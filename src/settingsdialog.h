@@ -1,0 +1,26 @@
+#ifndef SETTINGSDIALOG_H
+#define SETTINGSDIALOG_H
+
+#include <QDialog>
+
+class APIManager;
+class QLineEdit;
+
+class SettingsDialog : public QDialog
+{
+    Q_OBJECT
+
+public:
+    explicit SettingsDialog(APIManager *apiManager, QWidget *parent = nullptr);
+
+private slots:
+    void onTestConnection();
+    void onSave();
+
+private:
+    APIManager *m_apiManager;
+    QLineEdit *m_apiKeyEdit;
+    QLineEdit *m_githubTokenEdit;
+};
+
+#endif // SETTINGSDIALOG_H
