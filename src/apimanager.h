@@ -1,60 +1,61 @@
 #ifndef APIMANAGER_H
 #define APIMANAGER_H
 
-#include <QObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
+#include <KWallet>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QObject>
 #include <QUrlQuery>
-#include <KWallet>
 
-class APIManager : public QObject
-{
-    Q_OBJECT
+class APIManager : public QObject {
+  Q_OBJECT
 
 public:
-    explicit APIManager(QObject *parent = nullptr);
-    ~APIManager();
+  explicit APIManager(QObject *parent = nullptr);
+  ~APIManager();
 
-    void setApiKey(const QString &key);
-    QString apiKey() const;
-    void setGithubToken(const QString &token);
-    QString githubToken() const;
+  void setApiKey(const QString &key);
+  QString apiKey() const;
+  void setGithubToken(const QString &token);
+  QString githubToken() const;
 
-    void loadApiKeyFromWallet();
-    void saveApiKeyToWallet(const QString &key);
-    void loadGithubTokenFromWallet();
-    void saveGithubTokenToWallet(const QString &token);
+  void loadApiKeyFromWallet();
+  void saveApiKeyToWallet(const QString &key);
+  void loadGithubTokenFromWallet();
+  void saveGithubTokenToWallet(const QString &token);
 
-    void testConnection(const QString &apiKey = QString());
-    void listSources();
-    void createSession(const QString &source, const QString &prompt, const QString &automationMode = QString());
-    void listSessions();
-    void getSession(const QString &sessionId);
+  void testConnection(const QString &apiKey = QString());
+  void listSources();
+  void createSession(const QString &source, const QString &prompt,
+                     const QString &automationMode = QString());
+  void listSessions();
+  void getSession(const QString &sessionId);
 
 Q_SIGNALS:
-    void sourcesReceived(const QJsonArray &sources);
-    void sessionCreated(const QJsonObject &session);
-    void sessionsReceived(const QJsonArray &sessions);
-    void sessionDetailsReceived(const QJsonObject &session);
-    void connectionTested(bool success, const QString &message);
-    void errorOccurred(const QString &message);
-    void logMessage(const QString &message);
+  void sourcesReceived(const QJsonArray &sources);
+  void sessionCreated(const QJsonObject &session);
+  void sessionsReceived(const QJsonArray &sessions);
+  void sessionDetailsReceived(const QJsonObject &session);
+  void connectionTested(bool success, const QString &message);
+  void errorOccurred(const QString &message);
+  void logMessage(const QString &message);
 
 private Q_SLOTS:
-    void onWalletOpened(bool success);
+  void onWalletOpened(bool success);
 
 private:
-    QNetworkAccessManager *m_nam;
-    QString m_apiKey;
-    QString m_githubToken;
-    KWallet::Wallet *m_wallet;
-    bool m_tokenFailed;
+  QNetworkAccessManager *m_nam;
+  QString m_apiKey;
+  QString m_githubToken;
+  KWallet::Wallet *m_wallet;
+  bool m_tokenFailed;
 
-    QNetworkRequest createRequest(const QString &endpoint, const QString &overrideApiKey = QString());
-    bool canConnect() const;
+  QNetworkRequest createRequest(const QString &endpoint,
+                                const QString &overrideApiKey = QString());
+  bool canConnect() const;
 };
 
 #endif // APIMANAGER_H
