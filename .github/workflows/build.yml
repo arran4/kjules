@@ -2,22 +2,30 @@ name: Build and Test
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
+        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
+        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
+        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev
 
     - name: Configure CMake
-      run: cmake -B build
+      run: cmake -B build -S .
 
     - name: Build
       run: cmake --build build
 
     - name: Test
-      run: ./build/Kgithub-notify
+      run: cd build && ctest

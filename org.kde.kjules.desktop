@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=kJules
+Comment=Google Jules API Frontend
+Exec=kjules
+Icon=sc-apps-kjules
+Type=Application
+Categories=Development;
+Terminal=false
+X-KDE-StartupNotify=true
