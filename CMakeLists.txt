@@ -34,6 +34,7 @@ find_package(KF5 ${KF_MIN_VERSION} REQUIRED COMPONENTS
     XmlGui
     Config
     WidgetsAddons
+    GlobalAccel
 )
 
 add_definitions(-DQT_NO_CAST_FROM_ASCII
@@ -65,6 +66,7 @@ target_link_libraries(kjules
     KF5::XmlGui
     KF5::ConfigCore
     KF5::WidgetsAddons
+    KF5::GlobalAccel
 )
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

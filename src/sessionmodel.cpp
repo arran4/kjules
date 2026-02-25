@@ -23,17 +23,17 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const
 
     switch (role) {
     case IdRole:
-        return session.value("id").toString();
+        return session.value(QStringLiteral("id")).toString();
     case NameRole:
-        return session.value("name").toString();
+        return session.value(QStringLiteral("name")).toString();
     case TitleRole:
-        return session.value("title").toString();
+        return session.value(QStringLiteral("title")).toString();
     case SourceRole:
-        return session.value("sourceContext").toObject().value("source").toString();
+        return session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
     case PromptRole:
-        return session.value("prompt").toString();
+        return session.value(QStringLiteral("prompt")).toString();
     case Qt::DisplayRole:
-        return session.value("title").toString();
+        return session.value(QStringLiteral("title")).toString();
     default:
         return QVariant();
     }
@@ -66,11 +66,11 @@ void SessionModel::addSession(const QJsonObject &session)
 
 void SessionModel::updateSession(const QJsonObject &session)
 {
-    QString id = session.value("id").toString();
+    QString id = session.value(QStringLiteral("id")).toString();
     for (int i = 0; i < m_sessions.size(); ++i) {
-        if (m_sessions[i].toObject().value("id").toString() == id) {
+        if (m_sessions[i].toObject().value(QStringLiteral("id")).toString() == id) {
             m_sessions[i] = session;
-            emit dataChanged(index(i, 0), index(i, 0));
+            Q_EMIT dataChanged(index(i, 0), index(i, 0));
             return;
         }
     }

@@ -34,7 +34,7 @@ public:
     void listSessions();
     void getSession(const QString &sessionId);
 
-signals:
+Q_SIGNALS:
     void sourcesReceived(const QJsonArray &sources);
     void sessionCreated(const QJsonObject &session);
     void sessionsReceived(const QJsonArray &sessions);
@@ -43,7 +43,7 @@ signals:
     void errorOccurred(const QString &message);
     void logMessage(const QString &message);
 
-private slots:
+private Q_SLOTS:
     void onWalletOpened(bool success);
 
 private:

@@ -65,8 +65,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, QWidget *parent)
 
     // Automation Mode
     m_automationModeCombo = new QComboBox(this);
-    m_automationModeCombo->addItem(tr("None"), "");
-    m_automationModeCombo->addItem(tr("Auto Create PR"), "AUTO_CREATE_PR");
+    m_automationModeCombo->addItem(tr("None"), QStringLiteral(""));
+    m_automationModeCombo->addItem(tr("Auto Create PR"), QStringLiteral("AUTO_CREATE_PR"));
     formLayout->addRow(tr("Automation Mode:"), m_automationModeCombo);
 
     mainLayout->addLayout(formLayout);
@@ -93,18 +93,18 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, QWidget *parent)
 
 void NewSessionDialog::setInitialData(const QJsonObject &data)
 {
-    QString prompt = data.value("prompt").toString();
-    QString automationMode = data.value("automationMode").toString();
+    QString prompt = data.value(QStringLiteral("prompt")).toString();
+    QString automationMode = data.value(QStringLiteral("automationMode")).toString();
 
     // Check for "sources" array, fallback to "source" string
     QStringList sources;
-    if (data.contains("sources")) {
-        QJsonArray arr = data.value("sources").toArray();
+    if (data.contains(QStringLiteral("sources"))) {
+        QJsonArray arr = data.value(QStringLiteral("sources")).toArray();
         for(const auto &val : arr) {
             sources.append(val.toString());
         }
-    } else if (data.contains("source")) {
-        sources.append(data.value("source").toString());
+    } else if (data.contains(QStringLiteral("source"))) {
+        sources.append(data.value(QStringLiteral("source")).toString());
     }
 
     m_promptEdit->setPlainText(prompt);
@@ -156,7 +156,7 @@ void NewSessionDialog::onSubmit()
         return;
     }
 
-    emit createSessionRequested(sources, prompt, automationMode);
+    Q_EMIT createSessionRequested(sources, prompt, automationMode);
     accept();
 }
 
@@ -172,11 +172,11 @@ void NewSessionDialog::onSaveDraft()
     QString automationMode = m_automationModeCombo->currentData().toString();
 
     QJsonObject draft;
-    draft["sources"] = sourcesArr;
-    draft["prompt"] = prompt;
-    draft["automationMode"] = automationMode;
+    draft[QStringLiteral("sources")] = sourcesArr;
+    draft[QStringLiteral("prompt")] = prompt;
+    draft[QStringLiteral("automationMode")] = automationMode;
 
-    emit saveDraftRequested(draft);
+    Q_EMIT saveDraftRequested(draft);
     accept();
 }
 

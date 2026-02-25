@@ -26,13 +26,13 @@ QVariant DraftsModel::data(const QModelIndex &index, int role) const
 
     switch (role) {
     case SourceRole:
-        return draft.value("source").toString();
+        return draft.value(QStringLiteral("source")).toString();
     case PromptRole:
-        return draft.value("prompt").toString();
+        return draft.value(QStringLiteral("prompt")).toString();
     case AutomationModeRole:
-        return draft.value("automationMode").toString();
+        return draft.value(QStringLiteral("automationMode")).toString();
     case Qt::DisplayRole:
-        return draft.value("prompt").toString(); // Display prompt as title
+        return draft.value(QStringLiteral("prompt")).toString(); // Display prompt as title
     default:
         return QVariant();
     }
@@ -76,7 +76,7 @@ QJsonObject DraftsModel::getDraft(int row) const
 void DraftsModel::loadDrafts()
 {
     QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QFile file(path + "/drafts.json");
+    QFile file(path + QStringLiteral("/drafts.json"));
     if (file.open(QIODevice::ReadOnly)) {
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         m_drafts = doc.array();
@@ -89,9 +89,9 @@ void DraftsModel::saveDrafts()
     QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir dir(path);
     if (!dir.exists()) {
-        dir.mkpath(".");
+        dir.mkpath(QStringLiteral("."));
     }
-    QFile file(path + "/drafts.json");
+    QFile file(path + QStringLiteral("/drafts.json"));
     if (file.open(QIODevice::WriteOnly)) {
         QJsonDocument doc(m_drafts);
         file.write(doc.toJson());
