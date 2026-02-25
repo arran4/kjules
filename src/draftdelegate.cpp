@@ -43,7 +43,7 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
     painter->setPen(option.state & QStyle::State_Selected ? option.palette.highlightedText().color() : option.palette.text().color());
 
     QString displayPrompt = prompt.left(50);
-    if (prompt.length() > 50) displayPrompt += "...";
+    if (prompt.length() > 50) displayPrompt += QStringLiteral("...");
 
     QRect promptRect = painter->boundingRect(r, Qt::AlignLeft | Qt::AlignTop, displayPrompt);
     painter->drawText(r, Qt::AlignLeft | Qt::AlignTop, displayPrompt);
@@ -54,8 +54,8 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
     painter->setFont(detailsFont);
     painter->setPen(option.state & QStyle::State_Selected ? option.palette.highlightedText().color() : option.palette.placeholderText().color());
 
-    QString details = "Draft";
-    if (!automationMode.isEmpty()) details += " | Auto: " + automationMode;
+    QString details = QStringLiteral("Draft");
+    if (!automationMode.isEmpty()) details += QStringLiteral(" | Auto: ") + automationMode;
 
     QRect detailsRect = r;
     detailsRect.setTop(promptRect.bottom() + 5);
@@ -66,5 +66,6 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
 
 QSize DraftDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
+    Q_UNUSED(index)
     return QSize(option.rect.width(), 50);
 }

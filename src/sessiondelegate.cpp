@@ -45,12 +45,13 @@ void SessionDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 
     QRect sourceRect = r;
     sourceRect.setTop(titleRect.bottom() + 5);
-    painter->drawText(sourceRect, Qt::AlignLeft | Qt::AlignTop, "Source: " + source);
+    painter->drawText(sourceRect, Qt::AlignLeft | Qt::AlignTop, QStringLiteral("Source: ") + source);
 
     painter->restore();
 }
 
 QSize SessionDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
+    Q_UNUSED(index)
     return QSize(option.rect.width(), 60);
 }
