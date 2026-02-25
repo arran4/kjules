@@ -119,8 +119,8 @@ void APIManager::testConnection(const QString &apiKey)
 {
     // If apiKey is empty, we are using the stored key.
     if (apiKey.isEmpty() && !canConnect()) {
-         Q_EMIT connectionTested(false, QStringLiteral("Connection skipped: No token or previous failure."));
-         return;
+        Q_EMIT connectionTested(false, QStringLiteral("Connection skipped: No token or previous failure."));
+        return;
     }
     QNetworkRequest request = createRequest(QStringLiteral("/sources"), apiKey);
     QNetworkReply *reply = m_nam->get(request);
@@ -208,11 +208,11 @@ void APIManager::createSession(const QString &source, const QString &prompt, con
             Q_EMIT sessionCreated(doc.object());
             Q_EMIT logMessage(QStringLiteral("Session created successfully."));
         } else {
-             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-             if (statusCode == 401 || statusCode == 403) {
-                 m_tokenFailed = true;
-             }
-             Q_EMIT errorOccurred(QStringLiteral("Failed to create session: ") + reply->errorString());
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode == 401 || statusCode == 403) {
+                m_tokenFailed = true;
+            }
+            Q_EMIT errorOccurred(QStringLiteral("Failed to create session: ") + reply->errorString());
         }
         reply->deleteLater();
     });
@@ -243,11 +243,11 @@ void APIManager::listSessions()
             Q_EMIT sessionsReceived(sessions);
              Q_EMIT logMessage(QStringLiteral("Refreshed %1 sessions.").arg(sessions.size()));
         } else {
-             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-             if (statusCode == 401 || statusCode == 403) {
-                 m_tokenFailed = true;
-             }
-             Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString());
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode == 401 || statusCode == 403) {
+                m_tokenFailed = true;
+            }
+            Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString());
         }
         reply->deleteLater();
     });
@@ -280,11 +280,11 @@ void APIManager::getSession(const QString &sessionId)
              QJsonDocument doc = QJsonDocument::fromJson(data);
              Q_EMIT sessionDetailsReceived(doc.object());
         } else {
-             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-             if (statusCode == 401 || statusCode == 403) {
-                 m_tokenFailed = true;
-             }
-             Q_EMIT errorOccurred(QStringLiteral("Failed to get session details: ") + reply->errorString());
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode == 401 || statusCode == 403) {
+                m_tokenFailed = true;
+            }
+            Q_EMIT errorOccurred(QStringLiteral("Failed to get session details: ") + reply->errorString());
         }
         reply->deleteLater();
     });
