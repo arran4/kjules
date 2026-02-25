@@ -51,8 +51,10 @@ private:
     QString m_apiKey;
     QString m_githubToken;
     KWallet::Wallet *m_wallet;
+    bool m_tokenFailed;
 
     QNetworkRequest createRequest(const QString &endpoint, const QString &overrideApiKey = QString());
+    bool canConnect() const;
 };
 
 #endif // APIMANAGER_H

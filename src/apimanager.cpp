@@ -8,7 +8,7 @@
 
 const QString BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
 
-APIManager::APIManager(QObject *parent) : QObject(parent), m_nam(new QNetworkAccessManager(this)), m_wallet(nullptr)
+APIManager::APIManager(QObject *parent) : QObject(parent), m_nam(new QNetworkAccessManager(this)), m_wallet(nullptr), m_tokenFailed(false)
 {
     loadApiKeyFromWallet();
 }
@@ -23,6 +23,7 @@ APIManager::~APIManager()
 void APIManager::setApiKey(const QString &key)
 {
     m_apiKey = key;
+    m_tokenFailed = false;
     saveApiKeyToWallet(key);
 }
 
@@ -85,6 +86,7 @@ void APIManager::onWalletOpened(bool success)
         QString key;
         if (m_wallet->readPassword(QStringLiteral("jules_api_key"), key) == 0) {
             m_apiKey = key;
+            m_tokenFailed = false;
             Q_EMIT logMessage(QStringLiteral("API Key loaded from KWallet"));
         }
         QString token;
@@ -108,11 +110,22 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint, const QString
     return request;
 }
 
+bool APIManager::canConnect() const
+{
+    return !m_apiKey.isEmpty() && !m_tokenFailed;
+}
+
 void APIManager::testConnection(const QString &apiKey)
 {
+    // If apiKey is empty, we are using the stored key.
+    if (apiKey.isEmpty() && !canConnect()) {
+         Q_EMIT connectionTested(false, QStringLiteral("Connection skipped: No token or previous failure."));
+         return;
+    }
     QNetworkRequest request = createRequest(QStringLiteral("/sources"), apiKey);
     QNetworkReply *reply = m_nam->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    // Capture apiKey to know if we used the stored one
+    connect(reply, &QNetworkReply::finished, this, [this, reply, apiKey]() {
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
             QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -122,6 +135,12 @@ void APIManager::testConnection(const QString &apiKey)
                  Q_EMIT connectionTested(false, QStringLiteral("Connection successful but no sources found or invalid response."));
             }
         } else {
+            if (apiKey.isEmpty()) {
+                int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                if (statusCode == 401 || statusCode == 403) {
+                    m_tokenFailed = true;
+                }
+            }
             Q_EMIT connectionTested(false, QStringLiteral("Connection failed: ") + reply->errorString());
         }
         reply->deleteLater();
@@ -130,6 +149,10 @@ void APIManager::testConnection(const QString &apiKey)
 
 void APIManager::listSources()
 {
+    if (!canConnect()) {
+        Q_EMIT logMessage(QStringLiteral("Skipping listSources: No token or previous failure."));
+        return;
+    }
     QNetworkRequest request = createRequest(QStringLiteral("/sources"));
     QNetworkReply *reply = m_nam->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -140,6 +163,10 @@ void APIManager::listSources()
             Q_EMIT sourcesReceived(sources);
             Q_EMIT logMessage(QStringLiteral("Sources refreshed successfully."));
         } else {
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode == 401 || statusCode == 403) {
+                m_tokenFailed = true;
+            }
             Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString());
         }
         reply->deleteLater();
@@ -148,6 +175,10 @@ void APIManager::listSources()
 
 void APIManager::createSession(const QString &source, const QString &prompt, const QString &automationMode)
 {
+    if (!canConnect()) {
+        Q_EMIT errorOccurred(QStringLiteral("Cannot create session: No token or previous failure."));
+        return;
+    }
     QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
     QJsonObject json;
     json[QStringLiteral("prompt")] = prompt;
@@ -177,6 +208,10 @@ void APIManager::createSession(const QString &source, const QString &prompt, con
             Q_EMIT sessionCreated(doc.object());
             Q_EMIT logMessage(QStringLiteral("Session created successfully."));
         } else {
+             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+             if (statusCode == 401 || statusCode == 403) {
+                 m_tokenFailed = true;
+             }
              Q_EMIT errorOccurred(QStringLiteral("Failed to create session: ") + reply->errorString());
         }
         reply->deleteLater();
@@ -185,6 +220,10 @@ void APIManager::createSession(const QString &source, const QString &prompt, con
 
 void APIManager::listSessions()
 {
+    if (!canConnect()) {
+        Q_EMIT logMessage(QStringLiteral("Skipping listSessions: No token or previous failure."));
+        return;
+    }
     QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
     QNetworkReply *reply = m_nam->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -204,6 +243,10 @@ void APIManager::listSessions()
             Q_EMIT sessionsReceived(sessions);
              Q_EMIT logMessage(QStringLiteral("Refreshed %1 sessions.").arg(sessions.size()));
         } else {
+             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+             if (statusCode == 401 || statusCode == 403) {
+                 m_tokenFailed = true;
+             }
              Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString());
         }
         reply->deleteLater();
@@ -212,6 +255,10 @@ void APIManager::listSessions()
 
 void APIManager::getSession(const QString &sessionId)
 {
+    if (!canConnect()) {
+        Q_EMIT errorOccurred(QStringLiteral("Cannot get session details: No token or previous failure."));
+        return;
+    }
     // sessionId should be the full resource name e.g. "sessions/123..."
     // If just ID, prepend "sessions/"? API doc says name is "sessions/..."
     // We'll assume the caller passes the full name or ID correctly or we construct it.
@@ -233,6 +280,10 @@ void APIManager::getSession(const QString &sessionId)
              QJsonDocument doc = QJsonDocument::fromJson(data);
              Q_EMIT sessionDetailsReceived(doc.object());
         } else {
+             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+             if (statusCode == 401 || statusCode == 403) {
+                 m_tokenFailed = true;
+             }
              Q_EMIT errorOccurred(QStringLiteral("Failed to get session details: ") + reply->errorString());
         }
         reply->deleteLater();
