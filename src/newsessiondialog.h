@@ -18,11 +18,11 @@ public:
     explicit NewSessionDialog(SourceModel *sourceModel, QWidget *parent = nullptr);
     void setInitialData(const QJsonObject &data);
 
-signals:
+Q_SIGNALS:
     void createSessionRequested(const QStringList &sources, const QString &prompt, const QString &automationMode);
     void saveDraftRequested(const QJsonObject &draft);
 
-private slots:
+private Q_SLOTS:
     void onSubmit();
     void onSaveDraft();
     void onSelectAll();

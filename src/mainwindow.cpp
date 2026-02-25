@@ -46,7 +46,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_apiManager, &APIManager::sessionsReceived, m_sessionModel, &SessionModel::setSessions);
     connect(m_apiManager, &APIManager::sessionCreated, [this](const QJsonObject &session) {
         m_sessionModel->addSession(session);
-        updateStatus(i18n("Session created: %1", session.value("title").toString()));
+        updateStatus(i18n("Session created: %1", session.value(QStringLiteral("title")).toString()));
     });
     connect(m_apiManager, &APIManager::errorOccurred, this, &MainWindow::onError);
     connect(m_apiManager, &APIManager::logMessage, this, &MainWindow::updateStatus);
@@ -93,7 +93,7 @@ void MainWindow::setupUi()
             connect(copyUrlAction, &QAction::triggered, [this, index]() {
                  QString id = m_sessionModel->data(index, SessionModel::IdRole).toString();
                  // Placeholder URL logic
-                 QGuiApplication::clipboard()->setText("https://jules.google.com/sessions/" + id);
+                 QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/sessions/") + id);
                  updateStatus(i18n("URL copied to clipboard."));
             });
             menu.exec(m_sessionView->mapToGlobal(pos));
@@ -167,10 +167,10 @@ void MainWindow::setupUi()
 void MainWindow::setupTrayIcon()
 {
     m_trayIcon = new KStatusNotifierItem(this);
-    m_trayIcon->setIconByName("sc-apps-kjules");
+    m_trayIcon->setIconByName(QStringLiteral("sc-apps-kjules"));
     m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
     m_trayIcon->setStatus(KStatusNotifierItem::Active);
-    m_trayIcon->setToolTip("sc-apps-kjules", i18n("kJules"), i18n("Google Jules Client"));
+    m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"), i18n("Google Jules Client"));
 
     QMenu *menu = m_trayIcon->contextMenu();
     QAction *newSessionAction = menu->addAction(i18n("New Session"));
@@ -185,7 +185,7 @@ void MainWindow::createActions()
     connect(newSessionAction, &QAction::triggered, this, &MainWindow::showNewSessionDialog);
 
     KActionCollection *collection = new KActionCollection(this);
-    collection->addAction("new_session", newSessionAction);
+    collection->addAction(QStringLiteral("new_session"), newSessionAction);
     KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
 }
 
@@ -253,7 +253,7 @@ void MainWindow::onSessionActivated(const QModelIndex &index)
 void MainWindow::updateStatus(const QString &message)
 {
     m_statusLabel->setText(message);
-    m_trayIcon->setToolTip("sc-apps-kjules", i18n("kJules"), message);
+    m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"), message);
 }
 
 void MainWindow::onError(const QString &message)

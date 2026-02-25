@@ -22,11 +22,11 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const
 
     switch (role) {
     case NameRole:
-        return source.value("name").toString();
+        return source.value(QStringLiteral("name")).toString();
     case IdRole:
-        return source.value("id").toString();
+        return source.value(QStringLiteral("id")).toString();
     case Qt::DisplayRole:
-        return source.value("name").toString();
+        return source.value(QStringLiteral("name")).toString();
     default:
         return QVariant();
     }
