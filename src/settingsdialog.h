@@ -13,7 +13,7 @@ class SettingsDialog : public QDialog
 public:
     explicit SettingsDialog(APIManager *apiManager, QWidget *parent = nullptr);
 
-private slots:
+private Q_SLOTS:
     void onTestConnection();
     void onSave();
 
