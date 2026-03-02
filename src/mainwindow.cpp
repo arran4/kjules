@@ -5,6 +5,7 @@
 #include "newsessiondialog.h"
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
+#include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include <KActionCollection>
@@ -36,7 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)), m_refreshTimer(new QTimer(this)) {
+      m_draftsModel(new DraftsModel(this)) {
   setupUi();
   setupTrayIcon();
   createActions();
@@ -53,16 +54,17 @@ MainWindow::MainWindow(QWidget *parent)
                 i18n("Session created: %1",
                      session.value(QStringLiteral("title")).toString()));
           });
+  connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+          &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::errorOccurred, this, &MainWindow::onError);
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
 
   // Initial refresh
-  QTimer::singleShot(0, this, &MainWindow::refreshData);
-
-  // Setup refresh timer (every 60 seconds)
-  connect(m_refreshTimer, &QTimer::timeout, this, &MainWindow::refreshData);
-  m_refreshTimer->start(60000);
+  QTimer::singleShot(0, this, [this]() {
+    refreshSources();
+    refreshSessions();
+  });
 }
 
 MainWindow::~MainWindow() {}
@@ -74,6 +76,13 @@ void MainWindow::setupUi() {
   QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
   QTabWidget *tabWidget = new QTabWidget(this);
+
+  // Sources View
+  m_sourceView = new QListView(this);
+  m_sourceView->setModel(m_sourceModel);
+  connect(m_sourceView, &QListView::doubleClicked, this,
+          &MainWindow::onSourceActivated);
+  tabWidget->addTab(m_sourceView, i18n("Sources"));
 
   // Sessions View
   m_sessionView = new QListView(this);
@@ -110,7 +119,7 @@ void MainWindow::setupUi() {
   connect(m_sessionView, &QListView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
-  tabWidget->addTab(m_sessionView, i18n("Sessions"));
+  tabWidget->addTab(m_sessionView, i18n("Past"));
 
   // Drafts View
   m_draftsView = new QListView(this);
@@ -155,8 +164,15 @@ void MainWindow::setupUi() {
 
   // Toolbar / Buttons
   QHBoxLayout *buttonLayout = new QHBoxLayout();
-  QPushButton *refreshButton = new QPushButton(i18n("Refresh"), this);
-  connect(refreshButton, &QPushButton::clicked, this, &MainWindow::refreshData);
+  QPushButton *refreshSourcesBtn =
+      new QPushButton(i18n("Refresh Sources"), this);
+  connect(refreshSourcesBtn, &QPushButton::clicked, this,
+          &MainWindow::refreshSources);
+
+  QPushButton *refreshSessionsBtn =
+      new QPushButton(i18n("Refresh Sessions"), this);
+  connect(refreshSessionsBtn, &QPushButton::clicked, this,
+          &MainWindow::refreshSessions);
 
   QPushButton *newSessionButton = new QPushButton(i18n("New Session"), this);
   connect(newSessionButton, &QPushButton::clicked, this,
@@ -166,7 +182,8 @@ void MainWindow::setupUi() {
   connect(settingsButton, &QPushButton::clicked, this,
           &MainWindow::showSettingsDialog);
 
-  buttonLayout->addWidget(refreshButton);
+  buttonLayout->addWidget(refreshSourcesBtn);
+  buttonLayout->addWidget(refreshSessionsBtn);
   buttonLayout->addWidget(settingsButton);
   buttonLayout->addStretch();
   buttonLayout->addWidget(newSessionButton);
@@ -206,10 +223,21 @@ void MainWindow::createActions() {
   KGlobalAccel::setGlobalShortcut(newSessionAction,
                                   QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
 
-  QAction *refreshAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
-  connect(refreshAction, &QAction::triggered, this, &MainWindow::refreshData);
-  actionCollection()->addAction(QStringLiteral("refresh_data"), refreshAction);
+  QAction *refreshSourcesAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                  i18n("Refresh Sources"), this);
+  connect(refreshSourcesAction, &QAction::triggered, this,
+          &MainWindow::refreshSources);
+  actionCollection()->addAction(QStringLiteral("refresh_sources"),
+                                refreshSourcesAction);
+
+  QAction *refreshSessionsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                  i18n("Refresh Sessions"), this);
+  connect(refreshSessionsAction, &QAction::triggered, this,
+          &MainWindow::refreshSessions);
+  actionCollection()->addAction(QStringLiteral("refresh_sessions"),
+                                refreshSessionsAction);
 
   KStandardAction::preferences(this, &MainWindow::showSettingsDialog,
                                actionCollection());
@@ -218,9 +246,13 @@ void MainWindow::createActions() {
   setupGUI(Default, QStringLiteral("kjulesui.rc"));
 }
 
-void MainWindow::refreshData() {
-  updateStatus(i18n("Refreshing..."));
+void MainWindow::refreshSources() {
+  updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();
+}
+
+void MainWindow::refreshSessions() {
+  updateStatus(i18n("Refreshing sessions..."));
   m_apiManager->listSessions();
 }
 
@@ -273,6 +305,28 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
           });
 
   dialog.exec();
+}
+
+void MainWindow::onSourceActivated(const QModelIndex &index) {
+  QString sourceName =
+      m_sourceModel->data(index, SourceModel::NameRole).toString();
+  QJsonObject initData;
+  initData[QStringLiteral("source")] = sourceName;
+
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setInitialData(initData);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+          &MainWindow::onSessionCreated);
+  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+          &MainWindow::onDraftSaved);
+  dialog.exec();
+}
+
+void MainWindow::showSessionWindow(const QJsonObject &session) {
+  SessionWindow *window = new SessionWindow(session, this);
+  window->show();
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
