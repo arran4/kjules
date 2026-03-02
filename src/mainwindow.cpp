@@ -28,9 +28,12 @@
 #include <KLocalizedString>
 #include <KGlobalAccel>
 #include <KActionCollection>
+#include <KStandardAction>
+#include <QIcon>
+#include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent),
+    : KXmlGuiWindow(parent),
       m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
@@ -141,24 +144,6 @@ void MainWindow::setupUi()
 
     mainLayout->addWidget(tabWidget);
 
-    // Toolbar / Buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    QPushButton *refreshButton = new QPushButton(i18n("Refresh"), this);
-    connect(refreshButton, &QPushButton::clicked, this, &MainWindow::refreshData);
-
-    QPushButton *newSessionButton = new QPushButton(i18n("New Session"), this);
-    connect(newSessionButton, &QPushButton::clicked, this, &MainWindow::showNewSessionDialog);
-
-    QPushButton *settingsButton = new QPushButton(i18n("Settings"), this);
-    connect(settingsButton, &QPushButton::clicked, this, &MainWindow::showSettingsDialog);
-
-    buttonLayout->addWidget(refreshButton);
-    buttonLayout->addWidget(settingsButton);
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(newSessionButton);
-
-    mainLayout->addLayout(buttonLayout);
-
     // Status Bar
     m_statusLabel = new QLabel(i18n("Ready"), this);
     statusBar()->addWidget(m_statusLabel);
@@ -181,12 +166,19 @@ void MainWindow::setupTrayIcon()
 
 void MainWindow::createActions()
 {
-    QAction *newSessionAction = new QAction(i18n("New Session"), this);
+    QAction *newSessionAction = new QAction(QIcon::fromTheme(QStringLiteral("document-new")), i18n("New Session"), this);
     connect(newSessionAction, &QAction::triggered, this, &MainWindow::showNewSessionDialog);
-
-    KActionCollection *collection = new KActionCollection(this);
-    collection->addAction(QStringLiteral("new_session"), newSessionAction);
+    actionCollection()->addAction(QStringLiteral("new_session"), newSessionAction);
     KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+
+    QAction *refreshAction = new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
+    connect(refreshAction, &QAction::triggered, this, &MainWindow::refreshData);
+    actionCollection()->addAction(QStringLiteral("refresh_data"), refreshAction);
+
+    KStandardAction::preferences(this, &MainWindow::showSettingsDialog, actionCollection());
+    KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
+
+    setupGUI(Default, QStringLiteral("kjulesui.rc"));
 }
 
 void MainWindow::refreshData()
