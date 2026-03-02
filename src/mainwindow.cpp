@@ -15,9 +15,6 @@
 #include <QAction>
 #include <QClipboard>
 #include <QCoreApplication>
-#include <KStatusNotifierItem>
-#include <QAction>
-#include <QClipboard>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QGuiApplication>
@@ -219,14 +216,6 @@ void MainWindow::createActions() {
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
 
   setupGUI(Default, QStringLiteral("kjulesui.rc"));
-  QAction *newSessionAction = new QAction(i18n("New Session"), this);
-  connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
-
-  KActionCollection *collection = new KActionCollection(this);
-  collection->addAction(QStringLiteral("new_session"), newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction,
-                                  QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
 }
 
 void MainWindow::refreshData() {
