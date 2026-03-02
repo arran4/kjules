@@ -10,6 +10,11 @@
 #include <KActionCollection>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KStandardAction>
+#include <KStatusNotifierItem>
+#include <QAction>
+#include <QClipboard>
+#include <QCoreApplication>
 #include <KStatusNotifierItem>
 #include <QAction>
 #include <QClipboard>
@@ -17,6 +22,7 @@
 #include <QDesktopServices>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
@@ -30,7 +36,7 @@
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), m_apiManager(new APIManager(this)),
+    : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_refreshTimer(new QTimer(this)) {
@@ -193,6 +199,26 @@ void MainWindow::setupTrayIcon() {
 }
 
 void MainWindow::createActions() {
+  QAction *newSessionAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
+                  i18n("New Session"), this);
+  connect(newSessionAction, &QAction::triggered, this,
+          &MainWindow::showNewSessionDialog);
+  actionCollection()->addAction(QStringLiteral("new_session"),
+                                newSessionAction);
+  KGlobalAccel::setGlobalShortcut(newSessionAction,
+                                  QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+
+  QAction *refreshAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
+  connect(refreshAction, &QAction::triggered, this, &MainWindow::refreshData);
+  actionCollection()->addAction(QStringLiteral("refresh_data"), refreshAction);
+
+  KStandardAction::preferences(this, &MainWindow::showSettingsDialog,
+                               actionCollection());
+  KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
+
+  setupGUI(Default, QStringLiteral("kjulesui.rc"));
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);

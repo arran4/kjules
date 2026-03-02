@@ -1,7 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QMainWindow>
+#include <KXmlGuiWindow>
 #include <QSystemTrayIcon>
 
 class APIManager;
@@ -13,7 +13,7 @@ class KStatusNotifierItem;
 class QTimer;
 class QLabel;
 
-class MainWindow : public QMainWindow {
+class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
