@@ -6,21 +6,20 @@
 class APIManager;
 class QLineEdit;
 
-class SettingsDialog : public QDialog
-{
-    Q_OBJECT
+class SettingsDialog : public QDialog {
+  Q_OBJECT
 
 public:
-    explicit SettingsDialog(APIManager *apiManager, QWidget *parent = nullptr);
+  explicit SettingsDialog(APIManager *apiManager, QWidget *parent = nullptr);
 
 private Q_SLOTS:
-    void onTestConnection();
-    void onSave();
+  void onTestConnection();
+  void onSave();
 
 private:
-    APIManager *m_apiManager;
-    QLineEdit *m_apiKeyEdit;
-    QLineEdit *m_githubTokenEdit;
+  APIManager *m_apiManager;
+  QLineEdit *m_apiKeyEdit;
+  QLineEdit *m_githubTokenEdit;
 };
 
 #endif // SETTINGSDIALOG_H
