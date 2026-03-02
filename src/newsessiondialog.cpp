@@ -14,7 +14,8 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey, QWidget *parent)
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
+                                   QWidget *parent)
     : QDialog(parent), m_sourceModel(sourceModel) {
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
