@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [ '**' ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
+        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
+        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
+        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev
+
+    - name: Configure CMake
+      run: cmake -B build -S .
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Test
+      run: cd build && ctest
+
+  lint:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
+        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
+        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
+        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev \
+        clang-tidy
+
+    - name: Configure CMake
+      run: cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Run clang-tidy
+      run: |
+        # Run clang-tidy on source files
+        # Excluding generated files if any
+        run-clang-tidy -p build src
+
+  format:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install clang-format
+      run: sudo apt-get update && sudo apt-get install -y clang-format
+
+    - name: Run clang-format
+      run: |
+        find src -name "*.h" -o -name "*.cpp" | xargs clang-format -i
+
+    - name: Check for changes
+      id: check_changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create Pull Request or Fail
+      if: steps.check_changes.outputs.has_changes == 'true' && github.event_name == 'workflow_dispatch'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        title: 'Apply clang-format'
+        commit-message: 'style: apply clang-format'
+        branch: 'style/clang-format'
+        base: ${{ github.head_ref || github.ref_name }}
+
+    - name: Fail if not workflow_dispatch and changes exist
+      if: steps.check_changes.outputs.has_changes == 'true' && github.event_name != 'workflow_dispatch'
+      run: |
+        echo "clang-format found issues. Please format your code locally."
+        git diff
+        exit 1
+
+  build-and-release:
+    needs: [test, lint, format]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
+        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
+        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
+        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev
+
+    - name: Configure CMake
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Archive build
+      run: |
+        tar -czvf release.tar.gz -C build .
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
