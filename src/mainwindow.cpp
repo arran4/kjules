@@ -15,6 +15,9 @@
 #include <QAction>
 #include <QClipboard>
 #include <QCoreApplication>
+#include <KStatusNotifierItem>
+#include <QAction>
+#include <QClipboard>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QGuiApplication>
@@ -153,6 +156,26 @@ void MainWindow::setupUi() {
 
   mainLayout->addWidget(tabWidget);
 
+  // Toolbar / Buttons
+  QHBoxLayout *buttonLayout = new QHBoxLayout();
+  QPushButton *refreshButton = new QPushButton(i18n("Refresh"), this);
+  connect(refreshButton, &QPushButton::clicked, this, &MainWindow::refreshData);
+
+  QPushButton *newSessionButton = new QPushButton(i18n("New Session"), this);
+  connect(newSessionButton, &QPushButton::clicked, this,
+          &MainWindow::showNewSessionDialog);
+
+  QPushButton *settingsButton = new QPushButton(i18n("Settings"), this);
+  connect(settingsButton, &QPushButton::clicked, this,
+          &MainWindow::showSettingsDialog);
+
+  buttonLayout->addWidget(refreshButton);
+  buttonLayout->addWidget(settingsButton);
+  buttonLayout->addStretch();
+  buttonLayout->addWidget(newSessionButton);
+
+  mainLayout->addLayout(buttonLayout);
+
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
@@ -196,6 +219,14 @@ void MainWindow::createActions() {
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
 
   setupGUI(Default, QStringLiteral("kjulesui.rc"));
+  QAction *newSessionAction = new QAction(i18n("New Session"), this);
+  connect(newSessionAction, &QAction::triggered, this,
+          &MainWindow::showNewSessionDialog);
+
+  KActionCollection *collection = new KActionCollection(this);
+  collection->addAction(QStringLiteral("new_session"), newSessionAction);
+  KGlobalAccel::setGlobalShortcut(newSessionAction,
+                                  QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
 }
 
 void MainWindow::refreshData() {
