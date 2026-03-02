@@ -8,7 +8,8 @@
     <MenuBar>
         <Menu name="file">
             <Action name="new_session" />
-            <Action name="refresh_data" />
+            <Action name="refresh_sources" />
+            <Action name="refresh_sessions" />
             <Separator />
             <Action name="file_quit" />
         </Menu>
@@ -19,7 +20,8 @@
     <ToolBar name="mainToolBar">
         <text>Main Toolbar</text>
         <Action name="new_session" />
-        <Action name="refresh_data" />
+        <Action name="refresh_sources" />
+        <Action name="refresh_sessions" />
         <Separator />
         <Action name="options_configure" />
     </ToolBar>

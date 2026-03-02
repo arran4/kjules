@@ -53,6 +53,7 @@ set(kjules_SRCS
     src/settingsdialog.cpp
     src/draftdelegate.cpp
     src/sessiondelegate.cpp
+    src/sessionwindow.cpp
 )
 
 add_executable(kjules ${kjules_SRCS})

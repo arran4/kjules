@@ -10,7 +10,6 @@ class SourceModel;
 class DraftsModel;
 class QListView;
 class KStatusNotifierItem;
-class QTimer;
 class QLabel;
 
 class MainWindow : public KXmlGuiWindow {
@@ -21,7 +20,8 @@ public:
   ~MainWindow();
 
 private Q_SLOTS:
-  void refreshData();
+  void refreshSources();
+  void refreshSessions();
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
@@ -29,6 +29,8 @@ private Q_SLOTS:
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onSessionActivated(const QModelIndex &index);
+  void onSourceActivated(const QModelIndex &index);
+  void showSessionWindow(const QJsonObject &session);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
@@ -43,10 +45,10 @@ private:
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
 
+  QListView *m_sourceView;
   QListView *m_sessionView;
   QListView *m_draftsView;
   KStatusNotifierItem *m_trayIcon;
-  QTimer *m_refreshTimer;
   QLabel *m_statusLabel;
 };
 
