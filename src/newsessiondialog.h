@@ -15,7 +15,7 @@ class NewSessionDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit NewSessionDialog(SourceModel *sourceModel, QWidget *parent = nullptr);
+    explicit NewSessionDialog(SourceModel *sourceModel, bool hasApiKey, QWidget *parent = nullptr);
     void setInitialData(const QJsonObject &data);
 
 Q_SIGNALS:

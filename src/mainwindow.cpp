@@ -198,7 +198,8 @@ void MainWindow::refreshData()
 
 void MainWindow::showNewSessionDialog()
 {
-    NewSessionDialog dialog(m_sourceModel, this);
+    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
     connect(&dialog, &NewSessionDialog::createSessionRequested, this, &MainWindow::onSessionCreated);
     connect(&dialog, &NewSessionDialog::saveDraftRequested, this, &MainWindow::onDraftSaved);
     dialog.exec();
@@ -226,7 +227,8 @@ void MainWindow::onDraftSaved(const QJsonObject &draft)
 void MainWindow::onDraftActivated(const QModelIndex &index)
 {
     QJsonObject draft = m_draftsModel->getDraft(index.row());
-    NewSessionDialog dialog(m_sourceModel, this);
+    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
     dialog.setInitialData(draft);
 
     connect(&dialog, &NewSessionDialog::createSessionRequested, [this, index](const QStringList &sources, const QString &p, const QString &a) {

@@ -14,7 +14,7 @@
 #include <QDebug>
 #include <QJsonArray>
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, QWidget *parent)
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey, QWidget *parent)
     : QDialog(parent), m_sourceModel(sourceModel)
 {
     setWindowTitle(tr("Create New Session"));
@@ -79,6 +79,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, QWidget *parent)
     QPushButton *createButton = new QPushButton(tr("Create Session"), this);
     createButton->setDefault(true);
     connect(createButton, &QPushButton::clicked, this, &NewSessionDialog::onSubmit);
+    createButton->setEnabled(hasApiKey);
+    if (!hasApiKey) {
+        createButton->setToolTip(tr("API Key required to create sessions."));
+    }
 
     QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
