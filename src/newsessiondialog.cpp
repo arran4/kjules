@@ -14,7 +14,7 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, QWidget *parent)
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey, QWidget *parent)
     : QDialog(parent), m_sourceModel(sourceModel) {
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
@@ -82,6 +82,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, QWidget *parent)
 
   QPushButton *createButton = new QPushButton(tr("Create Session"), this);
   createButton->setDefault(true);
+  if (!hasApiKey) {
+    createButton->setEnabled(false);
+    createButton->setToolTip(tr("An API key is required to create a session."));
+  }
   connect(createButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSubmit);
 
