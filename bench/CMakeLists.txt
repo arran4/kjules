@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.5)
+project(Benchmark)
+find_package(Qt5 REQUIRED COMPONENTS Core)
+set(CMAKE_CXX_STANDARD 17)
+add_executable(benchmark benchmark.cpp)
+target_link_libraries(benchmark Qt5::Core)
