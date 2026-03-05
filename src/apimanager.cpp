@@ -272,11 +272,21 @@ void APIManager::getSession(const QString &sessionId) {
   // If we use the ID, we might need to construct the URL.
   // The endpoint is /sessions/{sessionId}
 
-  QString endpoint =
-      QStringLiteral("/") + sessionId; // Assuming sessionId is "sessions/123"
-  if (!sessionId.startsWith(QStringLiteral("sessions/"))) {
-    endpoint = QStringLiteral("/sessions/") + sessionId;
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
   }
+
+  if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    return;
+  }
+
+  QString endpoint = QStringLiteral("/sessions/") + cleanId;
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
