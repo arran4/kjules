@@ -81,6 +81,52 @@ void MainWindow::setupUi() {
   // Sources View
   m_sourceView = new QListView(this);
   m_sourceView->setModel(m_sourceModel);
+  m_sourceView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_sourceView, &QListView::customContextMenuRequested,
+          [this](const QPoint &pos) {
+            QModelIndex index = m_sourceView->indexAt(pos);
+            if (index.isValid()) {
+              QString id = index.data(SourceModel::IdRole).toString();
+              QString urlStr;
+              QStringList parts = id.split(QLatin1Char('/'));
+              if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+                QString provider = parts[1];
+                QString owner = parts[2];
+                QString repo = parts[3];
+                if (provider == QStringLiteral("github")) {
+                  urlStr = QStringLiteral("https://github.com/") + owner +
+                           QLatin1Char('/') + repo;
+                } else if (provider == QStringLiteral("gitlab")) {
+                  urlStr = QStringLiteral("https://gitlab.com/") + owner +
+                           QLatin1Char('/') + repo;
+                } else if (provider == QStringLiteral("bitbucket")) {
+                  urlStr = QStringLiteral("https://bitbucket.org/") + owner +
+                           QLatin1Char('/') + repo;
+                } else {
+                  urlStr = QStringLiteral("https://") + provider +
+                           QStringLiteral(".com/") + owner + QLatin1Char('/') +
+                           repo;
+                }
+              } else {
+                urlStr = id;
+              }
+
+              QMenu menu;
+              QAction *openUrlAction = menu.addAction(i18n("Open URL"));
+              QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+
+              connect(openUrlAction, &QAction::triggered, [this, id, urlStr]() {
+                QDesktopServices::openUrl(QUrl(urlStr));
+                updateStatus(i18n("Opening source %1", id));
+              });
+
+              connect(copyUrlAction, &QAction::triggered, [this, urlStr]() {
+                QGuiApplication::clipboard()->setText(urlStr);
+                updateStatus(i18n("URL copied to clipboard."));
+              });
+              menu.exec(m_sourceView->mapToGlobal(pos));
+            }
+          });
   connect(m_sourceView, &QListView::doubleClicked, this,
           &MainWindow::onSourceActivated);
   tabWidget->addTab(m_sourceView, i18n("Sources"));
