@@ -20,6 +20,7 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   QString prompt = index.data(DraftsModel::PromptRole).toString();
   QString automationMode =
       index.data(DraftsModel::AutomationModeRole).toString();
+  QString source = index.data(DraftsModel::SourceRole).toString();
 
   // Let's assume prompt is primary identifier.
 
@@ -52,6 +53,8 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   QString details = QStringLiteral("Draft");
   if (!automationMode.isEmpty())
     details += QStringLiteral(" | Auto: ") + automationMode;
+  if (!source.isEmpty())
+    details += QStringLiteral(" | Source: ") + source;
 
   QRect detailsRect = r;
   detailsRect.setTop(promptRect.bottom() + 5);

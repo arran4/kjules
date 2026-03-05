@@ -1,6 +1,7 @@
 #include "draftsmodel.h"
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
 
@@ -29,7 +30,7 @@ QVariant DraftsModel::data(const QModelIndex &index, int role) const {
       for (const QJsonValue &val : sourcesArray) {
         sourcesList.append(val.toString());
       }
-      return sourcesList;
+      return sourcesList.join(QStringLiteral(", "));
     }
     return draft.value(QStringLiteral("source")).toString();
   }
