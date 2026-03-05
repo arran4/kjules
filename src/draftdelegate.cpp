@@ -20,19 +20,7 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   QString prompt = index.data(DraftsModel::PromptRole).toString();
   QString automationMode =
       index.data(DraftsModel::AutomationModeRole).toString();
-  // Assuming source is stored as list in new logic, but DraftsModel::SourceRole
-  // might return string or list. In DraftsModel::data, SourceRole returns
-  // "source". I should update DraftsModel to handle "sources" array. For now,
-  // let's assume it returns whatever was stored. If I updated NewSessionDialog
-  // to store "sources" array, DraftsModel::data(SourceRole) might return
-  // QVariant(QJsonArray) or QVariantList. Let's check DraftsModel::data
-  // implementation.
-
-  // In DraftsModel::data: return draft.value("source").toString();
-  // If "sources" exists, "source" might be missing.
-  // I need to update DraftsModel to return sources list or joined string.
-
-  // Let's assume prompt is primary identifier.
+  QString source = index.data(DraftsModel::SourceRole).toString();
 
   QRect r = option.rect.adjusted(5, 5, -5, -5);
 
@@ -63,6 +51,8 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   QString details = QStringLiteral("Draft");
   if (!automationMode.isEmpty())
     details += QStringLiteral(" | Auto: ") + automationMode;
+  if (!source.isEmpty())
+    details += QStringLiteral(" | Source: ") + source;
 
   QRect detailsRect = r;
   detailsRect.setTop(promptRect.bottom() + 5);
