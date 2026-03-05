@@ -281,7 +281,8 @@ void APIManager::getSession(const QString &sessionId) {
     cleanId = cleanId.mid(1);
   }
 
-  if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
+  if (cleanId.contains(QStringLiteral("..")) ||
+      cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
     return;
   }
