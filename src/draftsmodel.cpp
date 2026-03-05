@@ -21,8 +21,18 @@ QVariant DraftsModel::data(const QModelIndex &index, int role) const {
   const QJsonObject draft = m_drafts[index.row()].toObject();
 
   switch (role) {
-  case SourceRole:
+  case SourceRole: {
+    if (draft.contains(QStringLiteral("sources"))) {
+      QJsonArray sourcesArray =
+          draft.value(QStringLiteral("sources")).toArray();
+      QStringList sourcesList;
+      for (const QJsonValue &val : sourcesArray) {
+        sourcesList.append(val.toString());
+      }
+      return sourcesList;
+    }
     return draft.value(QStringLiteral("source")).toString();
+  }
   case PromptRole:
     return draft.value(QStringLiteral("prompt")).toString();
   case AutomationModeRole:
