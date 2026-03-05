@@ -183,13 +183,16 @@ void APIManager::createSession(const QString &source, const QString &prompt,
 
   QJsonObject sourceContext;
   sourceContext[QStringLiteral("source")] = source;
-  // Assuming github repo context is needed or derived from source
-  // For simplicity, we just pass the source string as requested by API logic
-  // Wait, API doc says sourceContext has source and githubRepoContext
-  // The source string "sources/github/owner/repo"
 
-  // We'll need to parse the source string if we need to fill githubRepoContext
-  // details But for now let's assume the API handles it or we pass minimal
+  if (source.startsWith(QStringLiteral("sources/github/"))) {
+    QStringList parts = source.split(QStringLiteral("/"));
+    if (parts.size() >= 4) {
+      QJsonObject githubRepoContext;
+      githubRepoContext[QStringLiteral("owner")] = parts.at(2);
+      githubRepoContext[QStringLiteral("repo")] = parts.at(3);
+      sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
+    }
+  }
 
   json[QStringLiteral("sourceContext")] = sourceContext;
   if (!automationMode.isEmpty()) {
@@ -272,11 +275,22 @@ void APIManager::getSession(const QString &sessionId) {
   // If we use the ID, we might need to construct the URL.
   // The endpoint is /sessions/{sessionId}
 
-  QString endpoint =
-      QStringLiteral("/") + sessionId; // Assuming sessionId is "sessions/123"
-  if (!sessionId.startsWith(QStringLiteral("sessions/"))) {
-    endpoint = QStringLiteral("/sessions/") + sessionId;
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
   }
+
+  if (cleanId.contains(QStringLiteral("..")) ||
+      cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    return;
+  }
+
+  QString endpoint = QStringLiteral("/sessions/") + cleanId;
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);

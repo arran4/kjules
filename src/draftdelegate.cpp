@@ -22,6 +22,8 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
       index.data(DraftsModel::AutomationModeRole).toString();
   QString source = index.data(DraftsModel::SourceRole).toString();
 
+  // Let's assume prompt is primary identifier.
+
   QRect r = option.rect.adjusted(5, 5, -5, -5);
 
   // Prompt (Title)
