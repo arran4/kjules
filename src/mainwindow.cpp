@@ -26,6 +26,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -101,6 +102,13 @@ void MainWindow::setupUi() {
           connect(openUrlAction, &QAction::triggered, [this, index]() {
             QString id =
                 m_sessionModel->data(index, SessionModel::IdRole).toString();
+
+            QRegularExpression idRegex(QStringLiteral("^[a-zA-Z0-9_-]+$"));
+            if (!idRegex.match(id).hasMatch()) {
+              updateStatus(i18n("Invalid session ID format."));
+              return;
+            }
+
             // Placeholder URL logic
             updateStatus(i18n("Opening session %1", id));
           });
@@ -108,6 +116,13 @@ void MainWindow::setupUi() {
           connect(copyUrlAction, &QAction::triggered, [this, index]() {
             QString id =
                 m_sessionModel->data(index, SessionModel::IdRole).toString();
+
+            QRegularExpression idRegex(QStringLiteral("^[a-zA-Z0-9_-]+$"));
+            if (!idRegex.match(id).hasMatch()) {
+              updateStatus(i18n("Invalid session ID format."));
+              return;
+            }
+
             // Placeholder URL logic
             QGuiApplication::clipboard()->setText(
                 QStringLiteral("https://jules.google.com/sessions/") + id);
