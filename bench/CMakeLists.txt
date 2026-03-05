@@ -1,0 +1,3 @@
+add_executable(benchmark_performance test_performance.cpp)
+target_link_libraries(benchmark_performance Qt5::Test)
+add_test(NAME PerformanceBenchmark COMMAND benchmark_performance)

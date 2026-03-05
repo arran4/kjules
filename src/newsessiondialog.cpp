@@ -10,6 +10,7 @@
 #include <QListView>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSet>
 #include <QSortFilterProxyModel>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -128,6 +129,8 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   QItemSelectionModel *selectionModel = m_sourceView->selectionModel();
   selectionModel->clearSelection();
 
+  QSet<QString> sourcesSet(sources.begin(), sources.end());
+
   for (int i = 0; i < model->rowCount(); ++i) {
     QModelIndex idx = model->index(i, 0);
     // We need to map role data. Proxy usually forwards data.
@@ -139,7 +142,7 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
     // Let's use NameRole.
     QString name = model->data(idx, SourceModel::NameRole).toString();
 
-    if (sources.contains(name)) {
+    if (sourcesSet.contains(name)) {
       selectionModel->select(idx, QItemSelectionModel::Select);
     }
   }
