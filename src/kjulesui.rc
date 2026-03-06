@@ -12,6 +12,9 @@
             <Separator />
             <Action name="file_quit" />
         </Menu>
+        <Menu name="view">
+            <Action name="toggle_window" />
+        </Menu>
         <Menu name="settings">
             <Action name="options_configure" />
         </Menu>
@@ -20,6 +23,7 @@
         <text>Main Toolbar</text>
         <Action name="new_session" />
         <Action name="refresh_sources" />
+        <Action name="toggle_window" />
         <Separator />
         <Action name="options_configure" />
     </ToolBar>
