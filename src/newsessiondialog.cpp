@@ -67,45 +67,47 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   m_promptEdit = new QTextEdit(this);
   formLayout->addRow(tr("Prompt:"), m_promptEdit);
 
-  // Automation Mode
-  m_automationModeCombo = new QComboBox(this);
-  m_automationModeCombo->addItem(tr("None"), QStringLiteral(""));
-  m_automationModeCombo->addItem(tr("Auto Create PR"),
-                                 QStringLiteral("AUTO_CREATE_PR"));
-  formLayout->addRow(tr("Automation Mode:"), m_automationModeCombo);
-
   mainLayout->addLayout(formLayout);
 
   // Buttons
   QHBoxLayout *buttonLayout = new QHBoxLayout();
+
+  QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
+  connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+
   QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
   connect(draftButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveDraft);
 
   QPushButton *createButton = new QPushButton(tr("Create Session"), this);
-  createButton->setDefault(true);
   if (!hasApiKey) {
     createButton->setEnabled(false);
     createButton->setToolTip(tr("An API key is required to create a session."));
   }
   connect(createButton, &QPushButton::clicked, this,
-          &NewSessionDialog::onSubmit);
+          [this]() { onSubmit(QStringLiteral("")); });
 
-  QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
-  connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+  QPushButton *createPRButton = new QPushButton(tr("Create PR Session"), this);
+  createPRButton->setDefault(true);
+  if (!hasApiKey) {
+    createPRButton->setEnabled(false);
+    createPRButton->setToolTip(
+        tr("An API key is required to create a session."));
+  }
+  connect(createPRButton, &QPushButton::clicked, this,
+          [this]() { onSubmit(QStringLiteral("AUTO_CREATE_PR")); });
 
-  buttonLayout->addWidget(draftButton);
-  buttonLayout->addStretch();
-  buttonLayout->addWidget(createButton);
   buttonLayout->addWidget(cancelButton);
+  buttonLayout->addStretch();
+  buttonLayout->addWidget(draftButton);
+  buttonLayout->addWidget(createButton);
+  buttonLayout->addWidget(createPRButton);
 
   mainLayout->addLayout(buttonLayout);
 }
 
 void NewSessionDialog::setInitialData(const QJsonObject &data) {
   QString prompt = data.value(QStringLiteral("prompt")).toString();
-  QString automationMode =
-      data.value(QStringLiteral("automationMode")).toString();
 
   // Check for "sources" array, fallback to "source" string
   QStringList sources;
@@ -119,10 +121,6 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   }
 
   m_promptEdit->setPlainText(prompt);
-  int index = m_automationModeCombo->findData(automationMode);
-  if (index != -1) {
-    m_automationModeCombo->setCurrentIndex(index);
-  }
 
   // Select sources
   QAbstractItemModel *model = m_sourceView->model(); // Proxy model
@@ -148,7 +146,7 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   }
 }
 
-void NewSessionDialog::onSubmit() {
+void NewSessionDialog::onSubmit(const QString &automationMode) {
   QModelIndexList selection = m_sourceView->selectionModel()->selectedIndexes();
   if (selection.isEmpty()) {
     QMessageBox::warning(this, tr("Missing Source"),
@@ -162,7 +160,6 @@ void NewSessionDialog::onSubmit() {
   }
 
   QString prompt = m_promptEdit->toPlainText();
-  QString automationMode = m_automationModeCombo->currentData().toString();
 
   if (prompt.isEmpty()) {
     QMessageBox::warning(this, tr("Missing Prompt"),
@@ -182,12 +179,10 @@ void NewSessionDialog::onSaveDraft() {
   }
 
   QString prompt = m_promptEdit->toPlainText();
-  QString automationMode = m_automationModeCombo->currentData().toString();
 
   QJsonObject draft;
   draft[QStringLiteral("sources")] = sourcesArr;
   draft[QStringLiteral("prompt")] = prompt;
-  draft[QStringLiteral("automationMode")] = automationMode;
 
   Q_EMIT saveDraftRequested(draft);
   accept();
