@@ -24,7 +24,7 @@ Q_SIGNALS:
   void saveDraftRequested(const QJsonObject &draft);
 
 private Q_SLOTS:
-  void onSubmit();
+  void onSubmit(const QString &automationMode);
   void onSaveDraft();
   void onSelectAll();
   void onUnselectAll();
@@ -34,7 +34,6 @@ private:
   QListView *m_sourceView;
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
-  QComboBox *m_automationModeCombo;
 };
 
 #endif // NEWSESSIONDIALOG_H

@@ -228,16 +228,6 @@ void APIManager::createSession(const QString &source, const QString &prompt,
   QJsonObject sourceContext;
   sourceContext[QStringLiteral("source")] = source;
 
-  if (source.startsWith(QStringLiteral("sources/github/"))) {
-    QStringList parts = source.split(QStringLiteral("/"));
-    if (parts.size() >= 4) {
-      QJsonObject githubRepoContext;
-      githubRepoContext[QStringLiteral("owner")] = parts.at(2);
-      githubRepoContext[QStringLiteral("repo")] = parts.at(3);
-      sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
-    }
-  }
-
   json[QStringLiteral("sourceContext")] = sourceContext;
   if (!automationMode.isEmpty()) {
     json[QStringLiteral("automationMode")] = automationMode;
