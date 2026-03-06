@@ -1,7 +1,13 @@
 #include "sourcemodel.h"
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QStandardPaths>
 
-SourceModel::SourceModel(QObject *parent) : QAbstractListModel(parent) {}
+SourceModel::SourceModel(QObject *parent) : QAbstractListModel(parent) {
+  loadCache();
+}
 
 int SourceModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -38,6 +44,7 @@ void SourceModel::setSources(const QJsonArray &sources) {
   beginResetModel();
   m_sources = sources;
   endResetModel();
+  saveCache();
 }
 
 int SourceModel::addSources(const QJsonArray &sources) {
@@ -67,6 +74,38 @@ int SourceModel::addSources(const QJsonArray &sources) {
       m_sources.append(newSources[i]);
     }
     endInsertRows();
+    saveCache();
   }
   return addedCount;
+}
+
+void SourceModel::loadCache() {
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+  if (path.isEmpty())
+    return;
+  QFile file(path + QStringLiteral("/sources.json"));
+  if (file.open(QIODevice::ReadOnly)) {
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    m_sources = doc.array();
+    file.close();
+  }
+}
+
+void SourceModel::saveCache() {
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+  if (path.isEmpty())
+    return;
+  QDir dir(path);
+  if (!dir.exists()) {
+    dir.mkpath(QStringLiteral("."));
+  }
+  QFile file(path + QStringLiteral("/sources.json"));
+  if (file.open(QIODevice::WriteOnly)) {
+    file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+    QJsonDocument doc(m_sources);
+    file.write(doc.toJson());
+    file.close();
+  }
 }

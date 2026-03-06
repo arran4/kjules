@@ -21,6 +21,9 @@ public:
   int addSources(const QJsonArray &sources);
 
 private:
+  void loadCache();
+  void saveCache();
+
   QJsonArray m_sources;
 };
 

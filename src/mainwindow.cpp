@@ -40,8 +40,13 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0) {
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_sessionRefreshTimer(new QTimer(this)) {
   setupUi();
+
+  connect(m_sessionRefreshTimer, &QTimer::timeout, this,
+          &MainWindow::updateSessionStats);
+  m_sessionRefreshTimer->start(60000); // 1 minute
   setupTrayIcon();
   createActions();
 
@@ -50,11 +55,16 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesReceived);
   connect(m_apiManager, &APIManager::sourcesRefreshFinished, this,
           &MainWindow::onSourcesRefreshFinished);
-  connect(m_apiManager, &APIManager::sessionsReceived, m_sessionModel,
-          &SessionModel::setSessions);
+  connect(m_apiManager, &APIManager::sessionsReceived, this,
+          [this](const QJsonArray &sessions) {
+            m_sessionModel->setSessions(sessions);
+            m_lastSessionRefreshTime = QDateTime::currentDateTime();
+            updateSessionStats();
+          });
   connect(m_apiManager, &APIManager::sessionCreated,
           [this](const QJsonObject &session) {
             m_sessionModel->addSession(session);
+            updateSessionStats();
             updateStatus(
                 i18n("Session created: %1",
                      session.value(QStringLiteral("title")).toString()));
@@ -257,6 +267,10 @@ void MainWindow::setupUi() {
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
+
+  m_sessionStatsLabel = new QLabel(this);
+  statusBar()->addPermanentWidget(m_sessionStatsLabel);
+  updateSessionStats();
 
   m_sourceProgressBar = new QProgressBar(this);
   m_sourceProgressBar->setMinimum(0);
@@ -468,8 +482,9 @@ void MainWindow::onSourcesRefreshFinished() {
   m_refreshSourcesAction->setText(i18n("Refresh Sources"));
 
   if (wasRefreshing) {
-    updateStatus(i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
-                      m_sourcesLoadedCount, m_sourcesAddedCount));
+    updateStatus(
+        i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
+             m_sourcesLoadedCount, m_sourcesAddedCount));
   } else {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));
@@ -483,7 +498,25 @@ void MainWindow::cancelSourcesRefresh() {
   m_cancelRefreshBtn->hide();
   m_refreshSourcesBtn->setText(i18n("Refresh Sources"));
   m_refreshSourcesAction->setText(i18n("Refresh Sources"));
-    // Omit updateStatus here because APIManager's cancelation will
-    // subsequently emit sourcesRefreshFinished(), which would clobber this.
-    // Instead, we let onSourcesRefreshFinished() handle the final status text.
+  // Omit updateStatus here because APIManager's cancelation will
+  // subsequently emit sourcesRefreshFinished(), which would clobber this.
+  // Instead, we let onSourcesRefreshFinished() handle the final status text.
+}
+
+void MainWindow::updateSessionStats() {
+  int sessionCount = m_sessionModel->rowCount();
+  QString timeStr = i18n("Never");
+
+  if (m_lastSessionRefreshTime.isValid()) {
+    qint64 secs = m_lastSessionRefreshTime.secsTo(QDateTime::currentDateTime());
+    if (secs < 60) {
+      timeStr = i18n("Just now");
+    } else {
+      qint64 mins = secs / 60;
+      timeStr = i18np("1 min ago", "%1 mins ago", mins);
+    }
+  }
+
+  m_sessionStatsLabel->setText(
+      i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
 }
