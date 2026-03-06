@@ -28,7 +28,8 @@ public:
   void saveGithubTokenToWallet(const QString &token);
 
   void testConnection(const QString &apiKey = QString());
-  void listSources();
+  void listSources(const QString &pageToken = QString());
+  void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
                      const QString &automationMode = QString());
   void listSessions();
@@ -36,6 +37,7 @@ public:
 
 Q_SIGNALS:
   void sourcesReceived(const QJsonArray &sources);
+  void sourcesRefreshFinished();
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions);
   void sessionDetailsReceived(const QJsonObject &session);
@@ -52,6 +54,7 @@ private:
   QString m_githubToken;
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;
+  QNetworkReply *m_listSourcesReply;
 
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());

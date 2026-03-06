@@ -10,11 +10,16 @@ const QString BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
 
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
-      m_wallet(nullptr), m_tokenFailed(false) {
+      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
 APIManager::~APIManager() {
+  if (m_listSourcesReply) {
+    m_listSourcesReply->abort();
+    m_listSourcesReply->deleteLater();
+    m_listSourcesReply = nullptr;
+  }
   if (m_wallet) {
     delete m_wallet;
   }
@@ -141,22 +146,52 @@ void APIManager::testConnection(const QString &apiKey) {
   });
 }
 
-void APIManager::listSources() {
+void APIManager::listSources(const QString &pageToken) {
   if (!canConnect()) {
     Q_EMIT logMessage(
         QStringLiteral("Skipping listSources: No token or previous failure."));
+    Q_EMIT sourcesRefreshFinished();
     return;
   }
-  QNetworkRequest request = createRequest(QStringLiteral("/sources"));
-  QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+
+  if (m_listSourcesReply) {
+    // If a request is already in progress, abort it or ignore new request.
+    // For additive pagination, we might just ignore the new request if it's the
+    // same, but the UI should prevent calling this if already refreshing.
+  }
+
+  QString endpoint = QStringLiteral("/sources");
+  if (!pageToken.isEmpty()) {
+    endpoint += QStringLiteral("?pageToken=") + pageToken;
+  }
+  QNetworkRequest request = createRequest(endpoint);
+  m_listSourcesReply = m_nam->get(request);
+
+  connect(m_listSourcesReply, &QNetworkReply::finished, this, [this]() {
+    QNetworkReply *reply = m_listSourcesReply;
+    m_listSourcesReply = nullptr;
+
+    if (!reply)
+      return; // In case it was already deleted or null
+
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
-      QJsonArray sources =
-          doc.object().value(QStringLiteral("sources")).toArray();
+      QJsonObject obj = doc.object();
+      QJsonArray sources = obj.value(QStringLiteral("sources")).toArray();
       Q_EMIT sourcesReceived(sources);
-      Q_EMIT logMessage(QStringLiteral("Sources refreshed successfully."));
+
+      QString nextPageToken =
+          obj.value(QStringLiteral("nextPageToken")).toString();
+      if (!nextPageToken.isEmpty()) {
+        // Fetch next page automatically
+        listSources(nextPageToken);
+      } else {
+        Q_EMIT sourcesRefreshFinished();
+        Q_EMIT logMessage(QStringLiteral("Sources refreshed successfully."));
+      }
+    } else if (reply->error() == QNetworkReply::OperationCanceledError) {
+      Q_EMIT sourcesRefreshFinished();
     } else {
       int statusCode =
           reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -165,9 +200,18 @@ void APIManager::listSources() {
       }
       Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") +
                            reply->errorString());
+      Q_EMIT sourcesRefreshFinished();
     }
     reply->deleteLater();
   });
+}
+
+void APIManager::cancelListSources() {
+  if (m_listSourcesReply) {
+    m_listSourcesReply->abort();
+    // The finished signal will be emitted with OperationCanceledError,
+    // which will emit sourcesRefreshFinished().
+  }
 }
 
 void APIManager::createSession(const QString &source, const QString &prompt,

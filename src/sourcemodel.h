@@ -18,6 +18,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void setSources(const QJsonArray &sources);
+  int addSources(const QJsonArray &sources);
 
 private:
   QJsonArray m_sources;
