@@ -67,6 +67,11 @@ private:
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_viewSessionsAction;
+  QAction *m_showPastNewSessionsAction;
+  QAction *m_viewRawDataAction;
+  QAction *m_openUrlAction;
+  QAction *m_copyUrlAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;

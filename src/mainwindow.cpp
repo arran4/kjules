@@ -140,118 +140,16 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
-          QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
-          QAction *showPastNewSessionsAction =
-              menu.addAction(i18n("Show past new sessions"));
-          QAction *viewRawDataAction = menu.addAction(i18n("View Raw Data"));
-          QAction *openUrlAction = menu.addAction(i18n("Open URL"));
-          QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+          QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
+          connect(newSessionActionLocal, &QAction::triggered,
+                  [this, sourceIndex]() { onSourceActivated(sourceIndex); });
 
-          connect(openUrlAction, &QAction::triggered, [this, id, urlStr]() {
-            QDesktopServices::openUrl(QUrl(urlStr));
-            updateStatus(i18n("Opening source %1", id));
-          });
+          menu.addAction(m_viewSessionsAction);
+          menu.addAction(m_showPastNewSessionsAction);
+          menu.addAction(m_viewRawDataAction);
+          menu.addAction(m_openUrlAction);
+          menu.addAction(m_copyUrlAction);
 
-          connect(copyUrlAction, &QAction::triggered, [this, urlStr]() {
-            QGuiApplication::clipboard()->setText(urlStr);
-            updateStatus(i18n("URL copied to clipboard."));
-          });
-
-          connect(showPastNewSessionsAction, &QAction::triggered, [this, id]() {
-            QString path = QStandardPaths::writableLocation(
-                QStandardPaths::AppDataLocation);
-            QFile file(path + QStringLiteral("/cached_sessions.json"));
-            QJsonArray cachedSessions;
-            if (file.open(QIODevice::ReadOnly)) {
-              QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-              cachedSessions = doc.array();
-              file.close();
-            }
-
-            QJsonArray filteredSessions;
-            for (int i = 0; i < cachedSessions.size(); ++i) {
-              QJsonObject session = cachedSessions[i].toObject();
-              QString sessionSource =
-                  session.value(QStringLiteral("sourceContext"))
-                      .toObject()
-                      .value(QStringLiteral("source"))
-                      .toString();
-              if (sessionSource == id) {
-                filteredSessions.append(session);
-              }
-            }
-
-            KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-            SessionModel *localModel = new SessionModel(sessionsWindow);
-            localModel->setSessions(filteredSessions);
-            sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-            sessionsWindow->setWindowTitle(
-                i18n("Past New Sessions for %1", id));
-
-            QListView *listView = new QListView(sessionsWindow);
-            listView->setModel(localModel);
-            listView->setItemDelegate(new SessionDelegate(listView));
-
-            connect(listView, &QListView::doubleClicked, this,
-                    [this, localModel](const QModelIndex &filterIndex) {
-                      QString id =
-                          localModel->data(filterIndex, SessionModel::IdRole)
-                              .toString();
-                      m_apiManager->getSession(id);
-                      updateStatus(
-                          i18n("Fetching details for session %1...", id));
-                    });
-
-            sessionsWindow->setCentralWidget(listView);
-            sessionsWindow->resize(600, 400);
-            sessionsWindow->show();
-          });
-
-          connect(
-              viewRawDataAction, &QAction::triggered, [this, sourceIndex]() {
-                QJsonObject rawData =
-                    m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
-                        .toJsonObject();
-
-                KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
-                rawWindow->setAttribute(Qt::WA_DeleteOnClose);
-                rawWindow->setWindowTitle(i18n("Raw Data for Source"));
-
-                QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
-                QJsonDocument doc(rawData);
-                textBrowser->setPlainText(
-                    QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
-
-                rawWindow->setCentralWidget(textBrowser);
-                rawWindow->resize(600, 400);
-                rawWindow->show();
-              });
-
-          connect(viewSessionsAction, &QAction::triggered, [this, id]() {
-            KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-            QSortFilterProxyModel *filterModel =
-                new QSortFilterProxyModel(sessionsWindow);
-            filterModel->setSourceModel(m_sessionModel);
-            filterModel->setFilterRole(SessionModel::SourceRole);
-            filterModel->setFilterFixedString(id);
-            sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-            sessionsWindow->setWindowTitle(i18n("Sessions for %1", id));
-
-            QListView *listView = new QListView(sessionsWindow);
-            listView->setModel(filterModel);
-            listView->setItemDelegate(new SessionDelegate(listView));
-
-            connect(listView, &QListView::doubleClicked, this,
-                    [this, filterModel](const QModelIndex &filterIndex) {
-                      QModelIndex sourceIndex =
-                          filterModel->mapToSource(filterIndex);
-                      onSessionActivated(sourceIndex);
-                    });
-
-            sessionsWindow->setCentralWidget(listView);
-            sessionsWindow->resize(600, 400);
-            sessionsWindow->show();
-          });
           menu.exec(m_sourceView->mapToGlobal(pos));
         }
       });
@@ -465,6 +363,193 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+
+  m_viewSessionsAction = new QAction(i18n("View Sessions"), this);
+  actionCollection()->addAction(QStringLiteral("view_sessions"),
+                                m_viewSessionsAction);
+  connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+    QString id =
+        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+
+    QSortFilterProxyModel *filterModel = new QSortFilterProxyModel(
+        this); // Temp parent to avoid leak if we don't refactor everything
+    filterModel->setSourceModel(m_sessionModel);
+    filterModel->setFilterRole(SessionModel::SourceRole);
+    filterModel->setFilterFixedString(id);
+
+    KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+    filterModel->setParent(sessionsWindow); // Reparent to window to avoid leak
+    sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
+    sessionsWindow->setWindowTitle(i18n("Sessions for %1", id));
+    QListView *listView = new QListView(sessionsWindow);
+    listView->setModel(filterModel);
+    listView->setItemDelegate(new SessionDelegate(listView));
+    connect(listView, &QListView::doubleClicked, this,
+            [this, filterModel](const QModelIndex &filterIndex) {
+              QModelIndex srcIdx = filterModel->mapToSource(filterIndex);
+              onSessionActivated(srcIdx);
+            });
+    sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->resize(600, 400);
+    sessionsWindow->show();
+  });
+
+  m_showPastNewSessionsAction =
+      new QAction(i18n("Show past new sessions"), this);
+  actionCollection()->addAction(QStringLiteral("show_past_new_sessions"),
+                                m_showPastNewSessionsAction);
+  connect(m_showPastNewSessionsAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+    QString id =
+        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+
+    QString path =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QFile file(path + QStringLiteral("/cached_sessions.json"));
+    QJsonArray cachedSessions;
+    if (file.open(QIODevice::ReadOnly)) {
+      QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+      cachedSessions = doc.array();
+      file.close();
+    }
+    QJsonArray filteredSessions;
+    for (int i = 0; i < cachedSessions.size(); ++i) {
+      QJsonObject session = cachedSessions[i].toObject();
+      QString sessionSource = session.value(QStringLiteral("sourceContext"))
+                                  .toObject()
+                                  .value(QStringLiteral("source"))
+                                  .toString();
+      if (sessionSource == id) {
+        filteredSessions.append(session);
+      }
+    }
+    KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+    SessionModel *localModel = new SessionModel(sessionsWindow);
+    localModel->setSessions(filteredSessions);
+    sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
+    sessionsWindow->setWindowTitle(i18n("Past New Sessions for %1", id));
+    QListView *listView = new QListView(sessionsWindow);
+    listView->setModel(localModel);
+    listView->setItemDelegate(new SessionDelegate(listView));
+    connect(
+        listView, &QListView::doubleClicked, this,
+        [this, localModel](const QModelIndex &filterIndex) {
+          QString sessId =
+              localModel->data(filterIndex, SessionModel::IdRole).toString();
+          m_apiManager->getSession(sessId);
+          updateStatus(i18n("Fetching details for session %1...", sessId));
+        });
+    sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->resize(600, 400);
+    sessionsWindow->show();
+  });
+
+  m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
+  actionCollection()->addAction(QStringLiteral("view_raw_data"),
+                                m_viewRawDataAction);
+  connect(m_viewRawDataAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
+    QJsonObject rawData =
+        m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
+            .toJsonObject();
+    KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+    rawWindow->setAttribute(Qt::WA_DeleteOnClose);
+    rawWindow->setWindowTitle(i18n("Raw Data for Source"));
+    QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+    QJsonDocument doc(rawData);
+    textBrowser->setPlainText(
+        QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    rawWindow->setCentralWidget(textBrowser);
+    rawWindow->resize(600, 400);
+    rawWindow->show();
+  });
+
+  m_openUrlAction = new QAction(i18n("Open URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
+  connect(m_openUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+    QString id =
+        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+
+    QString urlStr;
+    QStringList parts = id.split(QLatin1Char('/'));
+    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+      QString provider = parts[1];
+      QString owner = parts[2];
+      QString repo = parts[3];
+      if (provider == QStringLiteral("github")) {
+        urlStr = QStringLiteral("https://github.com/") + owner +
+                 QLatin1Char('/') + repo;
+      } else if (provider == QStringLiteral("gitlab")) {
+        urlStr = QStringLiteral("https://gitlab.com/") + owner +
+                 QLatin1Char('/') + repo;
+      }
+    }
+
+    if (!urlStr.isEmpty()) {
+      QDesktopServices::openUrl(QUrl(urlStr));
+      updateStatus(i18n("Opening source %1", id));
+    } else {
+      updateStatus(i18n("Invalid source ID for opening URL."));
+    }
+  });
+
+  m_copyUrlAction = new QAction(i18n("Copy URL"), this);
+  actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
+  connect(m_copyUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+    QString id =
+        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+
+    QString urlStr;
+    QStringList parts = id.split(QLatin1Char('/'));
+    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+      QString provider = parts[1];
+      QString owner = parts[2];
+      QString repo = parts[3];
+      if (provider == QStringLiteral("github")) {
+        urlStr = QStringLiteral("https://github.com/") + owner +
+                 QLatin1Char('/') + repo;
+      } else if (provider == QStringLiteral("gitlab")) {
+        urlStr = QStringLiteral("https://gitlab.com/") + owner +
+                 QLatin1Char('/') + repo;
+      }
+    }
+
+    if (!urlStr.isEmpty()) {
+      QGuiApplication::clipboard()->setText(urlStr);
+      updateStatus(i18n("URL copied to clipboard."));
+    } else {
+      updateStatus(i18n("Invalid source ID for copying URL."));
+    }
+  });
 
   KStandardAction::preferences(this, &MainWindow::showSettingsDialog,
                                actionCollection());

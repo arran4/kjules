@@ -13,7 +13,15 @@
             <Action name="file_quit" />
         </Menu>
         <Menu name="view">
+            <Action name="view_sessions" />
+            <Action name="show_past_new_sessions" />
+            <Action name="view_raw_data" />
+            <Separator />
             <Action name="toggle_window" />
+        </Menu>
+        <Menu name="edit">
+            <Action name="open_url" />
+            <Action name="copy_url" />
         </Menu>
         <Menu name="settings">
             <Action name="options_configure" />
@@ -23,6 +31,13 @@
         <text>Main Toolbar</text>
         <Action name="new_session" />
         <Action name="refresh_sources" />
+        <Separator />
+        <Action name="view_sessions" />
+        <Action name="show_past_new_sessions" />
+        <Separator />
+        <Action name="open_url" />
+        <Action name="copy_url" />
+        <Separator />
         <Action name="toggle_window" />
         <Separator />
         <Action name="options_configure" />
