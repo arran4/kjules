@@ -39,3 +39,34 @@ void SourceModel::setSources(const QJsonArray &sources) {
   m_sources = sources;
   endResetModel();
 }
+
+int SourceModel::addSources(const QJsonArray &sources) {
+  int addedCount = 0;
+  QJsonArray newSources;
+  for (int i = 0; i < sources.size(); ++i) {
+    QJsonObject source = sources[i].toObject();
+    QString id = source.value(QStringLiteral("id")).toString();
+    bool exists = false;
+    for (int j = 0; j < m_sources.size(); ++j) {
+      if (m_sources[j].toObject().value(QStringLiteral("id")).toString() ==
+          id) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      newSources.append(source);
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    beginInsertRows(QModelIndex(), m_sources.size(),
+                    m_sources.size() + addedCount - 1);
+    for (int i = 0; i < newSources.size(); ++i) {
+      m_sources.append(newSources[i]);
+    }
+    endInsertRows();
+  }
+  return addedCount;
+}

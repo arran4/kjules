@@ -25,6 +25,7 @@
 #include <QListView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSplitter>
@@ -38,14 +39,17 @@ MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)) {
+      m_draftsModel(new DraftsModel(this)), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0) {
   setupUi();
   setupTrayIcon();
   createActions();
 
   // Connect API Manager signals
-  connect(m_apiManager, &APIManager::sourcesReceived, m_sourceModel,
-          &SourceModel::setSources);
+  connect(m_apiManager, &APIManager::sourcesReceived, this,
+          &MainWindow::onSourcesReceived);
+  connect(m_apiManager, &APIManager::sourcesRefreshFinished, this,
+          &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::sessionsReceived, m_sessionModel,
           &SessionModel::setSessions);
   connect(m_apiManager, &APIManager::sessionCreated,
@@ -225,9 +229,8 @@ void MainWindow::setupUi() {
 
   // Toolbar / Buttons
   QHBoxLayout *buttonLayout = new QHBoxLayout();
-  QPushButton *refreshSourcesBtn =
-      new QPushButton(i18n("Refresh Sources"), this);
-  connect(refreshSourcesBtn, &QPushButton::clicked, this,
+  m_refreshSourcesBtn = new QPushButton(i18n("Refresh Sources"), this);
+  connect(m_refreshSourcesBtn, &QPushButton::clicked, this,
           &MainWindow::refreshSources);
 
   QPushButton *refreshSessionsBtn =
@@ -243,7 +246,7 @@ void MainWindow::setupUi() {
   connect(settingsButton, &QPushButton::clicked, this,
           &MainWindow::showSettingsDialog);
 
-  buttonLayout->addWidget(refreshSourcesBtn);
+  buttonLayout->addWidget(m_refreshSourcesBtn);
   buttonLayout->addWidget(refreshSessionsBtn);
   buttonLayout->addWidget(settingsButton);
   buttonLayout->addStretch();
@@ -254,6 +257,18 @@ void MainWindow::setupUi() {
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
+
+  m_sourceProgressBar = new QProgressBar(this);
+  m_sourceProgressBar->setMinimum(0);
+  m_sourceProgressBar->setMaximum(0); // Indeterminate
+  m_sourceProgressBar->hide();
+  statusBar()->addPermanentWidget(m_sourceProgressBar);
+
+  m_cancelRefreshBtn = new QPushButton(i18n("Cancel"), this);
+  m_cancelRefreshBtn->hide();
+  connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
+          &MainWindow::cancelSourcesRefresh);
+  statusBar()->addPermanentWidget(m_cancelRefreshBtn);
 }
 
 void MainWindow::setupTrayIcon() {
@@ -284,13 +299,13 @@ void MainWindow::createActions() {
   KGlobalAccel::setGlobalShortcut(newSessionAction,
                                   QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
 
-  QAction *refreshSourcesAction =
+  m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
-  connect(refreshSourcesAction, &QAction::triggered, this,
+  connect(m_refreshSourcesAction, &QAction::triggered, this,
           &MainWindow::refreshSources);
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
-                                refreshSourcesAction);
+                                m_refreshSourcesAction);
 
   QAction *refreshSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
@@ -308,6 +323,20 @@ void MainWindow::createActions() {
 }
 
 void MainWindow::refreshSources() {
+  if (m_isRefreshingSources) {
+    cancelSourcesRefresh();
+    return;
+  }
+  m_isRefreshingSources = true;
+  m_sourcesLoadedCount = 0;
+  m_sourcesAddedCount = 0;
+  m_pagesLoadedCount = 0;
+
+  m_refreshSourcesBtn->setText(i18n("Cancel Refresh"));
+  m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
+  m_sourceProgressBar->show();
+  m_cancelRefreshBtn->show();
+
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();
 }
@@ -415,4 +444,46 @@ void MainWindow::toggleWindow() {
     raise();
     activateWindow();
   }
+}
+
+void MainWindow::onSourcesReceived(const QJsonArray &sources) {
+  int added = m_sourceModel->addSources(sources);
+  m_sourcesLoadedCount += sources.size();
+  m_sourcesAddedCount += added;
+  m_pagesLoadedCount++;
+
+  m_sourceProgressBar->setFormat(i18n("%1 sources loaded from %2 pages",
+                                      m_sourcesLoadedCount,
+                                      m_pagesLoadedCount));
+  updateStatus(i18n("Loaded %1 sources, added %2 new.", m_sourcesLoadedCount,
+                    m_sourcesAddedCount));
+}
+
+void MainWindow::onSourcesRefreshFinished() {
+  bool wasRefreshing = m_isRefreshingSources;
+  m_isRefreshingSources = false;
+  m_sourceProgressBar->hide();
+  m_cancelRefreshBtn->hide();
+  m_refreshSourcesBtn->setText(i18n("Refresh Sources"));
+  m_refreshSourcesAction->setText(i18n("Refresh Sources"));
+
+  if (wasRefreshing) {
+    updateStatus(i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
+                      m_sourcesLoadedCount, m_sourcesAddedCount));
+  } else {
+    updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
+                      m_sourcesLoadedCount, m_sourcesAddedCount));
+  }
+}
+
+void MainWindow::cancelSourcesRefresh() {
+  m_apiManager->cancelListSources();
+  m_isRefreshingSources = false;
+  m_sourceProgressBar->hide();
+  m_cancelRefreshBtn->hide();
+  m_refreshSourcesBtn->setText(i18n("Refresh Sources"));
+  m_refreshSourcesAction->setText(i18n("Refresh Sources"));
+    // Omit updateStatus here because APIManager's cancelation will
+    // subsequently emit sourcesRefreshFinished(), which would clobber this.
+    // Instead, we let onSourcesRefreshFinished() handle the final status text.
 }

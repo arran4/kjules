@@ -11,6 +11,9 @@ class DraftsModel;
 class QListView;
 class KStatusNotifierItem;
 class QLabel;
+class QProgressBar;
+class QPushButton;
+class QAction;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -34,6 +37,9 @@ private Q_SLOTS:
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
+  void onSourcesReceived(const QJsonArray &sources);
+  void onSourcesRefreshFinished();
+  void cancelSourcesRefresh();
 
 private:
   void setupUi();
@@ -50,6 +56,15 @@ private:
   QListView *m_draftsView;
   KStatusNotifierItem *m_trayIcon;
   QLabel *m_statusLabel;
+  QProgressBar *m_sourceProgressBar;
+  QPushButton *m_cancelRefreshBtn;
+  QPushButton *m_refreshSourcesBtn;
+  QAction *m_refreshSourcesAction;
+
+  bool m_isRefreshingSources;
+  int m_sourcesLoadedCount;
+  int m_sourcesAddedCount;
+  int m_pagesLoadedCount;
 };
 
 #endif // MAINWINDOW_H
