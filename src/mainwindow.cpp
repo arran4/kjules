@@ -347,6 +347,27 @@ void MainWindow::createActions() {
   KGlobalAccel::setGlobalShortcut(newSessionAction,
                                   QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
 
+  m_showFullSessionListAction = new QAction(i18n("Show Full Session List"), this);
+  actionCollection()->addAction(QStringLiteral("show_full_session_list"), m_showFullSessionListAction);
+  connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
+      // Replaces old refresh sessions / view full list functionality
+      KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+      sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
+      sessionsWindow->setWindowTitle(i18n("Full Session List"));
+
+      QListView *listView = new QListView(sessionsWindow);
+      listView->setModel(m_sessionModel);
+      listView->setItemDelegate(new SessionDelegate(listView));
+
+      connect(listView, &QListView::doubleClicked, this, [this](const QModelIndex& filterIndex) {
+          onSessionActivated(filterIndex);
+      });
+
+      sessionsWindow->setCentralWidget(listView);
+      sessionsWindow->resize(600, 400);
+      sessionsWindow->show();
+  });
+
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);

@@ -67,6 +67,7 @@ private:
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
   QAction *m_showPastNewSessionsAction;
   QAction *m_viewRawDataAction;

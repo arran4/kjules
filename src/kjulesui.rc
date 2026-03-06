@@ -9,6 +9,7 @@
         <Menu name="file">
             <Action name="new_session" />
             <Action name="refresh_sources" />
+            <Action name="show_full_session_list" />
             <Separator />
             <Action name="file_quit" />
         </Menu>
@@ -31,14 +32,7 @@
         <text>Main Toolbar</text>
         <Action name="new_session" />
         <Action name="refresh_sources" />
-        <Separator />
-        <Action name="view_sessions" />
-        <Action name="show_past_new_sessions" />
-        <Separator />
-        <Action name="open_url" />
-        <Action name="copy_url" />
-        <Separator />
-        <Action name="toggle_window" />
+        <Action name="show_full_session_list" />
         <Separator />
         <Action name="options_configure" />
     </ToolBar>
