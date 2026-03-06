@@ -42,8 +42,16 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
 
   if (role == Qt::DisplayRole) {
     switch (index.column()) {
-    case ColName:
-      return source.value(QStringLiteral("name")).toString();
+    case ColName: {
+      QString name = source.value(QStringLiteral("name")).toString();
+      if (!name.isEmpty() && name != id)
+        return name;
+      // Reconstitute it
+      if (!provider.isEmpty() && !owner.isEmpty() && !repo.isEmpty()) {
+        return owner + QLatin1Char('/') + repo;
+      }
+      return id;
+    }
     case ColId:
       return id;
     case ColProvider:

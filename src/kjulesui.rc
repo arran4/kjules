@@ -8,24 +8,27 @@
     <MenuBar>
         <Menu name="file">
             <Action name="new_session" />
-            <Action name="refresh_sources" />
-            <Action name="show_full_session_list" />
             <Separator />
             <Action name="file_quit" />
         </Menu>
-        <Menu name="view">
+        <Menu name="actions">
+            <text>Actions</text>
+            <Action name="refresh_sources" />
+            <Action name="show_full_session_list" />
+            <Separator />
             <Action name="view_sessions" />
             <Action name="show_past_new_sessions" />
             <Action name="view_raw_data" />
             <Separator />
-            <Action name="toggle_window" />
-        </Menu>
-        <Menu name="edit">
             <Action name="open_url" />
             <Action name="copy_url" />
         </Menu>
+        <Menu name="view">
+            <Action name="toggle_window" />
+        </Menu>
         <Menu name="settings">
             <Action name="options_configure" />
+            <Action name="options_configure_toolbars" />
         </Menu>
     </MenuBar>
     <ToolBar name="mainToolBar">
