@@ -2,6 +2,7 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "errorsmodel.h"
 #include "newsessiondialog.h"
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
@@ -18,8 +19,10 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QFile>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QIcon>
 #include <QLabel>
 #include <QListView>
@@ -28,10 +31,14 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSortFilterProxyModel>
 #include <QSplitter>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTextBrowser>
 #include <QTimer>
+#include <QTreeView>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -39,7 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)), m_isRefreshingSources(false),
+      m_draftsModel(new DraftsModel(this)),
+      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0) {
   setupUi();
   setupTrayIcon();
@@ -52,6 +60,8 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::sessionsReceived, m_sessionModel,
           &SessionModel::setSessions);
+  connect(m_apiManager, &APIManager::sessionCreationFailed, this,
+          &MainWindow::onSessionCreationFailed);
   connect(m_apiManager, &APIManager::sessionCreated,
           [this](const QJsonObject &session) {
             m_sessionModel->addSession(session);
@@ -66,10 +76,7 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::updateStatus);
 
   // Initial refresh
-  QTimer::singleShot(0, this, [this]() {
-    refreshSources();
-    refreshSessions();
-  });
+  QTimer::singleShot(0, this, [this]() { refreshSources(); });
 }
 
 MainWindow::~MainWindow() {}
@@ -83,55 +90,172 @@ void MainWindow::setupUi() {
   QTabWidget *tabWidget = new QTabWidget(this);
 
   // Sources View
-  m_sourceView = new QListView(this);
-  m_sourceView->setModel(m_sourceModel);
+  m_sourceView = new QTreeView(this);
+
+  QSortFilterProxyModel *proxyModel = new QSortFilterProxyModel(this);
+  proxyModel->setSourceModel(m_sourceModel);
+  proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+
+  m_sourceView->setModel(proxyModel);
+  m_sourceView->setSortingEnabled(true);
+  m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
+  m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sourceView->header()->setStretchLastSection(true);
+
   m_sourceView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(m_sourceView, &QListView::customContextMenuRequested,
-          [this](const QPoint &pos) {
-            QModelIndex index = m_sourceView->indexAt(pos);
-            if (index.isValid()) {
-              QString id = index.data(SourceModel::IdRole).toString();
-              QString urlStr;
-              QStringList parts = id.split(QLatin1Char('/'));
-              if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-                QString provider = parts[1];
-                QString owner = parts[2];
-                QString repo = parts[3];
-                if (provider == QStringLiteral("github")) {
-                  urlStr = QStringLiteral("https://github.com/") + owner +
-                           QLatin1Char('/') + repo;
-                } else if (provider == QStringLiteral("gitlab")) {
-                  urlStr = QStringLiteral("https://gitlab.com/") + owner +
-                           QLatin1Char('/') + repo;
-                } else if (provider == QStringLiteral("bitbucket")) {
-                  urlStr = QStringLiteral("https://bitbucket.org/") + owner +
-                           QLatin1Char('/') + repo;
-                } else {
-                  urlStr = QStringLiteral("https://") + provider +
-                           QStringLiteral(".com/") + owner + QLatin1Char('/') +
-                           repo;
-                }
-              } else {
-                urlStr = id;
-              }
-
-              QMenu menu;
-              QAction *openUrlAction = menu.addAction(i18n("Open URL"));
-              QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
-
-              connect(openUrlAction, &QAction::triggered, [this, id, urlStr]() {
-                QDesktopServices::openUrl(QUrl(urlStr));
-                updateStatus(i18n("Opening source %1", id));
-              });
-
-              connect(copyUrlAction, &QAction::triggered, [this, urlStr]() {
-                QGuiApplication::clipboard()->setText(urlStr);
-                updateStatus(i18n("URL copied to clipboard."));
-              });
-              menu.exec(m_sourceView->mapToGlobal(pos));
+  connect(
+      m_sourceView, &QTreeView::customContextMenuRequested,
+      [this](const QPoint &pos) {
+        QModelIndex index = m_sourceView->indexAt(pos);
+        if (index.isValid()) {
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_sourceView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+          QString id =
+              m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+          QString urlStr;
+          QStringList parts = id.split(QLatin1Char('/'));
+          if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+            QString provider = parts[1];
+            QString owner = parts[2];
+            QString repo = parts[3];
+            if (provider == QStringLiteral("github")) {
+              urlStr = QStringLiteral("https://github.com/") + owner +
+                       QLatin1Char('/') + repo;
+            } else if (provider == QStringLiteral("gitlab")) {
+              urlStr = QStringLiteral("https://gitlab.com/") + owner +
+                       QLatin1Char('/') + repo;
+            } else if (provider == QStringLiteral("bitbucket")) {
+              urlStr = QStringLiteral("https://bitbucket.org/") + owner +
+                       QLatin1Char('/') + repo;
+            } else {
+              urlStr = QStringLiteral("https://") + provider +
+                       QStringLiteral(".com/") + owner + QLatin1Char('/') +
+                       repo;
             }
+          } else {
+            urlStr = id;
+          }
+
+          QMenu menu;
+          QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
+          QAction *showPastNewSessionsAction =
+              menu.addAction(i18n("Show past new sessions"));
+          QAction *viewRawDataAction = menu.addAction(i18n("View Raw Data"));
+          QAction *openUrlAction = menu.addAction(i18n("Open URL"));
+          QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+
+          connect(openUrlAction, &QAction::triggered, [this, id, urlStr]() {
+            QDesktopServices::openUrl(QUrl(urlStr));
+            updateStatus(i18n("Opening source %1", id));
           });
-  connect(m_sourceView, &QListView::doubleClicked, this,
+
+          connect(copyUrlAction, &QAction::triggered, [this, urlStr]() {
+            QGuiApplication::clipboard()->setText(urlStr);
+            updateStatus(i18n("URL copied to clipboard."));
+          });
+
+          connect(showPastNewSessionsAction, &QAction::triggered, [this, id]() {
+            QString path = QStandardPaths::writableLocation(
+                QStandardPaths::AppDataLocation);
+            QFile file(path + QStringLiteral("/cached_sessions.json"));
+            QJsonArray cachedSessions;
+            if (file.open(QIODevice::ReadOnly)) {
+              QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+              cachedSessions = doc.array();
+              file.close();
+            }
+
+            QJsonArray filteredSessions;
+            for (int i = 0; i < cachedSessions.size(); ++i) {
+              QJsonObject session = cachedSessions[i].toObject();
+              QString sessionSource =
+                  session.value(QStringLiteral("sourceContext"))
+                      .toObject()
+                      .value(QStringLiteral("source"))
+                      .toString();
+              if (sessionSource == id) {
+                filteredSessions.append(session);
+              }
+            }
+
+            KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+            SessionModel *localModel = new SessionModel(sessionsWindow);
+            localModel->setSessions(filteredSessions);
+            sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
+            sessionsWindow->setWindowTitle(
+                i18n("Past New Sessions for %1", id));
+
+            QListView *listView = new QListView(sessionsWindow);
+            listView->setModel(localModel);
+            listView->setItemDelegate(new SessionDelegate(listView));
+
+            connect(listView, &QListView::doubleClicked, this,
+                    [this, localModel](const QModelIndex &filterIndex) {
+                      QString id =
+                          localModel->data(filterIndex, SessionModel::IdRole)
+                              .toString();
+                      m_apiManager->getSession(id);
+                      updateStatus(
+                          i18n("Fetching details for session %1...", id));
+                    });
+
+            sessionsWindow->setCentralWidget(listView);
+            sessionsWindow->resize(600, 400);
+            sessionsWindow->show();
+          });
+
+          connect(
+              viewRawDataAction, &QAction::triggered, [this, sourceIndex]() {
+                QJsonObject rawData =
+                    m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
+                        .toJsonObject();
+
+                KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+                rawWindow->setAttribute(Qt::WA_DeleteOnClose);
+                rawWindow->setWindowTitle(i18n("Raw Data for Source"));
+
+                QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+                QJsonDocument doc(rawData);
+                textBrowser->setPlainText(
+                    QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+
+                rawWindow->setCentralWidget(textBrowser);
+                rawWindow->resize(600, 400);
+                rawWindow->show();
+              });
+
+          connect(viewSessionsAction, &QAction::triggered, [this, id]() {
+            KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+            QSortFilterProxyModel *filterModel =
+                new QSortFilterProxyModel(sessionsWindow);
+            filterModel->setSourceModel(m_sessionModel);
+            filterModel->setFilterRole(SessionModel::SourceRole);
+            filterModel->setFilterFixedString(id);
+            sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
+            sessionsWindow->setWindowTitle(i18n("Sessions for %1", id));
+
+            QListView *listView = new QListView(sessionsWindow);
+            listView->setModel(filterModel);
+            listView->setItemDelegate(new SessionDelegate(listView));
+
+            connect(listView, &QListView::doubleClicked, this,
+                    [this, filterModel](const QModelIndex &filterIndex) {
+                      QModelIndex sourceIndex =
+                          filterModel->mapToSource(filterIndex);
+                      onSessionActivated(sourceIndex);
+                    });
+
+            sessionsWindow->setCentralWidget(listView);
+            sessionsWindow->resize(600, 400);
+            sessionsWindow->show();
+          });
+          menu.exec(m_sourceView->mapToGlobal(pos));
+        }
+      });
+  connect(m_sourceView, &QTreeView::doubleClicked, this,
           &MainWindow::onSourceActivated);
   tabWidget->addTab(m_sourceView, i18n("Sources"));
 
@@ -225,34 +349,60 @@ void MainWindow::setupUi() {
 
   tabWidget->addTab(m_draftsView, i18n("Drafts"));
 
+  // Errors View
+  m_errorsView = new QListView(this);
+  m_errorsView->setModel(m_errorsModel);
+  m_errorsView->setItemDelegate(new DraftDelegate(
+      this)); // Reusing DraftDelegate for simple display or create custom
+  m_errorsView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(
+      m_errorsView, &QListView::customContextMenuRequested,
+      [this](const QPoint &pos) {
+        QModelIndex index = m_errorsView->indexAt(pos);
+        if (index.isValid()) {
+          QMenu menu;
+          QAction *editAction = menu.addAction(i18n("Edit / Modify"));
+          QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
+          QAction *deleteAction = menu.addAction(i18n("Delete"));
+
+          connect(editAction, &QAction::triggered,
+                  [this, index]() { onErrorActivated(index); });
+
+          connect(rawTranscriptAction, &QAction::triggered, [this, index]() {
+            QJsonObject errorData = m_errorsModel->getError(index.row());
+            KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+            rawWindow->setAttribute(Qt::WA_DeleteOnClose);
+            rawWindow->setWindowTitle(i18n("Raw Transcript"));
+
+            QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+            QJsonDocument doc(errorData);
+            textBrowser->setPlainText(
+                QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+
+            rawWindow->setCentralWidget(textBrowser);
+            rawWindow->resize(600, 400);
+            rawWindow->show();
+          });
+
+          connect(deleteAction, &QAction::triggered, [this, index]() {
+            if (QMessageBox::question(this, i18n("Delete Error"),
+                                      i18n("Are you sure?")) ==
+                QMessageBox::Yes) {
+              m_errorsModel->removeError(index.row());
+            }
+          });
+
+          menu.exec(m_errorsView->mapToGlobal(pos));
+        }
+      });
+  connect(m_errorsView, &QListView::doubleClicked, this,
+          &MainWindow::onErrorActivated);
+
+  tabWidget->addTab(m_errorsView, i18n("Errors"));
+
   mainLayout->addWidget(tabWidget);
 
-  // Toolbar / Buttons
-  QHBoxLayout *buttonLayout = new QHBoxLayout();
-  m_refreshSourcesBtn = new QPushButton(i18n("Refresh Sources"), this);
-  connect(m_refreshSourcesBtn, &QPushButton::clicked, this,
-          &MainWindow::refreshSources);
-
-  QPushButton *refreshSessionsBtn =
-      new QPushButton(i18n("Refresh Sessions"), this);
-  connect(refreshSessionsBtn, &QPushButton::clicked, this,
-          &MainWindow::refreshSessions);
-
-  QPushButton *newSessionButton = new QPushButton(i18n("New Session"), this);
-  connect(newSessionButton, &QPushButton::clicked, this,
-          &MainWindow::showNewSessionDialog);
-
-  QPushButton *settingsButton = new QPushButton(i18n("Settings"), this);
-  connect(settingsButton, &QPushButton::clicked, this,
-          &MainWindow::showSettingsDialog);
-
-  buttonLayout->addWidget(m_refreshSourcesBtn);
-  buttonLayout->addWidget(refreshSessionsBtn);
-  buttonLayout->addWidget(settingsButton);
-  buttonLayout->addStretch();
-  buttonLayout->addWidget(newSessionButton);
-
-  mainLayout->addLayout(buttonLayout);
+  // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
 
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
@@ -302,18 +452,19 @@ void MainWindow::createActions() {
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
+  actionCollection()->setDefaultShortcut(m_refreshSourcesAction,
+                                         QKeySequence(Qt::Key_F5));
   connect(m_refreshSourcesAction, &QAction::triggered, this,
           &MainWindow::refreshSources);
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
 
-  QAction *refreshSessionsAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
-                  i18n("Refresh Sessions"), this);
-  connect(refreshSessionsAction, &QAction::triggered, this,
-          &MainWindow::refreshSessions);
-  actionCollection()->addAction(QStringLiteral("refresh_sessions"),
-                                refreshSessionsAction);
+  QAction *toggleWindowAction = new QAction(i18n("Show/Hide kjules"), this);
+  connect(toggleWindowAction, &QAction::triggered, this,
+          &MainWindow::toggleWindowVisibility);
+  actionCollection()->addAction(QStringLiteral("toggle_window"),
+                                toggleWindowAction);
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
 
   KStandardAction::preferences(this, &MainWindow::showSettingsDialog,
                                actionCollection());
@@ -332,18 +483,12 @@ void MainWindow::refreshSources() {
   m_sourcesAddedCount = 0;
   m_pagesLoadedCount = 0;
 
-  m_refreshSourcesBtn->setText(i18n("Cancel Refresh"));
   m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
   m_sourceProgressBar->show();
   m_cancelRefreshBtn->show();
 
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();
-}
-
-void MainWindow::refreshSessions() {
-  updateStatus(i18n("Refreshing sessions..."));
-  m_apiManager->listSessions();
 }
 
 void MainWindow::showNewSessionDialog() {
@@ -374,6 +519,68 @@ void MainWindow::onDraftSaved(const QJsonObject &draft) {
   updateStatus(i18n("Draft saved."));
 }
 
+void MainWindow::onSessionCreationFailed(const QJsonObject &request,
+                                         const QJsonObject &response,
+                                         const QString &errorString) {
+  QMessageBox msgBox(this);
+  msgBox.setWindowTitle(i18n("Session Creation Failed"));
+  msgBox.setText(i18n("Failed to create session:\n%1", errorString));
+
+  QPushButton *continueBtn =
+      msgBox.addButton(i18n("Continue Editing"), QMessageBox::ActionRole);
+  QPushButton *saveBtn =
+      msgBox.addButton(i18n("Save to Drafts"), QMessageBox::ActionRole);
+  QPushButton *ignoreBtn =
+      msgBox.addButton(i18n("Ignore"), QMessageBox::RejectRole);
+  msgBox.setDefaultButton(ignoreBtn);
+
+  msgBox.exec();
+
+  if (msgBox.clickedButton() == continueBtn) {
+    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+    dialog.setInitialData(request);
+
+    connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+            &MainWindow::onSessionCreated);
+    connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+            &MainWindow::onDraftSaved);
+    dialog.exec();
+  } else if (msgBox.clickedButton() == saveBtn) {
+    m_draftsModel->addDraft(request);
+    updateStatus(i18n("Saved to drafts."));
+  } else {
+    // Ignore, save to errors
+    m_errorsModel->addError(request, response, errorString);
+    updateStatus(i18n("Error saved."));
+  }
+}
+
+void MainWindow::onErrorActivated(const QModelIndex &index) {
+  QJsonObject errorData = m_errorsModel->getError(index.row());
+  QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
+
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setInitialData(request);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested,
+          [this, index](const QStringList &sources, const QString &p,
+                        const QString &a) {
+            onSessionCreated(sources, p, a);
+            m_errorsModel->removeError(index.row());
+          });
+
+  connect(&dialog, &NewSessionDialog::saveDraftRequested,
+          [this, index](const QJsonObject &d) {
+            m_draftsModel->addDraft(d);
+            m_errorsModel->removeError(index.row());
+            updateStatus(i18n("Draft saved and error removed."));
+          });
+
+  dialog.exec();
+}
+
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
@@ -398,8 +605,13 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 }
 
 void MainWindow::onSourceActivated(const QModelIndex &index) {
+  // Map index from proxy to source
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
   QString sourceName =
-      m_sourceModel->data(index, SourceModel::NameRole).toString();
+      m_sourceModel->data(sourceIndex, SourceModel::NameRole).toString();
   QJsonObject initData;
   initData[QStringLiteral("source")] = sourceName;
 
@@ -436,7 +648,9 @@ void MainWindow::onError(const QString &message) {
   QMessageBox::critical(this, i18n("Error"), message);
 }
 
-void MainWindow::toggleWindow() {
+void MainWindow::toggleWindow() { toggleWindowVisibility(); }
+
+void MainWindow::toggleWindowVisibility() {
   if (isVisible()) {
     hide();
   } else {
@@ -464,12 +678,13 @@ void MainWindow::onSourcesRefreshFinished() {
   m_isRefreshingSources = false;
   m_sourceProgressBar->hide();
   m_cancelRefreshBtn->hide();
-  m_refreshSourcesBtn->setText(i18n("Refresh Sources"));
+
   m_refreshSourcesAction->setText(i18n("Refresh Sources"));
 
   if (wasRefreshing) {
-    updateStatus(i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
-                      m_sourcesLoadedCount, m_sourcesAddedCount));
+    updateStatus(
+        i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
+             m_sourcesLoadedCount, m_sourcesAddedCount));
   } else {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));
@@ -481,9 +696,9 @@ void MainWindow::cancelSourcesRefresh() {
   m_isRefreshingSources = false;
   m_sourceProgressBar->hide();
   m_cancelRefreshBtn->hide();
-  m_refreshSourcesBtn->setText(i18n("Refresh Sources"));
+
   m_refreshSourcesAction->setText(i18n("Refresh Sources"));
-    // Omit updateStatus here because APIManager's cancelation will
-    // subsequently emit sourcesRefreshFinished(), which would clobber this.
-    // Instead, we let onSourcesRefreshFinished() handle the final status text.
+  // Omit updateStatus here because APIManager's cancelation will
+  // subsequently emit sourcesRefreshFinished(), which would clobber this.
+  // Instead, we let onSourcesRefreshFinished() handle the final status text.
 }

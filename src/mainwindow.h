@@ -8,7 +8,9 @@ class APIManager;
 class SessionModel;
 class SourceModel;
 class DraftsModel;
+class ErrorsModel;
 class QListView;
+class QTreeView;
 class KStatusNotifierItem;
 class QLabel;
 class QProgressBar;
@@ -24,19 +26,23 @@ public:
 
 private Q_SLOTS:
   void refreshSources();
-  void refreshSessions();
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
                         const QString &automationMode);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
+  void onErrorActivated(const QModelIndex &index);
+  void onSessionCreationFailed(const QJsonObject &request,
+                               const QJsonObject &response,
+                               const QString &errorString);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
+  void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
@@ -50,15 +56,16 @@ private:
   SessionModel *m_sessionModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
+  ErrorsModel *m_errorsModel;
 
-  QListView *m_sourceView;
+  QTreeView *m_sourceView;
   QListView *m_sessionView;
   QListView *m_draftsView;
+  QListView *m_errorsView;
   KStatusNotifierItem *m_trayIcon;
   QLabel *m_statusLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
-  QPushButton *m_refreshSourcesBtn;
   QAction *m_refreshSourcesAction;
 
   bool m_isRefreshingSources;

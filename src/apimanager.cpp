@@ -246,20 +246,47 @@ void APIManager::createSession(const QString &source, const QString &prompt,
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, json]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
-      Q_EMIT sessionCreated(doc.object());
+      QJsonObject sessionObj = doc.object();
+      Q_EMIT sessionCreated(sessionObj);
       Q_EMIT logMessage(QStringLiteral("Session created successfully."));
+
+      // Cache session locally
+      QString path =
+          QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+      QDir dir(path);
+      if (!dir.exists()) {
+        dir.mkpath(QStringLiteral("."));
+      }
+      QFile file(path + QStringLiteral("/cached_sessions.json"));
+      QJsonArray cachedSessions;
+      if (file.open(QIODevice::ReadOnly)) {
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        cachedSessions = doc.array();
+        file.close();
+      }
+      cachedSessions.append(sessionObj);
+      if (file.open(QIODevice::WriteOnly)) {
+        file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+        QJsonDocument writeDoc(cachedSessions);
+        file.write(writeDoc.toJson());
+        file.close();
+      }
     } else {
       int statusCode =
           reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
+      QString errorStr = reply->errorString();
+      QByteArray errorData = reply->readAll();
+      QJsonDocument errDoc = QJsonDocument::fromJson(errorData);
+      Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr);
       Q_EMIT errorOccurred(QStringLiteral("Failed to create session: ") +
-                           reply->errorString());
+                           errorStr);
     }
     reply->deleteLater();
   });
