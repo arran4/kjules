@@ -112,6 +112,7 @@ void MainWindow::setupUi() {
   m_sourceView->setSortingEnabled(true);
   m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(true);
 
   m_sourceView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -120,7 +121,9 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_sourceView->indexAt(pos);
         if (index.isValid()) {
-          m_sourceView->setCurrentIndex(index);
+          if (!m_sourceView->selectionModel()->isSelected(index)) {
+            m_sourceView->setCurrentIndex(index);
+          }
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sourceView->model());
@@ -154,7 +157,15 @@ void MainWindow::setupUi() {
           QMenu menu;
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
-                  [this, sourceIndex]() { onSourceActivated(sourceIndex); });
+                  [this, sourceIndex]() {
+                    QModelIndexList selection =
+                        m_sourceView->selectionModel()->selectedIndexes();
+                    if (selection.isEmpty()) {
+                      onSourceActivated(sourceIndex);
+                    } else {
+                      onSourceActivated(selection.first());
+                    }
+                  });
 
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showPastNewSessionsAction);
@@ -763,12 +774,23 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   // Map index from proxy to source
   const QSortFilterProxyModel *proxy =
       qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-  QString sourceName =
-      m_sourceModel->data(sourceIndex, SourceModel::NameRole).toString();
   QJsonObject initData;
-  initData[QStringLiteral("source")] = sourceName;
+  QJsonArray sourcesArr;
+
+  QModelIndexList selection = m_sourceView->selectionModel()->selectedIndexes();
+  if (selection.isEmpty()) {
+    selection.append(index);
+  }
+
+  for (const QModelIndex &selIndex : selection) {
+    QModelIndex mappedIndex = proxy ? proxy->mapToSource(selIndex) : selIndex;
+    QString srcName =
+        m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
+    sourcesArr.append(srcName);
+  }
+
+  initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
