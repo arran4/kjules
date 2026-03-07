@@ -222,25 +222,44 @@ void APIManager::createSession(const QString &source, const QString &prompt,
         QStringLiteral("Cannot create session: No token or previous failure."));
     return;
   }
+  QJsonObject requestData;
+  requestData[QStringLiteral("source")] = source;
+  requestData[QStringLiteral("prompt")] = prompt;
+  if (!automationMode.isEmpty()) {
+    requestData[QStringLiteral("automationMode")] = automationMode;
+  }
+  createSessionAsync(requestData);
+}
+
+void APIManager::createSessionAsync(const QJsonObject &requestData) {
+  if (!canConnect()) {
+    Q_EMIT errorOccurred(
+        QStringLiteral("Cannot create session: No token or previous failure."));
+    return;
+  }
+
   QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
   QJsonObject json;
-  json[QStringLiteral("prompt")] = prompt;
+  json[QStringLiteral("prompt")] =
+      requestData.value(QStringLiteral("prompt")).toString();
 
   QJsonObject sourceContext;
-  sourceContext[QStringLiteral("source")] = source;
+  sourceContext[QStringLiteral("source")] =
+      requestData.value(QStringLiteral("source")).toString();
 
   json[QStringLiteral("sourceContext")] = sourceContext;
-  if (!automationMode.isEmpty()) {
-    json[QStringLiteral("automationMode")] = automationMode;
+  if (requestData.contains(QStringLiteral("automationMode"))) {
+    json[QStringLiteral("automationMode")] =
+        requestData.value(QStringLiteral("automationMode")).toString();
   }
 
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
   connect(reply, &QNetworkReply::finished, this, [this, reply, json]() {
+    QByteArray responseData = reply->readAll();
     if (reply->error() == QNetworkReply::NoError) {
-      QByteArray data = reply->readAll();
-      QJsonDocument doc = QJsonDocument::fromJson(data);
+      QJsonDocument doc = QJsonDocument::fromJson(responseData);
       QJsonObject sessionObj = doc.object();
       Q_EMIT sessionCreated(sessionObj);
       Q_EMIT logMessage(QStringLiteral("Session created successfully."));
@@ -276,6 +295,11 @@ void APIManager::createSession(const QString &source, const QString &prompt,
       QByteArray errorData = reply->readAll();
       QJsonDocument errDoc = QJsonDocument::fromJson(errorData);
       Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr);
+      QString errorMsg =
+          QStringLiteral("Failed to create session: ") + reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT errorOccurredWithResponse(errorMsg,
+                                       QString::fromUtf8(responseData));
     }
     reply->deleteLater();
   });

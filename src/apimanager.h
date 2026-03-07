@@ -10,6 +10,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QQueue>
 #include <QStandardPaths>
 #include <QUrlQuery>
 
@@ -35,6 +36,7 @@ public:
   void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
                      const QString &automationMode = QString());
+  void createSessionAsync(const QJsonObject &requestData);
   void listSessions();
   void getSession(const QString &sessionId);
 
@@ -46,6 +48,8 @@ Q_SIGNALS:
   void sessionDetailsReceived(const QJsonObject &session);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
+  void errorOccurredWithResponse(const QString &message,
+                                 const QString &response);
   void sessionCreationFailed(const QJsonObject &request,
                              const QJsonObject &response,
                              const QString &errorString);

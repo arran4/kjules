@@ -9,6 +9,7 @@ class APIManager;
 class SessionModel;
 class SourceModel;
 class DraftsModel;
+class QueueModel;
 class ErrorsModel;
 class QListView;
 class QTreeView;
@@ -33,6 +34,8 @@ private Q_SLOTS:
                         const QString &automationMode);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
+  void onQueueActivated(const QModelIndex &index);
+  void onQueueContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
   void onSessionCreationFailed(const QJsonObject &request,
                                const QJsonObject &response,
@@ -48,6 +51,14 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void processQueue();
+  void onSessionCreatedResult(bool success, const QJsonObject &session,
+                              const QString &errorMsg,
+                              const QString &rawResponse = QString());
+  void sendQueueItemNow(int row);
+  void editQueueItem(int row);
+  void convertQueueItemToDraft(int row);
+  void showErrorDetails(int row);
 
 private:
   void setupUi();
@@ -58,11 +69,13 @@ private:
   SessionModel *m_sessionModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
+  QueueModel *m_queueModel;
   ErrorsModel *m_errorsModel;
 
   QTreeView *m_sourceView;
   QListView *m_sessionView;
   QListView *m_draftsView;
+  QListView *m_queueView;
   QListView *m_errorsView;
   KStatusNotifierItem *m_trayIcon;
   QLabel *m_statusLabel;
@@ -83,6 +96,10 @@ private:
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
+
+  QTimer *m_queueTimer;
+  bool m_isProcessingQueue;
+  QDateTime m_queueBackoffUntil;
 };
 
 #endif // MAINWINDOW_H

@@ -21,6 +21,7 @@ public:
   explicit NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
                             QWidget *parent = nullptr);
   void setInitialData(const QJsonObject &data);
+  void setEditMode(bool isEdit);
 
 Q_SIGNALS:
   void createSessionRequested(const QStringList &sources, const QString &prompt,
@@ -44,6 +45,8 @@ private:
   SourceSelectionProxyModel *m_selectedProxy;
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
+  QPushButton *m_createButton;
+  QPushButton *m_createPRButton;
   QSet<QString> m_selectedSources;
 };
 

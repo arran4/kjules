@@ -165,31 +165,44 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   connect(draftButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveDraft);
 
-  QPushButton *createButton = new QPushButton(tr("Create Session"), this);
+  m_createButton = new QPushButton(tr("Create Session"), this);
   if (!hasApiKey) {
-    createButton->setEnabled(false);
-    createButton->setToolTip(tr("An API key is required to create a session."));
-  }
-  connect(createButton, &QPushButton::clicked, this,
-          [this]() { onSubmit(QStringLiteral("")); });
-
-  QPushButton *createPRButton = new QPushButton(tr("Create PR Session"), this);
-  createPRButton->setDefault(true);
-  if (!hasApiKey) {
-    createPRButton->setEnabled(false);
-    createPRButton->setToolTip(
+    m_createButton->setEnabled(false);
+    m_createButton->setToolTip(
         tr("An API key is required to create a session."));
   }
-  connect(createPRButton, &QPushButton::clicked, this,
+  connect(m_createButton, &QPushButton::clicked, this,
+          [this]() { onSubmit(QStringLiteral("")); });
+
+  m_createPRButton = new QPushButton(tr("Create PR Session"), this);
+  m_createPRButton->setDefault(true);
+  if (!hasApiKey) {
+    m_createPRButton->setEnabled(false);
+    m_createPRButton->setToolTip(
+        tr("An API key is required to create a session."));
+  }
+  connect(m_createPRButton, &QPushButton::clicked, this,
           [this]() { onSubmit(QStringLiteral("AUTO_CREATE_PR")); });
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
   buttonLayout->addWidget(draftButton);
-  buttonLayout->addWidget(createButton);
-  buttonLayout->addWidget(createPRButton);
+  buttonLayout->addWidget(m_createButton);
+  buttonLayout->addWidget(m_createPRButton);
 
   mainLayout->addLayout(buttonLayout);
+}
+
+void NewSessionDialog::setEditMode(bool isEdit) {
+  if (isEdit) {
+    setWindowTitle(tr("Edit Queued Session"));
+    m_createButton->setText(tr("Requeue Session"));
+    m_createPRButton->setText(tr("Requeue PR Session"));
+  } else {
+    setWindowTitle(tr("Create New Session"));
+    m_createButton->setText(tr("Create Session"));
+    m_createPRButton->setText(tr("Create PR Session"));
+  }
 }
 
 void NewSessionDialog::setInitialData(const QJsonObject &data) {

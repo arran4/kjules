@@ -2,8 +2,11 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "errorwindow.h"
 #include "errorsmodel.h"
 #include "newsessiondialog.h"
+#include "queuedelegate.h"
+#include "queuemodel.h"
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
 #include "sessionwindow.h"
@@ -47,7 +50,11 @@ MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)),
+      m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
+      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
+      m_isProcessingQueue(false) {
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)) {
@@ -56,6 +63,11 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
           &MainWindow::updateSessionStats);
   m_sessionRefreshTimer->start(60000); // 1 minute
+
+  connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
+  if (!m_queueModel->isEmpty()) {
+    m_queueTimer->start(60000); // 1 minute
+  }
   setupTrayIcon();
   createActions();
 
@@ -74,15 +86,23 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSessionCreationFailed);
   connect(m_apiManager, &APIManager::sessionCreated,
           [this](const QJsonObject &session) {
-            m_sessionModel->addSession(session);
-            updateSessionStats();
-            updateStatus(
-                i18n("Session created: %1",
-                     session.value(QStringLiteral("title")).toString()));
+            onSessionCreatedResult(true, session, QString());
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
-  connect(m_apiManager, &APIManager::errorOccurred, this, &MainWindow::onError);
+  connect(m_apiManager, &APIManager::errorOccurred, this,
+          [this](const QString &msg) {
+            if (!m_isProcessingQueue) {
+              onError(msg);
+            }
+            // For queue errors we rely on errorOccurredWithResponse
+          });
+  connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
+          [this](const QString &msg, const QString &response) {
+            if (m_isProcessingQueue) {
+              onSessionCreatedResult(false, QJsonObject(), msg, response);
+            }
+          });
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
 
@@ -269,6 +289,17 @@ void MainWindow::setupUi() {
           &MainWindow::onDraftActivated);
 
   tabWidget->addTab(m_draftsView, i18n("Drafts"));
+
+  // Queue View
+  m_queueView = new QListView(this);
+  m_queueView->setModel(m_queueModel);
+  m_queueView->setItemDelegate(new QueueDelegate(this));
+  m_queueView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_queueView, &QListView::activated, this,
+          &MainWindow::onQueueActivated);
+  connect(m_queueView, &QListView::customContextMenuRequested, this,
+          &MainWindow::onQueueContextMenu);
+  tabWidget->addTab(m_queueView, i18n("Queue"));
 
   // Errors View
   m_errorsView = new QListView(this);
@@ -676,13 +707,201 @@ void MainWindow::onSessionCreated(const QStringList &sources,
                                   const QString &prompt,
                                   const QString &automationMode) {
   for (const QString &source : sources) {
-    m_apiManager->createSession(source, prompt, automationMode);
+    QJsonObject req;
+    req[QStringLiteral("source")] = source;
+    req[QStringLiteral("prompt")] = prompt;
+    if (!automationMode.isEmpty()) {
+      req[QStringLiteral("automationMode")] = automationMode;
+    }
+    m_queueModel->enqueue(req);
+  }
+  updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.",
+                     sources.size()));
+
+  // Start timer if not running
+  if (!m_queueTimer->isActive()) {
+    m_queueTimer->start(60000); // 1 minute
+  }
+
+  // Trigger processing immediately if we can
+  QTimer::singleShot(0, this, &MainWindow::processQueue);
+}
+
+void MainWindow::processQueue() {
+  if (m_isProcessingQueue)
+    return;
+  if (m_queueModel->isEmpty()) {
+    m_queueTimer->stop();
+    return;
+  }
+
+  if (m_queueBackoffUntil.isValid() &&
+      QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
+    // We are backing off
+    return;
+  }
+
+  m_isProcessingQueue = true;
+  QueueItem item = m_queueModel->peek();
+  m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::onSessionCreatedResult(bool success,
+                                        const QJsonObject &session,
+                                        const QString &errorMsg,
+                                        const QString &rawResponse) {
+  if (!m_isProcessingQueue) {
+    if (success) {
+      m_sessionModel->addSession(session);
+      updateStatus(i18n("Session created successfully."));
+    }
+    return;
+  }
+
+  QueueItem item = m_queueModel->dequeue(); // Pop the item we were processing
+  m_isProcessingQueue = false;
+
+  if (success) {
+    m_sessionModel->addSession(session);
+    updateStatus(i18n("Session created from queue."));
+    m_queueBackoffUntil = QDateTime(); // reset backoff
+    // The next item will be processed by the 1-minute timer (m_queueTimer)
+  } else {
+    updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
+    m_queueModel->requeueFailed(item, errorMsg, rawResponse);
+    m_queueBackoffUntil =
+        QDateTime::currentDateTimeUtc().addSecs(30 * 60); // 30 minutes backoff
   }
 }
 
 void MainWindow::onDraftSaved(const QJsonObject &draft) {
   m_draftsModel->addDraft(draft);
   updateStatus(i18n("Draft saved."));
+}
+
+void MainWindow::onQueueActivated(const QModelIndex &index) {
+  if (!index.isValid())
+    return;
+  int row = index.row();
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.errorCount > 0) {
+    showErrorDetails(row);
+  } else {
+    editQueueItem(row);
+  }
+}
+
+void MainWindow::onQueueContextMenu(const QPoint &pos) {
+  QModelIndex index = m_queueView->indexAt(pos);
+  if (!index.isValid())
+    return;
+  int row = index.row();
+
+  QueueItem item = m_queueModel->getItem(row);
+
+  QMenu menu;
+  QAction *errorAction = nullptr;
+  if (item.errorCount > 0) {
+    errorAction =
+        menu.addAction(QIcon::fromTheme(QStringLiteral("dialog-error")),
+                       i18n("View Error Details"));
+    menu.addSeparator();
+  }
+
+  QAction *editAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
+  QAction *deleteAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
+  QAction *draftAction =
+      menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
+                     i18n("Convert to Draft"));
+  QAction *sendAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
+
+  QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
+  if (errorAction && selected == errorAction) {
+    showErrorDetails(row);
+  } else if (selected == editAction) {
+    editQueueItem(row);
+  } else if (selected == deleteAction) {
+    if (QMessageBox::question(this, i18n("Remove Task"),
+                              i18n("Remove this task from the queue?")) ==
+        QMessageBox::Yes) {
+      m_queueModel->removeItem(row);
+      updateStatus(i18n("Task removed from queue."));
+    }
+  } else if (selected == draftAction) {
+    convertQueueItemToDraft(row);
+  } else if (selected == sendAction) {
+    sendQueueItemNow(row);
+  }
+}
+
+void MainWindow::sendQueueItemNow(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+  m_queueModel->removeItem(row);
+  updateStatus(i18n("Sending queue item immediately..."));
+  m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::showErrorDetails(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+
+  ErrorWindow *window = new ErrorWindow(row, item, this);
+  connect(window, &ErrorWindow::editRequested, this,
+          &MainWindow::editQueueItem);
+  connect(window, &ErrorWindow::deleteRequested, this, [this](int r) {
+    m_queueModel->removeItem(r);
+    updateStatus(i18n("Task removed from queue."));
+  });
+  connect(window, &ErrorWindow::draftRequested, this,
+          &MainWindow::convertQueueItemToDraft);
+  connect(window, &ErrorWindow::sendNowRequested, this,
+          &MainWindow::sendQueueItemNow);
+
+  window->setAttribute(Qt::WA_DeleteOnClose);
+  window->show();
+}
+
+void MainWindow::editQueueItem(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setEditMode(true);
+  dialog.setInitialData(item.requestData);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested,
+          [this, row](const QStringList &sources, const QString &p,
+                      const QString &a) {
+            m_queueModel->removeItem(row);
+            onSessionCreated(sources, p, a);
+          });
+
+  connect(&dialog, &NewSessionDialog::saveDraftRequested,
+          [this, row](const QJsonObject &d) {
+            m_queueModel->removeItem(row);
+            m_draftsModel->addDraft(d);
+            updateStatus(i18n("Task moved to drafts."));
+          });
+
+  dialog.exec();
+}
+
+void MainWindow::convertQueueItemToDraft(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+
+  m_queueModel->removeItem(row);
+  m_draftsModel->addDraft(item.requestData);
+  updateStatus(i18n("Task converted to draft."));
 }
 
 void MainWindow::onSessionCreationFailed(const QJsonObject &request,
