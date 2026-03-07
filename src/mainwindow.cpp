@@ -2,8 +2,8 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
-#include "errorwindow.h"
 #include "errorsmodel.h"
+#include "errorwindow.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -52,8 +52,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0),
-      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false) {
   setupUi();
