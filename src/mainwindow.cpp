@@ -2,8 +2,8 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
-#include "errorwindow.h"
 #include "errorsmodel.h"
+#include "errorwindow.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -386,10 +386,27 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
-  QMenu *menu = m_trayIcon->contextMenu();
-  QAction *newSessionAction = menu->addAction(i18n("New Session"));
+  QMenu *menu = new QMenu(this);
+
+  QAction *showHideAction = new QAction(i18n("Show/Hide"), this);
+  connect(showHideAction, &QAction::triggered, this,
+          &MainWindow::toggleWindowVisibility);
+  menu->addAction(showHideAction);
+
+  menu->addSeparator();
+
+  QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
+  menu->addAction(newSessionAction);
+
+  menu->addSeparator();
+
+  QAction *quitAction = new QAction(i18n("&Quit"), this);
+  connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
+  menu->addAction(quitAction);
+
+  m_trayIcon->setContextMenu(menu);
 }
 
 void MainWindow::createActions() {
