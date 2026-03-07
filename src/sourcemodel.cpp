@@ -42,13 +42,15 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
 
   if (role == Qt::DisplayRole) {
     if (index.column() == ColName) {
-      QString name = source.value(QStringLiteral("name")).toString();
-      if (!name.isEmpty() && name != id)
-        return name;
-      // Reconstitute it
+      // Reconstitute it first to drop the redundant sources/github/ prefix
       if (!provider.isEmpty() && !owner.isEmpty() && !repo.isEmpty()) {
         return owner + QLatin1Char('/') + repo;
       }
+
+      QString name = source.value(QStringLiteral("name")).toString();
+      if (!name.isEmpty() && name != id)
+        return name;
+
       return id;
     }
     return QVariant();
