@@ -351,6 +351,8 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
+  m_trayIcon->setAssociatedWidget(this);
+
   QMenu *menu = m_trayIcon->contextMenu();
 
   QAction *toggleWindowAction = menu->addAction(i18n("Show/Hide Window"));
@@ -851,10 +853,10 @@ void MainWindow::onError(const QString &message) {
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
 
 void MainWindow::toggleWindowVisibility() {
-  if (isVisible()) {
+  if (isVisible() && !isMinimized() && isActiveWindow()) {
     hide();
   } else {
-    show();
+    showNormal();
     raise();
     activateWindow();
   }
