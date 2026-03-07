@@ -51,13 +51,10 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
-      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_isProcessingQueue(false) {
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)) {
+      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
+      m_isProcessingQueue(false) {
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -390,8 +387,7 @@ void MainWindow::setupTrayIcon() {
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
 
-  connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
-          &MainWindow::toggleWindow);
+  m_trayIcon->setAssociatedWidget(this);
 }
 
 void MainWindow::createActions() {
