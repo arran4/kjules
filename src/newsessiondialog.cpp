@@ -131,13 +131,6 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
 
   for (int i = 0; i < model->rowCount(); ++i) {
     QModelIndex idx = model->index(i, 0);
-    // We need to map role data. Proxy usually forwards data.
-    QString id = model->data(idx, SourceModel::IdRole).toString();
-    // Or NameRole if that's what we use for API.
-    // Let's assume we use IdRole to match with stored sources.
-    // Wait, earlier I decided to use NameRole (resource path) for API.
-    // So sources list should contain names.
-    // Let's use NameRole.
     QString name = model->data(idx, SourceModel::NameRole).toString();
 
     if (sourcesSet.contains(name)) {
