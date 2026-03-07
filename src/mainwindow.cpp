@@ -51,13 +51,11 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
+        m_errorsModel(new ErrorsModel(this)),
       m_isRefreshingSources(false), m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false) {
-      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)) {
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -1005,7 +1003,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   for (const QModelIndex &selIndex : selection) {
     QModelIndex mappedIndex = proxy ? proxy->mapToSource(selIndex) : selIndex;
     QString srcName =
-        m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
+        m_sourceModel->data(mappedIndex, SourceModel::IdRole).toString();
     sourcesArr.append(srcName);
   }
 
