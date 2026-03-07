@@ -1,4 +1,5 @@
 #include "newsessiondialog.h"
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
 #include <QDialogButtonBox>
@@ -154,6 +155,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   m_promptEdit = new QTextEdit(this);
   formLayout->addRow(tr("Prompt:"), m_promptEdit);
 
+  // Require Plan Approval
+  m_requirePlanApprovalCheckBox = new QCheckBox(this);
+  m_requirePlanApprovalCheckBox->setChecked(false);
+  formLayout->addRow(tr("Require Plan Approval:"), m_requirePlanApprovalCheckBox);
+
   mainLayout->addLayout(formLayout);
 
   // Buttons
@@ -208,8 +214,12 @@ void NewSessionDialog::setEditMode(bool isEdit) {
   }
 }
 
-void NewSessionDialog::setInitialData(const QJsonObject &data) {
+  void NewSessionDialog::setInitialData(const QJsonObject &data) {
   QString prompt = data.value(QStringLiteral("prompt")).toString();
+
+  if (data.contains(QStringLiteral("requirePlanApproval"))) {
+    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+  }
 
   // Check for "sources" array, fallback to "source" string
   QStringList sources;
@@ -290,7 +300,9 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
     return;
   }
 
-  Q_EMIT createSessionRequested(sources, prompt, automationMode);
+  bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
+
+  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval);
   accept();
 }
 
@@ -303,10 +315,12 @@ void NewSessionDialog::onSaveDraft() {
   }
 
   QString prompt = m_promptEdit->toPlainText();
+  bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
   QJsonObject draft;
   draft[QStringLiteral("sources")] = sourcesArr;
   draft[QStringLiteral("prompt")] = prompt;
+  draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveDraftRequested(draft);
   accept();

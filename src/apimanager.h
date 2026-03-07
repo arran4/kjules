@@ -35,7 +35,7 @@ public:
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
-                     const QString &automationMode = QString());
+                     const QString &automationMode = QString(), bool requirePlanApproval = false);
   void createSessionAsync(const QJsonObject &requestData);
   void listSessions();
   void getSession(const QString &sessionId);
@@ -54,7 +54,8 @@ Q_SIGNALS:
                                  const QString &response);
   void sessionCreationFailed(const QJsonObject &request,
                              const QJsonObject &response,
-                             const QString &errorString);
+                             const QString &errorString,
+                             const QString &httpDetails);
   void logMessage(const QString &message);
 
 private Q_SLOTS:
