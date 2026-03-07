@@ -65,8 +65,8 @@ MainWindow::MainWindow(QWidget *parent)
   if (!m_queueModel->isEmpty()) {
     m_queueTimer->start(60000); // 1 minute
   }
-  setupTrayIcon();
   createActions();
+  setupTrayIcon();
 
   // Connect API Manager signals
   connect(m_apiManager, &APIManager::sourcesReceived, this,
@@ -382,16 +382,10 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
-  QMenu *menu = new QMenu(this);
-  QAction *newSessionAction = menu->addAction(i18n("New Session"));
-  connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
-
-  QAction *toggleWindowAction = menu->addAction(i18n("Show / Hide"));
-  connect(toggleWindowAction, &QAction::triggered, this,
-          &MainWindow::toggleWindowVisibility);
-
-  m_trayIcon->setContextMenu(menu);
+  m_trayIcon->contextMenu()->addAction(
+      actionCollection()->action(QStringLiteral("new_session")));
+  m_trayIcon->contextMenu()->addAction(
+      actionCollection()->action(QStringLiteral("toggle_window")));
 
   connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
           &MainWindow::toggleWindow);
