@@ -132,6 +132,7 @@ void MainWindow::setupUi() {
   m_sourceView->setSortingEnabled(true);
   m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(true);
 
   m_sourceView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -140,7 +141,9 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_sourceView->indexAt(pos);
         if (index.isValid()) {
-          m_sourceView->setCurrentIndex(index);
+          if (!m_sourceView->selectionModel()->isSelected(index)) {
+            m_sourceView->setCurrentIndex(index);
+          }
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sourceView->model());
@@ -174,7 +177,15 @@ void MainWindow::setupUi() {
           QMenu menu;
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
-                  [this, sourceIndex]() { onSourceActivated(sourceIndex); });
+                  [this, sourceIndex]() {
+                    QModelIndexList selection =
+                        m_sourceView->selectionModel()->selectedIndexes();
+                    if (selection.isEmpty()) {
+                      onSourceActivated(sourceIndex);
+                    } else {
+                      onSourceActivated(selection.first());
+                    }
+                  });
 
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showPastNewSessionsAction);
@@ -652,26 +663,7 @@ void MainWindow::createActions() {
 
   // Set up XML GUI
 
-  // Try several likely paths for the RC file during development to ensure
-  // toolbars show up correctly. When installed, KXmlGui will naturally find
-  // "kjulesui.rc" via standard system paths.
-
-  QString path1 = QCoreApplication::applicationDirPath() +
-                  QStringLiteral("/../src/kjulesui.rc");
-  QString path2 = QCoreApplication::applicationDirPath() +
-                  QStringLiteral("/../../src/kjulesui.rc");
-
-  if (QFile::exists(path1)) {
-    qDebug() << "Loading KXmlGui from relative path 1:" << path1;
-    setupGUI(Default, path1);
-  } else if (QFile::exists(path2)) {
-    qDebug() << "Loading KXmlGui from relative path 2:" << path2;
-    setupGUI(Default, path2);
-  } else {
-    qDebug()
-        << "Falling back to installed kjulesui.rc in standard KXmlGui paths.";
-    setupGUI(Default, QStringLiteral("kjulesui.rc"));
-  }
+  setupGUI(Default, QStringLiteral("kjulesui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
@@ -1001,12 +993,23 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   // Map index from proxy to source
   const QSortFilterProxyModel *proxy =
       qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-  QString sourceName =
-      m_sourceModel->data(sourceIndex, SourceModel::NameRole).toString();
   QJsonObject initData;
-  initData[QStringLiteral("source")] = sourceName;
+  QJsonArray sourcesArr;
+
+  QModelIndexList selection = m_sourceView->selectionModel()->selectedIndexes();
+  if (selection.isEmpty()) {
+    selection.append(index);
+  }
+
+  for (const QModelIndex &selIndex : selection) {
+    QModelIndex mappedIndex = proxy ? proxy->mapToSource(selIndex) : selIndex;
+    QString srcName =
+        m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
+    sourcesArr.append(srcName);
+  }
+
+  initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
