@@ -8,6 +8,43 @@
 
 SessionModel::SessionModel(QObject *parent) : QAbstractTableModel(parent) {}
 
+SessionData parseSessionData(const QJsonObject &obj) {
+  SessionData data;
+  data.id = obj.value(QStringLiteral("id")).toString();
+  data.name = obj.value(QStringLiteral("name")).toString();
+
+  QString title = obj.value(QStringLiteral("title")).toString();
+  QString prompt = obj.value(QStringLiteral("prompt")).toString();
+
+  if (title.isEmpty()) {
+    title = prompt;
+  }
+  title.replace(QLatin1Char('\n'), QLatin1Char(' '));
+  if (title.length() > 50) {
+    title = title.left(47) + QStringLiteral("...");
+  }
+  data.title = title;
+  data.prompt = prompt;
+
+  data.source = obj.value(QStringLiteral("sourceContext"))
+                    .toObject()
+                    .value(QStringLiteral("source"))
+                    .toString();
+
+  QStringList sourceParts = data.source.split(QLatin1Char('/'));
+  if (sourceParts.size() >= 4 && sourceParts[0] == QStringLiteral("sources")) {
+    data.provider = sourceParts[1];
+    data.owner = sourceParts[2];
+    data.repo = sourceParts[3];
+  }
+
+  data.status = obj.value(QStringLiteral("status")).toString();
+  data.updateTime = QDateTime::fromString(obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
+  data.createTime = QDateTime::fromString(obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+  data.rawObject = obj;
+  return data;
+}
+
 int SessionModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
     return 0;
@@ -32,10 +69,20 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     switch (index.column()) {
     case ColTitle:
       return session.title;
-    case ColSource:
-      return session.source;
     case ColStatus:
       return session.status;
+    case ColUpdatedAt:
+      return session.updateTime.toString(Qt::DefaultLocaleShortDate);
+    case ColCreatedAt:
+      return session.createTime.toString(Qt::DefaultLocaleShortDate);
+    case ColProvider:
+      return session.provider;
+    case ColOwner:
+      return session.owner;
+    case ColRepo:
+      return session.repo;
+    case ColSource:
+      return session.source;
     case ColId:
       return session.id;
     default:
@@ -66,10 +113,20 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation, int 
     switch (section) {
     case ColTitle:
       return i18n("Title");
-    case ColSource:
-      return i18n("Source");
     case ColStatus:
       return i18n("Status");
+    case ColUpdatedAt:
+      return i18n("Updated At");
+    case ColCreatedAt:
+      return i18n("Created At");
+    case ColProvider:
+      return i18n("Provider");
+    case ColOwner:
+      return i18n("Owner");
+    case ColRepo:
+      return i18n("Repo");
+    case ColSource:
+      return i18n("Source");
     case ColId:
       return i18n("ID");
     }
@@ -95,17 +152,7 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
   m_sessions.reserve(sessions.size());
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
-    SessionData data;
-    data.id = obj.value(QStringLiteral("id")).toString();
-    data.name = obj.value(QStringLiteral("name")).toString();
-    data.title = obj.value(QStringLiteral("title")).toString();
-    data.source = obj.value(QStringLiteral("sourceContext"))
-                      .toObject()
-                      .value(QStringLiteral("source"))
-                      .toString();
-    data.prompt = obj.value(QStringLiteral("prompt")).toString();
-    data.status = obj.value(QStringLiteral("status")).toString();
-    data.rawObject = obj;
+    SessionData data = parseSessionData(obj);
     m_sessions.append(data);
     m_idToIndex[data.id] = i;
   }
@@ -133,17 +180,7 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
   beginInsertRows(QModelIndex(), m_sessions.size(), m_sessions.size() + newSessions.size() - 1);
   for (int i = 0; i < newSessions.size(); ++i) {
     QJsonObject obj = newSessions[i];
-    SessionData data;
-    data.id = obj.value(QStringLiteral("id")).toString();
-    data.name = obj.value(QStringLiteral("name")).toString();
-    data.title = obj.value(QStringLiteral("title")).toString();
-    data.source = obj.value(QStringLiteral("sourceContext"))
-                      .toObject()
-                      .value(QStringLiteral("source"))
-                      .toString();
-    data.prompt = obj.value(QStringLiteral("prompt")).toString();
-    data.status = obj.value(QStringLiteral("status")).toString();
-    data.rawObject = obj;
+    SessionData data = parseSessionData(obj);
     m_sessions.append(data);
     m_rawSessions.append(obj);
     m_idToIndex[data.id] = m_sessions.size() - 1;
@@ -154,17 +191,7 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
 
 void SessionModel::addSession(const QJsonObject &session) {
   beginInsertRows(QModelIndex(), 0, 0);
-  SessionData data;
-  data.id = session.value(QStringLiteral("id")).toString();
-  data.name = session.value(QStringLiteral("name")).toString();
-  data.title = session.value(QStringLiteral("title")).toString();
-  data.source = session.value(QStringLiteral("sourceContext"))
-                    .toObject()
-                    .value(QStringLiteral("source"))
-                    .toString();
-  data.prompt = session.value(QStringLiteral("prompt")).toString();
-  data.status = session.value(QStringLiteral("status")).toString();
-  data.rawObject = session;
+  SessionData data = parseSessionData(session);
   m_sessions.insert(0, data);
   // Rebuild the index completely because inserting at 0 shifts all indices
   m_idToIndex.clear();
@@ -178,19 +205,10 @@ void SessionModel::updateSession(const QJsonObject &session) {
   QString id = session.value(QStringLiteral("id")).toString();
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
-    SessionData data;
-    data.id = id;
-    data.name = session.value(QStringLiteral("name")).toString();
-    data.title = session.value(QStringLiteral("title")).toString();
-    data.source = session.value(QStringLiteral("sourceContext"))
-                      .toObject()
-                      .value(QStringLiteral("source"))
-                      .toString();
-    data.prompt = session.value(QStringLiteral("prompt")).toString();
-    data.status = session.value(QStringLiteral("status")).toString();
-    data.rawObject = session;
+    SessionData data = parseSessionData(session);
+    data.id = id; // Ensure ID matches
     m_sessions[i] = data;
-    Q_EMIT dataChanged(index(i, 0), index(i, 0));
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     return;
   }
   // If not found, add it

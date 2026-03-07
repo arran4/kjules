@@ -2,15 +2,32 @@
 #define SESSIONSWINDOW_H
 
 #include <KXmlGuiWindow>
+#include <QSortFilterProxyModel>
 
 class APIManager;
+class QActionGroup;
 class SessionModel;
 class QTreeView;
-class QSortFilterProxyModel;
 class QLabel;
 class QProgressBar;
 class QPushButton;
 class QJsonArray;
+
+class SessionsProxyModel : public QSortFilterProxyModel {
+  Q_OBJECT
+public:
+  explicit SessionsProxyModel(QObject *parent = nullptr);
+
+  void setTextFilter(const QString &text);
+  void setStatusFilter(const QString &status);
+
+protected:
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
+
+private:
+  QString m_textFilter;
+  QString m_statusFilter;
+};
 
 class SessionsWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -33,7 +50,7 @@ private:
 
   APIManager *m_apiManager;
   SessionModel *m_model;
-  QSortFilterProxyModel *m_proxyModel;
+  SessionsProxyModel *m_proxyModel;
   QTreeView *m_listView;
   QLabel *m_statusLabel;
   QProgressBar *m_progressBar;
@@ -43,6 +60,7 @@ private:
   bool m_isRefreshing;
   QString m_nextPageToken;
   QAction *m_resumeAction;
+  QActionGroup *m_autoLoadGroup;
 };
 
 #endif // SESSIONSWINDOW_H

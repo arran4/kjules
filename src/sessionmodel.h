@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVector>
+#include <QDateTime>
 
 struct SessionData {
   QString id;
@@ -14,6 +15,11 @@ struct SessionData {
   QString source;
   QString prompt;
   QString status;
+  QDateTime updateTime;
+  QDateTime createTime;
+  QString provider;
+  QString owner;
+  QString repo;
   QJsonObject rawObject;
 };
 
@@ -32,8 +38,13 @@ public:
 
   enum Columns {
     ColTitle = 0,
-    ColSource,
     ColStatus,
+    ColUpdatedAt,
+    ColCreatedAt,
+    ColProvider,
+    ColOwner,
+    ColRepo,
+    ColSource,
     ColId,
     ColCount
   };
