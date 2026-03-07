@@ -14,6 +14,7 @@
 #include <KLocalizedString>
 #include <KStandardAction>
 #include <KStatusNotifierItem>
+#include <KToolBar>
 #include <QAction>
 #include <QClipboard>
 #include <QCoreApplication>
@@ -109,6 +110,7 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_sourceView->indexAt(pos);
         if (index.isValid()) {
+          m_sourceView->setCurrentIndex(index);
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sourceView->model());
@@ -529,7 +531,15 @@ void MainWindow::createActions() {
       } else if (provider == QStringLiteral("gitlab")) {
         urlStr = QStringLiteral("https://gitlab.com/") + owner +
                  QLatin1Char('/') + repo;
+      } else if (provider == QStringLiteral("bitbucket")) {
+        urlStr = QStringLiteral("https://bitbucket.org/") + owner +
+                 QLatin1Char('/') + repo;
+      } else {
+        urlStr = QStringLiteral("https://") + provider +
+                 QStringLiteral(".com/") + owner + QLatin1Char('/') + repo;
       }
+    } else {
+      urlStr = id;
     }
 
     if (!urlStr.isEmpty()) {
@@ -564,7 +574,15 @@ void MainWindow::createActions() {
       } else if (provider == QStringLiteral("gitlab")) {
         urlStr = QStringLiteral("https://gitlab.com/") + owner +
                  QLatin1Char('/') + repo;
+      } else if (provider == QStringLiteral("bitbucket")) {
+        urlStr = QStringLiteral("https://bitbucket.org/") + owner +
+                 QLatin1Char('/') + repo;
+      } else {
+        urlStr = QStringLiteral("https://") + provider +
+                 QStringLiteral(".com/") + owner + QLatin1Char('/') + repo;
       }
+    } else {
+      urlStr = id;
     }
 
     if (!urlStr.isEmpty()) {
@@ -583,16 +601,20 @@ void MainWindow::createActions() {
 
   setStandardToolBarMenuEnabled(true);
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
   // Set up XML GUI
-  // During local development without `make install`, KDE might fail to find the
-  // rc file. We can pass the absolute path if it exists locally, or fallback to
-  // default.
-  QString rcFilePath = QCoreApplication::applicationDirPath() +
-                       QStringLiteral("/../src/kjulesui.rc");
+  QString rcFilePath = QString::fromUtf8(TOSTRING(KJULES_SOURCE_DIR)) +
+                       QStringLiteral("/src/kjulesui.rc");
   if (QFile::exists(rcFilePath)) {
     setupGUI(Default, rcFilePath);
   } else {
     setupGUI(Default, QStringLiteral("kjulesui.rc"));
+  }
+
+  if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
+    tb->show();
   }
 }
 

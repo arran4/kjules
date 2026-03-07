@@ -285,8 +285,6 @@ void APIManager::createSession(const QString &source, const QString &prompt,
       QByteArray errorData = reply->readAll();
       QJsonDocument errDoc = QJsonDocument::fromJson(errorData);
       Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr);
-      Q_EMIT errorOccurred(QStringLiteral("Failed to create session: ") +
-                           errorStr);
     }
     reply->deleteLater();
   });
