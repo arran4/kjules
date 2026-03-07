@@ -248,6 +248,9 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   QJsonObject sourceContext;
   QString sourceStr = requestData.value(QStringLiteral("source")).toString();
+  if (!sourceStr.startsWith(QStringLiteral("sources/")) && !sourceStr.isEmpty()) {
+      sourceStr = QStringLiteral("sources/") + sourceStr;
+  }
   sourceContext[QStringLiteral("source")] = sourceStr;
 
   json[QStringLiteral("sourceContext")] = sourceContext;
@@ -307,6 +310,8 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       for (const QByteArray &h : reqHeaders) {
           if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
               httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) + QStringLiteral("\n");
+          } else {
+              httpReq += QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
           }
       }
       httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
@@ -318,12 +323,12 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       }
 
       QString errorStr = reply->errorString();
-      QByteArray errorData = reply->readAll();
-      httpRes += QStringLiteral("\n") + QString::fromUtf8(errorData);
+      // Do not readAll() again, use responseData
+      httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
 
       QString httpDetails = QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
 
-      QJsonDocument errDoc = QJsonDocument::fromJson(errorData);
+      QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
       Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr, httpDetails);
       QString errorMsg =
           QStringLiteral("Failed to create session: ") + reply->errorString();
