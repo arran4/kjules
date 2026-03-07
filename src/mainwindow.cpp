@@ -170,22 +170,37 @@ void MainWindow::setupUi() {
   tabWidget->addTab(m_sourceView, i18n("Sources"));
 
   // Sessions View
-  m_sessionView = new QListView(this);
-  m_sessionView->setModel(m_sessionModel);
+  m_sessionView = new QTreeView(this);
+  QSortFilterProxyModel *sessionProxyModel = new QSortFilterProxyModel(this);
+  sessionProxyModel->setSourceModel(m_sessionModel);
+  sessionProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  sessionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+
+  m_sessionView->setModel(sessionProxyModel);
+  m_sessionView->setSortingEnabled(true);
+  m_sessionView->sortByColumn(SessionModel::ColName, Qt::AscendingOrder);
+  m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sessionView->header()->setStretchLastSection(true);
   m_sessionView->setItemDelegate(new SessionDelegate(this));
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
-      m_sessionView, &QListView::customContextMenuRequested,
+      m_sessionView, &QTreeView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
+          m_sessionView->setCurrentIndex(index);
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_sessionView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
           QMenu menu;
           QAction *openUrlAction = menu.addAction(i18n("Open URL"));
           QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
 
-          connect(openUrlAction, &QAction::triggered, [this, index]() {
-            QString id =
-                m_sessionModel->data(index, SessionModel::IdRole).toString();
+          connect(openUrlAction, &QAction::triggered, [this, sourceIndex]() {
+            QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole)
+                             .toString();
 
             QRegularExpression idRegex(QStringLiteral("^[a-zA-Z0-9_-]+$"));
             if (!idRegex.match(id).hasMatch()) {
@@ -197,9 +212,9 @@ void MainWindow::setupUi() {
             updateStatus(i18n("Opening session %1", id));
           });
 
-          connect(copyUrlAction, &QAction::triggered, [this, index]() {
-            QString id =
-                m_sessionModel->data(index, SessionModel::IdRole).toString();
+          connect(copyUrlAction, &QAction::triggered, [this, sourceIndex]() {
+            QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole)
+                             .toString();
 
             QRegularExpression idRegex(QStringLiteral("^[a-zA-Z0-9_-]+$"));
             if (!idRegex.match(id).hasMatch()) {
@@ -215,8 +230,14 @@ void MainWindow::setupUi() {
           menu.exec(m_sessionView->mapToGlobal(pos));
         }
       });
-  connect(m_sessionView, &QListView::doubleClicked, this,
-          &MainWindow::onSessionActivated);
+  connect(m_sessionView, &QTreeView::doubleClicked, this,
+          [this](const QModelIndex &index) {
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_sessionView->model());
+            QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+            onSessionActivated(sourceIndex);
+          });
 
   tabWidget->addTab(m_sessionView, i18n("Past"));
 
@@ -373,16 +394,26 @@ void MainWindow::createActions() {
     sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
     sessionsWindow->setWindowTitle(i18n("Full Session List"));
 
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(m_sessionModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
+    QTreeView *treeView = new QTreeView(sessionsWindow);
+    QSortFilterProxyModel *proxyModel = new QSortFilterProxyModel(treeView);
+    proxyModel->setSourceModel(m_sessionModel);
+    proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
-    connect(listView, &QListView::doubleClicked, this,
-            [this](const QModelIndex &filterIndex) {
-              onSessionActivated(filterIndex);
+    treeView->setModel(proxyModel);
+    treeView->setSortingEnabled(true);
+    treeView->sortByColumn(SessionModel::ColName, Qt::AscendingOrder);
+    treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    treeView->header()->setStretchLastSection(true);
+    treeView->setItemDelegate(new SessionDelegate(treeView));
+
+    connect(treeView, &QTreeView::doubleClicked, this,
+            [this, proxyModel](const QModelIndex &filterIndex) {
+              QModelIndex sourceIndex = proxyModel->mapToSource(filterIndex);
+              onSessionActivated(sourceIndex);
             });
 
-    sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->setCentralWidget(treeView);
     sessionsWindow->resize(600, 400);
     sessionsWindow->show();
   });
@@ -644,6 +675,7 @@ void MainWindow::refreshSources() {
 
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();
+  m_apiManager->listSessions();
 }
 
 void MainWindow::showNewSessionDialog() {

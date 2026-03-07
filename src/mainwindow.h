@@ -61,7 +61,7 @@ private:
   ErrorsModel *m_errorsModel;
 
   QTreeView *m_sourceView;
-  QListView *m_sessionView;
+  QTreeView *m_sessionView;
   QListView *m_draftsView;
   QListView *m_errorsView;
   KStatusNotifierItem *m_trayIcon;
