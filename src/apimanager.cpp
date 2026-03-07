@@ -147,6 +147,49 @@ void APIManager::testConnection(const QString &apiKey) {
   });
 }
 
+void APIManager::getSource(const QString &sourceId) {
+  if (!canConnect()) {
+    Q_EMIT errorOccurred(QStringLiteral(
+        "Cannot get source details: No token or previous failure."));
+    return;
+  }
+
+  QString cleanId = sourceId;
+  if (cleanId.startsWith(QStringLiteral("sources/"))) {
+    cleanId = cleanId.mid(8);
+  } else if (cleanId.startsWith(QStringLiteral("/sources/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+
+  if (cleanId.contains(QStringLiteral(".."))) {
+    Q_EMIT errorOccurred(QStringLiteral("Invalid source ID."));
+    return;
+  }
+
+  QString endpoint = QStringLiteral("/sources/") + cleanId;
+
+  QNetworkRequest request = createRequest(endpoint);
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      Q_EMIT sourceDetailsReceived(doc.object());
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_tokenFailed = true;
+      }
+      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") +
+                           reply->errorString());
+    }
+    reply->deleteLater();
+  });
+}
+
 void APIManager::listSources(const QString &pageToken) {
   if (!canConnect()) {
     Q_EMIT logMessage(

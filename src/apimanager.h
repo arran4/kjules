@@ -39,6 +39,7 @@ public:
   void createSessionAsync(const QJsonObject &requestData);
   void listSessions();
   void getSession(const QString &sessionId);
+  void getSource(const QString &sourceId);
 
 Q_SIGNALS:
   void sourcesReceived(const QJsonArray &sources);
@@ -46,6 +47,7 @@ Q_SIGNALS:
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions);
   void sessionDetailsReceived(const QJsonObject &session);
+  void sourceDetailsReceived(const QJsonObject &source);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,

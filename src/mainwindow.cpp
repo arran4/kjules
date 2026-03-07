@@ -88,6 +88,8 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
+  connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
+          &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this,
           [this](const QString &msg) {
             if (!m_isProcessingQueue) {
@@ -185,6 +187,7 @@ void MainWindow::setupUi() {
                     }
                   });
 
+          menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showPastNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
@@ -407,8 +410,7 @@ void MainWindow::setupTrayIcon() {
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
 
-  connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
-          &MainWindow::toggleWindow);
+  m_trayIcon->setAssociatedWidget(this);
 }
 
 void MainWindow::createActions() {
@@ -420,7 +422,8 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction,
-                                  QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+                                  QKeySequence());
+  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -456,6 +459,22 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
 
+  m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
+  actionCollection()->addAction(QStringLiteral("refresh_source"),
+                                m_refreshSourceAction);
+  connect(m_refreshSourceAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+    QString id =
+        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+    m_apiManager->getSource(id);
+    updateStatus(i18n("Refreshing source %1...", id));
+  });
+
   QAction *toggleWindowAction =
       new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
                   i18n("Minimize to Tray"), this);
@@ -464,6 +483,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -1105,6 +1125,12 @@ void MainWindow::onSourcesRefreshFinished() {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));
   }
+}
+
+void MainWindow::onSourceDetailsReceived(const QJsonObject &source) {
+  m_sourceModel->updateSource(source);
+  QString name = source.value(QStringLiteral("name")).toString();
+  updateStatus(i18n("Source %1 refreshed successfully.", name));
 }
 
 void MainWindow::cancelSourcesRefresh() {
