@@ -92,7 +92,11 @@ MainWindow::MainWindow(QWidget *parent)
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() {
+  if (m_trayIcon) {
+    delete m_trayIcon;
+  }
+}
 
 void MainWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
@@ -338,7 +342,9 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupTrayIcon() {
-  m_trayIcon = new KStatusNotifierItem(this);
+  // Construct without a QWidget parent to avoid KXmlGuiWindow DBusMenu
+  // conflicts.
+  m_trayIcon = new KStatusNotifierItem(QStringLiteral("kjules"), nullptr);
   m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
 
@@ -351,7 +357,7 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
-  m_trayIcon->setAssociatedWidget(nullptr);
+  m_trayIcon->setAssociatedWidget(this);
 
   QMenu *menu = m_trayIcon->contextMenu();
 
@@ -364,8 +370,10 @@ void MainWindow::setupTrayIcon() {
           &MainWindow::showNewSessionDialog);
 
   if (m_showFullSessionListAction) {
-    QAction *trayShowFullSessionList = menu->addAction(i18n("Full Session List"));
-    connect(trayShowFullSessionList, &QAction::triggered, m_showFullSessionListAction, &QAction::trigger);
+    QAction *trayShowFullSessionList =
+        menu->addAction(i18n("Full Session List"));
+    connect(trayShowFullSessionList, &QAction::triggered,
+            m_showFullSessionListAction, &QAction::trigger);
   }
 
   connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
