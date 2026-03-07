@@ -59,7 +59,7 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
-target_compile_definitions(kjules PRIVATE KJULES_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 
 target_link_libraries(kjules
     Qt5::Core
