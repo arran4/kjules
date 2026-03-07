@@ -244,8 +244,14 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       requestData.value(QStringLiteral("prompt")).toString();
 
   QJsonObject sourceContext;
-  sourceContext[QStringLiteral("source")] =
-      requestData.value(QStringLiteral("source")).toString();
+  QString sourceStr = requestData.value(QStringLiteral("source")).toString();
+  sourceContext[QStringLiteral("source")] = sourceStr;
+
+  if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
+    QJsonObject githubRepoContext;
+    githubRepoContext[QStringLiteral("startingBranch")] = QStringLiteral("main");
+    sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
+  }
 
   json[QStringLiteral("sourceContext")] = sourceContext;
   if (requestData.contains(QStringLiteral("automationMode"))) {
