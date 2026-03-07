@@ -27,14 +27,8 @@ private Q_SLOTS:
     }
     qint64 oldTime = timer.nsecsElapsed();
 
-    timer.start();
-    manager.createSessions(sources, QStringLiteral("Test prompt"),
-                           QStringLiteral("auto"));
-    qint64 newTime = timer.nsecsElapsed();
-
+    // We removed createSessions, so just leave this.
     qDebug() << "Old loop time (ns):" << oldTime;
-    qDebug() << "New batch time (ns):" << newTime;
-    qDebug() << "Improvement:" << (double)oldTime / newTime << "x";
   }
 };
 

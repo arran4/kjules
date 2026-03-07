@@ -9,6 +9,7 @@ class APIManager;
 class SessionModel;
 class SourceModel;
 class DraftsModel;
+class QueueModel;
 class QListView;
 class KStatusNotifierItem;
 class QLabel;
@@ -32,6 +33,7 @@ private Q_SLOTS:
                         const QString &automationMode);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
+  void onQueueActivated(const QModelIndex &index);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
@@ -42,6 +44,9 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void processQueue();
+  void onSessionCreatedResult(bool success, const QJsonObject &session,
+                              const QString &errorMsg);
 
 private:
   void setupUi();
@@ -52,10 +57,12 @@ private:
   SessionModel *m_sessionModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
+  QueueModel *m_queueModel;
 
   QListView *m_sourceView;
   QListView *m_sessionView;
   QListView *m_draftsView;
+  QListView *m_queueView;
   KStatusNotifierItem *m_trayIcon;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
@@ -70,6 +77,10 @@ private:
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
+
+  QTimer *m_queueTimer;
+  bool m_isProcessingQueue;
+  QDateTime m_queueBackoffUntil;
 };
 
 #endif // MAINWINDOW_H

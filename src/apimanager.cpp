@@ -217,47 +217,40 @@ void APIManager::cancelListSources() {
 
 void APIManager::createSession(const QString &source, const QString &prompt,
                                const QString &automationMode) {
-  createSessions(QStringList{source}, prompt, automationMode);
-}
-
-void APIManager::createSessions(const QStringList &sources,
-                                const QString &prompt,
-                                const QString &automationMode) {
-  for (const QString &source : sources) {
-    m_sessionQueue.enqueue({source, prompt, automationMode});
-  }
-  if (!m_isProcessingSessionQueue) {
-    processNextSession();
-  }
-}
-
-void APIManager::processNextSession() {
-  if (m_sessionQueue.isEmpty()) {
-    m_isProcessingSessionQueue = false;
-    return;
-  }
-
-  m_isProcessingSessionQueue = true;
   if (!canConnect()) {
     Q_EMIT errorOccurred(
         QStringLiteral("Cannot create session: No token or previous failure."));
-    m_sessionQueue.clear();
-    m_isProcessingSessionQueue = false;
+    return;
+  }
+  QJsonObject requestData;
+  requestData[QStringLiteral("source")] = source;
+  requestData[QStringLiteral("prompt")] = prompt;
+  if (!automationMode.isEmpty()) {
+    requestData[QStringLiteral("automationMode")] = automationMode;
+  }
+  createSessionAsync(requestData);
+}
+
+void APIManager::createSessionAsync(const QJsonObject &requestData) {
+  if (!canConnect()) {
+    Q_EMIT errorOccurred(
+        QStringLiteral("Cannot create session: No token or previous failure."));
     return;
   }
 
-  SessionRequest req = m_sessionQueue.dequeue();
-
   QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
   QJsonObject json;
-  json[QStringLiteral("prompt")] = req.prompt;
+  json[QStringLiteral("prompt")] =
+      requestData.value(QStringLiteral("prompt")).toString();
 
   QJsonObject sourceContext;
-  sourceContext[QStringLiteral("source")] = req.source;
+  sourceContext[QStringLiteral("source")] =
+      requestData.value(QStringLiteral("source")).toString();
 
   json[QStringLiteral("sourceContext")] = sourceContext;
-  if (!req.automationMode.isEmpty()) {
-    json[QStringLiteral("automationMode")] = req.automationMode;
+  if (requestData.contains(QStringLiteral("automationMode"))) {
+    json[QStringLiteral("automationMode")] =
+        requestData.value(QStringLiteral("automationMode")).toString();
   }
 
   QByteArray data = QJsonDocument(json).toJson();
@@ -279,7 +272,6 @@ void APIManager::processNextSession() {
                            reply->errorString());
     }
     reply->deleteLater();
-    processNextSession();
   });
 }
 

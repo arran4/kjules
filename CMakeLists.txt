@@ -52,6 +52,8 @@ set(kjules_SRCS
     src/newsessiondialog.cpp
     src/settingsdialog.cpp
     src/draftdelegate.cpp
+    src/queuedelegate.cpp
+    src/queuemodel.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
 )
