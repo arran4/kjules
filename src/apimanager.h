@@ -45,6 +45,8 @@ Q_SIGNALS:
   void sessionDetailsReceived(const QJsonObject &session);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
+  void errorOccurredWithResponse(const QString &message,
+                                 const QString &response);
   void logMessage(const QString &message);
 
 private Q_SLOTS:

@@ -47,10 +47,12 @@ private Q_SLOTS:
   void updateSessionStats();
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
-                              const QString &errorMsg);
+                              const QString &errorMsg,
+                              const QString &rawResponse = QString());
   void sendQueueItemNow(int row);
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
+  void showErrorDetails(int row);
 
 private:
   void setupUi();

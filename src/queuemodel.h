@@ -10,6 +10,7 @@ struct QueueItem {
   QJsonObject requestData; // contains source, prompt, automationMode
   int errorCount = 0;
   QString lastError;
+  QString lastResponse;
   QDateTime lastTry;
 
   QJsonObject toJson() const;
@@ -39,7 +40,8 @@ public:
   void enqueue(const QJsonObject &requestData);
   QueueItem dequeue();
   QueueItem peek() const;
-  void requeueFailed(const QueueItem &item, const QString &errorMsg);
+  void requeueFailed(const QueueItem &item, const QString &errorMsg,
+                     const QString &rawResponse = QString());
   void removeItem(int index);
   bool isEmpty() const;
   void clear();

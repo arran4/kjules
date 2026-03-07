@@ -257,9 +257,9 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   QNetworkReply *reply = m_nam->post(request, data);
 
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    QByteArray responseData = reply->readAll();
     if (reply->error() == QNetworkReply::NoError) {
-      QByteArray data = reply->readAll();
-      QJsonDocument doc = QJsonDocument::fromJson(data);
+      QJsonDocument doc = QJsonDocument::fromJson(responseData);
       Q_EMIT sessionCreated(doc.object());
       Q_EMIT logMessage(QStringLiteral("Session created successfully."));
     } else {
@@ -268,8 +268,11 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to create session: ") +
-                           reply->errorString());
+      QString errorMsg =
+          QStringLiteral("Failed to create session: ") + reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT errorOccurredWithResponse(errorMsg,
+                                       QString::fromUtf8(responseData));
     }
     reply->deleteLater();
   });

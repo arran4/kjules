@@ -2,6 +2,7 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "errorwindow.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -78,10 +79,15 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::errorOccurred, this,
           [this](const QString &msg) {
-            if (m_isProcessingQueue) {
-              onSessionCreatedResult(false, QJsonObject(), msg);
-            } else {
+            if (!m_isProcessingQueue) {
               onError(msg);
+            }
+            // For queue errors we rely on errorOccurredWithResponse
+          });
+  connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
+          [this](const QString &msg, const QString &response) {
+            if (m_isProcessingQueue) {
+              onSessionCreatedResult(false, QJsonObject(), msg, response);
             }
           });
   connect(m_apiManager, &APIManager::logMessage, this,
@@ -443,7 +449,8 @@ void MainWindow::processQueue() {
 
 void MainWindow::onSessionCreatedResult(bool success,
                                         const QJsonObject &session,
-                                        const QString &errorMsg) {
+                                        const QString &errorMsg,
+                                        const QString &rawResponse) {
   if (!m_isProcessingQueue) {
     if (success) {
       m_sessionModel->addSession(session);
@@ -462,7 +469,7 @@ void MainWindow::onSessionCreatedResult(bool success,
     // The next item will be processed by the 1-minute timer (m_queueTimer)
   } else {
     updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-    m_queueModel->requeueFailed(item, errorMsg);
+    m_queueModel->requeueFailed(item, errorMsg, rawResponse);
     m_queueBackoffUntil =
         QDateTime::currentDateTimeUtc().addSecs(30 * 60); // 30 minutes backoff
   }
@@ -476,7 +483,13 @@ void MainWindow::onDraftSaved(const QJsonObject &draft) {
 void MainWindow::onQueueActivated(const QModelIndex &index) {
   if (!index.isValid())
     return;
-  editQueueItem(index.row());
+  int row = index.row();
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.errorCount > 0) {
+    showErrorDetails(row);
+  } else {
+    editQueueItem(row);
+  }
 }
 
 void MainWindow::onQueueContextMenu(const QPoint &pos) {
@@ -485,7 +498,17 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     return;
   int row = index.row();
 
+  QueueItem item = m_queueModel->getItem(row);
+
   QMenu menu;
+  QAction *errorAction = nullptr;
+  if (item.errorCount > 0) {
+    errorAction =
+        menu.addAction(QIcon::fromTheme(QStringLiteral("dialog-error")),
+                       i18n("View Error Details"));
+    menu.addSeparator();
+  }
+
   QAction *editAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
   QAction *deleteAction = menu.addAction(
@@ -497,7 +520,9 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
-  if (selected == editAction) {
+  if (errorAction && selected == errorAction) {
+    showErrorDetails(row);
+  } else if (selected == editAction) {
     editQueueItem(row);
   } else if (selected == deleteAction) {
     if (QMessageBox::question(this, i18n("Remove Task"),
@@ -520,6 +545,27 @@ void MainWindow::sendQueueItemNow(int row) {
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
   m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::showErrorDetails(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+
+  ErrorWindow *window = new ErrorWindow(row, item, this);
+  connect(window, &ErrorWindow::editRequested, this,
+          &MainWindow::editQueueItem);
+  connect(window, &ErrorWindow::deleteRequested, this, [this](int r) {
+    m_queueModel->removeItem(r);
+    updateStatus(i18n("Task removed from queue."));
+  });
+  connect(window, &ErrorWindow::draftRequested, this,
+          &MainWindow::convertQueueItemToDraft);
+  connect(window, &ErrorWindow::sendNowRequested, this,
+          &MainWindow::sendQueueItemNow);
+
+  window->setAttribute(Qt::WA_DeleteOnClose);
+  window->show();
 }
 
 void MainWindow::editQueueItem(int row) {

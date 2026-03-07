@@ -13,6 +13,7 @@ QJsonObject QueueItem::toJson() const {
   obj[QStringLiteral("requestData")] = requestData;
   obj[QStringLiteral("errorCount")] = errorCount;
   obj[QStringLiteral("lastError")] = lastError;
+  obj[QStringLiteral("lastResponse")] = lastResponse;
   if (lastTry.isValid()) {
     obj[QStringLiteral("lastTry")] = lastTry.toString(Qt::ISODate);
   }
@@ -24,6 +25,7 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   item.requestData = obj.value(QStringLiteral("requestData")).toObject();
   item.errorCount = obj.value(QStringLiteral("errorCount")).toInt();
   item.lastError = obj.value(QStringLiteral("lastError")).toString();
+  item.lastResponse = obj.value(QStringLiteral("lastResponse")).toString();
   if (obj.contains(QStringLiteral("lastTry"))) {
     item.lastTry = QDateTime::fromString(
         obj.value(QStringLiteral("lastTry")).toString(), Qt::ISODate);
@@ -123,12 +125,14 @@ QueueItem QueueModel::peek() const {
   return m_items.first();
 }
 
-void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg) {
+void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg,
+                               const QString &rawResponse) {
   // Usually we want failed items to stay at the front of the queue to be
   // retried
   QueueItem updatedItem = item;
   updatedItem.errorCount++;
   updatedItem.lastError = errorMsg;
+  updatedItem.lastResponse = rawResponse;
   updatedItem.lastTry = QDateTime::currentDateTimeUtc();
 
   beginInsertRows(QModelIndex(), 0, 0);

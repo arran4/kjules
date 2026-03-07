@@ -56,6 +56,7 @@ set(kjules_SRCS
     src/queuemodel.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
+    src/errorwindow.cpp
 )
 
 add_executable(kjules ${kjules_SRCS})
