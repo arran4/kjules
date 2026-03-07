@@ -26,6 +26,7 @@ public:
   int addSources(const QJsonArray &sources);
   void loadSources();
   void saveSources();
+  void updateSource(const QJsonObject &source);
 
 private:
   QJsonArray m_sources;
