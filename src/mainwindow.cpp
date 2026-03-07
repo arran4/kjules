@@ -322,9 +322,10 @@ void MainWindow::setupUi() {
             QJsonObject errorData = m_errorsModel->getError(index.row());
             QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
             QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
-            QString errorStr = errorData.value(QStringLiteral("errorString")).toString();
+            QString errorStr = errorData.value(QStringLiteral("message")).toString();
+            QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
 
-            ErrorWindow *window = new ErrorWindow(index.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr, this);
+            ErrorWindow *window = new ErrorWindow(index.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr, httpDetails, this);
             connect(window, &ErrorWindow::editRequested, [this](int row) {
                QModelIndex idx = m_errorsModel->index(row, 0);
                onErrorActivated(idx);
@@ -926,12 +927,13 @@ void MainWindow::convertQueueItemToDraft(int row) {
 
 void MainWindow::onSessionCreationFailed(const QJsonObject &request,
                                          const QJsonObject &response,
-                                         const QString &errorString) {
-  m_errorsModel->addError(request, response, errorString);
+                                         const QString &errorString,
+                                         const QString &httpDetails) {
+  m_errorsModel->addError(request, response, errorString, httpDetails);
   updateStatus(i18n("Error saved."));
   int newRow = m_errorsModel->rowCount() - 1;
 
-  ErrorWindow *window = new ErrorWindow(newRow, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorString, this);
+  ErrorWindow *window = new ErrorWindow(newRow, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorString, httpDetails, this);
   connect(window, &ErrorWindow::editRequested, [this](int row) {
      QModelIndex idx = m_errorsModel->index(row, 0);
      onErrorActivated(idx);
@@ -1023,7 +1025,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   for (const QModelIndex &selIndex : selection) {
     QModelIndex mappedIndex = proxy ? proxy->mapToSource(selIndex) : selIndex;
     QString srcName =
-        m_sourceModel->data(mappedIndex, SourceModel::IdRole).toString();
+        m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
     sourcesArr.append(srcName);
   }
 

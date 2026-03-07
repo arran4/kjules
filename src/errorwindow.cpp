@@ -19,9 +19,9 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
   setupUi();
 }
 
-ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse, const QString &lastError, QWidget *parent)
+ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse, const QString &lastError, const QString &httpDetails, QWidget *parent)
     : QDialog(parent), m_row(errorRow), m_requestData(requestData),
-      m_lastResponse(lastResponse), m_lastError(lastError) {
+      m_lastResponse(lastResponse), m_lastError(lastError), m_httpDetails(httpDetails) {
   setWindowTitle(i18n("Error Details"));
   setupUi();
 }
@@ -120,6 +120,19 @@ void ErrorWindow::setupUi() {
   rawLayout->addWidget(resLabel);
   rawLayout->addWidget(m_rawResponseEdit);
   tabWidget->addTab(rawTab, i18n("Raw Data"));
+
+  // Tab 3: HTTP Details
+  if (!m_httpDetails.isEmpty()) {
+    QWidget *httpTab = new QWidget(tabWidget);
+    QVBoxLayout *httpLayout = new QVBoxLayout(httpTab);
+
+    m_httpDetailsEdit = new QTextEdit(this);
+    m_httpDetailsEdit->setReadOnly(true);
+    m_httpDetailsEdit->setPlainText(m_httpDetails);
+
+    httpLayout->addWidget(m_httpDetailsEdit);
+    tabWidget->addTab(httpTab, i18n("HTTP Details"));
+  }
 
   mainLayout->addWidget(tabWidget);
 

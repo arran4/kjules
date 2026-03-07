@@ -32,8 +32,8 @@ protected:
       return false;
 
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
-    QString id = sourceModel()->data(idx, SourceModel::IdRole).toString();
-    bool isSelected = m_selectedSources->contains(id);
+    QString name = sourceModel()->data(idx, SourceModel::NameRole).toString();
+    bool isSelected = m_selectedSources->contains(name);
     return m_showSelected ? isSelected : !isSelected;
   }
 
@@ -135,7 +135,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   connect(m_unselectedView, &QListView::doubleClicked, this,
           [this](const QModelIndex &idx) {
             m_selectedSources.insert(
-                idx.data(SourceModel::IdRole).toString());
+                idx.data(SourceModel::NameRole).toString());
             updateModels();
             m_unselectedView->clearSelection();
           });
@@ -143,7 +143,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   connect(m_selectedView, &QListView::doubleClicked, this,
           [this](const QModelIndex &idx) {
             m_selectedSources.remove(
-                idx.data(SourceModel::IdRole).toString());
+                idx.data(SourceModel::NameRole).toString());
             updateModels();
             m_selectedView->clearSelection();
           });
@@ -247,7 +247,7 @@ void NewSessionDialog::onAddSelected() {
   QModelIndexList selection =
       m_unselectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &idx : selection) {
-    m_selectedSources.insert(idx.data(SourceModel::IdRole).toString());
+    m_selectedSources.insert(idx.data(SourceModel::NameRole).toString());
   }
   updateModels();
   m_unselectedView->clearSelection();
@@ -257,7 +257,7 @@ void NewSessionDialog::onRemoveSelected() {
   QModelIndexList selection =
       m_selectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &idx : selection) {
-    m_selectedSources.remove(idx.data(SourceModel::IdRole).toString());
+    m_selectedSources.remove(idx.data(SourceModel::NameRole).toString());
   }
   updateModels();
   m_selectedView->clearSelection();
@@ -266,7 +266,7 @@ void NewSessionDialog::onRemoveSelected() {
 void NewSessionDialog::onSelectAll() {
   for (int i = 0; i < m_unselectedProxy->rowCount(); ++i) {
     QModelIndex idx = m_unselectedProxy->index(i, 0);
-    m_selectedSources.insert(idx.data(SourceModel::IdRole).toString());
+    m_selectedSources.insert(idx.data(SourceModel::NameRole).toString());
   }
   updateModels();
 }
@@ -274,7 +274,7 @@ void NewSessionDialog::onSelectAll() {
 void NewSessionDialog::onUnselectAll() {
   for (int i = 0; i < m_selectedProxy->rowCount(); ++i) {
     QModelIndex idx = m_selectedProxy->index(i, 0);
-    m_selectedSources.remove(idx.data(SourceModel::IdRole).toString());
+    m_selectedSources.remove(idx.data(SourceModel::NameRole).toString());
   }
   updateModels();
 }

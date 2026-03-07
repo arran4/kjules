@@ -265,7 +265,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply, json]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, request, json, data]() {
     QByteArray responseData = reply->readAll();
     if (reply->error() == QNetworkReply::NoError) {
       QJsonDocument doc = QJsonDocument::fromJson(responseData);
@@ -300,10 +300,31 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
+      QString method = QStringLiteral("POST");
+      QString url = reply->url().toString();
+      QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
+      const auto reqHeaders = request.rawHeaderList();
+      for (const QByteArray &h : reqHeaders) {
+          if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
+              httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) + QStringLiteral("\n");
+          }
+      }
+      httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
+
+      QString httpRes = QStringLiteral("HTTP %1 %2\n").arg(statusCode).arg(reply->errorString());
+      const auto resHeaders = reply->rawHeaderList();
+      for (const QByteArray &h : resHeaders) {
+          httpRes += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(reply->rawHeader(h)) + QStringLiteral("\n");
+      }
+
       QString errorStr = reply->errorString();
       QByteArray errorData = reply->readAll();
+      httpRes += QStringLiteral("\n") + QString::fromUtf8(errorData);
+
+      QString httpDetails = QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
+
       QJsonDocument errDoc = QJsonDocument::fromJson(errorData);
-      Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr);
+      Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr, httpDetails);
       QString errorMsg =
           QStringLiteral("Failed to create session: ") + reply->errorString();
       Q_EMIT errorOccurred(errorMsg);

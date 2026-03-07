@@ -14,7 +14,7 @@ class ErrorWindow : public QDialog {
 public:
   explicit ErrorWindow(int queueRow, const QueueItem &item,
                        QWidget *parent = nullptr);
-  explicit ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse, const QString &lastError, QWidget *parent = nullptr);
+  explicit ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse, const QString &lastError, const QString &httpDetails = QString(), QWidget *parent = nullptr);
 
 Q_SIGNALS:
   void editRequested(int row);
@@ -32,10 +32,12 @@ private:
   QJsonObject m_requestData;
   QString m_lastResponse;
   QString m_lastError;
+  QString m_httpDetails;
 
   QLabel *m_errorLabel;
   QTextEdit *m_rawRequestEdit;
   QTextEdit *m_rawResponseEdit;
+  QTextEdit *m_httpDetailsEdit;
 };
 
 #endif // ERRORWINDOW_H

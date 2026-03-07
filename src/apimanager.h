@@ -52,7 +52,8 @@ Q_SIGNALS:
                                  const QString &response);
   void sessionCreationFailed(const QJsonObject &request,
                              const QJsonObject &response,
-                             const QString &errorString);
+                             const QString &errorString,
+                             const QString &httpDetails);
   void logMessage(const QString &message);
 
 private Q_SLOTS:
