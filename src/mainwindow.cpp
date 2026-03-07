@@ -462,15 +462,21 @@ void MainWindow::createActions() {
     filterModel->setParent(sessionsWindow); // Reparent to window to avoid leak
     sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
     sessionsWindow->setWindowTitle(i18n("Sessions for %1", id));
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(filterModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
-    connect(listView, &QListView::doubleClicked, this,
+
+    QTreeView *treeView = new QTreeView(sessionsWindow);
+    treeView->setModel(filterModel);
+    treeView->setSortingEnabled(true);
+    treeView->sortByColumn(SessionModel::ColName, Qt::AscendingOrder);
+    treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    treeView->header()->setStretchLastSection(true);
+    treeView->setItemDelegate(new SessionDelegate(treeView));
+
+    connect(treeView, &QTreeView::doubleClicked, this,
             [this, filterModel](const QModelIndex &filterIndex) {
               QModelIndex srcIdx = filterModel->mapToSource(filterIndex);
               onSessionActivated(srcIdx);
             });
-    sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->setCentralWidget(treeView);
     sessionsWindow->resize(600, 400);
     sessionsWindow->show();
   });
@@ -514,18 +520,30 @@ void MainWindow::createActions() {
     localModel->setSessions(filteredSessions);
     sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
     sessionsWindow->setWindowTitle(i18n("Past New Sessions for %1", id));
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(localModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
+
+    QTreeView *treeView = new QTreeView(sessionsWindow);
+    QSortFilterProxyModel *proxyModel = new QSortFilterProxyModel(treeView);
+    proxyModel->setSourceModel(localModel);
+    proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+
+    treeView->setModel(proxyModel);
+    treeView->setSortingEnabled(true);
+    treeView->sortByColumn(SessionModel::ColName, Qt::AscendingOrder);
+    treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    treeView->header()->setStretchLastSection(true);
+    treeView->setItemDelegate(new SessionDelegate(treeView));
+
     connect(
-        listView, &QListView::doubleClicked, this,
-        [this, localModel](const QModelIndex &filterIndex) {
+        treeView, &QTreeView::doubleClicked, this,
+        [this, localModel, proxyModel](const QModelIndex &filterIndex) {
+          QModelIndex sourceIndex = proxyModel->mapToSource(filterIndex);
           QString sessId =
-              localModel->data(filterIndex, SessionModel::IdRole).toString();
+              localModel->data(sourceIndex, SessionModel::IdRole).toString();
           m_apiManager->getSession(sessId);
           updateStatus(i18n("Fetching details for session %1...", sessId));
         });
-    sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->setCentralWidget(treeView);
     sessionsWindow->resize(600, 400);
     sessionsWindow->show();
   });
