@@ -383,14 +383,18 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
 
-  QAction *toggleWindowAction = new QAction(i18n("Show/Hide kjules"), this);
+  QAction *toggleWindowAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
+                  i18n("Minimize to Tray"), this);
   connect(toggleWindowAction, &QAction::triggered, this,
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
 
-  m_viewSessionsAction = new QAction(i18n("View Sessions"), this);
+  m_viewSessionsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
+                  i18n("View Sessions"), this);
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
