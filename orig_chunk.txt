@@ -1,0 +1,31 @@
+  m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
+  m_trayIcon->setStatus(KStatusNotifierItem::Active);
+  m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
+                         i18n("Google Jules Client"));
+
+  m_trayIcon->setStandardActionsEnabled(false);
+
+  QMenu *menu = m_trayIcon->contextMenu();
+  QAction *newSessionAction = menu->addAction(i18n("New Session"));
+  connect(newSessionAction, &QAction::triggered, this,
+          &MainWindow::showNewSessionDialog);
+
+  QAction *toggleWindowAction = menu->addAction(i18n("Show / Hide"));
+  connect(toggleWindowAction, &QAction::triggered, this,
+          &MainWindow::toggleWindowVisibility);
+
+  menu->addSeparator();
+  QAction *quitAction = menu->addAction(i18n("Quit"));
+  connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
+
+  connect(m_trayIcon, &KStatusNotifierItem::secondaryActivateRequested, this,
+          [menu](const QPoint &pos) { menu->popup(pos); });
+
+  connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
+          &MainWindow::toggleWindow);
+}
+
+void MainWindow::createActions() {
+  QAction *newSessionAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
+                  i18n("New Session"), this);

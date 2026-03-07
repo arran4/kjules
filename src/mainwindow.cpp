@@ -382,9 +382,7 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
-  m_trayIcon->setStandardActionsEnabled(false);
-
-  QMenu *menu = m_trayIcon->contextMenu();
+  QMenu *menu = new QMenu(this);
   QAction *newSessionAction = menu->addAction(i18n("New Session"));
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
@@ -393,12 +391,7 @@ void MainWindow::setupTrayIcon() {
   connect(toggleWindowAction, &QAction::triggered, this,
           &MainWindow::toggleWindowVisibility);
 
-  menu->addSeparator();
-  QAction *quitAction = menu->addAction(i18n("Quit"));
-  connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
-
-  connect(m_trayIcon, &KStatusNotifierItem::secondaryActivateRequested, this,
-          [menu](const QPoint &pos) { menu->popup(pos); });
+  m_trayIcon->setContextMenu(menu);
 
   connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
           &MainWindow::toggleWindow);
