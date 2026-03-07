@@ -1,0 +1,95 @@
+--- src/newsessiondialog.cpp
++++ src/newsessiondialog.cpp
+@@ -49,7 +50,7 @@
+   QVBoxLayout *sourceLayout = new QVBoxLayout();
+
+   m_filterEdit = new QLineEdit(this);
+-  m_filterEdit->setPlaceholderText(tr("Filter sources..."));
++  m_filterEdit->setPlaceholderText(tr("Filter sources... (Ctrl+F)"));
+   sourceLayout->addWidget(m_filterEdit);
+
+   QHBoxLayout *splitViewLayout = new QHBoxLayout();
+@@ -70,22 +71,26 @@
+   middleButtonsLayout->addStretch();
+
+   QPushButton *addBtn = new QPushButton(tr(">"), this);
+-  addBtn->setToolTip(tr("Add selected"));
++  addBtn->setToolTip(tr("Add selected (Alt+Right)"));
++  addBtn->setShortcut(QKeySequence(Qt::ALT + Qt::Key_Right));
+   connect(addBtn, &QPushButton::clicked, this,
+           &NewSessionDialog::onAddSelected);
+
+   QPushButton *addAllBtn = new QPushButton(tr(">>"), this);
+-  addAllBtn->setToolTip(tr("Add all"));
++  addAllBtn->setToolTip(tr("Add all (Alt+Shift+Right)"));
++  addAllBtn->setShortcut(QKeySequence(Qt::ALT + Qt::SHIFT + Qt::Key_Right));
+   connect(addAllBtn, &QPushButton::clicked, this,
+           &NewSessionDialog::onSelectAll);
+
+   QPushButton *removeBtn = new QPushButton(tr("<"), this);
+-  removeBtn->setToolTip(tr("Remove selected"));
++  removeBtn->setToolTip(tr("Remove selected (Alt+Left)"));
++  removeBtn->setShortcut(QKeySequence(Qt::ALT + Qt::Key_Left));
+   connect(removeBtn, &QPushButton::clicked, this,
+           &NewSessionDialog::onRemoveSelected);
+
+   QPushButton *removeAllBtn = new QPushButton(tr("<<"), this);
+-  removeAllBtn->setToolTip(tr("Remove all"));
++  removeAllBtn->setToolTip(tr("Remove all (Alt+Shift+Left)"));
++  removeAllBtn->setShortcut(QKeySequence(Qt::ALT + Qt::SHIFT + Qt::Key_Left));
+   connect(removeAllBtn, &QPushButton::clicked, this,
+           &NewSessionDialog::onUnselectAll);
+
+@@ -149,14 +160,19 @@
+   // Buttons
+   QHBoxLayout *buttonLayout = new QHBoxLayout();
+
+-  QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
++  QPushButton *cancelButton = new QPushButton(tr("Cancel (Esc)"), this);
+   connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+
+-  QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
++  QPushButton *draftButton = new QPushButton(tr("Save as Draft (Ctrl+S)"), this);
++  draftButton->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
+   connect(draftButton, &QPushButton::clicked, this,
+           &NewSessionDialog::onSaveDraft);
+
+-  m_createButton = new QPushButton(tr("Create Session"), this);
++  m_createButton = new QPushButton(tr("Create Session (Ctrl+Return)"), this);
++  m_createButton->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return));
++  QShortcut *createEnterShortcut = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Enter), this);
++  connect(createEnterShortcut, &QShortcut::activated, m_createButton, &QPushButton::click);
++
+   if (!hasApiKey) {
+     m_createButton->setEnabled(false);
+     m_createButton->setToolTip(
+@@ -165,8 +181,12 @@
+   connect(m_createButton, &QPushButton::clicked, this,
+           [this]() { onSubmit(QStringLiteral("")); });
+
+-  m_createPRButton = new QPushButton(tr("Create PR Session"), this);
++  m_createPRButton = new QPushButton(tr("Create PR Session (Ctrl+Shift+Return)"), this);
+   m_createPRButton->setDefault(true);
++  m_createPRButton->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_Return));
++  QShortcut *createPREnterShortcut = new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_Enter), this);
++  connect(createPREnterShortcut, &QShortcut::activated, m_createPRButton, &QPushButton::click);
++
+   if (!hasApiKey) {
+     m_createPRButton->setEnabled(false);
+     m_createPRButton->setToolTip(
+@@ -187,13 +207,13 @@
+ void NewSessionDialog::setEditMode(bool isEdit) {
+   if (isEdit) {
+     setWindowTitle(tr("Edit Queued Session"));
+-    m_createButton->setText(tr("Requeue Session"));
+-    m_createPRButton->setText(tr("Requeue PR Session"));
++    m_createButton->setText(tr("Requeue Session (Ctrl+Return)"));
++    m_createPRButton->setText(tr("Requeue PR Session (Ctrl+Shift+Return)"));
+   } else {
+     setWindowTitle(tr("Create New Session"));
+-    m_createButton->setText(tr("Create Session"));
+-    m_createPRButton->setText(tr("Create PR Session"));
++    m_createButton->setText(tr("Create Session (Ctrl+Return)"));
++    m_createPRButton->setText(tr("Create PR Session (Ctrl+Shift+Return)"));
+   }
+ }

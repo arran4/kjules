@@ -461,7 +461,7 @@ void MainWindow::createActions() {
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
-  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
