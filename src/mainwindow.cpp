@@ -529,6 +529,7 @@ void MainWindow::editQueueItem(int row) {
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setEditMode(true);
   dialog.setInitialData(item.requestData);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
