@@ -253,6 +253,12 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   }
   sourceContext[QStringLiteral("source")] = sourceStr;
 
+  if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
+    QJsonObject githubRepoContext;
+    githubRepoContext[QStringLiteral("startingBranch")] = QStringLiteral("main");
+    sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
+  }
+
   json[QStringLiteral("sourceContext")] = sourceContext;
 
   if (requestData.contains(QStringLiteral("requirePlanApproval"))) {
