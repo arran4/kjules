@@ -621,26 +621,7 @@ void MainWindow::createActions() {
 
   // Set up XML GUI
 
-  // Try several likely paths for the RC file during development to ensure
-  // toolbars show up correctly. When installed, KXmlGui will naturally find
-  // "kjulesui.rc" via standard system paths.
-
-  QString path1 = QCoreApplication::applicationDirPath() +
-                  QStringLiteral("/../src/kjulesui.rc");
-  QString path2 = QCoreApplication::applicationDirPath() +
-                  QStringLiteral("/../../src/kjulesui.rc");
-
-  if (QFile::exists(path1)) {
-    qDebug() << "Loading KXmlGui from relative path 1:" << path1;
-    setupGUI(Default, path1);
-  } else if (QFile::exists(path2)) {
-    qDebug() << "Loading KXmlGui from relative path 2:" << path2;
-    setupGUI(Default, path2);
-  } else {
-    qDebug()
-        << "Falling back to installed kjulesui.rc in standard KXmlGui paths.";
-    setupGUI(Default, QStringLiteral("kjulesui.rc"));
-  }
+  setupGUI(Default, QStringLiteral("kjulesui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
