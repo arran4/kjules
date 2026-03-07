@@ -2,8 +2,19 @@
 #define SESSIONMODEL_H
 
 #include <QAbstractListModel>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QVector>
+
+struct SessionData {
+  QString id;
+  QString name;
+  QString title;
+  QString source;
+  QString prompt;
+  QJsonObject rawObject;
+};
 
 class SessionModel : public QAbstractListModel {
   Q_OBJECT
@@ -31,7 +42,8 @@ public:
   QJsonObject getSession(int row) const;
 
 private:
-  QJsonArray m_sessions;
+  QVector<SessionData> m_sessions;
+  QHash<QString, int> m_idToIndex;
 };
 
 #endif // SESSIONMODEL_H

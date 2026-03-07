@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <KXmlGuiWindow>
+#include <QDateTime>
 #include <QSystemTrayIcon>
 
 class APIManager;
@@ -46,6 +47,7 @@ private Q_SLOTS:
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
+  void updateSessionStats();
 
 private:
   void setupUi();
@@ -64,6 +66,7 @@ private:
   QListView *m_errorsView;
   KStatusNotifierItem *m_trayIcon;
   QLabel *m_statusLabel;
+  QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
@@ -78,6 +81,8 @@ private:
   int m_sourcesLoadedCount;
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;
+  QTimer *m_sessionRefreshTimer;
+  QDateTime m_lastSessionRefreshTime;
 };
 
 #endif // MAINWINDOW_H

@@ -99,6 +99,7 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint,
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
   QString key = overrideApiKey.isEmpty() ? m_apiKey : overrideApiKey;
+  key.remove(QLatin1Char('\n')).remove(QLatin1Char('\r'));
   if (!key.isEmpty()) {
     request.setRawHeader("X-Goog-Api-Key", key.toUtf8());
   }
@@ -227,16 +228,6 @@ void APIManager::createSession(const QString &source, const QString &prompt,
 
   QJsonObject sourceContext;
   sourceContext[QStringLiteral("source")] = source;
-
-  if (source.startsWith(QStringLiteral("sources/github/"))) {
-    QStringList parts = source.split(QStringLiteral("/"));
-    if (parts.size() >= 4) {
-      QJsonObject githubRepoContext;
-      githubRepoContext[QStringLiteral("owner")] = parts.at(2);
-      githubRepoContext[QStringLiteral("repo")] = parts.at(3);
-      sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
-    }
-  }
 
   json[QStringLiteral("sourceContext")] = sourceContext;
   if (!automationMode.isEmpty()) {

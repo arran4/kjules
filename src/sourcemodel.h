@@ -28,6 +28,9 @@ public:
   void saveSources();
 
 private:
+  void loadCache();
+  void saveCache();
+
   QJsonArray m_sources;
 };
 

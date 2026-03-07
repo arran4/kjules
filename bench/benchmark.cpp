@@ -11,12 +11,12 @@ int main(int argc, char *argv[]) {
     // Setup
     QStringList list;
     for (int i = 0; i < 10000; ++i) {
-        list.append(QString("Source_%1").arg(i));
+        list.append(QStringLiteral("Source_%1").arg(i));
     }
 
     QStringList testNames;
     for (int i = 0; i < 20000; ++i) {
-        testNames.append(QString("Source_%1").arg(i));
+        testNames.append(QStringLiteral("Source_%1").arg(i));
     }
 
     // Benchmark QStringList
