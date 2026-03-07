@@ -1,5 +1,9 @@
 #include "sessionmodel.h"
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QStandardPaths>
 
 SessionModel::SessionModel(QObject *parent) : QAbstractListModel(parent) {}
 
@@ -48,6 +52,7 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
   beginResetModel();
   m_sessions.clear();
   m_idToIndex.clear();
+  m_rawSessions = sessions;
   m_sessions.reserve(sessions.size());
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
@@ -65,6 +70,45 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
     m_idToIndex[data.id] = i;
   }
   endResetModel();
+}
+
+int SessionModel::addSessions(const QJsonArray &sessions) {
+  if (sessions.isEmpty()) {
+    return 0;
+  }
+
+  QVector<QJsonObject> newSessions;
+  for (int i = 0; i < sessions.size(); ++i) {
+    QJsonObject obj = sessions[i].toObject();
+    QString id = obj.value(QStringLiteral("id")).toString();
+    if (!m_idToIndex.contains(id)) {
+      newSessions.append(obj);
+    }
+  }
+
+  if (newSessions.isEmpty()) {
+    return 0;
+  }
+
+  beginInsertRows(QModelIndex(), m_sessions.size(), m_sessions.size() + newSessions.size() - 1);
+  for (int i = 0; i < newSessions.size(); ++i) {
+    QJsonObject obj = newSessions[i];
+    SessionData data;
+    data.id = obj.value(QStringLiteral("id")).toString();
+    data.name = obj.value(QStringLiteral("name")).toString();
+    data.title = obj.value(QStringLiteral("title")).toString();
+    data.source = obj.value(QStringLiteral("sourceContext"))
+                      .toObject()
+                      .value(QStringLiteral("source"))
+                      .toString();
+    data.prompt = obj.value(QStringLiteral("prompt")).toString();
+    data.rawObject = obj;
+    m_sessions.append(data);
+    m_rawSessions.append(obj);
+    m_idToIndex[data.id] = m_sessions.size() - 1;
+  }
+  endInsertRows();
+  return newSessions.size();
 }
 
 void SessionModel::addSession(const QJsonObject &session) {
@@ -115,4 +159,39 @@ QJsonObject SessionModel::getSession(int row) const {
     return m_sessions[row].rawObject;
   }
   return QJsonObject();
+}
+
+void SessionModel::loadSessions() {
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QFile file(path + QStringLiteral("/cached_all_sessions.json"));
+  if (file.open(QIODevice::ReadOnly)) {
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    setSessions(doc.array());
+    file.close();
+  }
+}
+
+void SessionModel::saveSessions() {
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QDir dir(path);
+  if (!dir.exists()) {
+    dir.mkpath(QStringLiteral("."));
+  }
+  QFile file(path + QStringLiteral("/cached_all_sessions.json"));
+  if (file.open(QIODevice::WriteOnly)) {
+    file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+    QJsonDocument doc(m_rawSessions);
+    file.write(doc.toJson());
+    file.close();
+  }
+}
+
+void SessionModel::clearSessions() {
+  beginResetModel();
+  m_sessions.clear();
+  m_idToIndex.clear();
+  m_rawSessions = QJsonArray();
+  endResetModel();
 }

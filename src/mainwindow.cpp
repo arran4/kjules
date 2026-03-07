@@ -51,13 +51,10 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
-      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_isProcessingQueue(false) {
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)) {
+      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
+      m_isProcessingQueue(false) {
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -187,7 +184,11 @@ void MainWindow::setupUi() {
                     }
                   });
 
-          menu.addAction(m_viewSessionsAction);
+          QAction *sourceViewSessionsAction = menu.addAction(i18n("View Sessions"));
+          connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
+            SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
+            window->show();
+          });
           menu.addAction(m_showPastNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
           menu.addAction(m_openUrlAction);
@@ -211,8 +212,16 @@ void MainWindow::setupUi() {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
           QMenu menu;
+          QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
           QAction *openUrlAction = menu.addAction(i18n("Open URL"));
           QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+
+          connect(viewSessionsAction, &QAction::triggered, [this, index]() {
+            QString source =
+                m_sessionModel->data(index, SessionModel::SourceRole).toString();
+            SessionsWindow *window = new SessionsWindow(source, m_apiManager, this);
+            window->show();
+          });
 
           connect(openUrlAction, &QAction::triggered, [this, index]() {
             QString id =
@@ -410,23 +419,8 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
-    // Replaces old refresh sessions / view full list functionality
-    KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-    sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-    sessionsWindow->setWindowTitle(i18n("Full Session List"));
-
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(m_sessionModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
-
-    connect(listView, &QListView::doubleClicked, this,
-            [this](const QModelIndex &filterIndex) {
-              onSessionActivated(filterIndex);
-            });
-
-    sessionsWindow->setCentralWidget(listView);
-    sessionsWindow->resize(600, 400);
-    sessionsWindow->show();
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    window->show();
   });
 
   m_refreshSourcesAction =
@@ -454,36 +448,8 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
-    QModelIndex index = m_sourceView->currentIndex();
-    if (!index.isValid())
-      return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
-    QString id =
-        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-
-    QSortFilterProxyModel *filterModel = new QSortFilterProxyModel(
-        this); // Temp parent to avoid leak if we don't refactor everything
-    filterModel->setSourceModel(m_sessionModel);
-    filterModel->setFilterRole(SessionModel::SourceRole);
-    filterModel->setFilterFixedString(id);
-
-    KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-    filterModel->setParent(sessionsWindow); // Reparent to window to avoid leak
-    sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-    sessionsWindow->setWindowTitle(i18n("Sessions for %1", id));
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(filterModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
-    connect(listView, &QListView::doubleClicked, this,
-            [this, filterModel](const QModelIndex &filterIndex) {
-              QModelIndex srcIdx = filterModel->mapToSource(filterIndex);
-              onSessionActivated(srcIdx);
-            });
-    sessionsWindow->setCentralWidget(listView);
-    sessionsWindow->resize(600, 400);
-    sessionsWindow->show();
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    window->show();
   });
 
   m_showPastNewSessionsAction =

@@ -37,13 +37,18 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void setSessions(const QJsonArray &sessions);
+  int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
   QJsonObject getSession(int row) const;
+  void loadSessions();
+  void saveSessions();
+  void clearSessions();
 
 private:
   QVector<SessionData> m_sessions;
   QHash<QString, int> m_idToIndex;
+  QJsonArray m_rawSessions;
 };
 
 #endif // SESSIONMODEL_H

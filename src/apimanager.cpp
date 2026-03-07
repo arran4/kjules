@@ -10,7 +10,7 @@ const QString BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
 
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
-      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr) {
+      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -19,6 +19,11 @@ APIManager::~APIManager() {
     m_listSourcesReply->abort();
     m_listSourcesReply->deleteLater();
     m_listSourcesReply = nullptr;
+  }
+  if (m_listSessionsReply) {
+    m_listSessionsReply->abort();
+    m_listSessionsReply->deleteLater();
+    m_listSessionsReply = nullptr;
   }
   if (m_wallet) {
     delete m_wallet;
@@ -305,32 +310,51 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   });
 }
 
-void APIManager::listSessions() {
+void APIManager::listSessions(const QString &pageToken) {
   if (!canConnect()) {
     Q_EMIT logMessage(
         QStringLiteral("Skipping listSessions: No token or previous failure."));
+    Q_EMIT sessionsRefreshFinished();
     return;
   }
-  QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
-  QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+
+  if (m_listSessionsReply) {
+    return;
+  }
+
+  QString endpoint = QStringLiteral("/sessions");
+  if (!pageToken.isEmpty()) {
+    endpoint += QStringLiteral("?pageToken=") + pageToken;
+  }
+  QNetworkRequest request = createRequest(endpoint);
+  m_listSessionsReply = m_nam->get(request);
+
+  QNetworkReply *reply = m_listSessionsReply;
+  connect(m_listSessionsReply, &QNetworkReply::finished, this, [this, reply]() {
+    if (m_listSessionsReply == reply) {
+      m_listSessionsReply = nullptr;
+    }
+
+    if (!reply)
+      return;
+
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
-      // The API returns a list of sessions, possibly in "sessions" key?
-      // Wait, looking at API docs example response for ListSessions isn't fully
-      // shown, but it implies standard list response. Usually { "sessions": [
-      // ... ], "nextPageToken": ... }
-      QJsonArray sessions;
-      if (doc.object().contains(QStringLiteral("sessions"))) {
-        sessions = doc.object().value(QStringLiteral("sessions")).toArray();
-      } else {
-        // If it's just an array (unlikely for google apis)
-        // But let's assume "sessions" key
-      }
+      QJsonObject obj = doc.object();
+      QJsonArray sessions = obj.value(QStringLiteral("sessions")).toArray();
       Q_EMIT sessionsReceived(sessions);
-      Q_EMIT logMessage(
-          QStringLiteral("Refreshed %1 sessions.").arg(sessions.size()));
+
+      QString nextPageToken =
+          obj.value(QStringLiteral("nextPageToken")).toString();
+      if (!nextPageToken.isEmpty()) {
+        listSessions(nextPageToken);
+      } else {
+        Q_EMIT sessionsRefreshFinished();
+        Q_EMIT logMessage(QStringLiteral("Sessions refreshed successfully."));
+      }
+    } else if (reply->error() == QNetworkReply::OperationCanceledError) {
+      Q_EMIT sessionsRefreshFinished();
     } else {
       int statusCode =
           reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -339,9 +363,16 @@ void APIManager::listSessions() {
       }
       Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") +
                            reply->errorString());
+      Q_EMIT sessionsRefreshFinished();
     }
     reply->deleteLater();
   });
+}
+
+void APIManager::cancelListSessions() {
+  if (m_listSessionsReply) {
+    m_listSessionsReply->abort();
+  }
 }
 
 void APIManager::getSession(const QString &sessionId) {

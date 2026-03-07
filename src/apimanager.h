@@ -37,12 +37,14 @@ public:
   void createSession(const QString &source, const QString &prompt,
                      const QString &automationMode = QString());
   void createSessionAsync(const QJsonObject &requestData);
-  void listSessions();
+  void listSessions(const QString &pageToken = QString());
+  void cancelListSessions();
   void getSession(const QString &sessionId);
 
 Q_SIGNALS:
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished();
+  void sessionsRefreshFinished();
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions);
   void sessionDetailsReceived(const QJsonObject &session);
@@ -65,6 +67,7 @@ private:
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;
   QNetworkReply *m_listSourcesReply;
+  QNetworkReply *m_listSessionsReply;
 
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());
