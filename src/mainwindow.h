@@ -34,6 +34,7 @@ private Q_SLOTS:
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
+  void onQueueContextMenu(const QPoint &pos);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
@@ -47,6 +48,9 @@ private Q_SLOTS:
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg);
+  void sendQueueItemNow(int row);
+  void editQueueItem(int row);
+  void convertQueueItemToDraft(int row);
 
 private:
   void setupUi();

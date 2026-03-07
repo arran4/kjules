@@ -53,7 +53,9 @@ MainWindow::MainWindow(QWidget *parent)
   m_sessionRefreshTimer->start(60000); // 1 minute
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
-  m_queueTimer->start(60000); // 1 minute
+  if (!m_queueModel->isEmpty()) {
+    m_queueTimer->start(60000); // 1 minute
+  }
   setupTrayIcon();
   createActions();
 
@@ -249,8 +251,11 @@ void MainWindow::setupUi() {
   m_queueView = new QListView(this);
   m_queueView->setModel(m_queueModel);
   m_queueView->setItemDelegate(new QueueDelegate(this));
+  m_queueView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_queueView, &QListView::activated, this,
           &MainWindow::onQueueActivated);
+  connect(m_queueView, &QListView::customContextMenuRequested, this,
+          &MainWindow::onQueueContextMenu);
   tabWidget->addTab(m_queueView, i18n("Queue"));
 
   mainLayout->addWidget(tabWidget);
@@ -408,6 +413,11 @@ void MainWindow::onSessionCreated(const QStringList &sources,
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.",
                      sources.size()));
 
+  // Start timer if not running
+  if (!m_queueTimer->isActive()) {
+    m_queueTimer->start(60000); // 1 minute
+  }
+
   // Trigger processing immediately if we can
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
@@ -415,8 +425,10 @@ void MainWindow::onSessionCreated(const QStringList &sources,
 void MainWindow::processQueue() {
   if (m_isProcessingQueue)
     return;
-  if (m_queueModel->isEmpty())
+  if (m_queueModel->isEmpty()) {
+    m_queueTimer->stop();
     return;
+  }
 
   if (m_queueBackoffUntil.isValid() &&
       QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
@@ -464,13 +476,86 @@ void MainWindow::onDraftSaved(const QJsonObject &draft) {
 void MainWindow::onQueueActivated(const QModelIndex &index) {
   if (!index.isValid())
     return;
+  editQueueItem(index.row());
+}
+
+void MainWindow::onQueueContextMenu(const QPoint &pos) {
+  QModelIndex index = m_queueView->indexAt(pos);
+  if (!index.isValid())
+    return;
   int row = index.row();
-  if (QMessageBox::question(this, i18n("Remove Task"),
-                            i18n("Remove this task from the queue?")) ==
-      QMessageBox::Yes) {
-    m_queueModel->removeItem(row);
-    updateStatus(i18n("Task removed from queue."));
+
+  QMenu menu;
+  QAction *editAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
+  QAction *deleteAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
+  QAction *draftAction =
+      menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
+                     i18n("Convert to Draft"));
+  QAction *sendAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
+
+  QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
+  if (selected == editAction) {
+    editQueueItem(row);
+  } else if (selected == deleteAction) {
+    if (QMessageBox::question(this, i18n("Remove Task"),
+                              i18n("Remove this task from the queue?")) ==
+        QMessageBox::Yes) {
+      m_queueModel->removeItem(row);
+      updateStatus(i18n("Task removed from queue."));
+    }
+  } else if (selected == draftAction) {
+    convertQueueItemToDraft(row);
+  } else if (selected == sendAction) {
+    sendQueueItemNow(row);
   }
+}
+
+void MainWindow::sendQueueItemNow(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+  m_queueModel->removeItem(row);
+  updateStatus(i18n("Sending queue item immediately..."));
+  m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::editQueueItem(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setInitialData(item.requestData);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested,
+          [this, row](const QStringList &sources, const QString &p,
+                      const QString &a) {
+            m_queueModel->removeItem(row);
+            onSessionCreated(sources, p, a);
+          });
+
+  connect(&dialog, &NewSessionDialog::saveDraftRequested,
+          [this, row](const QJsonObject &d) {
+            m_queueModel->removeItem(row);
+            m_draftsModel->addDraft(d);
+            updateStatus(i18n("Task moved to drafts."));
+          });
+
+  dialog.exec();
+}
+
+void MainWindow::convertQueueItemToDraft(int row) {
+  QueueItem item = m_queueModel->getItem(row);
+  if (item.requestData.isEmpty())
+    return;
+
+  m_queueModel->removeItem(row);
+  m_draftsModel->addDraft(item.requestData);
+  updateStatus(i18n("Task converted to draft."));
 }
 
 void MainWindow::onDraftActivated(const QModelIndex &index) {
