@@ -216,7 +216,7 @@ void APIManager::cancelListSources() {
 }
 
 void APIManager::createSession(const QString &source, const QString &prompt,
-                               const QString &automationMode) {
+                               const QString &automationMode, bool requirePlanApproval) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(
         QStringLiteral("Cannot create session: No token or previous failure."));
@@ -225,6 +225,9 @@ void APIManager::createSession(const QString &source, const QString &prompt,
   QJsonObject requestData;
   requestData[QStringLiteral("source")] = source;
   requestData[QStringLiteral("prompt")] = prompt;
+  if (requirePlanApproval) {
+    requestData[QStringLiteral("requirePlanApproval")] = true;
+  }
   if (!automationMode.isEmpty()) {
     requestData[QStringLiteral("automationMode")] = automationMode;
   }
@@ -247,13 +250,13 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   QString sourceStr = requestData.value(QStringLiteral("source")).toString();
   sourceContext[QStringLiteral("source")] = sourceStr;
 
-  if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
-    QJsonObject githubRepoContext;
-    githubRepoContext[QStringLiteral("startingBranch")] = QStringLiteral("main");
-    sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
+  json[QStringLiteral("sourceContext")] = sourceContext;
+
+  if (requestData.contains(QStringLiteral("requirePlanApproval"))) {
+    json[QStringLiteral("requirePlanApproval")] =
+        requestData.value(QStringLiteral("requirePlanApproval")).toBool();
   }
 
-  json[QStringLiteral("sourceContext")] = sourceContext;
   if (requestData.contains(QStringLiteral("automationMode"))) {
     json[QStringLiteral("automationMode")] =
         requestData.value(QStringLiteral("automationMode")).toString();

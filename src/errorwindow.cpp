@@ -13,8 +13,20 @@
 #include <QVBoxLayout>
 
 ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
-    : QDialog(parent), m_row(queueRow), m_item(item) {
+    : QDialog(parent), m_row(queueRow), m_requestData(item.requestData),
+      m_lastResponse(item.lastResponse), m_lastError(item.lastError) {
   setWindowTitle(i18n("Queue Error Details"));
+  setupUi();
+}
+
+ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse, const QString &lastError, QWidget *parent)
+    : QDialog(parent), m_row(errorRow), m_requestData(requestData),
+      m_lastResponse(lastResponse), m_lastError(lastError) {
+  setWindowTitle(i18n("Error Details"));
+  setupUi();
+}
+
+void ErrorWindow::setupUi() {
   resize(600, 450);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -26,7 +38,7 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
 
   // Centered Error Message
   detailsLayout->addStretch();
-  m_errorLabel = new QLabel(item.lastError, this);
+  m_errorLabel = new QLabel(m_lastError, this);
   m_errorLabel->setAlignment(Qt::AlignCenter);
   m_errorLabel->setWordWrap(true);
   QFont font = m_errorLabel->font();
@@ -96,12 +108,12 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
   m_rawRequestEdit = new QTextEdit(this);
   m_rawRequestEdit->setReadOnly(true);
   m_rawRequestEdit->setPlainText(QString::fromUtf8(
-      QJsonDocument(item.requestData).toJson(QJsonDocument::Indented)));
+      QJsonDocument(m_requestData).toJson(QJsonDocument::Indented)));
 
   QLabel *resLabel = new QLabel(i18n("Raw Response:"), this);
   m_rawResponseEdit = new QTextEdit(this);
   m_rawResponseEdit->setReadOnly(true);
-  m_rawResponseEdit->setPlainText(item.lastResponse);
+  m_rawResponseEdit->setPlainText(m_lastResponse);
 
   rawLayout->addWidget(reqLabel);
   rawLayout->addWidget(m_rawRequestEdit);
@@ -122,5 +134,5 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
 
 void ErrorWindow::onCopyError() {
   QClipboard *clipboard = QGuiApplication::clipboard();
-  clipboard->setText(m_item.lastError);
+  clipboard->setText(m_lastError);
 }
