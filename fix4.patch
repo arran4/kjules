@@ -1,0 +1,20 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -342,7 +342,7 @@
+           &MainWindow::showNewSessionDialog);
+   actionCollection()->addAction(QStringLiteral("new_session"),
+                                 newSessionAction);
+-  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
++  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+
+   m_showFullSessionListAction =
+       new QAction(i18n("Show Full Session List"), this);
+@@ -402,7 +402,7 @@
+           &MainWindow::toggleWindowVisibility);
+   actionCollection()->addAction(QStringLiteral("toggle_window"),
+                                 toggleWindowAction);
+-  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
++  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+
+   m_viewSessionsAction =
+       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),

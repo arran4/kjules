@@ -1,0 +1,11 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -342,7 +342,7 @@
+           &MainWindow::showNewSessionDialog);
+   actionCollection()->addAction(QStringLiteral("new_session"),
+                                 newSessionAction);
+-  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
++  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+
+   m_showFullSessionListAction =
+       new QAction(i18n("Show Full Session List"), this);

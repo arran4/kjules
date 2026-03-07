@@ -403,6 +403,7 @@ void MainWindow::createActions() {
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction,
                                   QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -461,6 +462,7 @@ void MainWindow::createActions() {
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
   actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
 
   m_viewSessionsAction =
