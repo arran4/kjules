@@ -337,7 +337,7 @@ void MainWindow::setupUi() {
 
 void MainWindow::setupTrayIcon() {
   m_trayIcon = new KStatusNotifierItem(this);
-  m_trayIcon->setIconByName(QStringLiteral("sc-apps-kjules"));
+  m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
   m_trayIcon->setStatus(KStatusNotifierItem::Active);
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),

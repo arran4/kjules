@@ -56,6 +56,7 @@ set(kjules_SRCS
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/kjules.qrc
+    resources.qrc
 )
 
 add_executable(kjules ${kjules_SRCS})
