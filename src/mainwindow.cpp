@@ -402,7 +402,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction,
-                                  QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+                                  QKeySequence());
   actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
