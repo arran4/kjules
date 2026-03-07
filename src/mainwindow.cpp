@@ -2,8 +2,8 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
-#include "errorwindow.h"
 #include "errorsmodel.h"
+#include "errorwindow.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -379,6 +379,7 @@ void MainWindow::setupUi() {
 
 void MainWindow::setupTrayIcon() {
   m_trayIcon = new KStatusNotifierItem(this);
+  m_trayIcon->setAssociatedWidget(this);
   m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
   m_trayIcon->setStatus(KStatusNotifierItem::Active);
@@ -389,8 +390,6 @@ void MainWindow::setupTrayIcon() {
   QAction *newSessionAction = menu->addAction(i18n("New Session"));
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
-
-  m_trayIcon->setAssociatedWidget(this);
 }
 
 void MainWindow::createActions() {
