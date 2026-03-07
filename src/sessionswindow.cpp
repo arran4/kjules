@@ -7,7 +7,7 @@
 #include <KLocalizedString>
 #include <QAction>
 #include <QLabel>
-#include <QListView>
+#include <QTreeView>
 #include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
@@ -38,9 +38,14 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
   } else {
     setWindowTitle(i18n("All Sessions"));
     m_model->loadSessions();
+    m_nextPageToken = m_model->nextPageToken();
   }
 
   setupUi();
+
+  if (!m_nextPageToken.isEmpty() && m_resumeAction) {
+    m_resumeAction->setEnabled(true);
+  }
 
   if (m_apiManager) {
     connect(m_apiManager, &APIManager::sessionsReceived, this,
@@ -49,12 +54,8 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
             &SessionsWindow::onSessionsRefreshFinished);
   }
 
-  if (m_model->rowCount() == 0 || !m_filterSource.isEmpty()) {
-    refreshSessions();
-  } else {
-    m_statusLabel->setText(
-        i18n("Loaded %1 cached sessions.", m_model->rowCount()));
-  }
+  m_statusLabel->setText(
+      i18n("Loaded %1 cached sessions.", m_model->rowCount()));
 }
 
 SessionsWindow::~SessionsWindow() {}
@@ -69,15 +70,19 @@ void SessionsWindow::setupUi() {
 
   QTabWidget *tabWidget = new QTabWidget(this);
 
-  m_listView = new QListView(this);
+  m_listView = new QTreeView(this);
   m_listView->setModel(m_proxyModel);
-  m_listView->setItemDelegate(new SessionDelegate(this));
+  // Remove SessionDelegate if it's meant for a list view, or adjust it
+  // m_listView->setItemDelegate(new SessionDelegate(this));
   m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
+  // Set some treeview properties
+  m_listView->setSortingEnabled(true);
+  m_listView->setRootIsDecorated(false);
 
   tabWidget->addTab(m_listView, i18n("All sessions"));
 
   connect(
-      m_listView, &QListView::customContextMenuRequested,
+      m_listView, &QTreeView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_listView->indexAt(pos);
         if (index.isValid()) {
@@ -102,7 +107,7 @@ void SessionsWindow::setupUi() {
         }
       });
 
-  connect(m_listView, &QListView::doubleClicked, this,
+  connect(m_listView, &QTreeView::doubleClicked, this,
           [this](const QModelIndex &index) {
             QString id =
                 m_proxyModel->data(index, SessionModel::IdRole).toString();
@@ -121,9 +126,15 @@ void SessionsWindow::setupUi() {
   actionCollection()->addAction(QStringLiteral("refresh_sessions"), refreshAction);
   actionCollection()->setDefaultShortcut(refreshAction, QKeySequence(Qt::Key_F5));
 
+  m_resumeAction = new QAction(QIcon::fromTheme(QStringLiteral("go-down")), i18n("Load More"), this);
+  connect(m_resumeAction, &QAction::triggered, this, &SessionsWindow::resumeRefresh);
+  actionCollection()->addAction(QStringLiteral("resume_refresh"), m_resumeAction);
+  m_resumeAction->setEnabled(false);
+
   // Menu
   QMenu *fileMenu = new QMenu(i18n("File"), this);
   fileMenu->addAction(refreshAction);
+  fileMenu->addAction(m_resumeAction);
   QAction *quitAction = new QAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18n("Close"), this);
   connect(quitAction, &QAction::triggered, this, &SessionsWindow::close);
   fileMenu->addAction(quitAction);
@@ -133,6 +144,7 @@ void SessionsWindow::setupUi() {
   QToolBar *toolBar = addToolBar(i18n("Main Toolbar"));
   toolBar->setObjectName(QStringLiteral("mainToolBar"));
   toolBar->addAction(refreshAction);
+  toolBar->addAction(m_resumeAction);
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
@@ -160,23 +172,27 @@ void SessionsWindow::refreshSessions() {
 
   m_isRefreshing = true;
   m_sessionsLoaded = 0;
-
-  if (m_filterSource.isEmpty()) {
-    // If we're getting the global list, clear the current model
-    m_model->clearSessions();
-  } else {
-    // We don't necessarily clear it if it's a filtered view. We can keep
-    // pulling and append, but clearing might be better to avoid dupes since the
-    // pagination doesn't allow filtering server-side based on the source easily
-    // yet. But the API says `GET /sessions`. We just pull all and filter. So
-    // let's clear it.
-    m_model->clearSessions();
-  }
+  m_model->clearSessions();
+  m_nextPageToken.clear();
+  m_resumeAction->setEnabled(false);
 
   m_progressBar->show();
   m_cancelBtn->show();
   m_statusLabel->setText(i18n("Refreshing sessions..."));
   m_apiManager->listSessions();
+}
+
+void SessionsWindow::resumeRefresh() {
+  if (m_isRefreshing || !m_apiManager || m_nextPageToken.isEmpty()) {
+    return;
+  }
+
+  m_isRefreshing = true;
+  m_progressBar->show();
+  m_cancelBtn->show();
+  m_statusLabel->setText(i18n("Loading more sessions..."));
+  m_resumeAction->setEnabled(false);
+  m_apiManager->listSessions(m_nextPageToken);
 }
 
 void SessionsWindow::cancelRefresh() {
@@ -187,11 +203,14 @@ void SessionsWindow::cancelRefresh() {
   m_progressBar->hide();
   m_cancelBtn->hide();
   m_statusLabel->setText(i18n("Refresh cancelled. Loaded %1 sessions.", m_sessionsLoaded));
+  m_resumeAction->setEnabled(!m_nextPageToken.isEmpty());
 }
 
-void SessionsWindow::onSessionsReceived(const QJsonArray &sessions) {
+void SessionsWindow::onSessionsReceived(const QJsonArray &sessions, const QString &nextPageToken) {
   int added = m_model->addSessions(sessions);
   m_sessionsLoaded += added;
+  m_nextPageToken = nextPageToken;
+  m_model->setNextPageToken(nextPageToken);
   m_progressBar->setFormat(i18n("%1 sessions loaded", m_sessionsLoaded));
   m_statusLabel->setText(i18n("Loaded %1 sessions...", m_sessionsLoaded));
 }
@@ -202,6 +221,7 @@ void SessionsWindow::onSessionsRefreshFinished() {
   m_cancelBtn->hide();
   m_statusLabel->setText(
       i18n("Finished refreshing. Loaded %1 sessions.", m_sessionsLoaded));
+  m_resumeAction->setEnabled(!m_nextPageToken.isEmpty());
   if (m_filterSource.isEmpty()) {
     m_model->saveSessions();
   }

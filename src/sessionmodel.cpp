@@ -4,8 +4,9 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QStandardPaths>
+#include <KLocalizedString>
 
-SessionModel::SessionModel(QObject *parent) : QAbstractListModel(parent) {}
+SessionModel::SessionModel(QObject *parent) : QAbstractTableModel(parent) {}
 
 int SessionModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -14,11 +15,33 @@ int SessionModel::rowCount(const QModelIndex &parent) const {
   return m_sessions.size();
 }
 
+int SessionModel::columnCount(const QModelIndex &parent) const {
+  if (parent.isValid())
+    return 0;
+
+  return ColCount;
+}
+
 QVariant SessionModel::data(const QModelIndex &index, int role) const {
   if (!index.isValid() || index.row() >= m_sessions.size())
     return QVariant();
 
   const SessionData &session = m_sessions[index.row()];
+
+  if (role == Qt::DisplayRole) {
+    switch (index.column()) {
+    case ColTitle:
+      return session.title;
+    case ColSource:
+      return session.source;
+    case ColStatus:
+      return session.status;
+    case ColId:
+      return session.id;
+    default:
+      return QVariant();
+    }
+  }
 
   switch (role) {
   case IdRole:
@@ -31,11 +54,27 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.source;
   case PromptRole:
     return session.prompt;
-  case Qt::DisplayRole:
-    return session.title;
+  case StatusRole:
+    return session.status;
   default:
     return QVariant();
   }
+}
+
+QVariant SessionModel::headerData(int section, Qt::Orientation orientation, int role) const {
+  if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
+    switch (section) {
+    case ColTitle:
+      return i18n("Title");
+    case ColSource:
+      return i18n("Source");
+    case ColStatus:
+      return i18n("Status");
+    case ColId:
+      return i18n("ID");
+    }
+  }
+  return QVariant();
 }
 
 QHash<int, QByteArray> SessionModel::roleNames() const {
@@ -65,6 +104,7 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
                       .value(QStringLiteral("source"))
                       .toString();
     data.prompt = obj.value(QStringLiteral("prompt")).toString();
+    data.status = obj.value(QStringLiteral("status")).toString();
     data.rawObject = obj;
     m_sessions.append(data);
     m_idToIndex[data.id] = i;
@@ -102,6 +142,7 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
                       .value(QStringLiteral("source"))
                       .toString();
     data.prompt = obj.value(QStringLiteral("prompt")).toString();
+    data.status = obj.value(QStringLiteral("status")).toString();
     data.rawObject = obj;
     m_sessions.append(data);
     m_rawSessions.append(obj);
@@ -122,6 +163,7 @@ void SessionModel::addSession(const QJsonObject &session) {
                     .value(QStringLiteral("source"))
                     .toString();
   data.prompt = session.value(QStringLiteral("prompt")).toString();
+  data.status = session.value(QStringLiteral("status")).toString();
   data.rawObject = session;
   m_sessions.insert(0, data);
   // Rebuild the index completely because inserting at 0 shifts all indices
@@ -145,6 +187,7 @@ void SessionModel::updateSession(const QJsonObject &session) {
                       .value(QStringLiteral("source"))
                       .toString();
     data.prompt = session.value(QStringLiteral("prompt")).toString();
+    data.status = session.value(QStringLiteral("status")).toString();
     data.rawObject = session;
     m_sessions[i] = data;
     Q_EMIT dataChanged(index(i, 0), index(i, 0));
@@ -167,7 +210,13 @@ void SessionModel::loadSessions() {
   QFile file(path + QStringLiteral("/cached_all_sessions.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    setSessions(doc.array());
+    if (doc.isObject()) {
+      QJsonObject obj = doc.object();
+      m_nextPageToken = obj.value(QStringLiteral("nextPageToken")).toString();
+      setSessions(obj.value(QStringLiteral("sessions")).toArray());
+    } else {
+      setSessions(doc.array());
+    }
     file.close();
   }
 }
@@ -182,10 +231,21 @@ void SessionModel::saveSessions() {
   QFile file(path + QStringLiteral("/cached_all_sessions.json"));
   if (file.open(QIODevice::WriteOnly)) {
     file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-    QJsonDocument doc(m_rawSessions);
+    QJsonObject obj;
+    obj[QStringLiteral("sessions")] = m_rawSessions;
+    obj[QStringLiteral("nextPageToken")] = m_nextPageToken;
+    QJsonDocument doc(obj);
     file.write(doc.toJson());
     file.close();
   }
+}
+
+void SessionModel::setNextPageToken(const QString &token) {
+  m_nextPageToken = token;
+}
+
+QString SessionModel::nextPageToken() const {
+  return m_nextPageToken;
 }
 
 void SessionModel::clearSessions() {

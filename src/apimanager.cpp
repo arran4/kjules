@@ -343,16 +343,13 @@ void APIManager::listSessions(const QString &pageToken) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       QJsonObject obj = doc.object();
       QJsonArray sessions = obj.value(QStringLiteral("sessions")).toArray();
-      Q_EMIT sessionsReceived(sessions);
-
       QString nextPageToken =
           obj.value(QStringLiteral("nextPageToken")).toString();
-      if (!nextPageToken.isEmpty()) {
-        listSessions(nextPageToken);
-      } else {
-        Q_EMIT sessionsRefreshFinished();
-        Q_EMIT logMessage(QStringLiteral("Sessions refreshed successfully."));
-      }
+
+      Q_EMIT sessionsReceived(sessions, nextPageToken);
+
+      Q_EMIT sessionsRefreshFinished();
+      Q_EMIT logMessage(QStringLiteral("Sessions refreshed successfully."));
     } else if (reply->error() == QNetworkReply::OperationCanceledError) {
       Q_EMIT sessionsRefreshFinished();
     } else {

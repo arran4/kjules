@@ -46,7 +46,7 @@ Q_SIGNALS:
   void sourcesRefreshFinished();
   void sessionsRefreshFinished();
   void sessionCreated(const QJsonObject &session);
-  void sessionsReceived(const QJsonArray &sessions);
+  void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);

@@ -1,7 +1,7 @@
 #ifndef SESSIONMODEL_H
 #define SESSIONMODEL_H
 
-#include <QAbstractListModel>
+#include <QAbstractTableModel>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -13,10 +13,11 @@ struct SessionData {
   QString title;
   QString source;
   QString prompt;
+  QString status;
   QJsonObject rawObject;
 };
 
-class SessionModel : public QAbstractListModel {
+class SessionModel : public QAbstractTableModel {
   Q_OBJECT
 
 public:
@@ -29,11 +30,22 @@ public:
     StatusRole
   };
 
+  enum Columns {
+    ColTitle = 0,
+    ColSource,
+    ColStatus,
+    ColId,
+    ColCount
+  };
+
   explicit SessionModel(QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+  int columnCount(const QModelIndex &parent = QModelIndex()) const override;
   QVariant data(const QModelIndex &index,
                 int role = Qt::DisplayRole) const override;
+  QVariant headerData(int section, Qt::Orientation orientation,
+                      int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
   void setSessions(const QJsonArray &sessions);
@@ -44,11 +56,14 @@ public:
   void loadSessions();
   void saveSessions();
   void clearSessions();
+  void setNextPageToken(const QString &token);
+  QString nextPageToken() const;
 
 private:
   QVector<SessionData> m_sessions;
   QHash<QString, int> m_idToIndex;
   QJsonArray m_rawSessions;
+  QString m_nextPageToken;
 };
 
 #endif // SESSIONMODEL_H
