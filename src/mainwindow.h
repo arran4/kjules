@@ -10,7 +10,9 @@ class SessionModel;
 class SourceModel;
 class DraftsModel;
 class QueueModel;
+class ErrorsModel;
 class QListView;
+class QTreeView;
 class KStatusNotifierItem;
 class QLabel;
 class QProgressBar;
@@ -26,7 +28,6 @@ public:
 
 private Q_SLOTS:
   void refreshSources();
-  void refreshSessions();
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
@@ -35,12 +36,17 @@ private Q_SLOTS:
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
   void onQueueContextMenu(const QPoint &pos);
+  void onErrorActivated(const QModelIndex &index);
+  void onSessionCreationFailed(const QJsonObject &request,
+                               const QJsonObject &response,
+                               const QString &errorString);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
+  void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
@@ -64,18 +70,25 @@ private:
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
   QueueModel *m_queueModel;
+  ErrorsModel *m_errorsModel;
 
-  QListView *m_sourceView;
+  QTreeView *m_sourceView;
   QListView *m_sessionView;
   QListView *m_draftsView;
   QListView *m_queueView;
+  QListView *m_errorsView;
   KStatusNotifierItem *m_trayIcon;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
-  QPushButton *m_refreshSourcesBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_showFullSessionListAction;
+  QAction *m_viewSessionsAction;
+  QAction *m_showPastNewSessionsAction;
+  QAction *m_viewRawDataAction;
+  QAction *m_openUrlAction;
+  QAction *m_copyUrlAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;

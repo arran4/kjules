@@ -2,11 +2,14 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
-#include <QJsonObject>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QStandardPaths>
 #include <QStandardPaths>
 
-SourceModel::SourceModel(QObject *parent) : QAbstractListModel(parent) {
-  loadCache();
+SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) {
+  loadSources();
 }
 
 int SourceModel::rowCount(const QModelIndex &parent) const {
@@ -15,28 +18,76 @@ int SourceModel::rowCount(const QModelIndex &parent) const {
   return m_sources.size();
 }
 
+int SourceModel::columnCount(const QModelIndex &parent) const {
+  if (parent.isValid())
+    return 0;
+  return ColCount;
+}
+
 QVariant SourceModel::data(const QModelIndex &index, int role) const {
-  if (!index.isValid() || index.row() >= m_sources.size())
+  if (!index.isValid() || index.row() >= m_sources.size() ||
+      index.column() >= ColCount)
     return QVariant();
 
   const QJsonObject source = m_sources[index.row()].toObject();
+  QString id = source.value(QStringLiteral("id")).toString();
+  QString provider, owner, repo;
+
+  QStringList parts = id.split(QLatin1Char('/'));
+  if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+    provider = parts[1];
+    owner = parts[2];
+    repo = parts[3];
+  } else if (parts.size() >= 3) {
+    provider = parts[0];
+    owner = parts[1];
+    repo = parts[2];
+  }
+
+  if (role == Qt::DisplayRole) {
+    if (index.column() == ColName) {
+      // Reconstitute it first to drop the redundant sources/github/ prefix
+      if (!provider.isEmpty() && !owner.isEmpty() && !repo.isEmpty()) {
+        return owner + QLatin1Char('/') + repo;
+      }
+
+      QString name = source.value(QStringLiteral("name")).toString();
+      if (!name.isEmpty() && name != id)
+        return name;
+
+      return id;
+    }
+    return QVariant();
+  }
 
   switch (role) {
   case NameRole:
     return source.value(QStringLiteral("name")).toString();
   case IdRole:
-    return source.value(QStringLiteral("id")).toString();
-  case Qt::DisplayRole:
-    return source.value(QStringLiteral("name")).toString();
+    return id;
+  case RawDataRole:
+    return source;
   default:
     return QVariant();
   }
+}
+
+QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
+                                 int role) const {
+  if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
+    return QVariant();
+
+  if (section == ColName) {
+    return QStringLiteral("Name");
+  }
+  return QVariant();
 }
 
 QHash<int, QByteArray> SourceModel::roleNames() const {
   QHash<int, QByteArray> roles;
   roles[NameRole] = "name";
   roles[IdRole] = "id";
+  roles[RawDataRole] = "rawData";
   return roles;
 }
 
@@ -44,7 +95,7 @@ void SourceModel::setSources(const QJsonArray &sources) {
   beginResetModel();
   m_sources = sources;
   endResetModel();
-  saveCache();
+  saveSources();
 }
 
 int SourceModel::addSources(const QJsonArray &sources) {
@@ -58,6 +109,7 @@ int SourceModel::addSources(const QJsonArray &sources) {
       if (m_sources[j].toObject().value(QStringLiteral("id")).toString() ==
           id) {
         exists = true;
+        // Optionally update the existing source here.
         break;
       }
     }
@@ -74,16 +126,14 @@ int SourceModel::addSources(const QJsonArray &sources) {
       m_sources.append(newSources[i]);
     }
     endInsertRows();
-    saveCache();
+    saveSources();
   }
   return addedCount;
 }
 
-void SourceModel::loadCache() {
+void SourceModel::loadSources() {
   QString path =
-      QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-  if (path.isEmpty())
-    return;
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QFile file(path + QStringLiteral("/sources.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -92,11 +142,9 @@ void SourceModel::loadCache() {
   }
 }
 
-void SourceModel::saveCache() {
+void SourceModel::saveSources() {
   QString path =
-      QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-  if (path.isEmpty())
-    return;
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
@@ -109,3 +157,4 @@ void SourceModel::saveCache() {
     file.close();
   }
 }
+
