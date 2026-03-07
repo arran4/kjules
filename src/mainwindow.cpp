@@ -361,17 +361,24 @@ void MainWindow::setupTrayIcon() {
 
   QMenu *menu = m_trayIcon->contextMenu();
 
-  QAction *toggleWindowAction = menu->addAction(i18n("Show/Hide Window"));
+  QAction *toggleWindowAction = new QAction(i18n("Show/Hide Window"), this);
+  m_trayIcon->addAction(QStringLiteral("toggleWindow"), toggleWindowAction);
+  menu->addAction(toggleWindowAction);
   connect(toggleWindowAction, &QAction::triggered, this,
           &MainWindow::toggleWindow);
 
-  QAction *newSessionAction = menu->addAction(i18n("New Session"));
+  QAction *newSessionAction = new QAction(i18n("New Session"), this);
+  m_trayIcon->addAction(QStringLiteral("newSession"), newSessionAction);
+  menu->addAction(newSessionAction);
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
 
   if (m_showFullSessionListAction) {
     QAction *trayShowFullSessionList =
-        menu->addAction(i18n("Full Session List"));
+        new QAction(i18n("Full Session List"), this);
+    m_trayIcon->addAction(QStringLiteral("fullSessionList"),
+                          trayShowFullSessionList);
+    menu->addAction(trayShowFullSessionList);
     connect(trayShowFullSessionList, &QAction::triggered,
             m_showFullSessionListAction, &QAction::trigger);
   }
@@ -862,12 +869,12 @@ void MainWindow::onError(const QString &message) {
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
 
 void MainWindow::toggleWindowVisibility() {
-  if (isHidden() || isMinimized()) {
+  if (isVisible() && !isMinimized() && isActiveWindow()) {
+    hide();
+  } else {
     showNormal();
     raise();
     activateWindow();
-  } else {
-    hide();
   }
 }
 
