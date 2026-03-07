@@ -351,7 +351,7 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
-  m_trayIcon->setAssociatedWidget(this);
+  m_trayIcon->setAssociatedWidget(nullptr);
 
   QMenu *menu = m_trayIcon->contextMenu();
 
@@ -364,11 +364,12 @@ void MainWindow::setupTrayIcon() {
           &MainWindow::showNewSessionDialog);
 
   if (m_showFullSessionListAction) {
-    menu->addAction(m_showFullSessionListAction);
+    QAction *trayShowFullSessionList = menu->addAction(i18n("Full Session List"));
+    connect(trayShowFullSessionList, &QAction::triggered, m_showFullSessionListAction, &QAction::trigger);
   }
 
   connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
-          &MainWindow::toggleWindow);
+          [this](bool /*active*/, const QPoint & /*pos*/) { toggleWindow(); });
 }
 
 void MainWindow::createActions() {
@@ -853,12 +854,12 @@ void MainWindow::onError(const QString &message) {
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
 
 void MainWindow::toggleWindowVisibility() {
-  if (isVisible() && !isMinimized() && isActiveWindow()) {
-    hide();
-  } else {
+  if (isHidden() || isMinimized()) {
     showNormal();
     raise();
     activateWindow();
+  } else {
+    hide();
   }
 }
 
