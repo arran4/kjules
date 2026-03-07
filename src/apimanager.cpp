@@ -99,6 +99,7 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint,
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
   QString key = overrideApiKey.isEmpty() ? m_apiKey : overrideApiKey;
+  key.remove(QLatin1Char('\n')).remove(QLatin1Char('\r'));
   if (!key.isEmpty()) {
     request.setRawHeader("X-Goog-Api-Key", key.toUtf8());
   }
