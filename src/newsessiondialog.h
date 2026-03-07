@@ -4,11 +4,15 @@
 #include "sourcemodel.h"
 #include <QDialog>
 #include <QJsonObject>
+#include <QSet>
 
 class QLineEdit;
 class QTextEdit;
 class QListView;
 class QComboBox;
+class QSortFilterProxyModel;
+
+class SourceSelectionProxyModel;
 
 class NewSessionDialog : public QDialog {
   Q_OBJECT
@@ -28,12 +32,19 @@ private Q_SLOTS:
   void onSaveDraft();
   void onSelectAll();
   void onUnselectAll();
+  void onAddSelected();
+  void onRemoveSelected();
+  void updateModels();
 
 private:
   SourceModel *m_sourceModel;
-  QListView *m_sourceView;
+  QListView *m_unselectedView;
+  QListView *m_selectedView;
+  SourceSelectionProxyModel *m_unselectedProxy;
+  SourceSelectionProxyModel *m_selectedProxy;
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
+  QSet<QString> m_selectedSources;
 };
 
 #endif // NEWSESSIONDIALOG_H
