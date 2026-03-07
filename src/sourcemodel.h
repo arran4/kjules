@@ -10,7 +10,7 @@ class SourceModel : public QAbstractTableModel {
 
 public:
   enum SourceRoles { NameRole = Qt::UserRole + 1, IdRole, RawDataRole };
-  enum Columns { ColName = 0, ColId, ColProvider, ColOwner, ColRepo, ColCount };
+  enum Columns { ColName = 0, ColCount };
 
   explicit SourceModel(QObject *parent = nullptr);
 

@@ -581,7 +581,19 @@ void MainWindow::createActions() {
                                      actionCollection());
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
 
-  setupGUI(Default, QStringLiteral("kjulesui.rc"));
+  setStandardToolBarMenuEnabled(true);
+
+  // Set up XML GUI
+  // During local development without `make install`, KDE might fail to find the
+  // rc file. We can pass the absolute path if it exists locally, or fallback to
+  // default.
+  QString rcFilePath = QCoreApplication::applicationDirPath() +
+                       QStringLiteral("/../src/kjulesui.rc");
+  if (QFile::exists(rcFilePath)) {
+    setupGUI(Default, rcFilePath);
+  } else {
+    setupGUI(Default, QStringLiteral("kjulesui.rc"));
+  }
 }
 
 void MainWindow::refreshSources() {

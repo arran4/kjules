@@ -41,8 +41,7 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
   }
 
   if (role == Qt::DisplayRole) {
-    switch (index.column()) {
-    case ColName: {
+    if (index.column() == ColName) {
       QString name = source.value(QStringLiteral("name")).toString();
       if (!name.isEmpty() && name != id)
         return name;
@@ -52,17 +51,7 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       }
       return id;
     }
-    case ColId:
-      return id;
-    case ColProvider:
-      return provider;
-    case ColOwner:
-      return owner;
-    case ColRepo:
-      return repo;
-    default:
-      return QVariant();
-    }
+    return QVariant();
   }
 
   switch (role) {
@@ -82,20 +71,10 @@ QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
   if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
     return QVariant();
 
-  switch (section) {
-  case ColName:
+  if (section == ColName) {
     return QStringLiteral("Name");
-  case ColId:
-    return QStringLiteral("ID");
-  case ColProvider:
-    return QStringLiteral("Provider");
-  case ColOwner:
-    return QStringLiteral("Owner");
-  case ColRepo:
-    return QStringLiteral("Repo");
-  default:
-    return QVariant();
   }
+  return QVariant();
 }
 
 QHash<int, QByteArray> SourceModel::roleNames() const {
