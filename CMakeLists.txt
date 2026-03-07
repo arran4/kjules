@@ -55,6 +55,7 @@ set(kjules_SRCS
     src/draftdelegate.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
+    src/kjules.qrc
     resources.qrc
 )
 
