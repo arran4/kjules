@@ -49,6 +49,7 @@ set(kjules_SRCS
     src/sessionmodel.cpp
     src/sourcemodel.cpp
     src/draftsmodel.cpp
+    src/errorsmodel.cpp
     src/newsessiondialog.cpp
     src/settingsdialog.cpp
     src/draftdelegate.cpp
@@ -57,6 +58,8 @@ set(kjules_SRCS
 )
 
 add_executable(kjules ${kjules_SRCS})
+
+
 
 target_link_libraries(kjules
     Qt5::Core

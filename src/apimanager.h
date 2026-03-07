@@ -2,12 +2,15 @@
 #define APIMANAGER_H
 
 #include <KWallet>
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QStandardPaths>
 #include <QUrlQuery>
 
 class APIManager : public QObject {
@@ -43,6 +46,9 @@ Q_SIGNALS:
   void sessionDetailsReceived(const QJsonObject &session);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
+  void sessionCreationFailed(const QJsonObject &request,
+                             const QJsonObject &response,
+                             const QString &errorString);
   void logMessage(const QString &message);
 
 private Q_SLOTS:
