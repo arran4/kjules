@@ -112,6 +112,7 @@ void MainWindow::setupUi() {
   m_sourceView->setSortingEnabled(true);
   m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(true);
 
   m_sourceView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -120,7 +121,9 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_sourceView->indexAt(pos);
         if (index.isValid()) {
-          m_sourceView->setCurrentIndex(index);
+          if (!m_sourceView->selectionModel()->isSelected(index)) {
+            m_sourceView->setCurrentIndex(index);
+          }
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sourceView->model());
