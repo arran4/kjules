@@ -378,9 +378,7 @@ void MainWindow::showSettingsDialog() {
 void MainWindow::onSessionCreated(const QStringList &sources,
                                   const QString &prompt,
                                   const QString &automationMode) {
-  for (const QString &source : sources) {
-    m_apiManager->createSession(source, prompt, automationMode);
-  }
+  m_apiManager->createSessions(sources, prompt, automationMode);
 }
 
 void MainWindow::onDraftSaved(const QJsonObject &draft) {

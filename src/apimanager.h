@@ -8,6 +8,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QQueue>
 #include <QUrlQuery>
 
 class APIManager : public QObject {
@@ -32,6 +33,8 @@ public:
   void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
                      const QString &automationMode = QString());
+  void createSessions(const QStringList &sources, const QString &prompt,
+                      const QString &automationMode = QString());
   void listSessions();
   void getSession(const QString &sessionId);
 
@@ -59,6 +62,15 @@ private:
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());
   bool canConnect() const;
+
+  struct SessionRequest {
+    QString source;
+    QString prompt;
+    QString automationMode;
+  };
+  QQueue<SessionRequest> m_sessionQueue;
+  bool m_isProcessingSessionQueue = false;
+  void processNextSession();
 };
 
 #endif // APIMANAGER_H
