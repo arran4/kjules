@@ -51,6 +51,7 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void onSourceDetailsReceived(const QJsonObject &source);
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -83,6 +84,7 @@ private:
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_refreshSourceAction;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
   QAction *m_showPastNewSessionsAction;

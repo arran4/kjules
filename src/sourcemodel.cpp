@@ -142,6 +142,39 @@ void SourceModel::loadSources() {
   }
 }
 
+void SourceModel::updateSource(const QJsonObject &source) {
+  QString id = source.value(QStringLiteral("id")).toString();
+  if (id.isEmpty()) {
+    // If id isn't there, maybe it's in name
+    id = source.value(QStringLiteral("name")).toString();
+  }
+
+  if (id.isEmpty()) {
+    return;
+  }
+
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QString currentId = m_sources[i].toObject().value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId = m_sources[i].toObject().value(QStringLiteral("name")).toString();
+    }
+
+    if (currentId == id) {
+      m_sources[i] = source;
+      QModelIndex index = createIndex(i, 0);
+      Q_EMIT dataChanged(index, index);
+      saveSources();
+      return;
+    }
+  }
+
+  // Not found, append
+  beginInsertRows(QModelIndex(), m_sources.size(), m_sources.size());
+  m_sources.append(source);
+  endInsertRows();
+  saveSources();
+}
+
 void SourceModel::saveSources() {
   QString path =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
