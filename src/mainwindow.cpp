@@ -16,7 +16,6 @@
 #include <KGlobalAccel>
 #include <KLocalizedString>
 #include <KStandardAction>
-#include <KStatusNotifierItem>
 #include <KToolBar>
 #include <QAction>
 #include <QClipboard>
@@ -378,13 +377,9 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupTrayIcon() {
-  m_trayIcon = new KStatusNotifierItem(this);
-  m_trayIcon->setAssociatedWidget(this);
-  m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
-  m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
-  m_trayIcon->setStatus(KStatusNotifierItem::Active);
-  m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
-                         i18n("Google Jules Client"));
+  m_trayIcon = new QSystemTrayIcon(this);
+  m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
+  m_trayIcon->setToolTip(i18n("Google Jules Client"));
 
   QMenu *menu = new QMenu(this);
 
@@ -407,6 +402,17 @@ void MainWindow::setupTrayIcon() {
   menu->addAction(quitAction);
 
   m_trayIcon->setContextMenu(menu);
+  m_trayIcon->show();
+
+  connect(m_trayIcon, &QSystemTrayIcon::activated, this,
+          &MainWindow::onTrayIconActivated);
+}
+
+void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
+  if (reason == QSystemTrayIcon::Trigger ||
+      reason == QSystemTrayIcon::DoubleClick) {
+    toggleWindowVisibility();
+  }
 }
 
 void MainWindow::createActions() {
@@ -1066,8 +1072,7 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
-  m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
-                         message);
+  m_trayIcon->setToolTip(message);
 }
 
 void MainWindow::onError(const QString &message) {
