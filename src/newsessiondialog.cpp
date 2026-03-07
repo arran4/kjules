@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSet>
+#include <QShortcut>
 #include <QSortFilterProxyModel>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -166,6 +167,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
           &NewSessionDialog::onSaveDraft);
 
   m_createButton = new QPushButton(tr("Create Session"), this);
+
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
     m_createButton->setToolTip(
@@ -176,6 +178,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
 
   m_createPRButton = new QPushButton(tr("Create PR Session"), this);
   m_createPRButton->setDefault(true);
+
   if (!hasApiKey) {
     m_createPRButton->setEnabled(false);
     m_createPRButton->setToolTip(
