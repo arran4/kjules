@@ -1,6 +1,9 @@
 #include "settingsdialog.h"
 #include "apimanager.h"
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
+#include <QCheckBox>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -25,6 +28,14 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_githubTokenEdit->setText(m_apiManager->githubToken());
   m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
   formLayout->addRow(i18n("GitHub Token (Optional):"), m_githubTokenEdit);
+
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("TraySettings"));
+  bool showTrayIcon = config.readEntry(QStringLiteral("showTrayIcon"), true);
+
+  m_trayIconEdit = new QCheckBox(i18n("Show system tray icon"), this);
+  m_trayIconEdit->setChecked(showTrayIcon);
+  formLayout->addRow(i18n("System Tray:"), m_trayIconEdit);
 
   mainLayout->addLayout(formLayout);
 
@@ -65,5 +76,12 @@ void SettingsDialog::onTestConnection() {
 void SettingsDialog::onSave() {
   m_apiManager->setApiKey(m_apiKeyEdit->text());
   m_apiManager->setGithubToken(m_githubTokenEdit->text());
+
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("TraySettings"));
+  config.writeEntry(QStringLiteral("showTrayIcon"),
+                    m_trayIconEdit->isChecked());
+  config.sync();
+
   accept();
 }

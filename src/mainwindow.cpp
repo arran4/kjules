@@ -10,8 +10,10 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include <KActionCollection>
+#include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <KStandardAction>
 #include <KStatusNotifierItem>
 #include <KToolBar>
@@ -56,8 +58,8 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
           &MainWindow::updateSessionStats);
   m_sessionRefreshTimer->start(60000); // 1 minute
-  setupTrayIcon();
   createActions();
+  setupTrayIcon();
 
   // Connect API Manager signals
   connect(m_apiManager, &APIManager::sourcesReceived, this,
@@ -339,14 +341,29 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon = new KStatusNotifierItem(this);
   m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
-  m_trayIcon->setStatus(KStatusNotifierItem::Active);
+
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("TraySettings"));
+  bool showTrayIcon = config.readEntry(QStringLiteral("showTrayIcon"), true);
+  m_trayIcon->setStatus(showTrayIcon ? KStatusNotifierItem::Active
+                                     : KStatusNotifierItem::Passive);
+
   m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
                          i18n("Google Jules Client"));
 
   QMenu *menu = m_trayIcon->contextMenu();
+
+  QAction *toggleWindowAction = menu->addAction(i18n("Show/Hide Window"));
+  connect(toggleWindowAction, &QAction::triggered, this,
+          &MainWindow::toggleWindow);
+
   QAction *newSessionAction = menu->addAction(i18n("New Session"));
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
+
+  if (m_showFullSessionListAction) {
+    menu->addAction(m_showFullSessionListAction);
+  }
 
   connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
           &MainWindow::toggleWindow);
@@ -678,6 +695,15 @@ void MainWindow::showNewSessionDialog() {
 void MainWindow::showSettingsDialog() {
   SettingsDialog dialog(m_apiManager, this);
   dialog.exec();
+  updateTrayIconVisibility();
+}
+
+void MainWindow::updateTrayIconVisibility() {
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("TraySettings"));
+  bool showTrayIcon = config.readEntry(QStringLiteral("showTrayIcon"), true);
+  m_trayIcon->setStatus(showTrayIcon ? KStatusNotifierItem::Active
+                                     : KStatusNotifierItem::Passive);
 }
 
 void MainWindow::onSessionCreated(const QStringList &sources,

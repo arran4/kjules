@@ -48,6 +48,7 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void updateTrayIconVisibility();
 
 private:
   void setupUi();
