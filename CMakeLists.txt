@@ -59,7 +59,6 @@ set(kjules_SRCS
     src/sessionwindow.cpp
     src/errorwindow.cpp
     src/kjules.qrc
-    resources.qrc
 )
 
 add_executable(kjules ${kjules_SRCS})
