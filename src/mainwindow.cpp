@@ -390,8 +390,7 @@ void MainWindow::setupTrayIcon() {
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
 
-  connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
-          &MainWindow::toggleWindow);
+  m_trayIcon->setAssociatedWidget(this);
 }
 
 void MainWindow::createActions() {
