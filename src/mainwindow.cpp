@@ -51,13 +51,11 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false) {
-      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)) {
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -389,6 +387,10 @@ void MainWindow::setupTrayIcon() {
   QAction *newSessionAction = menu->addAction(i18n("New Session"));
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
+
+  QAction *toggleWindowAction = menu->addAction(i18n("Show / Hide"));
+  connect(toggleWindowAction, &QAction::triggered, this,
+          &MainWindow::toggleWindowVisibility);
 
   connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
           &MainWindow::toggleWindow);
