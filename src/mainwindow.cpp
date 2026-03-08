@@ -51,7 +51,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
+        m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false) {
@@ -87,6 +87,8 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
+  connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
+          &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this,
           [this](const QString &msg) {
             if (!m_isProcessingQueue) {
@@ -189,6 +191,8 @@ void MainWindow::setupUi() {
             SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
             window->show();
           });
+          menu.addAction(m_refreshSourceAction);
+          menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showPastNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
           menu.addAction(m_openUrlAction);
@@ -331,18 +335,37 @@ void MainWindow::setupUi() {
 
           connect(rawTranscriptAction, &QAction::triggered, [this, index]() {
             QJsonObject errorData = m_errorsModel->getError(index.row());
-            KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
-            rawWindow->setAttribute(Qt::WA_DeleteOnClose);
-            rawWindow->setWindowTitle(i18n("Raw Transcript"));
+            QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
+            QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
+            QString errorStr = errorData.value(QStringLiteral("message")).toString();
+            QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
 
-            QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
-            QJsonDocument doc(errorData);
-            textBrowser->setPlainText(
-                QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+            ErrorWindow *window = new ErrorWindow(index.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr, httpDetails, this);
+            connect(window, &ErrorWindow::editRequested, [this](int row) {
+               QModelIndex idx = m_errorsModel->index(row, 0);
+               onErrorActivated(idx);
+            });
+            connect(window, &ErrorWindow::deleteRequested, [this](int row) {
+               m_errorsModel->removeError(row);
+               updateStatus(i18n("Error removed."));
+            });
+            connect(window, &ErrorWindow::draftRequested, [this](int row) {
+               QJsonObject errData = m_errorsModel->getError(row);
+               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+               m_draftsModel->addDraft(req);
+               m_errorsModel->removeError(row);
+               updateStatus(i18n("Error converted to draft."));
+            });
+            connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+               QJsonObject errData = m_errorsModel->getError(row);
+               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+               m_errorsModel->removeError(row);
+               m_apiManager->createSessionAsync(req);
+               updateStatus(i18n("Sending error item immediately..."));
+            });
 
-            rawWindow->setCentralWidget(textBrowser);
-            rawWindow->resize(600, 400);
-            rawWindow->show();
+            window->setAttribute(Qt::WA_DeleteOnClose);
+            window->show();
           });
 
           connect(deleteAction, &QAction::triggered, [this, index]() {
@@ -399,8 +422,7 @@ void MainWindow::setupTrayIcon() {
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
 
-  connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
-          &MainWindow::toggleWindow);
+  m_trayIcon->setAssociatedWidget(this);
 }
 
 void MainWindow::createActions() {
@@ -412,7 +434,8 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction,
-                                  QKeySequence(Qt::CTRL + Qt::ALT + Qt::Key_N));
+                                  QKeySequence());
+  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -433,6 +456,22 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
 
+  m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
+  actionCollection()->addAction(QStringLiteral("refresh_source"),
+                                m_refreshSourceAction);
+  connect(m_refreshSourceAction, &QAction::triggered, this, [this]() {
+    QModelIndex index = m_sourceView->currentIndex();
+    if (!index.isValid())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+    QString id =
+        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+    m_apiManager->getSource(id);
+    updateStatus(i18n("Refreshing source %1...", id));
+  });
+
   QAction *toggleWindowAction =
       new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
                   i18n("Minimize to Tray"), this);
@@ -441,6 +480,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -671,11 +711,15 @@ void MainWindow::showSettingsDialog() {
 
 void MainWindow::onSessionCreated(const QStringList &sources,
                                   const QString &prompt,
-                                  const QString &automationMode) {
+                                  const QString &automationMode,
+                                  bool requirePlanApproval) {
   for (const QString &source : sources) {
     QJsonObject req;
     req[QStringLiteral("source")] = source;
     req[QStringLiteral("prompt")] = prompt;
+    if (requirePlanApproval) {
+      req[QStringLiteral("requirePlanApproval")] = true;
+    }
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
     }
@@ -845,9 +889,9 @@ void MainWindow::editQueueItem(int row) {
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
           [this, row](const QStringList &sources, const QString &p,
-                      const QString &a) {
+                      const QString &a, bool requirePlanApproval) {
             m_queueModel->removeItem(row);
-            onSessionCreated(sources, p, a);
+            onSessionCreated(sources, p, a, requirePlanApproval);
           });
 
   connect(&dialog, &NewSessionDialog::saveDraftRequested,
@@ -872,39 +916,38 @@ void MainWindow::convertQueueItemToDraft(int row) {
 
 void MainWindow::onSessionCreationFailed(const QJsonObject &request,
                                          const QJsonObject &response,
-                                         const QString &errorString) {
-  QMessageBox msgBox(this);
-  msgBox.setWindowTitle(i18n("Session Creation Failed"));
-  msgBox.setText(i18n("Failed to create session:\n%1", errorString));
+                                         const QString &errorString,
+                                         const QString &httpDetails) {
+  m_errorsModel->addError(request, response, errorString, httpDetails);
+  updateStatus(i18n("Error saved."));
+  int newRow = m_errorsModel->rowCount() - 1;
 
-  QPushButton *continueBtn =
-      msgBox.addButton(i18n("Continue Editing"), QMessageBox::ActionRole);
-  QPushButton *saveBtn =
-      msgBox.addButton(i18n("Save to Drafts"), QMessageBox::ActionRole);
-  QPushButton *ignoreBtn =
-      msgBox.addButton(i18n("Ignore"), QMessageBox::RejectRole);
-  msgBox.setDefaultButton(ignoreBtn);
+  ErrorWindow *window = new ErrorWindow(newRow, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorString, httpDetails, this);
+  connect(window, &ErrorWindow::editRequested, [this](int row) {
+     QModelIndex idx = m_errorsModel->index(row, 0);
+     onErrorActivated(idx);
+  });
+  connect(window, &ErrorWindow::deleteRequested, [this](int row) {
+     m_errorsModel->removeError(row);
+     updateStatus(i18n("Error removed."));
+  });
+  connect(window, &ErrorWindow::draftRequested, [this](int row) {
+     QJsonObject errData = m_errorsModel->getError(row);
+     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+     m_draftsModel->addDraft(req);
+     m_errorsModel->removeError(row);
+     updateStatus(i18n("Error converted to draft."));
+  });
+  connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+     QJsonObject errData = m_errorsModel->getError(row);
+     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+     m_errorsModel->removeError(row);
+     m_apiManager->createSessionAsync(req);
+     updateStatus(i18n("Sending error item immediately..."));
+  });
 
-  msgBox.exec();
-
-  if (msgBox.clickedButton() == continueBtn) {
-    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
-    dialog.setInitialData(request);
-
-    connect(&dialog, &NewSessionDialog::createSessionRequested, this,
-            &MainWindow::onSessionCreated);
-    connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
-            &MainWindow::onDraftSaved);
-    dialog.exec();
-  } else if (msgBox.clickedButton() == saveBtn) {
-    m_draftsModel->addDraft(request);
-    updateStatus(i18n("Saved to drafts."));
-  } else {
-    // Ignore, save to errors
-    m_errorsModel->addError(request, response, errorString);
-    updateStatus(i18n("Error saved."));
-  }
+  window->setAttribute(Qt::WA_DeleteOnClose);
+  window->show();
 }
 
 void MainWindow::onErrorActivated(const QModelIndex &index) {
@@ -917,8 +960,8 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
           [this, index](const QStringList &sources, const QString &p,
-                        const QString &a) {
-            onSessionCreated(sources, p, a);
+                        const QString &a, bool requirePlanApproval) {
+            onSessionCreated(sources, p, a, requirePlanApproval);
             m_errorsModel->removeError(index.row());
           });
 
@@ -940,8 +983,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
           [this, index](const QStringList &sources, const QString &p,
-                        const QString &a) {
-            onSessionCreated(sources, p, a);
+                        const QString &a, bool requirePlanApproval) {
+            onSessionCreated(sources, p, a, requirePlanApproval);
             m_draftsModel->removeDraft(index.row());
           });
 
@@ -1051,6 +1094,12 @@ void MainWindow::onSourcesRefreshFinished() {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));
   }
+}
+
+void MainWindow::onSourceDetailsReceived(const QJsonObject &source) {
+  m_sourceModel->updateSource(source);
+  QString name = source.value(QStringLiteral("name")).toString();
+  updateStatus(i18n("Source %1 refreshed successfully.", name));
 }
 
 void MainWindow::cancelSourcesRefresh() {

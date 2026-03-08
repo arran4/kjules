@@ -33,7 +33,7 @@ private Q_SLOTS:
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode);
+                        const QString &automationMode, bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
@@ -41,7 +41,8 @@ private Q_SLOTS:
   void onErrorActivated(const QModelIndex &index);
   void onSessionCreationFailed(const QJsonObject &request,
                                const QJsonObject &response,
-                               const QString &errorString);
+                               const QString &errorString,
+                               const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
@@ -53,6 +54,7 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void onSourceDetailsReceived(const QJsonObject &source);
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -85,6 +87,7 @@ private:
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_refreshSourceAction;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
   QAction *m_showPastNewSessionsAction;

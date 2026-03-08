@@ -11,6 +11,7 @@ class QTextEdit;
 class QListView;
 class QComboBox;
 class QSortFilterProxyModel;
+class QCheckBox;
 
 class SourceSelectionProxyModel;
 
@@ -25,7 +26,7 @@ public:
 
 Q_SIGNALS:
   void createSessionRequested(const QStringList &sources, const QString &prompt,
-                              const QString &automationMode);
+                              const QString &automationMode, bool requirePlanApproval);
   void saveDraftRequested(const QJsonObject &draft);
 
 private Q_SLOTS:
@@ -45,6 +46,7 @@ private:
   SourceSelectionProxyModel *m_selectedProxy;
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
+  QCheckBox *m_requirePlanApprovalCheckBox;
   QPushButton *m_createButton;
   QPushButton *m_createPRButton;
   QSet<QString> m_selectedSources;

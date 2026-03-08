@@ -28,6 +28,8 @@ QVariant ErrorsModel::data(const QModelIndex &index, int role) const {
     return error.value(QStringLiteral("response")).toObject();
   case MessageRole:
     return error.value(QStringLiteral("message")).toString();
+  case HttpDetailsRole:
+    return error.value(QStringLiteral("httpDetails")).toString();
   case Qt::DisplayRole:
     return error.value(QStringLiteral("message"))
         .toString(); // Display error message as title
@@ -41,16 +43,21 @@ QHash<int, QByteArray> ErrorsModel::roleNames() const {
   roles[RequestRole] = "request";
   roles[ResponseRole] = "response";
   roles[MessageRole] = "message";
+  roles[HttpDetailsRole] = "httpDetails";
   return roles;
 }
 
 void ErrorsModel::addError(const QJsonObject &request,
                            const QJsonObject &response,
-                           const QString &message) {
+                           const QString &message,
+                           const QString &httpDetails) {
   QJsonObject errorObj;
   errorObj[QStringLiteral("request")] = request;
   errorObj[QStringLiteral("response")] = response;
   errorObj[QStringLiteral("message")] = message;
+  if (!httpDetails.isEmpty()) {
+    errorObj[QStringLiteral("httpDetails")] = httpDetails;
+  }
 
   beginInsertRows(QModelIndex(), 0, 0);
   m_errors.insert(0, errorObj);
