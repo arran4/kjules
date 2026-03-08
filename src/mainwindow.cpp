@@ -421,9 +421,12 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupTrayIcon() {
-  m_trayIcon = new QSystemTrayIcon(this);
-  m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
-  m_trayIcon->setToolTip(i18n("Google Jules Client"));
+  m_trayIcon = new KStatusNotifierItem(this);
+  m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
+  m_trayIcon->setToolTip(QStringLiteral("kjules-tray"),
+                         i18n("Google Jules Client"), QString());
+  m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
+  m_trayIcon->setStatus(KStatusNotifierItem::Active);
 
   m_trayMenu = new QMenu(this);
 
@@ -446,19 +449,11 @@ void MainWindow::setupTrayIcon() {
   m_trayMenu->addAction(quitAction);
 
   m_trayIcon->setContextMenu(m_trayMenu);
-  m_trayIcon->show();
 
-  connect(m_trayIcon, &QSystemTrayIcon::activated, this,
-          &MainWindow::onTrayIconActivated);
-}
-
-void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
-  if (reason == QSystemTrayIcon::Trigger ||
-      reason == QSystemTrayIcon::DoubleClick) {
-    toggleWindowVisibility();
-  } else if (reason == QSystemTrayIcon::Context) {
-    m_trayMenu->popup(QCursor::pos());
-  }
+  connect(m_trayIcon, &KStatusNotifierItem::activateRequested, this,
+          [this](bool /*active*/, const QPoint & /*pos*/) {
+            toggleWindowVisibility();
+          });
 }
 
 void MainWindow::createActions() {
@@ -538,7 +533,8 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
                   i18n("Minimize to tray"), this);
   connect(minimizeToTrayAction, &QAction::triggered, this, &MainWindow::hide);
-  actionCollection()->addAction(QStringLiteral("minimize_to_tray"), minimizeToTrayAction);
+  actionCollection()->addAction(QStringLiteral("minimize_to_tray"),
+                                minimizeToTrayAction);
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -1134,7 +1130,8 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
-  m_trayIcon->setToolTip(message);
+  m_trayIcon->setToolTip(QStringLiteral("kjules-tray"),
+                         i18n("Google Jules Client"), message);
 }
 
 void MainWindow::onError(const QString &message) {

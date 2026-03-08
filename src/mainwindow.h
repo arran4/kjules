@@ -1,9 +1,9 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <KStatusNotifierItem>
 #include <KXmlGuiWindow>
 #include <QDateTime>
-#include <QSystemTrayIcon>
 
 class APIManager;
 class SessionModel;
@@ -64,7 +64,6 @@ private Q_SLOTS:
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row);
-  void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
 
 private:
   void setupUi();
@@ -83,7 +82,7 @@ private:
   QListView *m_draftsView;
   QListView *m_queueView;
   QListView *m_errorsView;
-  QSystemTrayIcon *m_trayIcon;
+  KStatusNotifierItem *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
