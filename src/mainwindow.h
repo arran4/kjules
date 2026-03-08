@@ -84,6 +84,7 @@ private:
   QListView *m_queueView;
   QListView *m_errorsView;
   QSystemTrayIcon *m_trayIcon;
+  QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;

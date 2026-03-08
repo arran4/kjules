@@ -23,6 +23,7 @@
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QFile>
@@ -53,9 +54,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-        m_errorsModel(new ErrorsModel(this)),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
-      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false) {
   setupUi();
@@ -336,33 +336,43 @@ void MainWindow::setupUi() {
 
           connect(rawTranscriptAction, &QAction::triggered, [this, index]() {
             QJsonObject errorData = m_errorsModel->getError(index.row());
-            QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
-            QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
-            QString errorStr = errorData.value(QStringLiteral("message")).toString();
-            QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
+            QJsonObject request =
+                errorData.value(QStringLiteral("request")).toObject();
+            QJsonObject response =
+                errorData.value(QStringLiteral("response")).toObject();
+            QString errorStr =
+                errorData.value(QStringLiteral("message")).toString();
+            QString httpDetails =
+                errorData.value(QStringLiteral("httpDetails")).toString();
 
-            ErrorWindow *window = new ErrorWindow(index.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr, httpDetails, this);
+            ErrorWindow *window = new ErrorWindow(
+                index.row(), request,
+                QString::fromUtf8(
+                    QJsonDocument(response).toJson(QJsonDocument::Indented)),
+                errorStr, httpDetails, this);
             connect(window, &ErrorWindow::editRequested, [this](int row) {
-               QModelIndex idx = m_errorsModel->index(row, 0);
-               onErrorActivated(idx);
+              QModelIndex idx = m_errorsModel->index(row, 0);
+              onErrorActivated(idx);
             });
             connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-               m_errorsModel->removeError(row);
-               updateStatus(i18n("Error removed."));
+              m_errorsModel->removeError(row);
+              updateStatus(i18n("Error removed."));
             });
             connect(window, &ErrorWindow::draftRequested, [this](int row) {
-               QJsonObject errData = m_errorsModel->getError(row);
-               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-               m_draftsModel->addDraft(req);
-               m_errorsModel->removeError(row);
-               updateStatus(i18n("Error converted to draft."));
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_draftsModel->addDraft(req);
+              m_errorsModel->removeError(row);
+              updateStatus(i18n("Error converted to draft."));
             });
             connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-               QJsonObject errData = m_errorsModel->getError(row);
-               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-               m_errorsModel->removeError(row);
-               m_apiManager->createSessionAsync(req);
-               updateStatus(i18n("Sending error item immediately..."));
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_errorsModel->removeError(row);
+              m_apiManager->createSessionAsync(req);
+              updateStatus(i18n("Sending error item immediately..."));
             });
 
             window->setAttribute(Qt::WA_DeleteOnClose);
@@ -415,27 +425,27 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   m_trayIcon->setToolTip(i18n("Google Jules Client"));
 
-  QMenu *menu = new QMenu(this);
+  m_trayMenu = new QMenu(this);
 
   QAction *showHideAction = new QAction(i18n("Show/Hide"), this);
   connect(showHideAction, &QAction::triggered, this,
           &MainWindow::toggleWindowVisibility);
-  menu->addAction(showHideAction);
+  m_trayMenu->addAction(showHideAction);
 
-  menu->addSeparator();
+  m_trayMenu->addSeparator();
 
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
-  menu->addAction(newSessionAction);
+  m_trayMenu->addAction(newSessionAction);
 
-  menu->addSeparator();
+  m_trayMenu->addSeparator();
 
   QAction *quitAction = new QAction(i18n("&Quit"), this);
   connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
-  menu->addAction(quitAction);
+  m_trayMenu->addAction(quitAction);
 
-  m_trayIcon->setContextMenu(menu);
+  m_trayIcon->setContextMenu(m_trayMenu);
   m_trayIcon->show();
 
   connect(m_trayIcon, &QSystemTrayIcon::activated, this,
@@ -446,6 +456,8 @@ void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
   if (reason == QSystemTrayIcon::Trigger ||
       reason == QSystemTrayIcon::DoubleClick) {
     toggleWindowVisibility();
+  } else if (reason == QSystemTrayIcon::Context) {
+    m_trayMenu->popup(QCursor::pos());
   }
 }
 
@@ -457,9 +469,9 @@ void MainWindow::createActions() {
           &MainWindow::showNewSessionDialog);
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction,
-                                  QKeySequence());
-  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
+  KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
+  actionCollection()->setDefaultShortcut(newSessionAction,
+                                         QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -519,7 +531,8 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
-  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
+  actionCollection()->setDefaultShortcut(toggleWindowAction,
+                                         QKeySequence(Qt::CTRL + Qt::Key_M));
 
   QAction *minimizeToTrayAction =
       new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
@@ -995,28 +1008,32 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
   updateStatus(i18n("Error saved."));
   int newRow = m_errorsModel->rowCount() - 1;
 
-  ErrorWindow *window = new ErrorWindow(newRow, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorString, httpDetails, this);
+  ErrorWindow *window =
+      new ErrorWindow(newRow, request,
+                      QString::fromUtf8(QJsonDocument(response).toJson(
+                          QJsonDocument::Indented)),
+                      errorString, httpDetails, this);
   connect(window, &ErrorWindow::editRequested, [this](int row) {
-     QModelIndex idx = m_errorsModel->index(row, 0);
-     onErrorActivated(idx);
+    QModelIndex idx = m_errorsModel->index(row, 0);
+    onErrorActivated(idx);
   });
   connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-     m_errorsModel->removeError(row);
-     updateStatus(i18n("Error removed."));
+    m_errorsModel->removeError(row);
+    updateStatus(i18n("Error removed."));
   });
   connect(window, &ErrorWindow::draftRequested, [this](int row) {
-     QJsonObject errData = m_errorsModel->getError(row);
-     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-     m_draftsModel->addDraft(req);
-     m_errorsModel->removeError(row);
-     updateStatus(i18n("Error converted to draft."));
+    QJsonObject errData = m_errorsModel->getError(row);
+    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+    m_draftsModel->addDraft(req);
+    m_errorsModel->removeError(row);
+    updateStatus(i18n("Error converted to draft."));
   });
   connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-     QJsonObject errData = m_errorsModel->getError(row);
-     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-     m_errorsModel->removeError(row);
-     m_apiManager->createSessionAsync(req);
-     updateStatus(i18n("Sending error item immediately..."));
+    QJsonObject errData = m_errorsModel->getError(row);
+    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+    m_errorsModel->removeError(row);
+    m_apiManager->createSessionAsync(req);
+    updateStatus(i18n("Sending error item immediately..."));
   });
 
   window->setAttribute(Qt::WA_DeleteOnClose);
