@@ -15,7 +15,6 @@ class QueueModel;
 class ErrorsModel;
 class QListView;
 class QTreeView;
-class KStatusNotifierItem;
 class QLabel;
 class QProgressBar;
 class QPushButton;
@@ -28,12 +27,16 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
 
+protected:
+  void closeEvent(QCloseEvent *event) override;
+
 private Q_SLOTS:
   void refreshSources();
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode, bool requirePlanApproval);
+                        const QString &automationMode,
+                        bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
@@ -63,6 +66,7 @@ private Q_SLOTS:
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row);
+  void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
 
 private:
   void setupUi();
@@ -81,7 +85,8 @@ private:
   QListView *m_draftsView;
   QListView *m_queueView;
   QListView *m_errorsView;
-  KStatusNotifierItem *m_trayIcon;
+  QSystemTrayIcon *m_trayIcon;
+  QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
