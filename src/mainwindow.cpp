@@ -453,8 +453,10 @@ void MainWindow::setupTrayIcon() {
 }
 
 void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
-  if (reason == QSystemTrayIcon::Trigger ||
-      reason == QSystemTrayIcon::DoubleClick) {
+  // Some tray implementations report right-click as Trigger (instead of Context).
+  // Restrict window toggling to explicit double-click to avoid stealing
+  // right-click interactions from the tray context menu.
+  if (reason == QSystemTrayIcon::DoubleClick) {
     toggleWindowVisibility();
   }
 }
