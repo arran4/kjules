@@ -5,6 +5,8 @@
 #include <QDateTime>
 #include <QSystemTrayIcon>
 
+#include "sessionswindow.h"
+
 class APIManager;
 class SessionModel;
 class SourceModel;
