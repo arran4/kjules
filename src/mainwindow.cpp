@@ -456,8 +456,6 @@ void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
   if (reason == QSystemTrayIcon::Trigger ||
       reason == QSystemTrayIcon::DoubleClick) {
     toggleWindowVisibility();
-  } else if (reason == QSystemTrayIcon::Context) {
-    m_trayMenu->popup(QCursor::pos());
   }
 }
 
