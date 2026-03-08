@@ -13,12 +13,15 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include <KActionCollection>
+#include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
 #include <QAction>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDesktopServices>
@@ -110,6 +113,17 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  bool closeToTray = config.readEntry("CloseToTray", false);
+  if (closeToTray) {
+    hide();
+    event->ignore();
+  } else {
+    KXmlGuiWindow::closeEvent(event);
+  }
+}
 
 void MainWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
@@ -506,6 +520,12 @@ void MainWindow::createActions() {
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
   actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
+
+  QAction *minimizeToTrayAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
+                  i18n("Minimize to tray"), this);
+  connect(minimizeToTrayAction, &QAction::triggered, this, &MainWindow::hide);
+  actionCollection()->addAction(QStringLiteral("minimize_to_tray"), minimizeToTrayAction);
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),

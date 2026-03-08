@@ -25,12 +25,16 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
 
+protected:
+  void closeEvent(QCloseEvent *event) override;
+
 private Q_SLOTS:
   void refreshSources();
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode, bool requirePlanApproval);
+                        const QString &automationMode,
+                        bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);

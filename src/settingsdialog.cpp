@@ -1,6 +1,9 @@
 #include "settingsdialog.h"
 #include "apimanager.h"
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
+#include <QCheckBox>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -25,6 +28,11 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_githubTokenEdit->setText(m_apiManager->githubToken());
   m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
   formLayout->addRow(i18n("GitHub Token (Optional):"), m_githubTokenEdit);
+
+  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  m_closeToTrayEdit = new QCheckBox(i18n("Close to Tray"), this);
+  m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
+  formLayout->addRow(QString(), m_closeToTrayEdit);
 
   mainLayout->addLayout(formLayout);
 
@@ -65,5 +73,10 @@ void SettingsDialog::onTestConnection() {
 void SettingsDialog::onSave() {
   m_apiManager->setApiKey(m_apiKeyEdit->text());
   m_apiManager->setGithubToken(m_githubTokenEdit->text());
+
+  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
+  config.sync();
+
   accept();
 }
