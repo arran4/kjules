@@ -4,6 +4,7 @@
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -34,11 +35,24 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
   formLayout->addRow(QString(), m_closeToTrayEdit);
 
+  m_tierComboBox = new QComboBox(this);
+  m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
+  m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
+  m_tierComboBox->addItem(i18n("Max (30 jobs)"), QStringLiteral("max"));
+
+  QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
+  int index = m_tierComboBox->findData(currentTier);
+  if (index >= 0) {
+      m_tierComboBox->setCurrentIndex(index);
+  }
+  formLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
+
+
   mainLayout->addLayout(formLayout);
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-  QPushButton *testButton = new QPushButton(i18n("Test Connection"), this);
+  QPushButton *testButton = new QPushButton(i18n("Test API Key"), this);
   connect(testButton, &QPushButton::clicked, this,
           &SettingsDialog::onTestConnection);
 
@@ -76,6 +90,7 @@ void SettingsDialog::onSave() {
 
   KConfigGroup config(KSharedConfig::openConfig(), "General");
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
+  config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.sync();
 
   accept();

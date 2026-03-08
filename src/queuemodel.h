@@ -13,6 +13,10 @@ struct QueueItem {
   QString lastResponse;
   QDateTime lastTry;
 
+  bool isWaitItem = false;
+  int waitSeconds = 0;
+  QDateTime waitStartTime;
+
   QJsonObject toJson() const;
   static QueueItem fromJson(const QJsonObject &obj);
 };
@@ -38,6 +42,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void enqueue(const QJsonObject &requestData);
+  void updateItem(int index, const QueueItem &item);
   QueueItem dequeue();
   QueueItem peek() const;
   void requeueFailed(const QueueItem &item, const QString &errorMsg,
@@ -51,6 +56,7 @@ public:
 
 private:
   QVector<QueueItem> m_items;
+  int m_jobsSinceLastWait = 0;
   void load();
   void save();
 };
