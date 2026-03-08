@@ -17,6 +17,8 @@
             <Action name="refresh_source" />
             <Action name="show_full_session_list" />
             <Separator />
+            <Action name="toggle_queue" />
+            <Separator />
             <Action name="view_sessions" />
             <Action name="show_past_new_sessions" />
             <Action name="view_raw_data" />
@@ -37,6 +39,7 @@
         <Action name="refresh_sources" />
         <Action name="view_sessions" />
         <Action name="options_configure" />
+        <Action name="toggle_queue" />
         <Action name="toggle_window" />
         <Action name="file_quit" />
     </ToolBar>

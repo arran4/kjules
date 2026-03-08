@@ -1,11 +1,14 @@
 #include "settingsdialog.h"
 #include "apimanager.h"
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
@@ -25,6 +28,13 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_githubTokenEdit->setText(m_apiManager->githubToken());
   m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
   formLayout->addRow(i18n("GitHub Token (Optional):"), m_githubTokenEdit);
+  m_queueIntervalSpin = new QSpinBox(this);
+  m_queueIntervalSpin->setRange(1, 3600);
+  KSharedConfig::Ptr config = KSharedConfig::openConfig();
+  KConfigGroup group = config->group("General");
+  m_queueIntervalSpin->setValue(group.readEntry("QueueInterval", 60));
+  formLayout->addRow(i18n("Queue Processing Interval (seconds):"),
+                     m_queueIntervalSpin);
 
   mainLayout->addLayout(formLayout);
 
@@ -65,5 +75,10 @@ void SettingsDialog::onTestConnection() {
 void SettingsDialog::onSave() {
   m_apiManager->setApiKey(m_apiKeyEdit->text());
   m_apiManager->setGithubToken(m_githubTokenEdit->text());
+  KSharedConfig::Ptr config = KSharedConfig::openConfig();
+  KConfigGroup group = config->group("General");
+  group.writeEntry("QueueInterval", m_queueIntervalSpin->value());
+  config->sync();
+
   accept();
 }

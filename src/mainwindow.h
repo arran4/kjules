@@ -30,7 +30,8 @@ private Q_SLOTS:
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode, bool requirePlanApproval);
+                        const QString &automationMode,
+                        bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
@@ -53,6 +54,7 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void processQueue();
+  void toggleQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
@@ -101,7 +103,10 @@ private:
   QDateTime m_lastSessionRefreshTime;
 
   QTimer *m_queueTimer;
+  QAction *m_toggleQueueAction;
   bool m_isProcessingQueue;
+  bool m_queuePaused;
+  int m_queueIntervalMs;
   QDateTime m_queueBackoffUntil;
 };
 
