@@ -48,15 +48,20 @@ void SessionsProxyModel::setStatusFilter(const QString &status) {
 
 bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
   QModelIndex indexTitle = sourceModel()->index(source_row, SessionModel::ColTitle, source_parent);
-  QModelIndex indexSource = sourceModel()->index(source_row, SessionModel::ColSource, source_parent);
-  QModelIndex indexStatus = sourceModel()->index(source_row, SessionModel::ColStatus, source_parent);
+  QModelIndex indexOwner = sourceModel()->index(source_row, SessionModel::ColOwner, source_parent);
+  QModelIndex indexRepo = sourceModel()->index(source_row, SessionModel::ColRepo, source_parent);
+  QModelIndex indexState = sourceModel()->index(source_row, SessionModel::ColState, source_parent);
 
   QString title = sourceModel()->data(indexTitle, Qt::DisplayRole).toString();
-  QString source = sourceModel()->data(indexSource, Qt::DisplayRole).toString();
-  QString status = sourceModel()->data(indexStatus, Qt::DisplayRole).toString();
+  QString owner = sourceModel()->data(indexOwner, Qt::DisplayRole).toString();
+  QString repo = sourceModel()->data(indexRepo, Qt::DisplayRole).toString();
+  QString state = sourceModel()->data(indexState, Qt::DisplayRole).toString();
 
-  bool textMatch = m_textFilter.isEmpty() || title.contains(m_textFilter, Qt::CaseInsensitive) || source.contains(m_textFilter, Qt::CaseInsensitive);
-  bool statusMatch = m_statusFilter.isEmpty() || m_statusFilter == i18n("All") || status.contains(m_statusFilter, Qt::CaseInsensitive);
+  bool textMatch = m_textFilter.isEmpty() ||
+                   title.contains(m_textFilter, Qt::CaseInsensitive) ||
+                   owner.contains(m_textFilter, Qt::CaseInsensitive) ||
+                   repo.contains(m_textFilter, Qt::CaseInsensitive);
+  bool statusMatch = m_statusFilter.isEmpty() || m_statusFilter == i18n("All") || state.contains(m_statusFilter, Qt::CaseInsensitive);
 
   return textMatch && statusMatch && QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
 }
@@ -113,7 +118,7 @@ void SessionsWindow::setupUi() {
   filterLayout->addWidget(searchEdit);
 
   QComboBox *statusCombo = new QComboBox(this);
-  statusCombo->addItems({i18n("All"), QStringLiteral("PENDING"), QStringLiteral("RUNNING"), QStringLiteral("COMPLETED"), QStringLiteral("FAILED"), QStringLiteral("CANCELED")});
+  statusCombo->addItems({i18n("All"), QStringLiteral("PENDING"), QStringLiteral("IN_PROGRESS"), QStringLiteral("COMPLETED"), QStringLiteral("FAILED"), QStringLiteral("CANCELED")});
   connect(statusCombo, &QComboBox::currentTextChanged, m_proxyModel, &SessionsProxyModel::setStatusFilter);
   filterLayout->addWidget(statusCombo);
 
@@ -133,7 +138,9 @@ void SessionsWindow::setupUi() {
   // Header configuration
   m_listView->header()->setMinimumSectionSize(100);
   m_listView->header()->resizeSection(SessionModel::ColTitle, 250);
-  m_listView->header()->resizeSection(SessionModel::ColStatus, 100);
+  m_listView->header()->resizeSection(SessionModel::ColState, 100);
+  m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
+  m_listView->header()->resizeSection(SessionModel::ColPR, 80);
   m_listView->header()->resizeSection(SessionModel::ColUpdatedAt, 150);
   m_listView->sortByColumn(SessionModel::ColUpdatedAt, Qt::DescendingOrder);
 
@@ -176,7 +183,7 @@ void SessionsWindow::setupUi() {
           });
 
           auto getSourceUrl = [this, index]() -> QString {
-            QString provider = m_proxyModel->data(m_proxyModel->index(index.row(), SessionModel::ColProvider)).toString();
+            QString provider = m_proxyModel->data(index, SessionModel::ProviderRole).toString();
             QString owner = m_proxyModel->data(m_proxyModel->index(index.row(), SessionModel::ColOwner)).toString();
             QString repo = m_proxyModel->data(m_proxyModel->index(index.row(), SessionModel::ColRepo)).toString();
             if (provider == QStringLiteral("github")) {
@@ -209,6 +216,31 @@ void SessionsWindow::setupUi() {
             } else {
               m_statusLabel->setText(i18n("Invalid source URL."));
             }
+          });
+
+          QString prUrl = m_proxyModel->data(index, SessionModel::PrUrlRole).toString();
+          if (!prUrl.isEmpty()) {
+            menu.addSeparator();
+            QAction *openPrUrlAction = menu.addAction(i18n("Open PR URL"));
+            QAction *copyPrUrlAction = menu.addAction(i18n("Copy PR URL"));
+
+            connect(openPrUrlAction, &QAction::triggered, [this, prUrl]() {
+              QDesktopServices::openUrl(QUrl(prUrl));
+              m_statusLabel->setText(i18n("Opening PR %1", prUrl));
+            });
+
+            connect(copyPrUrlAction, &QAction::triggered, [this, prUrl]() {
+              QGuiApplication::clipboard()->setText(prUrl);
+              m_statusLabel->setText(i18n("PR URL copied to clipboard."));
+            });
+          }
+
+          menu.addSeparator();
+          QAction *copyIdAction = menu.addAction(i18n("Copy Jules ID"));
+          connect(copyIdAction, &QAction::triggered, [this, index]() {
+            QString id = m_proxyModel->data(index, SessionModel::IdRole).toString();
+            QGuiApplication::clipboard()->setText(id);
+            m_statusLabel->setText(i18n("Jules ID copied to clipboard."));
           });
 
           menu.exec(m_listView->mapToGlobal(pos));

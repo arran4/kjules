@@ -38,9 +38,21 @@ SessionData parseSessionData(const QJsonObject &obj) {
     data.repo = sourceParts[3];
   }
 
-  data.status = obj.value(QStringLiteral("status")).toString();
+  data.state = obj.value(QStringLiteral("state")).toString();
   data.updateTime = QDateTime::fromString(obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
   data.createTime = QDateTime::fromString(obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+
+  data.hasChangeSet = obj.contains(QStringLiteral("changeSet"));
+
+  QJsonObject prObj = obj.value(QStringLiteral("pullRequest")).toObject();
+  data.prUrl = prObj.value(QStringLiteral("url")).toString();
+  if (!data.prUrl.isEmpty()) {
+    int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
+    if (lastSlash != -1) {
+      data.prNumber = QStringLiteral("#") + data.prUrl.mid(lastSlash + 1);
+    }
+  }
+
   data.rawObject = obj;
   return data;
 }
@@ -69,20 +81,20 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     switch (index.column()) {
     case ColTitle:
       return session.title;
-    case ColStatus:
-      return session.status;
+    case ColState:
+      return session.state;
+    case ColChangeSet:
+      return session.hasChangeSet ? i18n("Yes") : QString();
+    case ColPR:
+      return session.prNumber;
     case ColUpdatedAt:
       return session.updateTime.toString(Qt::DefaultLocaleShortDate);
     case ColCreatedAt:
       return session.createTime.toString(Qt::DefaultLocaleShortDate);
-    case ColProvider:
-      return session.provider;
     case ColOwner:
       return session.owner;
     case ColRepo:
       return session.repo;
-    case ColSource:
-      return session.source;
     case ColId:
       return session.id;
     default:
@@ -101,8 +113,14 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.source;
   case PromptRole:
     return session.prompt;
-  case StatusRole:
-    return session.status;
+  case StateRole:
+    return session.state;
+  case ChangeSetRole:
+    return session.hasChangeSet;
+  case PrUrlRole:
+    return session.prUrl;
+  case ProviderRole:
+    return session.provider;
   default:
     return QVariant();
   }
@@ -113,20 +131,20 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation, int 
     switch (section) {
     case ColTitle:
       return i18n("Title");
-    case ColStatus:
-      return i18n("Status");
+    case ColState:
+      return i18n("State");
+    case ColChangeSet:
+      return i18n("Change Set");
+    case ColPR:
+      return i18n("PR");
     case ColUpdatedAt:
       return i18n("Updated At");
     case ColCreatedAt:
       return i18n("Created At");
-    case ColProvider:
-      return i18n("Provider");
     case ColOwner:
       return i18n("Owner");
     case ColRepo:
       return i18n("Repo");
-    case ColSource:
-      return i18n("Source");
     case ColId:
       return i18n("ID");
     }
@@ -141,6 +159,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
   roles[TitleRole] = "title";
   roles[SourceRole] = "source";
   roles[PromptRole] = "prompt";
+  roles[StateRole] = "state";
   return roles;
 }
 

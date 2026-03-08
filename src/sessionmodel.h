@@ -14,12 +14,15 @@ struct SessionData {
   QString title;
   QString source;
   QString prompt;
-  QString status;
+  QString state;
   QDateTime updateTime;
   QDateTime createTime;
   QString provider;
   QString owner;
   QString repo;
+  bool hasChangeSet;
+  QString prUrl;
+  QString prNumber;
   QJsonObject rawObject;
 };
 
@@ -33,18 +36,21 @@ public:
     TitleRole,
     SourceRole,
     PromptRole,
-    StatusRole
+    StateRole,
+    ChangeSetRole,
+    PrUrlRole,
+    ProviderRole
   };
 
   enum Columns {
     ColTitle = 0,
-    ColStatus,
+    ColState,
+    ColChangeSet,
+    ColPR,
     ColUpdatedAt,
     ColCreatedAt,
-    ColProvider,
     ColOwner,
     ColRepo,
-    ColSource,
     ColId,
     ColCount
   };
