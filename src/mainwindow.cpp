@@ -851,6 +851,24 @@ void MainWindow::processQueue() {
     return;
   }
 
+  QueueItem peekItem = m_queueModel->peek();
+  if (peekItem.isWaitItem) {
+      if (!peekItem.waitStartTime.isValid()) {
+          peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
+          m_queueModel->updateItem(0, peekItem);
+          QTimer::singleShot(peekItem.waitSeconds * 1000, this, &MainWindow::processQueue);
+      } else {
+          qint64 elapsed = peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+          if (elapsed >= peekItem.waitSeconds) {
+              m_queueModel->dequeue(); // Wait completed, remove wait item
+              QTimer::singleShot(0, this, &MainWindow::processQueue);
+          } else {
+              QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this, &MainWindow::processQueue);
+          }
+      }
+      return;
+  }
+
   m_isProcessingQueue = true;
   QueueItem item = m_queueModel->peek();
   m_apiManager->createSessionAsync(item.requestData);
