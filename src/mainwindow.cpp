@@ -456,6 +456,8 @@ void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
   if (reason == QSystemTrayIcon::Trigger ||
       reason == QSystemTrayIcon::DoubleClick) {
     toggleWindowVisibility();
+  } else if (reason == QSystemTrayIcon::Context) {
+    m_trayMenu->popup(QCursor::pos());
   }
 }
 
@@ -536,8 +538,7 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
                   i18n("Minimize to tray"), this);
   connect(minimizeToTrayAction, &QAction::triggered, this, &MainWindow::hide);
-  actionCollection()->addAction(QStringLiteral("minimize_to_tray"),
-                                minimizeToTrayAction);
+  actionCollection()->addAction(QStringLiteral("minimize_to_tray"), minimizeToTrayAction);
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
