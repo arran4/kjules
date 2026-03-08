@@ -1,0 +1,47 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -401,23 +401,23 @@
+   m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
+   m_trayIcon->setToolTip(i18n("Google Jules Client"));
+
+-  QMenu *menu = new QMenu(this);
++  m_trayMenu = new QMenu(this);
+
+   QAction *showHideAction = new QAction(i18n("Show/Hide"), this);
+   connect(showHideAction, &QAction::triggered, this,
+           &MainWindow::toggleWindowVisibility);
+-  menu->addAction(showHideAction);
++  m_trayMenu->addAction(showHideAction);
+
+-  menu->addSeparator();
++  m_trayMenu->addSeparator();
+
+   QAction *newSessionAction = new QAction(i18n("New Session"), this);
+   connect(newSessionAction, &QAction::triggered, this,
+           &MainWindow::showNewSessionDialog);
+-  menu->addAction(newSessionAction);
++  m_trayMenu->addAction(newSessionAction);
+
+-  menu->addSeparator();
++  m_trayMenu->addSeparator();
+
+   QAction *quitAction = new QAction(i18n("&Quit"), this);
+   connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
+-  menu->addAction(quitAction);
++  m_trayMenu->addAction(quitAction);
+
+-  m_trayIcon->setContextMenu(menu);
++  m_trayIcon->setContextMenu(m_trayMenu);
+   m_trayIcon->show();
+
+   connect(m_trayIcon, &QSystemTrayIcon::activated, this,
+--- src/mainwindow.h
++++ src/mainwindow.h
+@@ -83,6 +83,7 @@
+   QListView *m_queueView;
+   QListView *m_errorsView;
+   QSystemTrayIcon *m_trayIcon;
++  QMenu *m_trayMenu;
+   QLabel *m_statusLabel;
+   QLabel *m_sessionStatsLabel;
+   QProgressBar *m_sourceProgressBar;
