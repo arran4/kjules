@@ -1,0 +1,13 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -438,8 +438,10 @@
+ }
+
+ void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
+   if (reason == QSystemTrayIcon::Trigger ||
+       reason == QSystemTrayIcon::DoubleClick) {
+     toggleWindowVisibility();
++  } else if (reason == QSystemTrayIcon::Context) {
++    m_trayMenu->popup(QCursor::pos());
+   }
+ }
