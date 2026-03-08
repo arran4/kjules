@@ -27,6 +27,7 @@ public:
   QJsonObject getDraft(int row) const;
   void loadDrafts();
   void saveDrafts();
+  void clear();
 
 private:
   QJsonArray m_drafts;

@@ -2,10 +2,6 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
-#include <QDir>
-#include <QFile>
-#include <QJsonDocument>
-#include <QStandardPaths>
 #include <QStandardPaths>
 
 SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) {
@@ -154,9 +150,11 @@ void SourceModel::updateSource(const QJsonObject &source) {
   }
 
   for (int i = 0; i < m_sources.size(); ++i) {
-    QString currentId = m_sources[i].toObject().value(QStringLiteral("id")).toString();
+    QString currentId =
+        m_sources[i].toObject().value(QStringLiteral("id")).toString();
     if (currentId.isEmpty()) {
-      currentId = m_sources[i].toObject().value(QStringLiteral("name")).toString();
+      currentId =
+          m_sources[i].toObject().value(QStringLiteral("name")).toString();
     }
 
     if (currentId == id) {
@@ -175,6 +173,12 @@ void SourceModel::updateSource(const QJsonObject &source) {
   saveSources();
 }
 
+void SourceModel::clear() {
+  beginResetModel();
+  m_sources = QJsonArray();
+  endResetModel();
+}
+
 void SourceModel::saveSources() {
   QString path =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -190,4 +194,3 @@ void SourceModel::saveSources() {
     file.close();
   }
 }
-
