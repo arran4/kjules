@@ -79,7 +79,6 @@ public:
 private:
   QVector<SessionData> m_sessions;
   QHash<QString, int> m_idToIndex;
-  QJsonArray m_rawSessions;
   QString m_nextPageToken;
 };
 

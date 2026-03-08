@@ -58,6 +58,8 @@ private:
   QString m_filterSource;
   int m_sessionsLoaded;
   bool m_isRefreshing;
+  int m_pagesLoaded;
+  bool m_isRefreshingAll;
   QString m_nextPageToken;
   QAction *m_resumeAction;
   QActionGroup *m_autoLoadGroup;

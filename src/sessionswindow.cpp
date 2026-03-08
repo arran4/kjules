@@ -56,11 +56,13 @@ bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sou
   QString owner = sourceModel()->data(indexOwner, Qt::DisplayRole).toString();
   QString repo = sourceModel()->data(indexRepo, Qt::DisplayRole).toString();
   QString state = sourceModel()->data(indexState, Qt::DisplayRole).toString();
+  QString fullSource = sourceModel()->data(indexTitle, SessionModel::SourceRole).toString();
 
   bool textMatch = m_textFilter.isEmpty() ||
                    title.contains(m_textFilter, Qt::CaseInsensitive) ||
                    owner.contains(m_textFilter, Qt::CaseInsensitive) ||
-                   repo.contains(m_textFilter, Qt::CaseInsensitive);
+                   repo.contains(m_textFilter, Qt::CaseInsensitive) ||
+                   fullSource.contains(m_textFilter, Qt::CaseInsensitive);
   bool statusMatch = m_statusFilter.isEmpty() || m_statusFilter == i18n("All") || state.contains(m_statusFilter, Qt::CaseInsensitive);
 
   return textMatch && statusMatch && QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
@@ -69,7 +71,8 @@ bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sou
 SessionsWindow::SessionsWindow(const QString &filterSource,
                                APIManager *apiManager, QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(apiManager),
-      m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false) {
+      m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
+      m_pagesLoaded(0), m_isRefreshingAll(false) {
 
   m_model = new SessionModel(this);
   m_proxyModel = new SessionsProxyModel(this);
@@ -114,6 +117,9 @@ void SessionsWindow::setupUi() {
   QHBoxLayout *filterLayout = new QHBoxLayout();
   QLineEdit *searchEdit = new QLineEdit(this);
   searchEdit->setPlaceholderText(i18n("Search title or source..."));
+  if (!m_filterSource.isEmpty()) {
+    searchEdit->setText(m_filterSource);
+  }
   connect(searchEdit, &QLineEdit::textChanged, m_proxyModel, &SessionsProxyModel::setTextFilter);
   filterLayout->addWidget(searchEdit);
 
@@ -310,6 +316,9 @@ void SessionsWindow::setupUi() {
   autoLoadMenu->addActions(m_autoLoadGroup->actions());
   menuBar()->addMenu(prefsMenu);
 
+  QMenu *viewMenu = new QMenu(i18n("View"), this);
+  QMenu *columnsMenu = viewMenu->addMenu(i18n("Columns"));
+
   KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
   QString autoLoadMode = config.readEntry("AutoLoadMode", "manual");
   for (QAction *action : m_autoLoadGroup->actions()) {
@@ -327,6 +336,37 @@ void SessionsWindow::setupUi() {
     config.writeEntry("AutoLoadMode", action->data().toString());
     config.sync();
   });
+
+  auto addColumnToggle = [this, columnsMenu, &config](const QString &label, int colIndex) {
+    QAction *action = new QAction(label, this);
+    action->setCheckable(true);
+
+    QString key = QStringLiteral("ShowColumn_%1").arg(colIndex);
+    bool isVisible = config.readEntry(key, true);
+    action->setChecked(isVisible);
+    m_listView->header()->setSectionHidden(colIndex, !isVisible);
+
+    connect(action, &QAction::toggled, [this, colIndex](bool checked) {
+      m_listView->header()->setSectionHidden(colIndex, !checked);
+      KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+      config.writeEntry(QStringLiteral("ShowColumn_%1").arg(colIndex), checked);
+      config.sync();
+    });
+
+    columnsMenu->addAction(action);
+  };
+
+  addColumnToggle(i18n("Title"), SessionModel::ColTitle);
+  addColumnToggle(i18n("State"), SessionModel::ColState);
+  addColumnToggle(i18n("Change Set"), SessionModel::ColChangeSet);
+  addColumnToggle(i18n("PR"), SessionModel::ColPR);
+  addColumnToggle(i18n("Updated At"), SessionModel::ColUpdatedAt);
+  addColumnToggle(i18n("Created At"), SessionModel::ColCreatedAt);
+  addColumnToggle(i18n("Owner"), SessionModel::ColOwner);
+  addColumnToggle(i18n("Repo"), SessionModel::ColRepo);
+  addColumnToggle(i18n("ID"), SessionModel::ColId);
+
+  menuBar()->addMenu(viewMenu);
 
   // Toolbar
   QToolBar *toolBar = addToolBar(i18n("Main Toolbar"));
@@ -359,14 +399,22 @@ void SessionsWindow::refreshSessions() {
     return;
 
   m_isRefreshing = true;
+
+  if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
+      m_autoLoadGroup->checkedAction()->data().toString() == QStringLiteral("load_all")) {
+    m_isRefreshingAll = true;
+  } else {
+    m_isRefreshingAll = false;
+  }
+
   m_sessionsLoaded = 0;
-  m_model->clearSessions();
+  m_pagesLoaded = 1;
   m_nextPageToken.clear();
   m_resumeAction->setEnabled(false);
 
   m_progressBar->show();
   m_cancelBtn->show();
-  m_statusLabel->setText(i18n("Refreshing sessions..."));
+  m_statusLabel->setText(i18n("Refreshing sessions (Page %1)...", m_pagesLoaded));
   m_apiManager->listSessions();
 }
 
@@ -376,9 +424,10 @@ void SessionsWindow::resumeRefresh() {
   }
 
   m_isRefreshing = true;
+  m_pagesLoaded++;
   m_progressBar->show();
   m_cancelBtn->show();
-  m_statusLabel->setText(i18n("Loading more sessions..."));
+  m_statusLabel->setText(i18n("Loading page %1...", m_pagesLoaded));
   m_resumeAction->setEnabled(false);
   m_apiManager->listSessions(m_nextPageToken);
 }
@@ -388,6 +437,7 @@ void SessionsWindow::cancelRefresh() {
     m_apiManager->cancelListSessions();
   }
   m_isRefreshing = false;
+  m_isRefreshingAll = false;
   m_progressBar->hide();
   m_cancelBtn->hide();
   m_statusLabel->setText(i18n("Refresh cancelled. Loaded %1 sessions.", m_sessionsLoaded));
@@ -400,11 +450,18 @@ void SessionsWindow::onSessionsReceived(const QJsonArray &sessions, const QStrin
   m_nextPageToken = nextPageToken;
   m_model->setNextPageToken(nextPageToken);
   m_progressBar->setFormat(i18n("%1 sessions loaded", m_sessionsLoaded));
-  m_statusLabel->setText(i18n("Loaded %1 sessions...", m_sessionsLoaded));
+  m_statusLabel->setText(i18n("Loading page %1... Loaded %2 sessions total.", m_pagesLoaded, m_sessionsLoaded));
 }
 
 void SessionsWindow::onSessionsRefreshFinished() {
   m_isRefreshing = false;
+
+  if (m_isRefreshingAll && !m_nextPageToken.isEmpty()) {
+    resumeRefresh();
+    return;
+  }
+
+  m_isRefreshingAll = false;
   m_progressBar->hide();
   m_cancelBtn->hide();
   m_statusLabel->setText(

@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 #include <KLocalizedString>
+#include <QColor>
+#include <QFont>
 
 SessionModel::SessionModel(QObject *parent) : QAbstractTableModel(parent) {}
 
@@ -42,14 +44,22 @@ SessionData parseSessionData(const QJsonObject &obj) {
   data.updateTime = QDateTime::fromString(obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
   data.createTime = QDateTime::fromString(obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
 
-  data.hasChangeSet = obj.contains(QStringLiteral("changeSet"));
-
-  QJsonObject prObj = obj.value(QStringLiteral("pullRequest")).toObject();
-  data.prUrl = prObj.value(QStringLiteral("url")).toString();
-  if (!data.prUrl.isEmpty()) {
-    int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
-    if (lastSlash != -1) {
-      data.prNumber = QStringLiteral("#") + data.prUrl.mid(lastSlash + 1);
+  data.hasChangeSet = false;
+  QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
+  for (int i = 0; i < outputs.size(); ++i) {
+    QJsonObject outputObj = outputs[i].toObject();
+    if (outputObj.contains(QStringLiteral("changeSet"))) {
+      data.hasChangeSet = true;
+    }
+    if (outputObj.contains(QStringLiteral("pullRequest"))) {
+      QJsonObject prObj = outputObj.value(QStringLiteral("pullRequest")).toObject();
+      data.prUrl = prObj.value(QStringLiteral("url")).toString();
+      if (!data.prUrl.isEmpty()) {
+        int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
+        if (lastSlash != -1) {
+          data.prNumber = QStringLiteral("#") + data.prUrl.mid(lastSlash + 1);
+        }
+      }
     }
   }
 
@@ -84,7 +94,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ColState:
       return session.state;
     case ColChangeSet:
-      return session.hasChangeSet ? i18n("Yes") : QString();
+      return session.hasChangeSet ? i18n("has changes set") : QString();
     case ColPR:
       return session.prNumber;
     case ColUpdatedAt:
@@ -99,6 +109,16 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return session.id;
     default:
       return QVariant();
+    }
+  } else if (role == Qt::ForegroundRole) {
+    if (index.column() == ColPR && !session.prNumber.isEmpty()) {
+      return QColor(Qt::blue);
+    }
+  } else if (role == Qt::FontRole) {
+    if (index.column() == ColPR && !session.prNumber.isEmpty()) {
+      QFont font;
+      font.setUnderline(true);
+      return font;
     }
   }
 
@@ -167,7 +187,6 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
   beginResetModel();
   m_sessions.clear();
   m_idToIndex.clear();
-  m_rawSessions = sessions;
   m_sessions.reserve(sessions.size());
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
@@ -187,7 +206,13 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
     QString id = obj.value(QStringLiteral("id")).toString();
-    if (!m_idToIndex.contains(id)) {
+    if (m_idToIndex.contains(id)) {
+      int row = m_idToIndex.value(id);
+      SessionData data = parseSessionData(obj);
+      data.id = id; // Ensure ID matches
+      m_sessions[row] = data;
+      Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
+    } else {
       newSessions.append(obj);
     }
   }
@@ -201,7 +226,6 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
     QJsonObject obj = newSessions[i];
     SessionData data = parseSessionData(obj);
     m_sessions.append(data);
-    m_rawSessions.append(obj);
     m_idToIndex[data.id] = m_sessions.size() - 1;
   }
   endInsertRows();
@@ -269,7 +293,13 @@ void SessionModel::saveSessions() {
   if (file.open(QIODevice::WriteOnly)) {
     file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
     QJsonObject obj;
-    obj[QStringLiteral("sessions")] = m_rawSessions;
+
+    QJsonArray sessionsArray;
+    for (int i = 0; i < m_sessions.size(); ++i) {
+      sessionsArray.append(m_sessions[i].rawObject);
+    }
+
+    obj[QStringLiteral("sessions")] = sessionsArray;
     obj[QStringLiteral("nextPageToken")] = m_nextPageToken;
     QJsonDocument doc(obj);
     file.write(doc.toJson());
@@ -289,6 +319,5 @@ void SessionModel::clearSessions() {
   beginResetModel();
   m_sessions.clear();
   m_idToIndex.clear();
-  m_rawSessions = QJsonArray();
   endResetModel();
 }
