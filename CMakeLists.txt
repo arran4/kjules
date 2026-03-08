@@ -58,6 +58,7 @@ set(kjules_SRCS
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/errorwindow.cpp
+    src/sessionswindow.cpp
     src/kjules.qrc
 )
 
