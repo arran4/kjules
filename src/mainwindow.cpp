@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "apimanager.h"
+#include "backupdialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
@@ -1235,15 +1236,22 @@ void MainWindow::backupData() {
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dataDir(dataPath);
 
-  if (!dataDir.exists()) {
-    updateStatus(i18n("No data directory found to backup."));
+  BackupDialog dialog(dataPath, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  QString destDirStr = dialog.backupDirectory();
+  QDir destDir(destDirStr);
+  if (!destDir.exists() && !destDir.mkpath(QStringLiteral("."))) {
+    updateStatus(i18n("Failed to create backup directory: %1", destDirStr));
     return;
   }
 
   QString backupFileName = QStringLiteral("kjules_backup_%1.zip")
                                .arg(QDateTime::currentDateTime().toString(
                                    QStringLiteral("yyyyMMdd_HHmmss")));
-  QString backupPath = dataDir.filePath(backupFileName);
+  QString backupPath = destDir.filePath(backupFileName);
 
   KZip zip(backupPath);
   if (!zip.open(QIODevice::WriteOnly)) {
@@ -1251,12 +1259,7 @@ void MainWindow::backupData() {
     return;
   }
 
-  QStringList filesToBackup = {QStringLiteral("sources.json"),
-                               QStringLiteral("cached_sessions.json"),
-                               QStringLiteral("cached_all_sessions.json"),
-                               QStringLiteral("drafts.json"),
-                               QStringLiteral("queue.json"),
-                               QStringLiteral("errors.json")};
+  QStringList filesToBackup = dialog.filesToBackup();
 
   bool backedUpSomething = false;
 
@@ -1273,18 +1276,30 @@ void MainWindow::backupData() {
 
   if (backedUpSomething) {
     updateStatus(i18n("Backup created at: %1", backupPath));
-    for (const QString &fileName : filesToBackup) {
-      QString filePath = dataDir.filePath(fileName);
-      QFile::remove(filePath);
+    if (dialog.removeOriginals()) {
+      for (const QString &fileName : filesToBackup) {
+        QString filePath = dataDir.filePath(fileName);
+        QFile::remove(filePath);
+      }
+
+      // Clear models and UI since the underlying data has been removed
+      if (filesToBackup.contains(QStringLiteral("sources.json")))
+        m_sourceModel->clear();
+      if (filesToBackup.contains(QStringLiteral("cached_sessions.json")) ||
+          filesToBackup.contains(QStringLiteral("cached_all_sessions.json")))
+        m_sessionModel->clear();
+      if (filesToBackup.contains(QStringLiteral("drafts.json")))
+        m_draftsModel->clear();
+      if (filesToBackup.contains(QStringLiteral("queue.json")))
+        m_queueModel->clear();
+      if (filesToBackup.contains(QStringLiteral("errors.json")))
+        m_errorsModel->clear();
+      m_apiManager->cancelListSources(); // Cancel any ongoing fetch
     }
 
-    // Clear models and UI since the underlying data has been removed
-    m_sourceModel->clear();
-    m_sessionModel->clear();
-    m_draftsModel->clear();
-    m_queueModel->clear();
-    m_errorsModel->clear();
-    m_apiManager->cancelListSources(); // Cancel any ongoing fetch
+    if (dialog.openDirectory()) {
+      QDesktopServices::openUrl(QUrl::fromLocalFile(destDirStr));
+    }
   } else {
     updateStatus(i18n("No files to backup."));
     QFile::remove(backupPath); // Delete the empty zip
