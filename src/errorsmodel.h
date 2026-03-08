@@ -9,7 +9,12 @@ class ErrorsModel : public QAbstractListModel {
   Q_OBJECT
 
 public:
-  enum ErrorRoles { RequestRole = Qt::UserRole + 1, ResponseRole, MessageRole, HttpDetailsRole };
+  enum ErrorRoles {
+    RequestRole = Qt::UserRole + 1,
+    ResponseRole,
+    MessageRole,
+    HttpDetailsRole
+  };
 
   explicit ErrorsModel(QObject *parent = nullptr);
 
@@ -24,6 +29,7 @@ public:
   QJsonObject getError(int row) const;
   void loadErrors();
   void saveErrors();
+  void clear();
 
 private:
   QJsonArray m_errors;

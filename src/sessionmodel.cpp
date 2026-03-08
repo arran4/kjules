@@ -116,3 +116,10 @@ QJsonObject SessionModel::getSession(int row) const {
   }
   return QJsonObject();
 }
+
+void SessionModel::clear() {
+  beginResetModel();
+  m_sessions.clear();
+  m_idToIndex.clear();
+  endResetModel();
+}

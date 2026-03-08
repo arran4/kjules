@@ -61,6 +61,12 @@ void DraftsModel::addDraft(const QJsonObject &draft) {
   saveDrafts();
 }
 
+void DraftsModel::clear() {
+  beginResetModel();
+  m_drafts = QJsonArray();
+  endResetModel();
+}
+
 void DraftsModel::removeDraft(int row) {
   if (row >= 0 && row < m_drafts.size()) {
     beginRemoveRows(QModelIndex(), row, row);

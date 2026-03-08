@@ -9,6 +9,8 @@
         <Menu name="file">
             <Action name="new_session" />
             <Separator />
+            <Action name="backup_data" />
+            <Separator />
             <Action name="file_quit" />
         </Menu>
         <Menu name="actions">

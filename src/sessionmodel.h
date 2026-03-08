@@ -40,6 +40,7 @@ public:
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
   QJsonObject getSession(int row) const;
+  void clear();
 
 private:
   QVector<SessionData> m_sessions;

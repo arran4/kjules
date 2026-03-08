@@ -19,6 +19,7 @@
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
+#include <KZip>
 #include <QAction>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -26,6 +27,7 @@
 #include <QCursor>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -538,7 +540,8 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
                   i18n("Minimize to tray"), this);
   connect(minimizeToTrayAction, &QAction::triggered, this, &MainWindow::hide);
-  actionCollection()->addAction(QStringLiteral("minimize_to_tray"), minimizeToTrayAction);
+  actionCollection()->addAction(QStringLiteral("minimize_to_tray"),
+                                minimizeToTrayAction);
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -701,6 +704,12 @@ void MainWindow::createActions() {
       updateStatus(i18n("Invalid source ID for opening URL."));
     }
   });
+
+  m_backupDataAction = new QAction(i18n("Backup Data"), this);
+  actionCollection()->addAction(QStringLiteral("backup_data"),
+                                m_backupDataAction);
+  connect(m_backupDataAction, &QAction::triggered, this,
+          &MainWindow::backupData);
 
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
@@ -1219,4 +1228,65 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
+}
+
+void MainWindow::backupData() {
+  QString dataPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QDir dataDir(dataPath);
+
+  if (!dataDir.exists()) {
+    updateStatus(i18n("No data directory found to backup."));
+    return;
+  }
+
+  QString backupFileName = QStringLiteral("kjules_backup_%1.zip")
+                               .arg(QDateTime::currentDateTime().toString(
+                                   QStringLiteral("yyyyMMdd_HHmmss")));
+  QString backupPath = dataDir.filePath(backupFileName);
+
+  KZip zip(backupPath);
+  if (!zip.open(QIODevice::WriteOnly)) {
+    updateStatus(i18n("Failed to create archive: %1", backupPath));
+    return;
+  }
+
+  QStringList filesToBackup = {QStringLiteral("sources.json"),
+                               QStringLiteral("cached_sessions.json"),
+                               QStringLiteral("cached_all_sessions.json"),
+                               QStringLiteral("drafts.json"),
+                               QStringLiteral("queue.json"),
+                               QStringLiteral("errors.json")};
+
+  bool backedUpSomething = false;
+
+  for (const QString &fileName : filesToBackup) {
+    QString filePath = dataDir.filePath(fileName);
+    QFile file(filePath);
+    if (file.exists()) {
+      zip.addLocalFile(filePath, fileName);
+      backedUpSomething = true;
+    }
+  }
+
+  zip.close();
+
+  if (backedUpSomething) {
+    updateStatus(i18n("Backup created at: %1", backupPath));
+    for (const QString &fileName : filesToBackup) {
+      QString filePath = dataDir.filePath(fileName);
+      QFile::remove(filePath);
+    }
+
+    // Clear models and UI since the underlying data has been removed
+    m_sourceModel->clear();
+    m_sessionModel->clear();
+    m_draftsModel->clear();
+    m_queueModel->clear();
+    m_errorsModel->clear();
+    m_apiManager->cancelListSources(); // Cancel any ongoing fetch
+  } else {
+    updateStatus(i18n("No files to backup."));
+    QFile::remove(backupPath); // Delete the empty zip
+  }
 }

@@ -27,6 +27,7 @@ public:
   void loadSources();
   void saveSources();
   void updateSource(const QJsonObject &source);
+  void clear();
 
 private:
   QJsonArray m_sources;

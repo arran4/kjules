@@ -65,6 +65,7 @@ private Q_SLOTS:
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
+  void backupData();
 
 private:
   void setupUi();
@@ -97,6 +98,7 @@ private:
   QAction *m_viewRawDataAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
+  QAction *m_backupDataAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
