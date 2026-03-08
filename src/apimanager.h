@@ -40,6 +40,7 @@ public:
   void listSessions(const QString &pageToken = QString());
   void cancelListSessions();
   void getSession(const QString &sessionId);
+  void reloadSession(const QString &sessionId);
 
 Q_SIGNALS:
   void sourcesReceived(const QJsonArray &sources);
@@ -48,6 +49,7 @@ Q_SIGNALS:
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
+  void sessionReloaded(const QJsonObject &session);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,

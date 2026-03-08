@@ -12,6 +12,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QJsonArray;
+class QComboBox;
 
 class SessionsProxyModel : public QSortFilterProxyModel {
   Q_OBJECT
@@ -20,6 +21,7 @@ public:
 
   void setTextFilter(const QString &text);
   void setStatusFilter(const QString &status);
+  void setRepoFilter(const QString &repo);
 
 protected:
   bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
@@ -27,6 +29,7 @@ protected:
 private:
   QString m_textFilter;
   QString m_statusFilter;
+  QString m_repoFilter;
 };
 
 class SessionsWindow : public KXmlGuiWindow {
@@ -41,9 +44,11 @@ public:
 private Q_SLOTS:
   void refreshSessions();
   void resumeRefresh();
+  void loadRemainingRefresh();
   void cancelRefresh();
   void onSessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void onSessionsRefreshFinished();
+  void updateRepoFilterList();
 
 private:
   void setupUi();
@@ -55,6 +60,7 @@ private:
   QLabel *m_statusLabel;
   QProgressBar *m_progressBar;
   QPushButton *m_cancelBtn;
+  QComboBox *m_repoCombo;
   QString m_filterSource;
   int m_sessionsLoaded;
   bool m_isRefreshing;
@@ -62,6 +68,7 @@ private:
   bool m_isRefreshingAll;
   QString m_nextPageToken;
   QAction *m_resumeAction;
+  QAction *m_loadRemainingAction;
   QActionGroup *m_autoLoadGroup;
 };
 

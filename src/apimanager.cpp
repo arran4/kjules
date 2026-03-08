@@ -152,6 +152,50 @@ void APIManager::testConnection(const QString &apiKey) {
   });
 }
 
+void APIManager::reloadSession(const QString &sessionId) {
+  if (!canConnect()) {
+    Q_EMIT errorOccurred(QStringLiteral(
+        "Cannot reload session details: No token or previous failure."));
+    return;
+  }
+
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+
+  if (cleanId.contains(QStringLiteral("..")) ||
+      cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    return;
+  }
+
+  QString endpoint = QStringLiteral("/sessions/") + cleanId;
+
+  QNetworkRequest request = createRequest(endpoint);
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      Q_EMIT sessionReloaded(doc.object());
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_tokenFailed = true;
+      }
+      Q_EMIT errorOccurred(QStringLiteral("Failed to reload session details: ") +
+                           reply->errorString());
+    }
+    reply->deleteLater();
+  });
+}
+
 void APIManager::listSources(const QString &pageToken) {
   if (!canConnect()) {
     Q_EMIT logMessage(
