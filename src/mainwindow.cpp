@@ -2,8 +2,8 @@
 #include "apimanager.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
-#include "errorwindow.h"
 #include "errorsmodel.h"
+#include "errorwindow.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -16,7 +16,6 @@
 #include <KGlobalAccel>
 #include <KLocalizedString>
 #include <KStandardAction>
-#include <KStatusNotifierItem>
 #include <KToolBar>
 #include <QAction>
 #include <QClipboard>
@@ -398,19 +397,42 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupTrayIcon() {
-  m_trayIcon = new KStatusNotifierItem(this);
-  m_trayIcon->setIconByPixmap(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
-  m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
-  m_trayIcon->setStatus(KStatusNotifierItem::Active);
-  m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
-                         i18n("Google Jules Client"));
+  m_trayIcon = new QSystemTrayIcon(this);
+  m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
+  m_trayIcon->setToolTip(i18n("Google Jules Client"));
 
-  QMenu *menu = m_trayIcon->contextMenu();
-  QAction *newSessionAction = menu->addAction(i18n("New Session"));
+  QMenu *menu = new QMenu(this);
+
+  QAction *showHideAction = new QAction(i18n("Show/Hide"), this);
+  connect(showHideAction, &QAction::triggered, this,
+          &MainWindow::toggleWindowVisibility);
+  menu->addAction(showHideAction);
+
+  menu->addSeparator();
+
+  QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
+  menu->addAction(newSessionAction);
 
-  m_trayIcon->setAssociatedWidget(this);
+  menu->addSeparator();
+
+  QAction *quitAction = new QAction(i18n("&Quit"), this);
+  connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
+  menu->addAction(quitAction);
+
+  m_trayIcon->setContextMenu(menu);
+  m_trayIcon->show();
+
+  connect(m_trayIcon, &QSystemTrayIcon::activated, this,
+          &MainWindow::onTrayIconActivated);
+}
+
+void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
+  if (reason == QSystemTrayIcon::Trigger ||
+      reason == QSystemTrayIcon::DoubleClick) {
+    toggleWindowVisibility();
+  }
 }
 
 void MainWindow::createActions() {
@@ -1075,8 +1097,7 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
-  m_trayIcon->setToolTip(QStringLiteral("sc-apps-kjules"), i18n("kJules"),
-                         message);
+  m_trayIcon->setToolTip(message);
 }
 
 void MainWindow::onError(const QString &message) {

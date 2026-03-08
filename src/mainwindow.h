@@ -13,7 +13,6 @@ class QueueModel;
 class ErrorsModel;
 class QListView;
 class QTreeView;
-class KStatusNotifierItem;
 class QLabel;
 class QProgressBar;
 class QPushButton;
@@ -61,6 +60,7 @@ private Q_SLOTS:
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row);
+  void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
 
 private:
   void setupUi();
@@ -79,7 +79,7 @@ private:
   QListView *m_draftsView;
   QListView *m_queueView;
   QListView *m_errorsView;
-  KStatusNotifierItem *m_trayIcon;
+  QSystemTrayIcon *m_trayIcon;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
