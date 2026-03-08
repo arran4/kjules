@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QSpinBox>
 
 SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
     : QDialog(parent), m_apiManager(apiManager) {
@@ -33,6 +34,20 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_closeToTrayEdit = new QCheckBox(i18n("Close to Tray"), this);
   m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
   formLayout->addRow(QString(), m_closeToTrayEdit);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+
+  m_queueIntervalEdit = new QSpinBox(this);
+  m_queueIntervalEdit->setRange(1, 1440); // 1 min to 24 hours
+  m_queueIntervalEdit->setSuffix(i18n(" minutes"));
+  m_queueIntervalEdit->setValue(queueConfig.readEntry("TimerInterval", 1));
+  formLayout->addRow(i18n("Queue processing interval:"), m_queueIntervalEdit);
+
+  m_queueBackoffEdit = new QSpinBox(this);
+  m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
+  m_queueBackoffEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
+  formLayout->addRow(i18n("Queue failure backoff:"), m_queueBackoffEdit);
 
   mainLayout->addLayout(formLayout);
 
@@ -77,6 +92,11 @@ void SettingsDialog::onSave() {
   KConfigGroup config(KSharedConfig::openConfig(), "General");
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
   config.sync();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+  queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
+  queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
+  queueConfig.sync();
 
   accept();
 }

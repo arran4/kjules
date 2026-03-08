@@ -68,6 +68,8 @@ private Q_SLOTS:
   void showErrorDetails(int row);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
+  void toggleQueueState();
+  void loadQueueSettings();
 
 private:
   void setupUi();
@@ -101,6 +103,7 @@ private:
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
   QAction *m_backupDataAction;
+  QAction *m_toggleQueueAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
@@ -112,6 +115,7 @@ private:
   QTimer *m_queueTimer;
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
+  bool m_queuePaused;
 };
 
 #endif // MAINWINDOW_H

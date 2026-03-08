@@ -15,6 +15,8 @@
         </Menu>
         <Menu name="actions">
             <text>Actions</text>
+            <Action name="toggle_queue" />
+            <Separator />
             <Action name="refresh_sources" />
             <Action name="refresh_source" />
             <Action name="show_full_session_list" />
@@ -37,6 +39,8 @@
     </MenuBar>
     <ToolBar name="mainToolBar">
         <text>Main Toolbar</text>
+        <Action name="toggle_queue" />
+        <Separator />
         <Action name="refresh_sources" />
         <Action name="view_sessions" />
         <Action name="options_configure" />

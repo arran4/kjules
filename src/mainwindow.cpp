@@ -60,7 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_isProcessingQueue(false) {
+      m_isProcessingQueue(false), m_queuePaused(false) {
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -68,9 +68,7 @@ MainWindow::MainWindow(QWidget *parent)
   m_sessionRefreshTimer->start(60000); // 1 minute
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
-  if (!m_queueModel->isEmpty()) {
-    m_queueTimer->start(60000); // 1 minute
-  }
+  loadQueueSettings();
   setupTrayIcon();
   createActions();
 
@@ -682,6 +680,11 @@ void MainWindow::createActions() {
   connect(m_backupDataAction, &QAction::triggered, this,
           &MainWindow::backupData);
 
+  m_toggleQueueAction = new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
+                                    i18n("Pause Queue"), this);
+  actionCollection()->addAction(QStringLiteral("toggle_queue"), m_toggleQueueAction);
+  connect(m_toggleQueueAction, &QAction::triggered, this, &MainWindow::toggleQueueState);
+
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
   connect(m_copyUrlAction, &QAction::triggered, this, [this]() {
@@ -772,7 +775,38 @@ void MainWindow::showNewSessionDialog() {
 
 void MainWindow::showSettingsDialog() {
   SettingsDialog dialog(m_apiManager, this);
-  dialog.exec();
+  if (dialog.exec() == QDialog::Accepted) {
+    loadQueueSettings();
+  }
+}
+
+void MainWindow::loadQueueSettings() {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+  int intervalMins = queueConfig.readEntry("TimerInterval", 1);
+  m_queueTimer->setInterval(intervalMins * 60000);
+
+  if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
+    m_queueTimer->start();
+  }
+}
+
+void MainWindow::toggleQueueState() {
+  m_queuePaused = !m_queuePaused;
+  if (m_queuePaused) {
+    m_queueTimer->stop();
+    m_toggleQueueAction->setText(i18n("Play Queue"));
+    m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
+    updateStatus(i18n("Queue processing paused."));
+  } else {
+    if (!m_queueModel->isEmpty()) {
+      m_queueTimer->start();
+      // Try processing immediately when unpaused
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    }
+    m_toggleQueueAction->setText(i18n("Pause Queue"));
+    m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-pause")));
+    updateStatus(i18n("Queue processing resumed."));
+  }
 }
 
 void MainWindow::onSessionCreated(const QStringList &sources,
@@ -795,8 +829,8 @@ void MainWindow::onSessionCreated(const QStringList &sources,
                      sources.size()));
 
   // Start timer if not running
-  if (!m_queueTimer->isActive()) {
-    m_queueTimer->start(60000); // 1 minute
+  if (!m_queuePaused && !m_queueTimer->isActive()) {
+    m_queueTimer->start();
   }
 
   // Trigger processing immediately if we can
@@ -804,7 +838,7 @@ void MainWindow::onSessionCreated(const QStringList &sources,
 }
 
 void MainWindow::processQueue() {
-  if (m_isProcessingQueue)
+  if (m_isProcessingQueue || m_queuePaused)
     return;
   if (m_queueModel->isEmpty()) {
     m_queueTimer->stop();
@@ -841,12 +875,15 @@ void MainWindow::onSessionCreatedResult(bool success,
     m_sessionModel->addSession(session);
     updateStatus(i18n("Session created from queue."));
     m_queueBackoffUntil = QDateTime(); // reset backoff
-    // The next item will be processed by the 1-minute timer (m_queueTimer)
+    // The next item will be processed by the configured timer (m_queueTimer)
   } else {
     updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
     m_queueModel->requeueFailed(item, errorMsg, rawResponse);
+
+    KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+    int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
     m_queueBackoffUntil =
-        QDateTime::currentDateTimeUtc().addSecs(30 * 60); // 30 minutes backoff
+        QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
   }
 }
 
