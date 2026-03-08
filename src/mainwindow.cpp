@@ -1230,6 +1230,7 @@ void MainWindow::toggleQueue() {
         QIcon::fromTheme(QStringLiteral("media-playback-start")));
     m_toggleQueueAction->setText(i18n("Resume Queue"));
     m_queueTimer->stop();
+    updateStatus(i18n("Queue paused."));
   } else {
     m_toggleQueueAction->setIcon(
         QIcon::fromTheme(QStringLiteral("media-playback-pause")));
@@ -1238,5 +1239,6 @@ void MainWindow::toggleQueue() {
       m_queueTimer->start(m_queueIntervalMs);
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
+    updateStatus(i18n("Queue resumed."));
   }
 }
