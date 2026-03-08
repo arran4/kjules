@@ -3,14 +3,19 @@
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "newsessiondialog.h"
+#include "queuemanager.h"
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 #include "settingsdialog.h"
+#include "sourcedelegate.h"
 #include "sourcemodel.h"
+#include "sourcesessionswindow.h"
 #include <KActionCollection>
+#include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <KStandardAction>
 #include <KStatusNotifierItem>
 #include <QAction>
@@ -37,7 +42,8 @@ MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)) {
+      m_draftsModel(new DraftsModel(this)),
+      m_queueManager(new QueueManager(m_apiManager, this)) {
   setupUi();
   setupTrayIcon();
   createActions();
@@ -80,6 +86,15 @@ void MainWindow::setupUi() {
   // Sources View
   m_sourceView = new QListView(this);
   m_sourceView->setModel(m_sourceModel);
+
+  SourceDelegate *sourceDelegate = new SourceDelegate(this);
+  m_sourceView->setItemDelegate(sourceDelegate);
+  m_sourceView->setMouseTracking(true);
+  m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+  connect(sourceDelegate, &SourceDelegate::actionClicked, this,
+          &MainWindow::onSourceActionClicked);
+
   connect(m_sourceView, &QListView::doubleClicked, this,
           &MainWindow::onSourceActivated);
   tabWidget->addTab(m_sourceView, i18n("Sources"));
@@ -160,7 +175,18 @@ void MainWindow::setupUi() {
 
   tabWidget->addTab(m_draftsView, i18n("Drafts"));
 
+  // Queue View
+  m_queueView = new QListView(this);
+  m_queueView->setModel(m_queueManager);
+  tabWidget->addTab(m_queueView, i18n("Queue"));
+
   mainLayout->addWidget(tabWidget);
+
+  // Initialize Tier from settings
+  KSharedConfig::Ptr config = KSharedConfig::openConfig();
+  KConfigGroup settingsGroup(config, "Settings");
+  int currentTier = settingsGroup.readEntry("BackoffTier", 0);
+  m_queueManager->setTier(static_cast<QueueManager::Tier>(currentTier));
 
   // Toolbar / Buttons
   QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -251,14 +277,62 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
+void MainWindow::onSourcesReceived(const QJsonArray &sources,
+                                   int newItemsCount) {
+  m_sourceModel->setSources(sources);
+  QString timeStr = QTime::currentTime().toString(QStringLiteral("hh:mm:ss"));
+  updateStatus(
+      i18n("Last refreshed at %1. %2 new items.", timeStr, newItemsCount));
+}
+
 void MainWindow::refreshSessions() {
   updateStatus(i18n("Refreshing sessions..."));
   m_apiManager->listSessions();
 }
 
 void MainWindow::showNewSessionDialog() {
+  // Check if there's an active selection in the sources view
+  QItemSelectionModel *selectionModel = m_sourceView->selectionModel();
+  QModelIndexList selectedIndexes;
+  if (selectionModel) {
+    selectedIndexes = selectionModel->selectedIndexes();
+  }
+
+  if (!selectedIndexes.isEmpty()) {
+    onSourceSelectionActivated();
+  } else {
+    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+    connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+            &MainWindow::onSessionCreated);
+    connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+            &MainWindow::onDraftSaved);
+    dialog.exec();
+  }
+}
+
+void MainWindow::onSourceSelectionActivated() {
+  QItemSelectionModel *selectionModel = m_sourceView->selectionModel();
+  if (!selectionModel)
+    return;
+
+  QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
+  if (selectedIndexes.isEmpty())
+    return;
+
+  QJsonArray sourcesArray;
+  for (const QModelIndex &idx : selectedIndexes) {
+    sourcesArray.append(
+        m_sourceModel->data(idx, SourceModel::NameRole).toString());
+  }
+
+  QJsonObject initData;
+  initData[QStringLiteral("sources")] = sourcesArray;
+
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setInitialData(initData);
+
   connect(&dialog, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
@@ -266,17 +340,41 @@ void MainWindow::showNewSessionDialog() {
   dialog.exec();
 }
 
+void MainWindow::onSourceActionClicked(const QModelIndex &index, int actionId) {
+  if (actionId == 0) {
+    // New Session
+    onSourceActivated(index);
+  } else if (actionId == 1) {
+    // More options menu
+    QMenu menu;
+    QAction *listSessionsAction =
+        menu.addAction(i18n("List sessions for source in new window"));
+    connect(listSessionsAction, &QAction::triggered, [this, index]() {
+      QString sourceName = index.data(SourceModel::NameRole).toString();
+      SourceSessionsWindow *window = new SourceSessionsWindow(sourceName, this);
+      window->setAttribute(Qt::WA_DeleteOnClose);
+      window->show();
+      updateStatus(i18n("Opened sessions window for %1", sourceName));
+    });
+
+    // Show the menu at the cursor position
+    menu.exec(QCursor::pos());
+  }
+}
+
 void MainWindow::showSettingsDialog() {
   SettingsDialog dialog(m_apiManager, this);
+  connect(&dialog, &SettingsDialog::tierChanged, this, [this](int tierIndex) {
+    m_queueManager->setTier(static_cast<QueueManager::Tier>(tierIndex));
+  });
   dialog.exec();
 }
 
 void MainWindow::onSessionCreated(const QStringList &sources,
                                   const QString &prompt,
                                   const QString &automationMode) {
-  for (const QString &source : sources) {
-    m_apiManager->createSession(source, prompt, automationMode);
-  }
+  m_queueManager->addJobs(sources, prompt, automationMode);
+  updateStatus(i18n("Added %1 job(s) to the queue.", sources.size()));
 }
 
 void MainWindow::onDraftSaved(const QJsonObject &draft) {

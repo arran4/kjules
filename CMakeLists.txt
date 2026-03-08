@@ -54,6 +54,9 @@ set(kjules_SRCS
     src/draftdelegate.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
+    src/sourcedelegate.cpp
+    src/sourcesessionswindow.cpp
+    src/queuemanager.cpp
 )
 
 add_executable(kjules ${kjules_SRCS})

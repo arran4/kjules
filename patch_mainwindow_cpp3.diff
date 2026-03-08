@@ -1,0 +1,101 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -262,6 +262,12 @@
+   m_apiManager->listSources();
+ }
+
++void MainWindow::onSourcesReceived(const QJsonArray &sources, int newItemsCount) {
++  m_sourceModel->setSources(sources);
++  QString timeStr = QTime::currentTime().toString(QStringLiteral("hh:mm:ss"));
++  updateStatus(i18n("Last refreshed at %1. %2 new items.", timeStr, newItemsCount));
++}
++
+ void MainWindow::refreshSessions() {
+   updateStatus(i18n("Refreshing sessions..."));
+   m_apiManager->listSessions();
+@@ -279,15 +285,34 @@
+ }
+
+ void MainWindow::showNewSessionDialog() {
+-  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+-          &MainWindow::onSessionCreated);
+-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+-          &MainWindow::onDraftSaved);
+-  dialog.exec();
++  // Check if there's an active selection in the sources view
++  QItemSelectionModel *selectionModel = m_sourceView->selectionModel();
++  QModelIndexList selectedIndexes;
++  if (selectionModel) {
++    selectedIndexes = selectionModel->selectedIndexes();
++  }
++
++  if (!selectedIndexes.isEmpty()) {
++    onSourceSelectionActivated();
++  } else {
++    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
++    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
++    connect(&dialog, &NewSessionDialog::createSessionRequested, this,
++            &MainWindow::onSessionCreated);
++    connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
++            &MainWindow::onDraftSaved);
++    dialog.exec();
++  }
+ }
+
+ void MainWindow::showSettingsDialog() {
+   SettingsDialog dialog(m_apiManager, this);
+   connect(&dialog, &SettingsDialog::tierChanged, this, [this](int tierIndex) {
+@@ -342,6 +367,26 @@
+   dialog.exec();
+ }
+
++void MainWindow::onSourceSelectionActivated() {
++  QItemSelectionModel *selectionModel = m_sourceView->selectionModel();
++  if (!selectionModel) return;
++
++  QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
++  if (selectedIndexes.isEmpty()) return;
++
++  QJsonArray sourcesArray;
++  for (const QModelIndex &idx : selectedIndexes) {
++    sourcesArray.append(m_sourceModel->data(idx, SourceModel::NameRole).toString());
++  }
++
++  QJsonObject initData;
++  initData[QStringLiteral("sources")] = sourcesArray;
++
++  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
++  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
++  dialog.setInitialData(initData);
++
++  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
++          &MainWindow::onSessionCreated);
++  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
++          &MainWindow::onDraftSaved);
++  dialog.exec();
++}
++
++void MainWindow::onSourceActionClicked(const QModelIndex &index, int actionId) {
++  if (actionId == 0) {
++    // New Session
++    onSourceActivated(index);
++  } else if (actionId == 1) {
++    // More options menu
++    QMenu menu;
++    QAction *listSessionsAction = menu.addAction(i18n("List sessions for source in new window"));
++    connect(listSessionsAction, &QAction::triggered, [this, index]() {
++      QString sourceName = index.data(SourceModel::NameRole).toString();
++      // Placeholder for source sessions window, as we reverted earlier
++      updateStatus(i18n("Action selected: list sessions for %1", sourceName));
++    });
++
++    // Show the menu at the cursor position
++    menu.exec(QCursor::pos());
++  }
++}
++
+ void MainWindow::showSessionWindow(const QJsonObject &session) {
+   SessionWindow *window = new SessionWindow(session, this);
+   window->show();
