@@ -1,3 +1,5 @@
+#include <KSharedConfig>
+#include <KConfigGroup>
 #include "mainwindow.h"
 #include "apimanager.h"
 #include "draftdelegate.h"
@@ -13,10 +15,8 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include <KActionCollection>
-#include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
-#include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
 #include <QAction>
@@ -52,10 +52,10 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_isProcessingQueue(false), m_queuePaused(false) {
+        m_errorsModel(new ErrorsModel(this)),
+      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)), m_queueCountdownTimer(new QTimer(this)), m_queueTimeRemaining(0), m_isProcessingQueue(false), m_queuePaused(false) {
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -64,10 +64,13 @@ MainWindow::MainWindow(QWidget *parent)
   KSharedConfig::Ptr config = KSharedConfig::openConfig();
   KConfigGroup group = config->group("General");
   m_queueIntervalMs = group.readEntry("QueueInterval", 60) * 1000;
+  connect(m_queueCountdownTimer, &QTimer::timeout, this, &MainWindow::updateQueueCountdown);
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
-  if (!m_queueModel->isEmpty()) {
+  if (!m_queueModel->isEmpty() && !m_queuePaused) {
     m_queueTimer->start(m_queueIntervalMs);
+    m_queueTimeRemaining = m_queueIntervalMs / 1000;
+    m_queueCountdownTimer->start(1000);
   }
   setupTrayIcon();
   createActions();
@@ -326,43 +329,33 @@ void MainWindow::setupUi() {
 
           connect(rawTranscriptAction, &QAction::triggered, [this, index]() {
             QJsonObject errorData = m_errorsModel->getError(index.row());
-            QJsonObject request =
-                errorData.value(QStringLiteral("request")).toObject();
-            QJsonObject response =
-                errorData.value(QStringLiteral("response")).toObject();
-            QString errorStr =
-                errorData.value(QStringLiteral("message")).toString();
-            QString httpDetails =
-                errorData.value(QStringLiteral("httpDetails")).toString();
+            QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
+            QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
+            QString errorStr = errorData.value(QStringLiteral("message")).toString();
+            QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
 
-            ErrorWindow *window = new ErrorWindow(
-                index.row(), request,
-                QString::fromUtf8(
-                    QJsonDocument(response).toJson(QJsonDocument::Indented)),
-                errorStr, httpDetails, this);
+            ErrorWindow *window = new ErrorWindow(index.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr, httpDetails, this);
             connect(window, &ErrorWindow::editRequested, [this](int row) {
-              QModelIndex idx = m_errorsModel->index(row, 0);
-              onErrorActivated(idx);
+               QModelIndex idx = m_errorsModel->index(row, 0);
+               onErrorActivated(idx);
             });
             connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-              m_errorsModel->removeError(row);
-              updateStatus(i18n("Error removed."));
+               m_errorsModel->removeError(row);
+               updateStatus(i18n("Error removed."));
             });
             connect(window, &ErrorWindow::draftRequested, [this](int row) {
-              QJsonObject errData = m_errorsModel->getError(row);
-              QJsonObject req =
-                  errData.value(QStringLiteral("request")).toObject();
-              m_draftsModel->addDraft(req);
-              m_errorsModel->removeError(row);
-              updateStatus(i18n("Error converted to draft."));
+               QJsonObject errData = m_errorsModel->getError(row);
+               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+               m_draftsModel->addDraft(req);
+               m_errorsModel->removeError(row);
+               updateStatus(i18n("Error converted to draft."));
             });
             connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-              QJsonObject errData = m_errorsModel->getError(row);
-              QJsonObject req =
-                  errData.value(QStringLiteral("request")).toObject();
-              m_errorsModel->removeError(row);
-              m_apiManager->createSessionAsync(req);
-              updateStatus(i18n("Sending error item immediately..."));
+               QJsonObject errData = m_errorsModel->getError(row);
+               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+               m_errorsModel->removeError(row);
+               m_apiManager->createSessionAsync(req);
+               updateStatus(i18n("Sending error item immediately..."));
             });
 
             window->setAttribute(Qt::WA_DeleteOnClose);
@@ -465,9 +458,9 @@ void MainWindow::createActions() {
           &MainWindow::showNewSessionDialog);
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
-  actionCollection()->setDefaultShortcut(newSessionAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_N));
+  KGlobalAccel::setGlobalShortcut(newSessionAction,
+                                  QKeySequence());
+  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -527,8 +520,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
-  actionCollection()->setDefaultShortcut(toggleWindowAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_M));
+  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -790,6 +782,8 @@ void MainWindow::showSettingsDialog() {
       m_queueIntervalMs = newInterval;
       if (m_queueTimer->isActive()) {
         m_queueTimer->start(m_queueIntervalMs);
+        m_queueTimeRemaining = m_queueIntervalMs / 1000;
+        m_queueCountdownTimer->start(1000);
       }
     }
   }
@@ -817,19 +811,22 @@ void MainWindow::onSessionCreated(const QStringList &sources,
   // Start timer if not running
   if (!m_queueTimer->isActive() && !m_queuePaused) {
     m_queueTimer->start(m_queueIntervalMs);
+    m_queueTimeRemaining = m_queueIntervalMs / 1000;
+    m_queueCountdownTimer->start(1000);
   }
 
   // Trigger processing immediately if we can
-  QTimer::singleShot(0, this, &MainWindow::processQueue);
+  if (!m_queuePaused) {
+    QTimer::singleShot(0, this, &MainWindow::processQueue);
+  }
 }
 
 void MainWindow::processQueue() {
-  if (m_queuePaused)
-    return;
   if (m_isProcessingQueue)
     return;
   if (m_queueModel->isEmpty()) {
     m_queueTimer->stop();
+    m_queueCountdownTimer->stop();
     return;
   }
 
@@ -840,6 +837,9 @@ void MainWindow::processQueue() {
   }
 
   m_isProcessingQueue = true;
+  m_queueModel->setItemSending(0, true);
+  m_queueCountdownTimer->stop();
+  updateStatus(i18n("Sending queue item..."));
   QueueItem item = m_queueModel->peek();
   m_apiManager->createSessionAsync(item.requestData);
 }
@@ -863,9 +863,14 @@ void MainWindow::onSessionCreatedResult(bool success,
     m_sessionModel->addSession(session);
     updateStatus(i18n("Session created from queue."));
     m_queueBackoffUntil = QDateTime(); // reset backoff
+    if (!m_queueModel->isEmpty()) {
+      m_queueTimeRemaining = m_queueIntervalMs / 1000;
+      m_queueCountdownTimer->start(1000);
+    }
     // The next item will be processed by the 1-minute timer (m_queueTimer)
   } else {
     updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
+    item.isSending = false;
     m_queueModel->requeueFailed(item, errorMsg, rawResponse);
     m_queueBackoffUntil =
         QDateTime::currentDateTimeUtc().addSecs(30 * 60); // 30 minutes backoff
@@ -1010,32 +1015,28 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
   updateStatus(i18n("Error saved."));
   int newRow = m_errorsModel->rowCount() - 1;
 
-  ErrorWindow *window =
-      new ErrorWindow(newRow, request,
-                      QString::fromUtf8(QJsonDocument(response).toJson(
-                          QJsonDocument::Indented)),
-                      errorString, httpDetails, this);
+  ErrorWindow *window = new ErrorWindow(newRow, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorString, httpDetails, this);
   connect(window, &ErrorWindow::editRequested, [this](int row) {
-    QModelIndex idx = m_errorsModel->index(row, 0);
-    onErrorActivated(idx);
+     QModelIndex idx = m_errorsModel->index(row, 0);
+     onErrorActivated(idx);
   });
   connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-    m_errorsModel->removeError(row);
-    updateStatus(i18n("Error removed."));
+     m_errorsModel->removeError(row);
+     updateStatus(i18n("Error removed."));
   });
   connect(window, &ErrorWindow::draftRequested, [this](int row) {
-    QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-    m_draftsModel->addDraft(req);
-    m_errorsModel->removeError(row);
-    updateStatus(i18n("Error converted to draft."));
+     QJsonObject errData = m_errorsModel->getError(row);
+     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+     m_draftsModel->addDraft(req);
+     m_errorsModel->removeError(row);
+     updateStatus(i18n("Error converted to draft."));
   });
   connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-    QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-    m_errorsModel->removeError(row);
-    m_apiManager->createSessionAsync(req);
-    updateStatus(i18n("Sending error item immediately..."));
+     QJsonObject errData = m_errorsModel->getError(row);
+     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+     m_errorsModel->removeError(row);
+     m_apiManager->createSessionAsync(req);
+     updateStatus(i18n("Sending error item immediately..."));
   });
 
   window->setAttribute(Qt::WA_DeleteOnClose);
@@ -1223,6 +1224,20 @@ void MainWindow::updateSessionStats() {
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
 }
 
+void MainWindow::updateQueueCountdown() {
+  m_queueTimeRemaining--;
+  if (m_queueTimeRemaining > 0) {
+    updateStatus(i18np("Next queue item in 1 second...",
+                       "Next queue item in %1 seconds...",
+                       m_queueTimeRemaining));
+  } else {
+    m_queueCountdownTimer->stop();
+    if (!m_queuePaused && !m_isProcessingQueue) {
+       updateStatus(i18n("Ready."));
+    }
+  }
+}
+
 void MainWindow::toggleQueue() {
   m_queuePaused = !m_queuePaused;
   if (m_queuePaused) {
@@ -1230,6 +1245,7 @@ void MainWindow::toggleQueue() {
         QIcon::fromTheme(QStringLiteral("media-playback-start")));
     m_toggleQueueAction->setText(i18n("Resume Queue"));
     m_queueTimer->stop();
+    m_queueCountdownTimer->stop();
     updateStatus(i18n("Queue paused."));
   } else {
     m_toggleQueueAction->setIcon(
@@ -1237,6 +1253,8 @@ void MainWindow::toggleQueue() {
     m_toggleQueueAction->setText(i18n("Pause Queue"));
     if (!m_queueModel->isEmpty()) {
       m_queueTimer->start(m_queueIntervalMs);
+      m_queueTimeRemaining = m_queueIntervalMs / 1000;
+      m_queueCountdownTimer->start(1000);
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
     updateStatus(i18n("Queue resumed."));

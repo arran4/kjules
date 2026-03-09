@@ -54,6 +54,7 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void processQueue();
+  void updateQueueCountdown();
   void toggleQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -103,6 +104,8 @@ private:
   QDateTime m_lastSessionRefreshTime;
 
   QTimer *m_queueTimer;
+  QTimer *m_queueCountdownTimer;
+  int m_queueTimeRemaining;
   QAction *m_toggleQueueAction;
   bool m_isProcessingQueue;
   bool m_queuePaused;

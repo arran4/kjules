@@ -70,6 +70,9 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     return QStringLiteral("%1: %2").arg(source, prompt);
   }
   case StatusRole: {
+    if (item.isSending) {
+      return i18n("Sending...");
+    }
     if (item.errorCount > 0) {
       QString timeStr = item.lastTry.isValid()
                             ? item.lastTry.toString(Qt::DefaultLocaleShortDate)
@@ -216,4 +219,14 @@ void QueueModel::save() {
 
   QJsonDocument doc(arr);
   file.write(doc.toJson());
+}
+
+void QueueModel::setItemSending(int index, bool sending) {
+  if (index >= 0 && index < m_items.size()) {
+    if (m_items[index].isSending != sending) {
+      m_items[index].isSending = sending;
+      Q_EMIT dataChanged(this->index(index, 0), this->index(index, 0), {StatusRole});
+      save();
+    }
+  }
 }

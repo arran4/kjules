@@ -12,6 +12,7 @@ struct QueueItem {
   QString lastError;
   QString lastResponse;
   QDateTime lastTry;
+  bool isSending = false;
 
   QJsonObject toJson() const;
   static QueueItem fromJson(const QJsonObject &obj);
@@ -48,6 +49,7 @@ public:
   int size() const;
 
   QueueItem getItem(int index) const;
+  void setItemSending(int index, bool sending);
 
 private:
   QVector<QueueItem> m_items;
