@@ -2,6 +2,7 @@
 #include <KConfigGroup>
 #include "mainwindow.h"
 #include "apimanager.h"
+#include "backupdialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
@@ -15,15 +16,21 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include <KActionCollection>
+#include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
+#include <KZip>
 #include <QAction>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -52,9 +59,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-        m_errorsModel(new ErrorsModel(this)),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
-      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)), m_queueCountdownTimer(new QTimer(this)), m_queueTimeRemaining(0), m_isProcessingQueue(false), m_queuePaused(false) {
   setupUi();
 
@@ -117,6 +123,17 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  bool closeToTray = config.readEntry("CloseToTray", false);
+  if (closeToTray) {
+    hide();
+    event->ignore();
+  } else {
+    KXmlGuiWindow::closeEvent(event);
+  }
+}
 
 void MainWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
@@ -193,6 +210,11 @@ void MainWindow::setupUi() {
                     }
                   });
 
+          QAction *sourceViewSessionsAction = menu.addAction(i18n("View Sessions"));
+          connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
+            SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
+            window->show();
+          });
           menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showPastNewSessionsAction);
@@ -218,8 +240,16 @@ void MainWindow::setupUi() {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
           QMenu menu;
+          QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
           QAction *openUrlAction = menu.addAction(i18n("Open URL"));
           QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+
+          connect(viewSessionsAction, &QAction::triggered, [this, index]() {
+            QString source =
+                m_sessionModel->data(index, SessionModel::SourceRole).toString();
+            SessionsWindow *window = new SessionsWindow(source, m_apiManager, this);
+            window->show();
+          });
 
           connect(openUrlAction, &QAction::triggered, [this, index]() {
             QString id =
@@ -329,33 +359,43 @@ void MainWindow::setupUi() {
 
           connect(rawTranscriptAction, &QAction::triggered, [this, index]() {
             QJsonObject errorData = m_errorsModel->getError(index.row());
-            QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
-            QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
-            QString errorStr = errorData.value(QStringLiteral("message")).toString();
-            QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
+            QJsonObject request =
+                errorData.value(QStringLiteral("request")).toObject();
+            QJsonObject response =
+                errorData.value(QStringLiteral("response")).toObject();
+            QString errorStr =
+                errorData.value(QStringLiteral("message")).toString();
+            QString httpDetails =
+                errorData.value(QStringLiteral("httpDetails")).toString();
 
-            ErrorWindow *window = new ErrorWindow(index.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr, httpDetails, this);
+            ErrorWindow *window = new ErrorWindow(
+                index.row(), request,
+                QString::fromUtf8(
+                    QJsonDocument(response).toJson(QJsonDocument::Indented)),
+                errorStr, httpDetails, this);
             connect(window, &ErrorWindow::editRequested, [this](int row) {
-               QModelIndex idx = m_errorsModel->index(row, 0);
-               onErrorActivated(idx);
+              QModelIndex idx = m_errorsModel->index(row, 0);
+              onErrorActivated(idx);
             });
             connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-               m_errorsModel->removeError(row);
-               updateStatus(i18n("Error removed."));
+              m_errorsModel->removeError(row);
+              updateStatus(i18n("Error removed."));
             });
             connect(window, &ErrorWindow::draftRequested, [this](int row) {
-               QJsonObject errData = m_errorsModel->getError(row);
-               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-               m_draftsModel->addDraft(req);
-               m_errorsModel->removeError(row);
-               updateStatus(i18n("Error converted to draft."));
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_draftsModel->addDraft(req);
+              m_errorsModel->removeError(row);
+              updateStatus(i18n("Error converted to draft."));
             });
             connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-               QJsonObject errData = m_errorsModel->getError(row);
-               QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-               m_errorsModel->removeError(row);
-               m_apiManager->createSessionAsync(req);
-               updateStatus(i18n("Sending error item immediately..."));
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_errorsModel->removeError(row);
+              m_apiManager->createSessionAsync(req);
+              updateStatus(i18n("Sending error item immediately..."));
             });
 
             window->setAttribute(Qt::WA_DeleteOnClose);
@@ -408,27 +448,27 @@ void MainWindow::setupTrayIcon() {
   m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   m_trayIcon->setToolTip(i18n("Google Jules Client"));
 
-  QMenu *menu = new QMenu(this);
+  m_trayMenu = new QMenu(this);
 
   QAction *showHideAction = new QAction(i18n("Show/Hide"), this);
   connect(showHideAction, &QAction::triggered, this,
           &MainWindow::toggleWindowVisibility);
-  menu->addAction(showHideAction);
+  m_trayMenu->addAction(showHideAction);
 
-  menu->addSeparator();
+  m_trayMenu->addSeparator();
 
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
           &MainWindow::showNewSessionDialog);
-  menu->addAction(newSessionAction);
+  m_trayMenu->addAction(newSessionAction);
 
-  menu->addSeparator();
+  m_trayMenu->addSeparator();
 
   QAction *quitAction = new QAction(i18n("&Quit"), this);
   connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
-  menu->addAction(quitAction);
+  m_trayMenu->addAction(quitAction);
 
-  m_trayIcon->setContextMenu(menu);
+  m_trayIcon->setContextMenu(m_trayMenu);
   m_trayIcon->show();
 
   connect(m_trayIcon, &QSystemTrayIcon::activated, this,
@@ -439,6 +479,8 @@ void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
   if (reason == QSystemTrayIcon::Trigger ||
       reason == QSystemTrayIcon::DoubleClick) {
     toggleWindowVisibility();
+  } else if (reason == QSystemTrayIcon::Context) {
+    m_trayMenu->popup(QCursor::pos());
   }
 }
 
@@ -458,32 +500,17 @@ void MainWindow::createActions() {
           &MainWindow::showNewSessionDialog);
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction,
-                                  QKeySequence());
-  actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL + Qt::Key_N));
+  KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
+  actionCollection()->setDefaultShortcut(newSessionAction,
+                                         QKeySequence(Qt::CTRL + Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
-    // Replaces old refresh sessions / view full list functionality
-    KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-    sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-    sessionsWindow->setWindowTitle(i18n("Full Session List"));
-
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(m_sessionModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
-
-    connect(listView, &QListView::doubleClicked, this,
-            [this](const QModelIndex &filterIndex) {
-              onSessionActivated(filterIndex);
-            });
-
-    sessionsWindow->setCentralWidget(listView);
-    sessionsWindow->resize(600, 400);
-    sessionsWindow->show();
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    window->show();
   });
 
   m_refreshSourcesAction =
@@ -520,7 +547,15 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
-  actionCollection()->setDefaultShortcut(toggleWindowAction, QKeySequence(Qt::CTRL + Qt::Key_M));
+  actionCollection()->setDefaultShortcut(toggleWindowAction,
+                                         QKeySequence(Qt::CTRL + Qt::Key_M));
+
+  QAction *minimizeToTrayAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
+                  i18n("Minimize to tray"), this);
+  connect(minimizeToTrayAction, &QAction::triggered, this, &MainWindow::hide);
+  actionCollection()->addAction(QStringLiteral("minimize_to_tray"),
+                                minimizeToTrayAction);
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -528,36 +563,8 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
-    QModelIndex index = m_sourceView->currentIndex();
-    if (!index.isValid())
-      return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
-    QString id =
-        m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-
-    QSortFilterProxyModel *filterModel = new QSortFilterProxyModel(
-        this); // Temp parent to avoid leak if we don't refactor everything
-    filterModel->setSourceModel(m_sessionModel);
-    filterModel->setFilterRole(SessionModel::SourceRole);
-    filterModel->setFilterFixedString(id);
-
-    KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-    filterModel->setParent(sessionsWindow); // Reparent to window to avoid leak
-    sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-    sessionsWindow->setWindowTitle(i18n("Sessions for %1", id));
-    QListView *listView = new QListView(sessionsWindow);
-    listView->setModel(filterModel);
-    listView->setItemDelegate(new SessionDelegate(listView));
-    connect(listView, &QListView::doubleClicked, this,
-            [this, filterModel](const QModelIndex &filterIndex) {
-              QModelIndex srcIdx = filterModel->mapToSource(filterIndex);
-              onSessionActivated(srcIdx);
-            });
-    sessionsWindow->setCentralWidget(listView);
-    sessionsWindow->resize(600, 400);
-    sessionsWindow->show();
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    window->show();
   });
 
   m_showPastNewSessionsAction =
@@ -683,6 +690,12 @@ void MainWindow::createActions() {
       updateStatus(i18n("Invalid source ID for opening URL."));
     }
   });
+
+  m_backupDataAction = new QAction(i18n("Backup Data"), this);
+  actionCollection()->addAction(QStringLiteral("backup_data"),
+                                m_backupDataAction);
+  connect(m_backupDataAction, &QAction::triggered, this,
+          &MainWindow::backupData);
 
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
@@ -834,6 +847,24 @@ void MainWindow::processQueue() {
       QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
     // We are backing off
     return;
+  }
+
+  QueueItem peekItem = m_queueModel->peek();
+  if (peekItem.isWaitItem) {
+      if (!peekItem.waitStartTime.isValid()) {
+          peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
+          m_queueModel->updateItem(0, peekItem);
+          QTimer::singleShot(peekItem.waitSeconds * 1000, this, &MainWindow::processQueue);
+      } else {
+          qint64 elapsed = peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+          if (elapsed >= peekItem.waitSeconds) {
+              m_queueModel->dequeue(); // Wait completed, remove wait item
+              QTimer::singleShot(0, this, &MainWindow::processQueue);
+          } else {
+              QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this, &MainWindow::processQueue);
+          }
+      }
+      return;
   }
 
   m_isProcessingQueue = true;
@@ -1015,28 +1046,32 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
   updateStatus(i18n("Error saved."));
   int newRow = m_errorsModel->rowCount() - 1;
 
-  ErrorWindow *window = new ErrorWindow(newRow, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorString, httpDetails, this);
+  ErrorWindow *window =
+      new ErrorWindow(newRow, request,
+                      QString::fromUtf8(QJsonDocument(response).toJson(
+                          QJsonDocument::Indented)),
+                      errorString, httpDetails, this);
   connect(window, &ErrorWindow::editRequested, [this](int row) {
-     QModelIndex idx = m_errorsModel->index(row, 0);
-     onErrorActivated(idx);
+    QModelIndex idx = m_errorsModel->index(row, 0);
+    onErrorActivated(idx);
   });
   connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-     m_errorsModel->removeError(row);
-     updateStatus(i18n("Error removed."));
+    m_errorsModel->removeError(row);
+    updateStatus(i18n("Error removed."));
   });
   connect(window, &ErrorWindow::draftRequested, [this](int row) {
-     QJsonObject errData = m_errorsModel->getError(row);
-     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-     m_draftsModel->addDraft(req);
-     m_errorsModel->removeError(row);
-     updateStatus(i18n("Error converted to draft."));
+    QJsonObject errData = m_errorsModel->getError(row);
+    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+    m_draftsModel->addDraft(req);
+    m_errorsModel->removeError(row);
+    updateStatus(i18n("Error converted to draft."));
   });
   connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-     QJsonObject errData = m_errorsModel->getError(row);
-     QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-     m_errorsModel->removeError(row);
-     m_apiManager->createSessionAsync(req);
-     updateStatus(i18n("Sending error item immediately..."));
+    QJsonObject errData = m_errorsModel->getError(row);
+    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+    m_errorsModel->removeError(row);
+    m_apiManager->createSessionAsync(req);
+    updateStatus(i18n("Sending error item immediately..."));
   });
 
   window->setAttribute(Qt::WA_DeleteOnClose);
@@ -1258,5 +1293,80 @@ void MainWindow::toggleQueue() {
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
     updateStatus(i18n("Queue resumed."));
+  }
+}
+
+void MainWindow::backupData() {
+  QString dataPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QDir dataDir(dataPath);
+
+  BackupDialog dialog(dataPath, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  QString destDirStr = dialog.backupDirectory();
+  QDir destDir(destDirStr);
+  if (!destDir.exists() && !destDir.mkpath(QStringLiteral("."))) {
+    updateStatus(i18n("Failed to create backup directory: %1", destDirStr));
+    return;
+  }
+
+  QString backupFileName = QStringLiteral("kjules_backup_%1.zip")
+                               .arg(QDateTime::currentDateTime().toString(
+                                   QStringLiteral("yyyyMMdd_HHmmss")));
+  QString backupPath = destDir.filePath(backupFileName);
+
+  KZip zip(backupPath);
+  if (!zip.open(QIODevice::WriteOnly)) {
+    updateStatus(i18n("Failed to create archive: %1", backupPath));
+    return;
+  }
+
+  QStringList filesToBackup = dialog.filesToBackup();
+
+  bool backedUpSomething = false;
+
+  for (const QString &fileName : filesToBackup) {
+    QString filePath = dataDir.filePath(fileName);
+    QFile file(filePath);
+    if (file.exists()) {
+      zip.addLocalFile(filePath, fileName);
+      backedUpSomething = true;
+    }
+  }
+
+  zip.close();
+
+  if (backedUpSomething) {
+    updateStatus(i18n("Backup created at: %1", backupPath));
+    if (dialog.removeOriginals()) {
+      for (const QString &fileName : filesToBackup) {
+        QString filePath = dataDir.filePath(fileName);
+        QFile::remove(filePath);
+      }
+
+      // Clear models and UI since the underlying data has been removed
+      if (filesToBackup.contains(QStringLiteral("sources.json")))
+        m_sourceModel->clear();
+      if (filesToBackup.contains(QStringLiteral("cached_sessions.json")) ||
+          filesToBackup.contains(QStringLiteral("cached_all_sessions.json")))
+        m_sessionModel->clear();
+      if (filesToBackup.contains(QStringLiteral("drafts.json")))
+        m_draftsModel->clear();
+      if (filesToBackup.contains(QStringLiteral("queue.json")))
+        m_queueModel->clear();
+      if (filesToBackup.contains(QStringLiteral("errors.json")))
+        m_errorsModel->clear();
+      m_apiManager->cancelListSources(); // Cancel any ongoing fetch
+    }
+
+    if (dialog.openDirectory()) {
+      QDesktopServices::openUrl(QUrl::fromLocalFile(destDirStr));
+    }
+  } else {
+    updateStatus(i18n("No files to backup."));
+    QFile::remove(backupPath); // Delete the empty zip
   }
 }

@@ -6,6 +6,8 @@
 class APIManager;
 class QLineEdit;
 class QSpinBox;
+class QCheckBox;
+class QComboBox;
 
 class SettingsDialog : public QDialog {
   Q_OBJECT
@@ -22,6 +24,8 @@ private:
   QLineEdit *m_apiKeyEdit;
   QLineEdit *m_githubTokenEdit;
   QSpinBox *m_queueIntervalSpin;
+  QCheckBox *m_closeToTrayEdit;
+  QComboBox *m_tierComboBox;
 };
 
 #endif // SETTINGSDIALOG_H

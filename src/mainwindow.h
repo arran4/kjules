@@ -5,6 +5,8 @@
 #include <QDateTime>
 #include <QSystemTrayIcon>
 
+#include "sessionswindow.h"
+
 class APIManager;
 class SessionModel;
 class SourceModel;
@@ -24,6 +26,9 @@ class MainWindow : public KXmlGuiWindow {
 public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
+
+protected:
+  void closeEvent(QCloseEvent *event) override;
 
 private Q_SLOTS:
   void refreshSources();
@@ -64,6 +69,7 @@ private Q_SLOTS:
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
+  void backupData();
 
 private:
   void setupUi();
@@ -83,6 +89,7 @@ private:
   QListView *m_queueView;
   QListView *m_errorsView;
   QSystemTrayIcon *m_trayIcon;
+  QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
@@ -95,6 +102,7 @@ private:
   QAction *m_viewRawDataAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
+  QAction *m_backupDataAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;

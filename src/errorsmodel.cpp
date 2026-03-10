@@ -48,8 +48,7 @@ QHash<int, QByteArray> ErrorsModel::roleNames() const {
 }
 
 void ErrorsModel::addError(const QJsonObject &request,
-                           const QJsonObject &response,
-                           const QString &message,
+                           const QJsonObject &response, const QString &message,
                            const QString &httpDetails) {
   QJsonObject errorObj;
   errorObj[QStringLiteral("request")] = request;
@@ -63,6 +62,12 @@ void ErrorsModel::addError(const QJsonObject &request,
   m_errors.insert(0, errorObj);
   endInsertRows();
   saveErrors();
+}
+
+void ErrorsModel::clear() {
+  beginResetModel();
+  m_errors = QJsonArray();
+  endResetModel();
 }
 
 void ErrorsModel::removeError(int row) {

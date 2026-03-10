@@ -17,6 +17,11 @@ QJsonObject QueueItem::toJson() const {
   if (lastTry.isValid()) {
     obj[QStringLiteral("lastTry")] = lastTry.toString(Qt::ISODate);
   }
+  obj[QStringLiteral("isWaitItem")] = isWaitItem;
+  obj[QStringLiteral("waitSeconds")] = waitSeconds;
+  if (waitStartTime.isValid()) {
+    obj[QStringLiteral("waitStartTime")] = waitStartTime.toString(Qt::ISODate);
+  }
   return obj;
 }
 
@@ -29,6 +34,12 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   if (obj.contains(QStringLiteral("lastTry"))) {
     item.lastTry = QDateTime::fromString(
         obj.value(QStringLiteral("lastTry")).toString(), Qt::ISODate);
+  }
+  item.isWaitItem = obj.value(QStringLiteral("isWaitItem")).toBool();
+  item.waitSeconds = obj.value(QStringLiteral("waitSeconds")).toInt();
+  if (obj.contains(QStringLiteral("waitStartTime"))) {
+    item.waitStartTime = QDateTime::fromString(
+        obj.value(QStringLiteral("waitStartTime")).toString(), Qt::ISODate);
   }
   return item;
 }
@@ -59,6 +70,9 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
   case LastTryRole:
     return item.lastTry;
   case SummaryRole: {
+    if (item.isWaitItem) {
+        return i18n("Wait for %1 seconds", item.waitSeconds);
+    }
     QString source =
         item.requestData.value(QStringLiteral("source")).toString();
     QString prompt =
@@ -72,6 +86,18 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
   case StatusRole: {
     if (item.isSending) {
       return i18n("Sending...");
+    }
+    if (item.isWaitItem) {
+        if (item.waitStartTime.isValid()) {
+            qint64 elapsed = item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+            qint64 remaining = item.waitSeconds - elapsed;
+            if (remaining > 0) {
+                return i18n("Waiting... %1s remaining", remaining);
+            } else {
+                return i18n("Wait complete");
+            }
+        }
+        return i18n("Pending wait");
     }
     if (item.errorCount > 0) {
       QString timeStr = item.lastTry.isValid()
@@ -101,14 +127,48 @@ QHash<int, QByteArray> QueueModel::roleNames() const {
   return roles;
 }
 
+#include <KSharedConfig>
+#include <KConfigGroup>
+
 void QueueModel::enqueue(const QJsonObject &requestData) {
   beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   QueueItem item;
   item.requestData = requestData;
   m_items.append(item);
   endInsertRows();
+  m_jobsSinceLastWait++;
+
+  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  QString tier = config.readEntry("Tier", QStringLiteral("free"));
+  int jobsBeforeWait = 3;
+  if (tier == QStringLiteral("pro")) {
+      jobsBeforeWait = 15;
+  } else if (tier == QStringLiteral("max")) {
+      jobsBeforeWait = 30;
+  }
+
+  if (m_jobsSinceLastWait >= jobsBeforeWait) {
+      beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      waitItem.waitSeconds = 3600; // 1 hour
+      m_items.append(waitItem);
+      endInsertRows();
+      m_jobsSinceLastWait = 0;
+  }
+
   save();
 }
+
+void QueueModel::updateItem(int index, const QueueItem &item) {
+  if (index >= 0 && index < m_items.size()) {
+      m_items[index] = item;
+      QModelIndex idx = this->index(index, 0);
+      Q_EMIT dataChanged(idx, idx);
+      save();
+  }
+}
+
 
 QueueItem QueueModel::dequeue() {
   if (m_items.isEmpty()) {
@@ -184,7 +244,17 @@ void QueueModel::load() {
 
   QByteArray data = file.readAll();
   QJsonDocument doc(QJsonDocument::fromJson(data));
-  QJsonArray arr = doc.array();
+  QJsonArray arr;
+
+  if (doc.isObject()) {
+      QJsonObject topObj = doc.object();
+      if (topObj.contains(QStringLiteral("m_jobsSinceLastWait"))) {
+          m_jobsSinceLastWait = topObj.value(QStringLiteral("m_jobsSinceLastWait")).toInt();
+      }
+      arr = topObj.value(QStringLiteral("items")).toArray();
+  } else if (doc.isArray()) {
+      arr = doc.array();
+  }
 
   beginResetModel();
   m_items.clear();
@@ -217,7 +287,11 @@ void QueueModel::save() {
     arr.append(item.toJson());
   }
 
-  QJsonDocument doc(arr);
+  QJsonObject topObj;
+  topObj[QStringLiteral("m_jobsSinceLastWait")] = m_jobsSinceLastWait;
+  topObj[QStringLiteral("items")] = arr;
+
+  QJsonDocument doc(topObj);
   file.write(doc.toJson());
 }
 
