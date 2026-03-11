@@ -1430,11 +1430,25 @@ void MainWindow::restoreData() {
   zip.close();
 
   if (restoredSomething) {
-    updateStatus(i18n("Data restored successfully. Please restart the application or refresh models."));
-    // Ideally we'd reload models here, but reloading varies per model.
-    // This is a minimal implementation.
+    updateStatus(i18n("Data restored successfully. Data reloaded."));
+
+    // Clear models so they reload properly
     if (filesToRestore.contains(QStringLiteral("sources.json"))) {
-       // Optional: Trigger reload of sources if model supports it
+      m_sourceModel->clear();
+      refreshSources();
+    }
+    if (filesToRestore.contains(QStringLiteral("cached_sessions.json")) ||
+        filesToRestore.contains(QStringLiteral("cached_all_sessions.json"))) {
+      m_sessionModel->clear();
+    }
+    if (filesToRestore.contains(QStringLiteral("drafts.json"))) {
+      m_draftsModel->clear();
+    }
+    if (filesToRestore.contains(QStringLiteral("queue.json"))) {
+      m_queueModel->clear();
+    }
+    if (filesToRestore.contains(QStringLiteral("errors.json"))) {
+      m_errorsModel->clear();
     }
   } else {
     updateStatus(i18n("No files were restored."));
