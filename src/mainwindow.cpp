@@ -144,10 +144,13 @@ void MainWindow::setupUi() {
 
   m_sourceView->setModel(proxyModel);
   m_sourceView->setSortingEnabled(true);
+  m_sourceView->header()->setSectionResizeMode(SourceModel::ColName, QHeaderView::Stretch);
+  m_sourceView->header()->setMinimumSectionSize(300);
+  m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
   m_sourceView->sortByColumn(SourceModel::ColLastUsed, Qt::DescendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_sourceView->header()->setStretchLastSection(true);
+  m_sourceView->header()->setStretchLastSection(false);
 
   m_sourceView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
