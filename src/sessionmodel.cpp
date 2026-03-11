@@ -172,6 +172,8 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
       return i18n("Repo");
     case ColId:
       return i18n("ID");
+    case ColLastRefreshed:
+      return i18n("Last Refreshed");
     }
   }
   return QVariant();
@@ -185,6 +187,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
   roles[SourceRole] = "source";
   roles[PromptRole] = "prompt";
   roles[StateRole] = "state";
+  roles[LastRefreshedRole] = "lastRefreshed";
   return roles;
 }
 
@@ -251,17 +254,21 @@ void SessionModel::addSession(const QJsonObject &session) {
 }
 
 void SessionModel::updateSession(const QJsonObject &session) {
-  QString id = session.value(QStringLiteral("id")).toString();
+  QJsonObject sessionWithRefresh = session;
+  sessionWithRefresh[QStringLiteral("lastRefreshed")] =
+      QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+  QString id = sessionWithRefresh.value(QStringLiteral("id")).toString();
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
-    SessionData data = parseSessionData(session);
+    SessionData data = parseSessionData(sessionWithRefresh);
     data.id = id; // Ensure ID matches
     m_sessions[i] = data;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     return;
   }
   // If not found, add it
-  addSession(session);
+  addSession(sessionWithRefresh);
 }
 
 QJsonObject SessionModel::getSession(int row) const {

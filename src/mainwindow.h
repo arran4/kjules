@@ -85,8 +85,8 @@ private:
   ErrorsModel *m_errorsModel;
 
   QTreeView *m_sourceView;
-  QListView *m_sessionView;
-  QListView *m_archiveView;
+  QTreeView *m_sessionView;
+  QTreeView *m_archiveView;
   QListView *m_draftsView;
   QListView *m_queueView;
   QListView *m_errorsView;

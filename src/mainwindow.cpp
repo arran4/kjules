@@ -94,6 +94,10 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
+  connect(m_apiManager, &APIManager::sessionReloaded, this,
+          [this](const QJsonObject &session) {
+            m_sessionModel->updateSession(session);
+          });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this,
@@ -228,15 +232,28 @@ void MainWindow::setupUi() {
   tabWidget->addTab(m_sourceView, i18n("Sources"));
 
   // Sessions View
-  m_sessionView = new QListView(this);
-  m_sessionView->setModel(m_sessionModel);
-  m_sessionView->setItemDelegate(new SessionDelegate(this));
+  m_sessionView = new QTreeView(this);
+  QSortFilterProxyModel *sessionProxyModel = new QSortFilterProxyModel(this);
+  sessionProxyModel->setSourceModel(m_sessionModel);
+  sessionProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  sessionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+
+  m_sessionView->setModel(sessionProxyModel);
+  m_sessionView->setSortingEnabled(true);
+  m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_sessionView->header()->setStretchLastSection(true);
+
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
-      m_sessionView, &QListView::customContextMenuRequested,
+      m_sessionView, &QTreeView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_sessionView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
           QMenu menu;
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
@@ -244,14 +261,22 @@ void MainWindow::setupUi() {
           QAction *refreshSessionAction =
               menu.addAction(i18n("Refresh session details"));
           menu.addSeparator();
-          QAction *openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
-          QAction *copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
+          QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole)
+                           .toString();
+
+          QAction *openJulesUrlAction = nullptr;
+          QAction *copyJulesUrlAction = nullptr;
+          if (!id.isEmpty()) {
+            openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
+            copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
+          }
 
           QString provider =
-              m_sessionModel->data(index, SessionModel::ProviderRole)
+              m_sessionModel->data(sourceIndex, SessionModel::ProviderRole)
                   .toString();
           QString prUrl =
-              m_sessionModel->data(index, SessionModel::PrUrlRole).toString();
+              m_sessionModel->data(sourceIndex, SessionModel::PrUrlRole)
+                  .toString();
 
           QString githubUrl;
           if (!prUrl.isEmpty()) {
@@ -259,11 +284,11 @@ void MainWindow::setupUi() {
           } else if (provider == QStringLiteral("github")) {
             QString owner = m_sessionModel
                                 ->data(m_sessionModel->index(
-                                    index.row(), SessionModel::ColOwner))
+                                    sourceIndex.row(), SessionModel::ColOwner))
                                 .toString();
             QString repo = m_sessionModel
                                ->data(m_sessionModel->index(
-                                   index.row(), SessionModel::ColRepo))
+                                   sourceIndex.row(), SessionModel::ColRepo))
                                .toString();
             githubUrl = QStringLiteral("https://github.com/") + owner +
                         QLatin1Char('/') + repo;
@@ -287,38 +312,35 @@ void MainWindow::setupUi() {
                   [this, index]() { onSessionActivated(index); });
 
           connect(openSessionsForSourceAction, &QAction::triggered,
-                  [this, index]() {
+                  [this, sourceIndex]() {
                     QString source =
-                        m_sessionModel->data(index, SessionModel::SourceRole)
+                        m_sessionModel
+                            ->data(sourceIndex, SessionModel::SourceRole)
                             .toString();
                     SessionsWindow *window =
                         new SessionsWindow(source, m_apiManager, this);
                     window->show();
                   });
 
-          connect(refreshSessionAction, &QAction::triggered, [this, index]() {
-            QString id =
-                m_sessionModel->data(index, SessionModel::IdRole).toString();
-            m_apiManager->getSession(id);
+          connect(refreshSessionAction, &QAction::triggered, [this, id]() {
+            m_apiManager->reloadSession(id);
             updateStatus(i18n("Refreshing session details for %1...", id));
           });
 
-          connect(openJulesUrlAction, &QAction::triggered, [this, index]() {
-            QString id =
-                m_sessionModel->data(index, SessionModel::IdRole).toString();
-            QString urlStr =
-                QStringLiteral("https://jules.google.com/sessions/") + id;
-            QDesktopServices::openUrl(QUrl(urlStr));
-            updateStatus(i18n("Opened session %1", id));
-          });
+          if (openJulesUrlAction && copyJulesUrlAction) {
+            connect(openJulesUrlAction, &QAction::triggered, [this, id]() {
+              QString urlStr =
+                  QStringLiteral("https://jules.google.com/sessions/") + id;
+              QDesktopServices::openUrl(QUrl(urlStr));
+              updateStatus(i18n("Opened session %1", id));
+            });
 
-          connect(copyJulesUrlAction, &QAction::triggered, [this, index]() {
-            QString id =
-                m_sessionModel->data(index, SessionModel::IdRole).toString();
-            QGuiApplication::clipboard()->setText(
-                QStringLiteral("https://jules.google.com/sessions/") + id);
-            updateStatus(i18n("Jules URL copied to clipboard."));
-          });
+            connect(copyJulesUrlAction, &QAction::triggered, [this, id]() {
+              QGuiApplication::clipboard()->setText(
+                  QStringLiteral("https://jules.google.com/sessions/") + id);
+              updateStatus(i18n("Jules URL copied to clipboard."));
+            });
+          }
 
           if (openGithubUrlAction && copyGithubUrlAction) {
             connect(openGithubUrlAction, &QAction::triggered,
@@ -334,23 +356,23 @@ void MainWindow::setupUi() {
                     });
           }
 
-          connect(archiveAction, &QAction::triggered, [this, index]() {
-            QJsonObject session = m_sessionModel->getSession(index.row());
+          connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
+            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
             m_archiveModel->addSession(session);
             m_archiveModel->saveSessions();
-            m_sessionModel->removeSession(index.row());
+            m_sessionModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session archived."));
           });
 
-          connect(deleteAction, &QAction::triggered, [this, index]() {
-            m_sessionModel->removeSession(index.row());
+          connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
+            m_sessionModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session deleted."));
           });
 
           connect(newSessionFromSessionAction, &QAction::triggered,
-                  [this, index]() {
+                  [this, sourceIndex]() {
                     QJsonObject session =
-                        m_sessionModel->getSession(index.row());
+                        m_sessionModel->getSession(sourceIndex.row());
                     QString prompt =
                         session.value(QStringLiteral("prompt")).toString();
                     QString source =
@@ -381,56 +403,75 @@ void MainWindow::setupUi() {
           menu.exec(m_sessionView->mapToGlobal(pos));
         }
       });
-  connect(m_sessionView, &QListView::doubleClicked, this,
+  connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
   tabWidget->addTab(m_sessionView, i18n("Past"));
 
   // Archive View
-  m_archiveView = new QListView(this);
-  m_archiveView->setModel(m_archiveModel);
-  m_archiveView->setItemDelegate(new SessionDelegate(this));
+  m_archiveView = new QTreeView(this);
+  QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
+  archiveProxyModel->setSourceModel(m_archiveModel);
+  archiveProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  archiveProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+
+  m_archiveView->setModel(archiveProxyModel);
+  m_archiveView->setSortingEnabled(true);
+  m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_archiveView->header()->setStretchLastSection(true);
+
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
-      m_archiveView, &QListView::customContextMenuRequested,
+      m_archiveView, &QTreeView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_archiveView->indexAt(pos);
         if (index.isValid()) {
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_archiveView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
           QMenu menu;
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
-          connect(openSessionAction, &QAction::triggered, [this, index]() {
-            QString id =
-                m_archiveModel->data(index, SessionModel::IdRole).toString();
-            m_apiManager->getSession(id);
-            updateStatus(i18n("Fetching details for session %1...", id));
-          });
+          connect(
+              openSessionAction, &QAction::triggered, [this, sourceIndex]() {
+                QString id =
+                    m_archiveModel->data(sourceIndex, SessionModel::IdRole)
+                        .toString();
+                m_apiManager->getSession(id);
+                updateStatus(i18n("Fetching details for session %1...", id));
+              });
 
-          connect(unarchiveAction, &QAction::triggered, [this, index]() {
-            QJsonObject session = m_archiveModel->getSession(index.row());
+          connect(unarchiveAction, &QAction::triggered, [this, sourceIndex]() {
+            QJsonObject session = m_archiveModel->getSession(sourceIndex.row());
             m_sessionModel->addSession(session);
             m_sessionModel->saveSessions();
-            m_archiveModel->removeSession(index.row());
+            m_archiveModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session unarchived."));
           });
 
-          connect(deleteAction, &QAction::triggered, [this, index]() {
-            m_archiveModel->removeSession(index.row());
+          connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
+            m_archiveModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session deleted from archive."));
           });
 
           menu.exec(m_archiveView->mapToGlobal(pos));
         }
       });
-  connect(m_archiveView, &QListView::doubleClicked, this,
-          [this](const QModelIndex &index) {
-            QString id =
-                m_archiveModel->data(index, SessionModel::IdRole).toString();
-            m_apiManager->getSession(id);
-            updateStatus(i18n("Fetching details for session %1...", id));
-          });
+  connect(
+      m_archiveView, &QTreeView::doubleClicked, this,
+      [this](const QModelIndex &index) {
+        const QSortFilterProxyModel *proxy =
+            qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+        QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+        QString id =
+            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_apiManager->getSession(id);
+        updateStatus(i18n("Fetching details for session %1...", id));
+      });
 
   tabWidget->addTab(m_archiveView, i18n("Archive"));
 
@@ -1321,7 +1362,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
-  SessionWindow *window = new SessionWindow(session, this);
+  SessionWindow *window = new SessionWindow(session, m_apiManager, this);
   window->show();
 }
 

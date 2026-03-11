@@ -17,6 +17,7 @@ struct SessionData {
   QString state;
   QDateTime updateTime;
   QDateTime createTime;
+  QDateTime lastRefreshed;
   QString provider;
   QString owner;
   QString repo;
@@ -39,7 +40,8 @@ public:
     StateRole,
     ChangeSetRole,
     PrUrlRole,
-    ProviderRole
+    ProviderRole,
+    LastRefreshedRole
   };
 
   enum Columns {
@@ -52,6 +54,7 @@ public:
     ColOwner,
     ColRepo,
     ColId,
+    ColLastRefreshed,
     ColCount
   };
 

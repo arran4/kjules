@@ -405,19 +405,9 @@ void SessionsWindow::setupUi() {
             QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
             QJsonObject rawData = m_model->getSession(sourceIndex.row());
 
-            QDialog *detailDialog = new QDialog(this);
-            detailDialog->setAttribute(Qt::WA_DeleteOnClose);
-            detailDialog->setWindowTitle(i18n("Session Details"));
-            detailDialog->resize(600, 400);
-
-            QVBoxLayout *dlgLayout = new QVBoxLayout(detailDialog);
-            QTextBrowser *textBrowser = new QTextBrowser(detailDialog);
-            QJsonDocument doc(rawData);
-            textBrowser->setPlainText(
-                QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
-
-            dlgLayout->addWidget(textBrowser);
-            detailDialog->exec();
+            SessionWindow *window =
+                new SessionWindow(rawData, m_apiManager, this);
+            window->show();
           });
 
   layout->addWidget(tabWidget);
