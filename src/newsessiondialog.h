@@ -22,16 +22,20 @@ public:
   explicit NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
                             QWidget *parent = nullptr);
   void setInitialData(const QJsonObject &data);
+  void setTemplateData(const QJsonObject &data);
   void setEditMode(bool isEdit);
 
 Q_SIGNALS:
   void createSessionRequested(const QStringList &sources, const QString &prompt,
                               const QString &automationMode, bool requirePlanApproval);
   void saveDraftRequested(const QJsonObject &draft);
+  void saveTemplateRequested(const QJsonObject &tmpl);
+  void loadTemplateRequested();
 
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
   void onSaveDraft();
+  void onSaveTemplate();
   void onSelectAll();
   void onUnselectAll();
   void onAddSelected();
@@ -49,6 +53,8 @@ private:
   QCheckBox *m_requirePlanApprovalCheckBox;
   QPushButton *m_createButton;
   QPushButton *m_createPRButton;
+  QPushButton *m_loadTemplateButton;
+  QPushButton *m_saveTemplateButton;
   QSet<QString> m_selectedSources;
 };
 

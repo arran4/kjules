@@ -51,6 +51,7 @@ set(kjules_SRCS
     src/sessionmodel.cpp
     src/sourcemodel.cpp
     src/draftsmodel.cpp
+    src/templatesmodel.cpp
     src/errorsmodel.cpp
     src/newsessiondialog.cpp
     src/settingsdialog.cpp

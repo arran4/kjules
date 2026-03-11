@@ -3,6 +3,7 @@
 #include "backupdialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "templatesmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "newsessiondialog.h"
@@ -56,7 +57,8 @@ MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(new SessionModel(this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
+      m_draftsModel(new DraftsModel(this)), m_templatesModel(new TemplatesModel(this)),
+      m_queueModel(new QueueModel(this)),
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
@@ -317,6 +319,38 @@ void MainWindow::setupUi() {
           &MainWindow::onDraftActivated);
 
   tabWidget->addTab(m_draftsView, i18n("Drafts"));
+
+  // Templates View
+  m_templatesView = new QListView(this);
+  m_templatesView->setModel(m_templatesModel);
+  m_templatesView->setItemDelegate(new DraftDelegate(this));
+  m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_templatesView, &QListView::customContextMenuRequested,
+          [this](const QPoint &pos) {
+            QModelIndex index = m_templatesView->indexAt(pos);
+            if (index.isValid()) {
+              QMenu menu;
+              QAction *editAction = menu.addAction(i18n("Use Template"));
+              connect(editAction, &QAction::triggered,
+                      [this, index]() { onTemplateActivated(index); });
+
+              QAction *deleteAction = menu.addAction(i18n("Delete Template"));
+              connect(deleteAction, &QAction::triggered, [this, index]() {
+                if (QMessageBox::question(this, i18n("Delete Template"),
+                                          i18n("Are you sure you want to "
+                                               "delete this template?")) ==
+                    QMessageBox::Yes) {
+                  m_templatesModel->removeTemplate(index.row());
+                  updateStatus(i18n("Template deleted."));
+                }
+              });
+              menu.exec(m_templatesView->mapToGlobal(pos));
+            }
+          });
+  connect(m_templatesView, &QListView::doubleClicked, this,
+          &MainWindow::onTemplateActivated);
+
+  tabWidget->addTab(m_templatesView, i18n("Templates"));
 
   // Queue View
   m_queueView = new QListView(this);
@@ -770,6 +804,10 @@ void MainWindow::showNewSessionDialog() {
           &MainWindow::onSessionCreated);
   connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
+  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
+  connect(&dialog, &NewSessionDialog::loadTemplateRequested, this,
+          &MainWindow::onTemplateLoadRequested);
   dialog.exec();
 }
 
@@ -908,6 +946,63 @@ void MainWindow::onSessionCreatedResult(bool success,
 void MainWindow::onDraftSaved(const QJsonObject &draft) {
   m_draftsModel->addDraft(draft);
   updateStatus(i18n("Draft saved."));
+}
+
+void MainWindow::onTemplateSaved(const QJsonObject &tmpl) {
+  m_templatesModel->addTemplate(tmpl);
+  updateStatus(i18n("Template saved."));
+}
+
+void MainWindow::onTemplateActivated(const QModelIndex &index) {
+  QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
+
+  // Create template dialog with prompt but NO sources
+  QJsonObject templateData = tmpl;
+  templateData.remove(QStringLiteral("sources"));
+  templateData.remove(QStringLiteral("source"));
+
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setInitialData(templateData);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+          &MainWindow::onSessionCreated);
+  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+          &MainWindow::onDraftSaved);
+  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
+  connect(&dialog, &NewSessionDialog::loadTemplateRequested, this,
+          &MainWindow::onTemplateLoadRequested);
+
+  dialog.exec();
+}
+
+void MainWindow::onTemplateLoadRequested() {
+  NewSessionDialog *dialog = qobject_cast<NewSessionDialog*>(sender());
+  if (!dialog) return;
+
+  if (m_templatesModel->rowCount() == 0) {
+    QMessageBox::information(this, i18n("No Templates"),
+                             i18n("There are no saved templates."));
+    return;
+  }
+
+  QMenu menu;
+  for (int i = 0; i < m_templatesModel->rowCount(); ++i) {
+    QJsonObject tmpl = m_templatesModel->getTemplate(i);
+    QString prompt = tmpl.value(QStringLiteral("prompt")).toString();
+    QString title = prompt.length() > 30 ? prompt.left(30) + QStringLiteral("...") : prompt;
+    QAction *action = menu.addAction(title);
+    connect(action, &QAction::triggered, [dialog, tmpl]() {
+      QJsonObject data = tmpl;
+      data.remove(QStringLiteral("sources"));
+      data.remove(QStringLiteral("source"));
+      dialog->setTemplateData(data);
+    });
+  }
+
+  // Show the menu roughly where the mouse is or centered
+  menu.exec(QCursor::pos());
 }
 
 void MainWindow::onQueueActivated(const QModelIndex &index) {
@@ -1119,6 +1214,10 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Draft updated."));
           });
+  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
+  connect(&dialog, &NewSessionDialog::loadTemplateRequested, this,
+          &MainWindow::onTemplateLoadRequested);
 
   dialog.exec();
 }
