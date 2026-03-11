@@ -10,7 +10,8 @@ const QString BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
 
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
-      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
+      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr),
+      m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -152,6 +153,58 @@ void APIManager::testConnection(const QString &apiKey) {
   });
 }
 
+void APIManager::listActivities(const QString &sessionId) {
+  if (!canConnect()) {
+    Q_EMIT errorOccurred(QStringLiteral(
+        "Cannot fetch activities: No token or previous failure."));
+    return;
+  }
+
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+
+  if (cleanId.contains(QStringLiteral("..")) ||
+      cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    return;
+  }
+
+  QString endpoint =
+      QStringLiteral("/sessions/") + cleanId + QStringLiteral("/activities");
+
+  QNetworkRequest request = createRequest(endpoint);
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      QJsonArray activities;
+      if (doc.isObject() &&
+          doc.object().contains(QStringLiteral("activities"))) {
+        activities = doc.object().value(QStringLiteral("activities")).toArray();
+      } else if (doc.isArray()) {
+        activities = doc.array();
+      }
+      Q_EMIT activitiesReceived(sessionId, activities);
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_tokenFailed = true;
+      }
+      Q_EMIT errorOccurred(QStringLiteral("Failed to fetch activities: ") +
+                           reply->errorString());
+    }
+    reply->deleteLater();
+  });
+}
+
 void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
@@ -189,8 +242,9 @@ void APIManager::reloadSession(const QString &sessionId) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to reload session details: ") +
-                           reply->errorString());
+      Q_EMIT errorOccurred(
+          QStringLiteral("Failed to reload session details: ") +
+          reply->errorString());
     }
     reply->deleteLater();
   });
@@ -308,7 +362,8 @@ void APIManager::cancelListSources() {
 }
 
 void APIManager::createSession(const QString &source, const QString &prompt,
-                               const QString &automationMode, bool requirePlanApproval) {
+                               const QString &automationMode,
+                               bool requirePlanApproval) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(
         QStringLiteral("Cannot create session: No token or previous failure."));
@@ -340,14 +395,16 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   QJsonObject sourceContext;
   QString sourceStr = requestData.value(QStringLiteral("source")).toString();
-  if (!sourceStr.startsWith(QStringLiteral("sources/")) && !sourceStr.isEmpty()) {
-      sourceStr = QStringLiteral("sources/") + sourceStr;
+  if (!sourceStr.startsWith(QStringLiteral("sources/")) &&
+      !sourceStr.isEmpty()) {
+    sourceStr = QStringLiteral("sources/") + sourceStr;
   }
   sourceContext[QStringLiteral("source")] = sourceStr;
 
   if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
     QJsonObject githubRepoContext;
-    githubRepoContext[QStringLiteral("startingBranch")] = QStringLiteral("main");
+    githubRepoContext[QStringLiteral("startingBranch")] =
+        QStringLiteral("main");
     sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
   }
 
@@ -366,76 +423,91 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply, request, json, data]() {
-    QByteArray responseData = reply->readAll();
-    if (reply->error() == QNetworkReply::NoError) {
-      QJsonDocument doc = QJsonDocument::fromJson(responseData);
-      QJsonObject sessionObj = doc.object();
-      Q_EMIT sessionCreated(sessionObj);
-      Q_EMIT logMessage(QStringLiteral("Session created successfully."));
+  connect(
+      reply, &QNetworkReply::finished, this,
+      [this, reply, request, json, data]() {
+        QByteArray responseData = reply->readAll();
+        if (reply->error() == QNetworkReply::NoError) {
+          QJsonDocument doc = QJsonDocument::fromJson(responseData);
+          QJsonObject sessionObj = doc.object();
+          Q_EMIT sessionCreated(sessionObj);
+          Q_EMIT logMessage(QStringLiteral("Session created successfully."));
 
-      // Cache session locally
-      QString path =
-          QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-      QDir dir(path);
-      if (!dir.exists()) {
-        dir.mkpath(QStringLiteral("."));
-      }
-      QFile file(path + QStringLiteral("/cached_sessions.json"));
-      QJsonArray cachedSessions;
-      if (file.open(QIODevice::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        cachedSessions = doc.array();
-        file.close();
-      }
-      cachedSessions.append(sessionObj);
-      if (file.open(QIODevice::WriteOnly)) {
-        file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-        QJsonDocument writeDoc(cachedSessions);
-        file.write(writeDoc.toJson());
-        file.close();
-      }
-    } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-      if (statusCode == 401 || statusCode == 403) {
-        m_tokenFailed = true;
-      }
-      QString method = QStringLiteral("POST");
-      QString url = reply->url().toString();
-      QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
-      const auto reqHeaders = request.rawHeaderList();
-      for (const QByteArray &h : reqHeaders) {
-          if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
-              httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) + QStringLiteral("\n");
-          } else {
-              httpReq += QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
+          // Cache session locally
+          QString path =
+              QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+          QDir dir(path);
+          if (!dir.exists()) {
+            dir.mkpath(QStringLiteral("."));
           }
-      }
-      httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
+          QFile file(path + QStringLiteral("/cached_sessions.json"));
+          QJsonArray cachedSessions;
+          if (file.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+            cachedSessions = doc.array();
+            file.close();
+          }
+          cachedSessions.append(sessionObj);
+          if (file.open(QIODevice::WriteOnly)) {
+            file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+            QJsonDocument writeDoc(cachedSessions);
+            file.write(writeDoc.toJson());
+            file.close();
+          }
+        } else {
+          int statusCode =
+              reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
+                  .toInt();
+          if (statusCode == 401 || statusCode == 403) {
+            m_tokenFailed = true;
+          }
+          QString method = QStringLiteral("POST");
+          QString url = reply->url().toString();
+          QString httpReq =
+              method + QStringLiteral(" ") + url + QStringLiteral("\n");
+          const auto reqHeaders = request.rawHeaderList();
+          for (const QByteArray &h : reqHeaders) {
+            if (h.toLower() != "x-goog-api-key" &&
+                h.toLower() != "authorization") {
+              httpReq += QString::fromUtf8(h) + QStringLiteral(": ") +
+                         QString::fromUtf8(request.rawHeader(h)) +
+                         QStringLiteral("\n");
+            } else {
+              httpReq +=
+                  QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
+            }
+          }
+          httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
 
-      QString httpRes = QStringLiteral("HTTP %1 %2\n").arg(statusCode).arg(reply->errorString());
-      const auto resHeaders = reply->rawHeaderList();
-      for (const QByteArray &h : resHeaders) {
-          httpRes += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(reply->rawHeader(h)) + QStringLiteral("\n");
-      }
+          QString httpRes = QStringLiteral("HTTP %1 %2\n")
+                                .arg(statusCode)
+                                .arg(reply->errorString());
+          const auto resHeaders = reply->rawHeaderList();
+          for (const QByteArray &h : resHeaders) {
+            httpRes += QString::fromUtf8(h) + QStringLiteral(": ") +
+                       QString::fromUtf8(reply->rawHeader(h)) +
+                       QStringLiteral("\n");
+          }
 
-      QString errorStr = reply->errorString();
-      // Do not readAll() again, use responseData
-      httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
+          QString errorStr = reply->errorString();
+          // Do not readAll() again, use responseData
+          httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
 
-      QString httpDetails = QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
+          QString httpDetails = QStringLiteral("=== Request ===\n") + httpReq +
+                                QStringLiteral("\n\n=== Response ===\n") +
+                                httpRes;
 
-      QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
-      Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr, httpDetails);
-      QString errorMsg =
-          QStringLiteral("Failed to create session: ") + reply->errorString();
-      Q_EMIT errorOccurred(errorMsg);
-      Q_EMIT errorOccurredWithResponse(errorMsg,
-                                       QString::fromUtf8(responseData));
-    }
-    reply->deleteLater();
-  });
+          QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
+          Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr,
+                                       httpDetails);
+          QString errorMsg = QStringLiteral("Failed to create session: ") +
+                             reply->errorString();
+          Q_EMIT errorOccurred(errorMsg);
+          Q_EMIT errorOccurredWithResponse(errorMsg,
+                                           QString::fromUtf8(responseData));
+        }
+        reply->deleteLater();
+      });
 }
 
 void APIManager::listSessions(const QString &pageToken) {

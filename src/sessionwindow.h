@@ -24,8 +24,11 @@ private:
   void setupActions();
   void refreshSession();
   void onSessionReloaded(const QJsonObject &session);
+  void onActivitiesReceived(const QString &sessionId,
+                            const QJsonArray &activities);
   void duplicateSession();
   void updateAutoRefresh();
+  void renderDetailsAndDiff();
 
   QJsonObject m_sessionData;
   APIManager *m_apiManager;
@@ -34,6 +37,7 @@ private:
   QTimer *m_autoRefreshTimer;
   QComboBox *m_autoRefreshCombo;
   QTextBrowser *m_detailsBrowser;
+  QTextBrowser *m_diffBrowser;
   QTextBrowser *m_activityBrowser;
   QTextBrowser *m_textBrowser;
 

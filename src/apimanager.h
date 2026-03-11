@@ -35,23 +35,28 @@ public:
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
-                     const QString &automationMode = QString(), bool requirePlanApproval = false);
+                     const QString &automationMode = QString(),
+                     bool requirePlanApproval = false);
   void createSessionAsync(const QJsonObject &requestData);
   void listSessions(const QString &pageToken = QString());
   void cancelListSessions();
   void getSession(const QString &sessionId);
   void reloadSession(const QString &sessionId);
   void getSource(const QString &sourceId);
+  void listActivities(const QString &sessionId);
 
 Q_SIGNALS:
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished();
   void sessionsRefreshFinished();
   void sessionCreated(const QJsonObject &session);
-  void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
+  void sessionsReceived(const QJsonArray &sessions,
+                        const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
   void sessionReloaded(const QJsonObject &session);
   void sourceDetailsReceived(const QJsonObject &source);
+  void activitiesReceived(const QString &sessionId,
+                          const QJsonArray &activities);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,

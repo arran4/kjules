@@ -1,0 +1,25 @@
+<<<<<<< SEARCH
+  if (m_apiManager) {
+      connect(m_apiManager, &APIManager::sessionReloaded, this, &SessionWindow::onSessionReloaded);
+  }
+
+  setupUi(m_sessionData);
+=======
+  if (m_apiManager) {
+      connect(m_apiManager, &APIManager::sessionReloaded, this, &SessionWindow::onSessionReloaded);
+      connect(m_apiManager, &APIManager::activitiesReceived, this, &SessionWindow::onActivitiesReceived);
+  }
+
+  setupUi(m_sessionData);
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+        // Just run the same logic for html activity feed without setting up ui
+        QString html =
+            QStringLiteral("<html><head><style>") +
+=======
+        renderDetailsAndDiff();
+
+        // Just run the same logic for html activity feed without setting up ui
+        QString html =
+            QStringLiteral("<html><head><style>") +
+>>>>>>> REPLACE
