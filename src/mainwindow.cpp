@@ -144,7 +144,7 @@ void MainWindow::setupUi() {
 
   m_sourceView->setModel(proxyModel);
   m_sourceView->setSortingEnabled(true);
-  m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
+  m_sourceView->sortByColumn(SourceModel::ColLastUsed, Qt::DescendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(true);
@@ -881,6 +881,8 @@ void MainWindow::onSessionCreatedResult(bool success,
   if (!m_isProcessingQueue) {
     if (success) {
       m_sessionModel->addSession(session);
+      QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+      if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
       updateStatus(i18n("Session created successfully."));
     }
     return;
@@ -891,6 +893,8 @@ void MainWindow::onSessionCreatedResult(bool success,
 
   if (success) {
     m_sessionModel->addSession(session);
+    QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+    if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
     updateStatus(i18n("Session created from queue."));
     m_queueBackoffUntil = QDateTime(); // reset backoff
     // The next item will be processed by the configured timer (m_queueTimer)
