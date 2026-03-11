@@ -30,7 +30,6 @@
         </Menu>
         <Menu name="view">
             <Action name="toggle_window" />
-            <Action name="minimize_to_tray" />
         </Menu>
         <Menu name="settings">
             <Action name="options_configure" />
@@ -45,11 +44,9 @@
         <Action name="view_sessions" />
         <Action name="options_configure" />
         <Action name="toggle_window" />
-        <Action name="minimize_to_tray" />
         <Action name="file_quit" />
     </ToolBar>
     <ActionProperties>
         <Action name="toggle_window" icon="window-minimize" text="Minimize to Tray" />
-        <Action name="minimize_to_tray" icon="window-minimize" text="Minimize to tray" />
     </ActionProperties>
 </gui>

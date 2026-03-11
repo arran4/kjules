@@ -533,13 +533,6 @@ void MainWindow::createActions() {
   actionCollection()->setDefaultShortcut(toggleWindowAction,
                                          QKeySequence(Qt::CTRL + Qt::Key_M));
 
-  QAction *minimizeToTrayAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("window-minimize")),
-                  i18n("Minimize to tray"), this);
-  connect(minimizeToTrayAction, &QAction::triggered, this, &MainWindow::hide);
-  actionCollection()->addAction(QStringLiteral("minimize_to_tray"),
-                                minimizeToTrayAction);
-
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
                   i18n("View Sessions"), this);
