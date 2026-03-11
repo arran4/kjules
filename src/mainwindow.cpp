@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "apimanager.h"
 #include "backupdialog.h"
+#include "restoredialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
@@ -674,6 +675,10 @@ void MainWindow::createActions() {
     }
   });
 
+  m_restoreDataAction = new QAction(i18n("Restore Data"), this);
+  actionCollection()->addAction(QStringLiteral("restore_data"), m_restoreDataAction);
+  connect(m_restoreDataAction, &QAction::triggered, this, &MainWindow::restoreData);
+
   m_backupDataAction = new QAction(i18n("Backup Data"), this);
   actionCollection()->addAction(QStringLiteral("backup_data"),
                                 m_backupDataAction);
@@ -1328,5 +1333,110 @@ void MainWindow::backupData() {
   } else {
     updateStatus(i18n("No files to backup."));
     QFile::remove(backupPath); // Delete the empty zip
+  }
+}
+
+void MainWindow::restoreData() {
+  QString dataPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+
+  RestoreDialog dialog(dataPath, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  QString backupFilePath = dialog.restoreFile();
+  if (backupFilePath.isEmpty()) {
+    updateStatus(i18n("No backup file selected."));
+    return;
+  }
+
+  KZip zip(backupFilePath);
+  if (!zip.open(QIODevice::ReadOnly)) {
+    updateStatus(i18n("Failed to open backup archive: %1", backupFilePath));
+    return;
+  }
+
+  const KArchiveDirectory *archiveDir = zip.directory();
+  if (!archiveDir) {
+    updateStatus(i18n("Invalid archive structure."));
+    return;
+  }
+
+  QStringList filesToRestore = dialog.filesToRestore();
+  bool merge = dialog.mergeData();
+  bool restoredSomething = false;
+  QDir destDir(dataPath);
+
+  for (const QString &fileName : filesToRestore) {
+    const KArchiveEntry *entry = archiveDir->entry(fileName);
+    if (!entry || !entry->isFile()) {
+      continue;
+    }
+
+    const KArchiveFile *archiveFile = static_cast<const KArchiveFile *>(entry);
+    QByteArray fileData = archiveFile->data();
+    QString destPath = destDir.filePath(fileName);
+
+    if (merge && QFile::exists(destPath)) {
+      QFile existingFile(destPath);
+      if (existingFile.open(QIODevice::ReadOnly)) {
+        QJsonDocument existingDoc = QJsonDocument::fromJson(existingFile.readAll());
+        existingFile.close();
+        QJsonDocument newDoc = QJsonDocument::fromJson(fileData);
+
+        if (existingDoc.isArray() && newDoc.isArray()) {
+          QJsonArray existingArray = existingDoc.array();
+          QJsonArray newArray = newDoc.array();
+
+          for (const QJsonValue &val : newArray) {
+              if (!existingArray.contains(val)) {
+                  existingArray.append(val);
+              }
+          }
+
+          QFile outFile(destPath);
+          if (outFile.open(QIODevice::WriteOnly)) {
+            outFile.write(QJsonDocument(existingArray).toJson());
+            restoredSomething = true;
+          }
+        } else if (existingDoc.isObject() && newDoc.isObject()) {
+          // Attempt merging objects based on a key (e.g., id)
+          // Simplified fallback: Overwrite if complex merging isn't applicable
+          QFile outFile(destPath);
+          if (outFile.open(QIODevice::WriteOnly)) {
+            outFile.write(fileData);
+            restoredSomething = true;
+          }
+        } else {
+            // Type mismatch or not JSON array/object, fallback to overwrite
+            QFile outFile(destPath);
+            if (outFile.open(QIODevice::WriteOnly)) {
+              outFile.write(fileData);
+              restoredSomething = true;
+            }
+        }
+      }
+    } else {
+      // No merge, just overwrite/create
+      QFile outFile(destPath);
+      if (outFile.open(QIODevice::WriteOnly)) {
+        outFile.write(fileData);
+        restoredSomething = true;
+      }
+    }
+  }
+
+  zip.close();
+
+  if (restoredSomething) {
+    updateStatus(i18n("Data restored successfully. Please restart the application or refresh models."));
+    // Ideally we'd reload models here, but reloading varies per model.
+    // This is a minimal implementation.
+    if (filesToRestore.contains(QStringLiteral("sources.json"))) {
+       // Optional: Trigger reload of sources if model supports it
+    }
+  } else {
+    updateStatus(i18n("No files were restored."));
   }
 }

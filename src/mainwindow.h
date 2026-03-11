@@ -68,6 +68,7 @@ private Q_SLOTS:
   void showErrorDetails(int row);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
+  void restoreData();
   void toggleQueueState();
   void loadQueueSettings();
 
@@ -103,6 +104,7 @@ private:
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
   QAction *m_backupDataAction;
+  QAction *m_restoreDataAction;
   QAction *m_toggleQueueAction;
 
   bool m_isRefreshingSources;

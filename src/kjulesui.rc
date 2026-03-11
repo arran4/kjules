@@ -10,6 +10,7 @@
             <Action name="new_session" />
             <Separator />
             <Action name="backup_data" />
+            <Action name="restore_data" />
             <Separator />
             <Action name="file_quit" />
         </Menu>
