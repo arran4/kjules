@@ -1,4 +1,6 @@
 #include "newsessiondialog.h"
+#include "savedialog.h"
+#include "selectiondialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
@@ -237,6 +239,12 @@ void NewSessionDialog::setEditMode(bool isEdit) {
     m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
+  if (data.contains(QStringLiteral("comment"))) {
+    m_draftComment = data.value(QStringLiteral("comment")).toString();
+  } else {
+    m_draftComment.clear();
+  }
+
   // Check for "sources" array, fallback to "source" string
   QStringList sources;
   if (data.contains(QStringLiteral("sources"))) {
@@ -332,6 +340,14 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 }
 
 void NewSessionDialog::onSaveDraft() {
+  SaveDialog dlg(QStringLiteral("Draft"), this);
+  if (!m_draftComment.isEmpty()) {
+    dlg.setInitialData(m_draftComment);
+  }
+  if (dlg.exec() != QDialog::Accepted) {
+    return;
+  }
+
   QJsonArray sourcesArr;
   QStringList sources(m_selectedSources.begin(), m_selectedSources.end());
   sources.sort();
@@ -345,6 +361,7 @@ void NewSessionDialog::onSaveDraft() {
   QJsonObject draft;
   draft[QStringLiteral("sources")] = sourcesArr;
   draft[QStringLiteral("prompt")] = prompt;
+  draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveDraftRequested(draft);
@@ -352,6 +369,11 @@ void NewSessionDialog::onSaveDraft() {
 }
 
 void NewSessionDialog::onSaveTemplate() {
+  SaveDialog dlg(QStringLiteral("Template"), this);
+  if (dlg.exec() != QDialog::Accepted) {
+    return;
+  }
+
   QJsonArray sourcesArr;
   QStringList sources(m_selectedSources.begin(), m_selectedSources.end());
   sources.sort();
@@ -368,6 +390,8 @@ void NewSessionDialog::onSaveTemplate() {
   // means we ignore sources when loading in an *existing* window.
   tmpl[QStringLiteral("sources")] = sourcesArr;
   tmpl[QStringLiteral("prompt")] = prompt;
+  tmpl[QStringLiteral("name")] = dlg.nameOrComment();
+  tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveTemplateRequested(tmpl);

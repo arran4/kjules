@@ -14,6 +14,7 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+#include "savedialog.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -293,6 +294,7 @@ void MainWindow::setupUi() {
               QMenu menu;
               QAction *submitAction = menu.addAction(i18n("Submit Now"));
               QAction *duplicateAction = menu.addAction(i18n("Duplicate"));
+              QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
               QAction *deleteAction = menu.addAction(i18n("Delete"));
 
               connect(submitAction, &QAction::triggered,
@@ -302,6 +304,17 @@ void MainWindow::setupUi() {
                 QJsonObject draft = m_draftsModel->getDraft(index.row());
                 m_draftsModel->addDraft(draft);
                 updateStatus(i18n("Draft duplicated."));
+              });
+
+              connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+                SaveDialog dlg(QStringLiteral("Template"), this);
+                if (dlg.exec() == QDialog::Accepted) {
+                  QJsonObject draft = m_draftsModel->getDraft(index.row());
+                  draft[QStringLiteral("name")] = dlg.nameOrComment();
+                  draft[QStringLiteral("description")] = dlg.description();
+                  m_templatesModel->addTemplate(draft);
+                  updateStatus(i18n("Template created from draft."));
+                }
               });
 
               connect(deleteAction, &QAction::triggered, [this, index]() {
@@ -806,8 +819,6 @@ void MainWindow::showNewSessionDialog() {
           &MainWindow::onDraftSaved);
   connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
-  connect(&dialog, &NewSessionDialog::loadTemplateRequested, this,
-          &MainWindow::onTemplateLoadRequested);
   dialog.exec();
 }
 
@@ -971,39 +982,10 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
           &MainWindow::onDraftSaved);
   connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
-  connect(&dialog, &NewSessionDialog::loadTemplateRequested, this,
-          &MainWindow::onTemplateLoadRequested);
 
   dialog.exec();
 }
 
-void MainWindow::onTemplateLoadRequested() {
-  NewSessionDialog *dialog = qobject_cast<NewSessionDialog*>(sender());
-  if (!dialog) return;
-
-  if (m_templatesModel->rowCount() == 0) {
-    QMessageBox::information(this, i18n("No Templates"),
-                             i18n("There are no saved templates."));
-    return;
-  }
-
-  QMenu menu;
-  for (int i = 0; i < m_templatesModel->rowCount(); ++i) {
-    QJsonObject tmpl = m_templatesModel->getTemplate(i);
-    QString prompt = tmpl.value(QStringLiteral("prompt")).toString();
-    QString title = prompt.length() > 30 ? prompt.left(30) + QStringLiteral("...") : prompt;
-    QAction *action = menu.addAction(title);
-    connect(action, &QAction::triggered, [dialog, tmpl]() {
-      QJsonObject data = tmpl;
-      data.remove(QStringLiteral("sources"));
-      data.remove(QStringLiteral("source"));
-      dialog->setTemplateData(data);
-    });
-  }
-
-  // Show the menu roughly where the mouse is or centered
-  menu.exec(QCursor::pos());
-}
 
 void MainWindow::onQueueActivated(const QModelIndex &index) {
   if (!index.isValid())
@@ -1041,6 +1023,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   QAction *draftAction =
       menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
                      i18n("Convert to Draft"));
+  QAction *copyTemplateAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
   QAction *sendAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
 
@@ -1058,6 +1042,15 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     }
   } else if (selected == draftAction) {
     convertQueueItemToDraft(row);
+  } else if (selected == copyTemplateAction) {
+    SaveDialog dlg(QStringLiteral("Template"), this);
+    if (dlg.exec() == QDialog::Accepted) {
+      QJsonObject data = item.requestData;
+      data[QStringLiteral("name")] = dlg.nameOrComment();
+      data[QStringLiteral("description")] = dlg.description();
+      m_templatesModel->addTemplate(data);
+      updateStatus(i18n("Template created from queued item."));
+    }
   } else if (selected == sendAction) {
     sendQueueItemNow(row);
   }
@@ -1216,8 +1209,6 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
           });
   connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
-  connect(&dialog, &NewSessionDialog::loadTemplateRequested, this,
-          &MainWindow::onTemplateLoadRequested);
 
   dialog.exec();
 }

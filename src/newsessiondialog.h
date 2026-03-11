@@ -56,6 +56,7 @@ private:
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;
   QSet<QString> m_selectedSources;
+  QString m_draftComment;
 };
 
 #endif // NEWSESSIONDIALOG_H

@@ -42,7 +42,6 @@ private Q_SLOTS:
   void onDraftActivated(const QModelIndex &index);
   void onTemplateSaved(const QJsonObject &tmpl);
   void onTemplateActivated(const QModelIndex &index);
-  void onTemplateLoadRequested();
   void onQueueActivated(const QModelIndex &index);
   void onQueueContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
