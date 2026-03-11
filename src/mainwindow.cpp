@@ -430,11 +430,15 @@ void MainWindow::setupUi() {
 
           connect(
               openSessionAction, &QAction::triggered, [this, sourceIndex]() {
-                QString id =
-                    m_archiveModel->data(sourceIndex, SessionModel::IdRole)
-                        .toString();
-                m_apiManager->getSession(id);
-                updateStatus(i18n("Fetching details for session %1...", id));
+                QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
+                if (!sessionData.isEmpty()) {
+                    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+                    window->show();
+                } else {
+                    QString id = m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+                    m_apiManager->getSession(id);
+                    updateStatus(i18n("Fetching details for session %1...", id));
+                }
               });
 
           connect(unarchiveAction, &QAction::triggered, [this, sourceIndex]() {
@@ -1359,9 +1363,21 @@ void MainWindow::showSessionWindow(const QJsonObject &session) {
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
-  QString id = m_sessionModel->data(index, SessionModel::IdRole).toString();
-  m_apiManager->getSession(id);
-  updateStatus(i18n("Fetching details for session %1...", id));
+  // Pass the basic cached session data to show the window instantly, then let SessionWindow refresh itself
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+  QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
+
+  if (sessionData.isEmpty()) {
+      // Fallback
+      QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+      m_apiManager->getSession(id);
+      updateStatus(i18n("Fetching details for session %1...", id));
+  } else {
+      SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+      window->show();
+  }
 }
 
 void MainWindow::updateStatus(const QString &message) {

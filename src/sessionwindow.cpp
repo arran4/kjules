@@ -37,8 +37,8 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onActivitiesReceived);
   }
 
-  setupUi(m_sessionData);
   setupActions();
+  setupUi(m_sessionData);
 
   KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
   int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);
@@ -128,6 +128,7 @@ void SessionWindow::onSessionReloaded(const QJsonObject &session) {
 
   if (currentId == incomingId) {
     m_sessionData = session;
+    m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     renderDetailsAndDiff();
 
@@ -208,6 +209,11 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
               QStringLiteral("\n");
         }
       }
+      if (content.isEmpty()) {
+        // Fallback to pretty-printing the JSON for unknown objects (e.g. tool calls, raw system messages)
+        QJsonDocument doc(turn);
+        content = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
+      }
 
       QString roleClass = role.toLower();
       if (roleClass != QStringLiteral("user") &&
@@ -228,6 +234,9 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
 
   html += QStringLiteral("</body></html>");
   m_activityBrowser->setHtml(html);
+
+  QJsonDocument activitiesDoc(turns);
+  m_rawActivitiesBrowser->setPlainText(QString::fromUtf8(activitiesDoc.toJson(QJsonDocument::Indented)));
 
   m_statusLabel->setText(
       i18n("Refreshed at %1",
@@ -264,9 +273,12 @@ void SessionWindow::renderDetailsAndDiff() {
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
                  QStringLiteral("</th><td>") + title.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
+  QString julesUrl = QStringLiteral("https://jules.google.com/sessions/") + sessionId;
   detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
                  QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Jules URL:") +
+                 QStringLiteral("</th><td><a href=\"") + julesUrl.toHtmlEscaped() + QStringLiteral("\">") + julesUrl.toHtmlEscaped() + QStringLiteral("</a></td></tr>");
   detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") +
                  QStringLiteral("</th><td>") + state.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
@@ -358,6 +370,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_diffBrowser = new QTextBrowser(this);
   m_diffBrowser->setStyleSheet(QStringLiteral("font-family: monospace;"));
 
+  m_rawActivitiesBrowser = new QTextBrowser(this);
   m_activityBrowser = new QTextBrowser(this);
   m_textBrowser = new QTextBrowser(this);
 
@@ -390,6 +403,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_tabWidget->addTab(m_detailsBrowser, i18n("Details"));
   m_tabWidget->addTab(m_diffBrowser, i18n("Diff"));
   m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));
+  m_tabWidget->addTab(m_rawActivitiesBrowser, i18n("Raw Activities"));
   m_tabWidget->addTab(m_textBrowser, i18n("Raw JSON"));
 
   QString title = sessionData.value(QStringLiteral("title")).toString();
@@ -399,135 +413,16 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   }
   setWindowTitle(i18n("Session %1 - %2", sessionId, title));
 
-  QJsonDocument doc(sessionData);
-  QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
-  m_textBrowser->setPlainText(jsonString);
+  renderDetailsAndDiff();
 
-  QString lastRefreshed =
-      sessionData.value(QStringLiteral("lastRefreshed")).toString();
-  QString state = sessionData.value(QStringLiteral("state")).toString();
-  QString source = sessionData.value(QStringLiteral("sourceContext"))
-                       .toObject()
-                       .value(QStringLiteral("source"))
-                       .toString();
-  QString promptText = sessionData.value(QStringLiteral("prompt")).toString();
-
-  QString detailsHtml =
-      QStringLiteral("<html><head><style>") +
-      QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
-                     "line-height: 1.6; }") +
-      QStringLiteral(
-          "th { text-align: left; padding-right: 15px; color: #555; }") +
-      QStringLiteral("</style></head><body><h2>") + i18n("Session Details") +
-      QStringLiteral("</h2><table>");
-
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
-                 QStringLiteral("</th><td>") + title.toHtmlEscaped() +
-                 QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
-                 QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
-                 QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") +
-                 QStringLiteral("</th><td>") + state.toHtmlEscaped() +
-                 QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") +
-                 QStringLiteral("</th><td>") + source.toHtmlEscaped() +
-                 QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") +
-                 QStringLiteral("</th><td>") +
-                 (lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed)
-                     .toHtmlEscaped() +
-                 QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("</table><hr/><h3>") + i18n("Prompt") +
-                 QStringLiteral("</h3><pre>") + promptText.toHtmlEscaped() +
-                 QStringLiteral("</pre></body></html>");
-
-  m_detailsBrowser->setHtml(detailsHtml);
-
-  // Parse activity feed
-  QString html =
-      QStringLiteral("<html><head><style>") +
-      QStringLiteral("body { font-family: sans-serif; }") +
-      QStringLiteral(".prompt { font-weight: bold; font-size: 1.1em; color: "
-                     "#2c3e50; margin-bottom: 10px; }") +
-      QStringLiteral(
-          ".turn { margin-bottom: 15px; padding: 10px; border-radius: 5px; }") +
-      QStringLiteral(".user { background-color: #e8f4f8; border-left: 4px "
-                     "solid #3498db; }") +
-      QStringLiteral(".system { background-color: #f9f9f9; border-left: 4px "
-                     "solid #95a5a6; }") +
-      QStringLiteral(".assistant { background-color: #eafaf1; border-left: 4px "
-                     "solid #2ecc71; }") +
-      QStringLiteral(
-          ".role { font-weight: bold; text-transform: capitalize; "
-          "margin-bottom: 5px; color: #7f8c8d; font-size: 0.9em; }") +
-      QStringLiteral(".content { white-space: pre-wrap; }") +
-      QStringLiteral("</style></head><body>");
-
-  QString prompt = sessionData.value(QStringLiteral("prompt")).toString();
-  if (!prompt.isEmpty()) {
-    html += QStringLiteral("<div class='prompt'>") + i18n("Prompt:") +
-            QStringLiteral(" ") + prompt.toHtmlEscaped() +
-            QStringLiteral("</div><hr>");
-  }
-
-  QJsonArray turns;
-  if (sessionData.contains(QStringLiteral("turns"))) {
-    turns = sessionData.value(QStringLiteral("turns")).toArray();
-  } else if (sessionData.contains(QStringLiteral("history"))) {
-    turns = sessionData.value(QStringLiteral("history")).toArray();
-  } else if (sessionData.contains(QStringLiteral("messages"))) {
-    turns = sessionData.value(QStringLiteral("messages")).toArray();
-  } else if (sessionData.contains(QStringLiteral("actions"))) {
-    turns = sessionData.value(QStringLiteral("actions")).toArray();
-  }
-
-  if (turns.isEmpty()) {
-    html += QStringLiteral("<p><i>") + i18n("No activity feed available.") +
-            QStringLiteral("</i></p>");
+  // Load activities initially if API manager exists, otherwise fallback to
+  // embedded in onActivitiesReceived
+  if (m_apiManager) {
+    if (m_statusLabel) m_statusLabel->setText(i18n("Loading activities..."));
+    m_apiManager->listActivities(sessionId);
   } else {
-    for (int i = 0; i < turns.size(); ++i) {
-      QJsonObject turn = turns[i].toObject();
-      QString role = turn.value(QStringLiteral("role")).toString();
-      if (role.isEmpty()) {
-        role = turn.value(QStringLiteral("author")).toString();
-      }
-      if (role.isEmpty()) {
-        role = QStringLiteral("system");
-      }
-
-      QString content = turn.value(QStringLiteral("content")).toString();
-      if (content.isEmpty()) {
-        content = turn.value(QStringLiteral("text")).toString();
-      }
-      if (content.isEmpty() && turn.contains(QStringLiteral("parts"))) {
-        QJsonArray parts = turn.value(QStringLiteral("parts")).toArray();
-        for (int j = 0; j < parts.size(); ++j) {
-          content +=
-              parts[j].toObject().value(QStringLiteral("text")).toString() +
-              QStringLiteral("\n");
-        }
-      }
-
-      QString roleClass = role.toLower();
-      if (roleClass != QStringLiteral("user") &&
-          roleClass != QStringLiteral("assistant") &&
-          roleClass != QStringLiteral("system")) {
-        roleClass = QStringLiteral("system");
-      }
-
-      html += QStringLiteral("<div class='turn ") + roleClass +
-              QStringLiteral("'>");
-      html += QStringLiteral("<div class='role'>") + role.toHtmlEscaped() +
-              QStringLiteral("</div>");
-      html += QStringLiteral("<div class='content'>") +
-              content.toHtmlEscaped() + QStringLiteral("</div>");
-      html += QStringLiteral("</div>");
-    }
+    onActivitiesReceived(sessionId, QJsonArray());
   }
-
-  html += QStringLiteral("</body></html>");
-  m_activityBrowser->setHtml(html);
 
   resize(800, 600);
 }
