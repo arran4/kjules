@@ -13,6 +13,8 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+#include "templatedelegate.h"
+#include "templatesmodel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -60,7 +62,8 @@ MainWindow::MainWindow(QWidget *parent)
           QStringLiteral("cached_archive_sessions.json"), this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
+      m_errorsModel(new ErrorsModel(this)),
+      m_templatesModel(new TemplatesModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false), m_queuePaused(false) {
@@ -299,6 +302,8 @@ void MainWindow::setupUi() {
           menu.addSeparator();
           QAction *newSessionFromSessionAction =
               menu.addAction(i18n("New Session From Session"));
+          QAction *saveTemplateAction =
+              menu.addAction(i18n("Save prompt as template"));
 
           connect(openSessionAction, &QAction::triggered,
                   [this, index]() { onSessionActivated(index); });
@@ -392,6 +397,19 @@ void MainWindow::setupUi() {
                     dialog.exec();
                   });
 
+          connect(
+              saveTemplateAction, &QAction::triggered, [this, sourceIndex]() {
+                QJsonObject session =
+                    m_sessionModel->getSession(sourceIndex.row());
+                QJsonObject templateData;
+                templateData[QStringLiteral("prompt")] =
+                    session.value(QStringLiteral("prompt")).toString();
+                templateData[QStringLiteral("automationMode")] =
+                    session.value(QStringLiteral("automationMode")).toString();
+                m_templatesModel->addTemplate(templateData);
+                updateStatus(i18n("Prompt saved as template."));
+              });
+
           menu.exec(m_sessionView->mapToGlobal(pos));
         }
       });
@@ -427,18 +445,25 @@ void MainWindow::setupUi() {
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
+          menu.addSeparator();
+          QAction *saveTemplateAction =
+              menu.addAction(i18n("Save prompt as template"));
 
           connect(
               openSessionAction, &QAction::triggered, [this, sourceIndex]() {
-                QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
+                QJsonObject sessionData =
+                    m_archiveModel->getSession(sourceIndex.row());
                 if (!sessionData.isEmpty()) {
-                    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
-                    connectSessionWindow(window);
-                    window->show();
+                  SessionWindow *window =
+                      new SessionWindow(sessionData, m_apiManager, this);
+                  connectSessionWindow(window);
+                  window->show();
                 } else {
-                    QString id = m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-                    m_apiManager->getSession(id);
-                    updateStatus(i18n("Fetching details for session %1...", id));
+                  QString id =
+                      m_archiveModel->data(sourceIndex, SessionModel::IdRole)
+                          .toString();
+                  m_apiManager->getSession(id);
+                  updateStatus(i18n("Fetching details for session %1...", id));
                 }
               });
 
@@ -455,6 +480,19 @@ void MainWindow::setupUi() {
             updateStatus(i18n("Session deleted from archive."));
           });
 
+          connect(
+              saveTemplateAction, &QAction::triggered, [this, sourceIndex]() {
+                QJsonObject session =
+                    m_archiveModel->getSession(sourceIndex.row());
+                QJsonObject templateData;
+                templateData[QStringLiteral("prompt")] =
+                    session.value(QStringLiteral("prompt")).toString();
+                templateData[QStringLiteral("automationMode")] =
+                    session.value(QStringLiteral("automationMode")).toString();
+                m_templatesModel->addTemplate(templateData);
+                updateStatus(i18n("Prompt saved as template."));
+              });
+
           menu.exec(m_archiveView->mapToGlobal(pos));
         }
       });
@@ -466,18 +504,51 @@ void MainWindow::setupUi() {
         QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
         QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
         if (!sessionData.isEmpty()) {
-            SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
-            connectSessionWindow(window);
-            window->show();
+          SessionWindow *window =
+              new SessionWindow(sessionData, m_apiManager, this);
+          connectSessionWindow(window);
+          window->show();
         } else {
-            QString id =
-                m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-            m_apiManager->getSession(id);
-            updateStatus(i18n("Fetching details for session %1...", id));
+          QString id = m_archiveModel->data(sourceIndex, SessionModel::IdRole)
+                           .toString();
+          m_apiManager->getSession(id);
+          updateStatus(i18n("Fetching details for session %1...", id));
         }
       });
 
   tabWidget->addTab(m_archiveView, i18n("Archive"));
+
+  // Templates View
+  m_templatesView = new QListView(this);
+  m_templatesView->setModel(m_templatesModel);
+  m_templatesView->setItemDelegate(new TemplateDelegate(this));
+  m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_templatesView, &QListView::customContextMenuRequested,
+          [this](const QPoint &pos) {
+            QModelIndex index = m_templatesView->indexAt(pos);
+            if (index.isValid()) {
+              QMenu menu;
+              QAction *useAction = menu.addAction(i18n("Use Template"));
+              QAction *deleteAction = menu.addAction(i18n("Delete"));
+
+              connect(useAction, &QAction::triggered,
+                      [this, index]() { onTemplateActivated(index); });
+
+              connect(deleteAction, &QAction::triggered, [this, index]() {
+                if (QMessageBox::question(this, i18n("Delete Template"),
+                                          i18n("Are you sure?")) ==
+                    QMessageBox::Yes) {
+                  m_templatesModel->removeTemplate(index.row());
+                }
+              });
+
+              menu.exec(m_templatesView->mapToGlobal(pos));
+            }
+          });
+  connect(m_templatesView, &QListView::doubleClicked, this,
+          &MainWindow::onTemplateActivated);
+
+  tabWidget->addTab(m_templatesView, i18n("Templates"));
 
   // Drafts View
   m_draftsView = new QListView(this);
@@ -1309,6 +1380,27 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   dialog.exec();
 }
 
+void MainWindow::onTemplateActivated(const QModelIndex &index) {
+  QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  dialog.setInitialData(tmpl);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested,
+          [this](const QStringList &sources, const QString &p, const QString &a,
+                 bool requirePlanApproval) {
+            onSessionCreated(sources, p, a, requirePlanApproval);
+          });
+
+  connect(&dialog, &NewSessionDialog::saveDraftRequested,
+          [this](const QJsonObject &d) {
+            m_draftsModel->addDraft(d);
+            updateStatus(i18n("Draft saved from template."));
+          });
+
+  dialog.exec();
+}
+
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
@@ -1366,30 +1458,42 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
-  connect(window, &SessionWindow::archiveRequested, this, [this, window](const QString &id) {
-    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
-        QJsonObject session = m_sessionModel->getSession(i);
-        m_archiveModel->addSession(session);
-        m_archiveModel->saveSessions();
-        m_sessionModel->removeSession(i);
-        updateStatus(i18n("Session archived."));
-        window->close();
-        break;
-      }
-    }
-  });
+  connect(window, &SessionWindow::templateRequested, this,
+          [this](const QJsonObject &templateData) {
+            m_templatesModel->addTemplate(templateData);
+            updateStatus(i18n("Prompt saved as template."));
+          });
 
-  connect(window, &SessionWindow::deleteRequested, this, [this, window](const QString &id) {
-    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
-        m_sessionModel->removeSession(i);
-        updateStatus(i18n("Session deleted."));
-        window->close();
-        break;
-      }
-    }
-  });
+  connect(window, &SessionWindow::archiveRequested, this,
+          [this, window](const QString &id) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                      .toString() == id) {
+                QJsonObject session = m_sessionModel->getSession(i);
+                m_archiveModel->addSession(session);
+                m_archiveModel->saveSessions();
+                m_sessionModel->removeSession(i);
+                updateStatus(i18n("Session archived."));
+                window->close();
+                break;
+              }
+            }
+          });
+
+  connect(window, &SessionWindow::deleteRequested, this,
+          [this, window](const QString &id) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                      .toString() == id) {
+                m_sessionModel->removeSession(i);
+                updateStatus(i18n("Session deleted."));
+                window->close();
+                break;
+              }
+            }
+          });
 }
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
@@ -1399,21 +1503,23 @@ void MainWindow::showSessionWindow(const QJsonObject &session) {
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
-  // Pass the basic cached session data to show the window instantly, then let SessionWindow refresh itself
+  // Pass the basic cached session data to show the window instantly, then let
+  // SessionWindow refresh itself
   const QSortFilterProxyModel *proxy =
       qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
   if (sessionData.isEmpty()) {
-      // Fallback
-      QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-      m_apiManager->getSession(id);
-      updateStatus(i18n("Fetching details for session %1...", id));
+    // Fallback
+    QString id =
+        m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+    m_apiManager->getSession(id);
+    updateStatus(i18n("Fetching details for session %1...", id));
   } else {
-      SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
-      connectSessionWindow(window);
-      window->show();
+    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+    connectSessionWindow(window);
+    window->show();
   }
 }
 

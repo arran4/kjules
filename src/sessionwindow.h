@@ -49,6 +49,7 @@ private:
 Q_SIGNALS:
   void archiveRequested(const QString &id);
   void deleteRequested(const QString &id);
+  void templateRequested(const QJsonObject &templateData);
 };
 
 #endif // SESSIONWINDOW_H

@@ -114,6 +114,16 @@ void SessionWindow::setupActions() {
   sessionMenu->addAction(refreshAction);
   sessionMenu->addAction(duplicateAction);
 
+  QAction *saveTemplateAction = new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Save prompt as template"), this);
+  connect(saveTemplateAction, &QAction::triggered, this, [this]() {
+      QJsonObject templateData;
+      templateData[QStringLiteral("prompt")] = m_sessionData.value(QStringLiteral("prompt")).toString();
+      templateData[QStringLiteral("automationMode")] = m_sessionData.value(QStringLiteral("automationMode")).toString();
+      Q_EMIT templateRequested(templateData);
+  });
+  sessionMenu->addAction(saveTemplateAction);
+  sessionMenu->addSeparator();
+
   QAction *archiveAction = new QAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
       Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString());
