@@ -681,7 +681,7 @@ void MainWindow::createActions() {
           &MainWindow::backupData);
 
   m_toggleQueueAction = new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
-                                    i18n("Pause Queue"), this);
+                                    i18n("Stop Queue"), this);
   actionCollection()->addAction(QStringLiteral("toggle_queue"), m_toggleQueueAction);
   connect(m_toggleQueueAction, &QAction::triggered, this, &MainWindow::toggleQueueState);
 
@@ -794,7 +794,7 @@ void MainWindow::toggleQueueState() {
   m_queuePaused = !m_queuePaused;
   if (m_queuePaused) {
     m_queueTimer->stop();
-    m_toggleQueueAction->setText(i18n("Play Queue"));
+    m_toggleQueueAction->setText(i18n("Process Queue"));
     m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
     updateStatus(i18n("Queue processing paused."));
   } else {
@@ -803,7 +803,7 @@ void MainWindow::toggleQueueState() {
       // Try processing immediately when unpaused
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
-    m_toggleQueueAction->setText(i18n("Pause Queue"));
+    m_toggleQueueAction->setText(i18n("Stop Queue"));
     m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-pause")));
     updateStatus(i18n("Queue processing resumed."));
   }
