@@ -12,7 +12,9 @@ public:
   enum TemplateRoles {
     SourceRole = Qt::UserRole + 1,
     PromptRole,
-    AutomationModeRole
+    AutomationModeRole,
+    NameRole,
+    DescriptionRole
   };
 
   explicit TemplatesModel(QObject *parent = nullptr);
@@ -23,6 +25,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void addTemplate(const QJsonObject &tmpl);
+  void updateTemplate(int row, const QJsonObject &tmpl);
   void removeTemplate(int row);
   QJsonObject getTemplate(int row) const;
   void loadTemplates();

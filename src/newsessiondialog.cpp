@@ -1,6 +1,6 @@
 #include "newsessiondialog.h"
 #include "savedialog.h"
-#include "selectiondialog.h"
+#include "templateselectiondialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
@@ -45,9 +45,9 @@ private:
   bool m_showSelected;
 };
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
                                    QWidget *parent)
-    : QDialog(parent), m_sourceModel(sourceModel) {
+    : QDialog(parent), m_sourceModel(sourceModel), m_templatesModel(templatesModel) {
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
 
@@ -156,7 +156,12 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   // Prompt
   m_promptEdit = new QTextEdit(this);
   m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
-  connect(m_loadTemplateButton, &QPushButton::clicked, this, &NewSessionDialog::loadTemplateRequested);
+  connect(m_loadTemplateButton, &QPushButton::clicked, this, [this]() {
+    TemplateSelectionDialog dlg(m_templatesModel, this);
+    if (dlg.exec() == QDialog::Accepted) {
+      setTemplateData(dlg.selectedTemplate());
+    }
+  });
 
   QVBoxLayout *promptLayout = new QVBoxLayout();
   promptLayout->addWidget(m_loadTemplateButton, 0, Qt::AlignLeft);

@@ -55,7 +55,8 @@ set(kjules_SRCS
     src/errorsmodel.cpp
     src/newsessiondialog.cpp
     src/savedialog.cpp
-    src/selectiondialog.cpp
+    src/templateselectiondialog.cpp
+    src/templateeditdialog.cpp
     src/settingsdialog.cpp
     src/draftdelegate.cpp
     src/queuedelegate.cpp

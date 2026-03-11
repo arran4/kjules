@@ -38,9 +38,17 @@ QVariant TemplatesModel::data(const QModelIndex &index, int role) const {
     return tmpl.value(QStringLiteral("prompt")).toString();
   case AutomationModeRole:
     return tmpl.value(QStringLiteral("automationMode")).toString();
-  case Qt::DisplayRole:
-    return tmpl.value(QStringLiteral("prompt"))
-        .toString(); // Display prompt as title
+  case TemplatesModel::NameRole:
+    return tmpl.value(QStringLiteral("name")).toString();
+  case TemplatesModel::DescriptionRole:
+    return tmpl.value(QStringLiteral("description")).toString();
+  case Qt::DisplayRole: {
+    QString name = tmpl.value(QStringLiteral("name")).toString();
+    if (!name.isEmpty()) return name;
+    return tmpl.value(QStringLiteral("prompt")).toString(); // Fallback
+  }
+  case Qt::ToolTipRole:
+    return tmpl.value(QStringLiteral("description")).toString();
   default:
     return QVariant();
   }
@@ -59,6 +67,15 @@ void TemplatesModel::addTemplate(const QJsonObject &tmpl) {
   m_templates.insert(0, tmpl);
   endInsertRows();
   saveTemplates();
+}
+
+void TemplatesModel::updateTemplate(int row, const QJsonObject &tmpl) {
+  if (row >= 0 && row < m_templates.size()) {
+    m_templates[row] = tmpl;
+    QModelIndex idx = index(row, 0);
+    Q_EMIT dataChanged(idx, idx);
+    saveTemplates();
+  }
 }
 
 void TemplatesModel::clear() {

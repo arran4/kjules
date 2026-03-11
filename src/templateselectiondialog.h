@@ -1,5 +1,5 @@
-#ifndef SELECTIONDIALOG_H
-#define SELECTIONDIALOG_H
+#ifndef TEMPLATESELECTIONDIALOG_H
+#define TEMPLATESELECTIONDIALOG_H
 
 #include <QDialog>
 #include <QJsonObject>
@@ -9,12 +9,12 @@ class QListView;
 class QSortFilterProxyModel;
 class TemplatesModel;
 
-class SelectionDialog : public QDialog {
+class TemplateSelectionDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit SelectionDialog(TemplatesModel *templatesModel,
-                           QWidget *parent = nullptr);
+  explicit TemplateSelectionDialog(TemplatesModel *templatesModel,
+                                   QWidget *parent = nullptr);
 
   QJsonObject selectedTemplate() const;
 
@@ -32,4 +32,4 @@ private:
   QJsonObject m_selectedTemplate;
 };
 
-#endif // SELECTIONDIALOG_H
+#endif // TEMPLATESELECTIONDIALOG_H

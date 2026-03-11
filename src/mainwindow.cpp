@@ -15,6 +15,7 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include "savedialog.h"
+#include "templateeditdialog.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -237,6 +238,7 @@ void MainWindow::setupUi() {
           QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
           QAction *openUrlAction = menu.addAction(i18n("Open URL"));
           QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
 
           connect(viewSessionsAction, &QAction::triggered, [this, index]() {
             QString source =
@@ -274,6 +276,22 @@ void MainWindow::setupUi() {
                 QStringLiteral("https://jules.google.com/sessions/") + id);
             updateStatus(i18n("URL copied to clipboard."));
           });
+
+          connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+            SaveDialog dlg(QStringLiteral("Template"), this);
+            if (dlg.exec() == QDialog::Accepted) {
+              QJsonObject sessionData;
+              QString prompt = m_sessionModel->data(index, SessionModel::PromptRole).toString();
+              QString source = m_sessionModel->data(index, SessionModel::SourceRole).toString();
+              sessionData[QStringLiteral("prompt")] = prompt;
+              sessionData[QStringLiteral("source")] = source;
+              sessionData[QStringLiteral("name")] = dlg.nameOrComment();
+              sessionData[QStringLiteral("description")] = dlg.description();
+              m_templatesModel->addTemplate(sessionData);
+              updateStatus(i18n("Template created from session."));
+            }
+          });
+
           menu.exec(m_sessionView->mapToGlobal(pos));
         }
       });
@@ -343,9 +361,19 @@ void MainWindow::setupUi() {
             QModelIndex index = m_templatesView->indexAt(pos);
             if (index.isValid()) {
               QMenu menu;
-              QAction *editAction = menu.addAction(i18n("Use Template"));
-              connect(editAction, &QAction::triggered,
+              QAction *useAction = menu.addAction(i18n("Use Template"));
+              connect(useAction, &QAction::triggered,
                       [this, index]() { onTemplateActivated(index); });
+
+              QAction *editAction = menu.addAction(i18n("Edit Template"));
+              connect(editAction, &QAction::triggered, [this, index]() {
+                TemplateEditDialog dlg(this);
+                dlg.setInitialData(m_templatesModel->getTemplate(index.row()));
+                if (dlg.exec() == QDialog::Accepted) {
+                  m_templatesModel->updateTemplate(index.row(), dlg.templateData());
+                  updateStatus(i18n("Template updated."));
+                }
+              });
 
               QAction *deleteAction = menu.addAction(i18n("Delete Template"));
               connect(deleteAction, &QAction::triggered, [this, index]() {
@@ -812,7 +840,7 @@ void MainWindow::refreshSources() {
 
 void MainWindow::showNewSessionDialog() {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   connect(&dialog, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
@@ -973,7 +1001,7 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
   templateData.remove(QStringLiteral("source"));
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(templateData);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested, this,
@@ -1092,7 +1120,7 @@ void MainWindow::editQueueItem(int row) {
     return;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setEditMode(true);
   dialog.setInitialData(item.requestData);
 
@@ -1168,7 +1196,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(request);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
@@ -1191,7 +1219,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(draft);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
@@ -1236,7 +1264,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(initData);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested, this,

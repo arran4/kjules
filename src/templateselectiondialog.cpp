@@ -1,4 +1,4 @@
-#include "selectiondialog.h"
+#include "templateselectiondialog.h"
 #include "templatesmodel.h"
 
 #include <QHBoxLayout>
@@ -10,7 +10,7 @@
 #include <QVBoxLayout>
 #include "draftdelegate.h"
 
-SelectionDialog::SelectionDialog(TemplatesModel *templatesModel, QWidget *parent)
+TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel, QWidget *parent)
     : QDialog(parent), m_templatesModel(templatesModel) {
   setWindowTitle(tr("Select Template"));
   resize(500, 400);
@@ -53,12 +53,12 @@ SelectionDialog::SelectionDialog(TemplatesModel *templatesModel, QWidget *parent
   });
 
   connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
-          this, &SelectionDialog::onSelectionChanged);
+          this, &TemplateSelectionDialog::onSelectionChanged);
   connect(m_listView, &QListView::doubleClicked, this,
-          &SelectionDialog::onDoubleClicked);
+          &TemplateSelectionDialog::onDoubleClicked);
 }
 
-void SelectionDialog::onSelectionChanged() {
+void TemplateSelectionDialog::onSelectionChanged() {
   QModelIndexList selected = m_listView->selectionModel()->selectedIndexes();
   if (!selected.isEmpty()) {
     QModelIndex proxyIndex = selected.first();
@@ -70,13 +70,13 @@ void SelectionDialog::onSelectionChanged() {
   }
 }
 
-void SelectionDialog::onDoubleClicked() {
+void TemplateSelectionDialog::onDoubleClicked() {
   onSelectionChanged();
   if (m_selectButton->isEnabled()) {
     accept();
   }
 }
 
-QJsonObject SelectionDialog::selectedTemplate() const {
+QJsonObject TemplateSelectionDialog::selectedTemplate() const {
   return m_selectedTemplate;
 }

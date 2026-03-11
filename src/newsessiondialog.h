@@ -14,12 +14,13 @@ class QSortFilterProxyModel;
 class QCheckBox;
 
 class SourceSelectionProxyModel;
+class TemplatesModel;
 
 class NewSessionDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
+  explicit NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
                             QWidget *parent = nullptr);
   void setInitialData(const QJsonObject &data);
   void setTemplateData(const QJsonObject &data);
@@ -30,7 +31,6 @@ Q_SIGNALS:
                               const QString &automationMode, bool requirePlanApproval);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
-  void loadTemplateRequested();
 
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
@@ -44,6 +44,7 @@ private Q_SLOTS:
 
 private:
   SourceModel *m_sourceModel;
+  TemplatesModel *m_templatesModel;
   QListView *m_unselectedView;
   QListView *m_selectedView;
   SourceSelectionProxyModel *m_unselectedProxy;
