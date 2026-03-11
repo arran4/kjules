@@ -54,7 +54,10 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
-      m_sessionModel(new SessionModel(this)),
+      m_sessionModel(
+          new SessionModel(QStringLiteral("cached_all_sessions.json"), this)),
+      m_archiveModel(new SessionModel(
+          QStringLiteral("cached_archive_sessions.json"), this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
@@ -108,6 +111,9 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
+
+  // Load archive model
+  m_archiveModel->loadSessions();
 
   // Initial refresh
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
@@ -201,7 +207,8 @@ void MainWindow::setupUi() {
                     }
                   });
 
-          QAction *sourceViewSessionsAction = menu.addAction(i18n("View Sessions"));
+          QAction *sourceViewSessionsAction =
+              menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
             SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
             window->show();
@@ -231,46 +238,146 @@ void MainWindow::setupUi() {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
           QMenu menu;
-          QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
-          QAction *openUrlAction = menu.addAction(i18n("Open URL"));
-          QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
+          QAction *openSessionAction = menu.addAction(i18n("Open Session"));
+          QAction *openSessionsForSourceAction =
+              menu.addAction(i18n("Open Sessions for source"));
+          QAction *refreshSessionAction =
+              menu.addAction(i18n("Refresh session details"));
+          menu.addSeparator();
+          QAction *openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
+          QAction *copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
 
-          connect(viewSessionsAction, &QAction::triggered, [this, index]() {
-            QString source =
-                m_sessionModel->data(index, SessionModel::SourceRole).toString();
-            SessionsWindow *window = new SessionsWindow(source, m_apiManager, this);
-            window->show();
-          });
+          QString provider =
+              m_sessionModel->data(index, SessionModel::ProviderRole)
+                  .toString();
+          QString prUrl =
+              m_sessionModel->data(index, SessionModel::PrUrlRole).toString();
 
-          connect(openUrlAction, &QAction::triggered, [this, index]() {
+          QString githubUrl;
+          if (!prUrl.isEmpty()) {
+            githubUrl = prUrl;
+          } else if (provider == QStringLiteral("github")) {
+            QString owner = m_sessionModel
+                                ->data(m_sessionModel->index(
+                                    index.row(), SessionModel::ColOwner))
+                                .toString();
+            QString repo = m_sessionModel
+                               ->data(m_sessionModel->index(
+                                   index.row(), SessionModel::ColRepo))
+                               .toString();
+            githubUrl = QStringLiteral("https://github.com/") + owner +
+                        QLatin1Char('/') + repo;
+          }
+
+          QAction *openGithubUrlAction = nullptr;
+          QAction *copyGithubUrlAction = nullptr;
+          if (!githubUrl.isEmpty()) {
+            openGithubUrlAction = menu.addAction(i18n("Open Github URL"));
+            copyGithubUrlAction = menu.addAction(i18n("Copy Github URL"));
+          }
+
+          menu.addSeparator();
+          QAction *archiveAction = menu.addAction(i18n("Archive"));
+          QAction *deleteAction = menu.addAction(i18n("Delete"));
+          menu.addSeparator();
+          QAction *newSessionFromSessionAction =
+              menu.addAction(i18n("New Session From Session"));
+
+          connect(openSessionAction, &QAction::triggered,
+                  [this, index]() { onSessionActivated(index); });
+
+          connect(openSessionsForSourceAction, &QAction::triggered,
+                  [this, index]() {
+                    QString source =
+                        m_sessionModel->data(index, SessionModel::SourceRole)
+                            .toString();
+                    SessionsWindow *window =
+                        new SessionsWindow(source, m_apiManager, this);
+                    window->show();
+                  });
+
+          connect(refreshSessionAction, &QAction::triggered, [this, index]() {
             QString id =
                 m_sessionModel->data(index, SessionModel::IdRole).toString();
-
-            QRegularExpression idRegex(QStringLiteral("^[a-zA-Z0-9_-]+$"));
-            if (!idRegex.match(id).hasMatch()) {
-              updateStatus(i18n("Invalid session ID format."));
-              return;
-            }
-
-            // Placeholder URL logic
-            updateStatus(i18n("Opening session %1", id));
+            m_apiManager->getSession(id);
+            updateStatus(i18n("Refreshing session details for %1...", id));
           });
 
-          connect(copyUrlAction, &QAction::triggered, [this, index]() {
+          connect(openJulesUrlAction, &QAction::triggered, [this, index]() {
             QString id =
                 m_sessionModel->data(index, SessionModel::IdRole).toString();
+            QString urlStr =
+                QStringLiteral("https://jules.google.com/sessions/") + id;
+            QDesktopServices::openUrl(QUrl(urlStr));
+            updateStatus(i18n("Opened session %1", id));
+          });
 
-            QRegularExpression idRegex(QStringLiteral("^[a-zA-Z0-9_-]+$"));
-            if (!idRegex.match(id).hasMatch()) {
-              updateStatus(i18n("Invalid session ID format."));
-              return;
-            }
-
-            // Placeholder URL logic
+          connect(copyJulesUrlAction, &QAction::triggered, [this, index]() {
+            QString id =
+                m_sessionModel->data(index, SessionModel::IdRole).toString();
             QGuiApplication::clipboard()->setText(
                 QStringLiteral("https://jules.google.com/sessions/") + id);
-            updateStatus(i18n("URL copied to clipboard."));
+            updateStatus(i18n("Jules URL copied to clipboard."));
           });
+
+          if (openGithubUrlAction && copyGithubUrlAction) {
+            connect(openGithubUrlAction, &QAction::triggered,
+                    [this, githubUrl]() {
+                      QDesktopServices::openUrl(QUrl(githubUrl));
+                      updateStatus(i18n("Opened Github URL"));
+                    });
+
+            connect(copyGithubUrlAction, &QAction::triggered,
+                    [this, githubUrl]() {
+                      QGuiApplication::clipboard()->setText(githubUrl);
+                      updateStatus(i18n("Github URL copied to clipboard."));
+                    });
+          }
+
+          connect(archiveAction, &QAction::triggered, [this, index]() {
+            QJsonObject session = m_sessionModel->getSession(index.row());
+            m_archiveModel->addSession(session);
+            m_archiveModel->saveSessions();
+            m_sessionModel->removeSession(index.row());
+            updateStatus(i18n("Session archived."));
+          });
+
+          connect(deleteAction, &QAction::triggered, [this, index]() {
+            m_sessionModel->removeSession(index.row());
+            updateStatus(i18n("Session deleted."));
+          });
+
+          connect(newSessionFromSessionAction, &QAction::triggered,
+                  [this, index]() {
+                    QJsonObject session =
+                        m_sessionModel->getSession(index.row());
+                    QString prompt =
+                        session.value(QStringLiteral("prompt")).toString();
+                    QString source =
+                        session.value(QStringLiteral("sourceContext"))
+                            .toObject()
+                            .value(QStringLiteral("source"))
+                            .toString();
+
+                    QJsonObject initData;
+                    initData[QStringLiteral("prompt")] = prompt;
+                    if (!source.isEmpty()) {
+                      QJsonArray sourcesArr;
+                      sourcesArr.append(source);
+                      initData[QStringLiteral("sources")] = sourcesArr;
+                    }
+
+                    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+                    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+                    dialog.setInitialData(initData);
+
+                    connect(&dialog, &NewSessionDialog::createSessionRequested,
+                            this, &MainWindow::onSessionCreated);
+                    connect(&dialog, &NewSessionDialog::saveDraftRequested,
+                            this, &MainWindow::onDraftSaved);
+                    dialog.exec();
+                  });
+
           menu.exec(m_sessionView->mapToGlobal(pos));
         }
       });
@@ -278,6 +385,54 @@ void MainWindow::setupUi() {
           &MainWindow::onSessionActivated);
 
   tabWidget->addTab(m_sessionView, i18n("Past"));
+
+  // Archive View
+  m_archiveView = new QListView(this);
+  m_archiveView->setModel(m_archiveModel);
+  m_archiveView->setItemDelegate(new SessionDelegate(this));
+  m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(
+      m_archiveView, &QListView::customContextMenuRequested,
+      [this](const QPoint &pos) {
+        QModelIndex index = m_archiveView->indexAt(pos);
+        if (index.isValid()) {
+          QMenu menu;
+          QAction *openSessionAction = menu.addAction(i18n("Open Session"));
+          QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
+          QAction *deleteAction = menu.addAction(i18n("Delete"));
+
+          connect(openSessionAction, &QAction::triggered, [this, index]() {
+            QString id =
+                m_archiveModel->data(index, SessionModel::IdRole).toString();
+            m_apiManager->getSession(id);
+            updateStatus(i18n("Fetching details for session %1...", id));
+          });
+
+          connect(unarchiveAction, &QAction::triggered, [this, index]() {
+            QJsonObject session = m_archiveModel->getSession(index.row());
+            m_sessionModel->addSession(session);
+            m_sessionModel->saveSessions();
+            m_archiveModel->removeSession(index.row());
+            updateStatus(i18n("Session unarchived."));
+          });
+
+          connect(deleteAction, &QAction::triggered, [this, index]() {
+            m_archiveModel->removeSession(index.row());
+            updateStatus(i18n("Session deleted from archive."));
+          });
+
+          menu.exec(m_archiveView->mapToGlobal(pos));
+        }
+      });
+  connect(m_archiveView, &QListView::doubleClicked, this,
+          [this](const QModelIndex &index) {
+            QString id =
+                m_archiveModel->data(index, SessionModel::IdRole).toString();
+            m_apiManager->getSession(id);
+            updateStatus(i18n("Fetching details for session %1...", id));
+          });
+
+  tabWidget->addTab(m_archiveView, i18n("Archive"));
 
   // Drafts View
   m_draftsView = new QListView(this);
@@ -585,7 +740,8 @@ void MainWindow::createActions() {
       }
     }
     KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-    SessionModel *localModel = new SessionModel(sessionsWindow);
+    SessionModel *localModel = new SessionModel(
+        QStringLiteral("cached_all_sessions.json"), sessionsWindow);
     localModel->setSessions(filteredSessions);
     sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
     sessionsWindow->setWindowTitle(i18n("Past New Sessions for %1", id));
@@ -680,10 +836,13 @@ void MainWindow::createActions() {
   connect(m_backupDataAction, &QAction::triggered, this,
           &MainWindow::backupData);
 
-  m_toggleQueueAction = new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
-                                    i18n("Pause Queue"), this);
-  actionCollection()->addAction(QStringLiteral("toggle_queue"), m_toggleQueueAction);
-  connect(m_toggleQueueAction, &QAction::triggered, this, &MainWindow::toggleQueueState);
+  m_toggleQueueAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
+                  i18n("Pause Queue"), this);
+  actionCollection()->addAction(QStringLiteral("toggle_queue"),
+                                m_toggleQueueAction);
+  connect(m_toggleQueueAction, &QAction::triggered, this,
+          &MainWindow::toggleQueueState);
 
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
@@ -795,7 +954,8 @@ void MainWindow::toggleQueueState() {
   if (m_queuePaused) {
     m_queueTimer->stop();
     m_toggleQueueAction->setText(i18n("Play Queue"));
-    m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
+    m_toggleQueueAction->setIcon(
+        QIcon::fromTheme(QStringLiteral("media-playback-start")));
     updateStatus(i18n("Queue processing paused."));
   } else {
     if (!m_queueModel->isEmpty()) {
@@ -804,7 +964,8 @@ void MainWindow::toggleQueueState() {
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
     m_toggleQueueAction->setText(i18n("Pause Queue"));
-    m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-pause")));
+    m_toggleQueueAction->setIcon(
+        QIcon::fromTheme(QStringLiteral("media-playback-pause")));
     updateStatus(i18n("Queue processing resumed."));
   }
 }
@@ -853,20 +1014,23 @@ void MainWindow::processQueue() {
 
   QueueItem peekItem = m_queueModel->peek();
   if (peekItem.isWaitItem) {
-      if (!peekItem.waitStartTime.isValid()) {
-          peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
-          m_queueModel->updateItem(0, peekItem);
-          QTimer::singleShot(peekItem.waitSeconds * 1000, this, &MainWindow::processQueue);
+    if (!peekItem.waitStartTime.isValid()) {
+      peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
+      m_queueModel->updateItem(0, peekItem);
+      QTimer::singleShot(peekItem.waitSeconds * 1000, this,
+                         &MainWindow::processQueue);
+    } else {
+      qint64 elapsed =
+          peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+      if (elapsed >= peekItem.waitSeconds) {
+        m_queueModel->dequeue(); // Wait completed, remove wait item
+        QTimer::singleShot(0, this, &MainWindow::processQueue);
       } else {
-          qint64 elapsed = peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-          if (elapsed >= peekItem.waitSeconds) {
-              m_queueModel->dequeue(); // Wait completed, remove wait item
-              QTimer::singleShot(0, this, &MainWindow::processQueue);
-          } else {
-              QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this, &MainWindow::processQueue);
-          }
+        QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
+                           &MainWindow::processQueue);
       }
-      return;
+    }
+    return;
   }
 
   m_isProcessingQueue = true;

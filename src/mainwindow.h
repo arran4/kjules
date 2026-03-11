@@ -78,6 +78,7 @@ private:
 
   APIManager *m_apiManager;
   SessionModel *m_sessionModel;
+  SessionModel *m_archiveModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
   QueueModel *m_queueModel;
@@ -85,6 +86,7 @@ private:
 
   QTreeView *m_sourceView;
   QListView *m_sessionView;
+  QListView *m_archiveView;
   QListView *m_draftsView;
   QListView *m_queueView;
   QListView *m_errorsView;

@@ -5,6 +5,7 @@
 #include <QJsonObject>
 
 class QTextBrowser;
+class QTabWidget;
 
 class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -17,6 +18,8 @@ public:
 private:
   void setupUi(const QJsonObject &sessionData);
 
+  QTabWidget *m_tabWidget;
+  QTextBrowser *m_activityBrowser;
   QTextBrowser *m_textBrowser;
 };
 

@@ -1,14 +1,15 @@
 #include "sessionmodel.h"
+#include <KLocalizedString>
+#include <QColor>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFont>
 #include <QJsonDocument>
 #include <QStandardPaths>
-#include <KLocalizedString>
-#include <QColor>
-#include <QFont>
 
-SessionModel::SessionModel(QObject *parent) : QAbstractTableModel(parent) {}
+SessionModel::SessionModel(const QString &cacheFileName, QObject *parent)
+    : QAbstractTableModel(parent), m_cacheFileName(cacheFileName) {}
 
 SessionData parseSessionData(const QJsonObject &obj) {
   SessionData data;
@@ -41,8 +42,10 @@ SessionData parseSessionData(const QJsonObject &obj) {
   }
 
   data.state = obj.value(QStringLiteral("state")).toString();
-  data.updateTime = QDateTime::fromString(obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
-  data.createTime = QDateTime::fromString(obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+  data.updateTime = QDateTime::fromString(
+      obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
+  data.createTime = QDateTime::fromString(
+      obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
 
   data.hasChangeSet = false;
   QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
@@ -52,7 +55,8 @@ SessionData parseSessionData(const QJsonObject &obj) {
       data.hasChangeSet = true;
     }
     if (outputObj.contains(QStringLiteral("pullRequest"))) {
-      QJsonObject prObj = outputObj.value(QStringLiteral("pullRequest")).toObject();
+      QJsonObject prObj =
+          outputObj.value(QStringLiteral("pullRequest")).toObject();
       data.prUrl = prObj.value(QStringLiteral("url")).toString();
       if (!data.prUrl.isEmpty()) {
         int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
@@ -146,7 +150,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   }
 }
 
-QVariant SessionModel::headerData(int section, Qt::Orientation orientation, int role) const {
+QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
+                                  int role) const {
   if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
     switch (section) {
     case ColTitle:
@@ -221,7 +226,8 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
     return 0;
   }
 
-  beginInsertRows(QModelIndex(), m_sessions.size(), m_sessions.size() + newSessions.size() - 1);
+  beginInsertRows(QModelIndex(), m_sessions.size(),
+                  m_sessions.size() + newSessions.size() - 1);
   for (int i = 0; i < newSessions.size(); ++i) {
     QJsonObject obj = newSessions[i];
     SessionData data = parseSessionData(obj);
@@ -272,10 +278,25 @@ void SessionModel::clear() {
   endResetModel();
 }
 
+void SessionModel::removeSession(int row) {
+  if (row < 0 || row >= m_sessions.size())
+    return;
+
+  beginRemoveRows(QModelIndex(), row, row);
+  m_sessions.removeAt(row);
+
+  m_idToIndex.clear();
+  for (int i = 0; i < m_sessions.size(); ++i) {
+    m_idToIndex[m_sessions[i].id] = i;
+  }
+  endRemoveRows();
+  saveSessions();
+}
+
 void SessionModel::loadSessions() {
   QString path =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QFile file(path + QStringLiteral("/cached_all_sessions.json"));
+  QFile file(path + QLatin1Char('/') + m_cacheFileName);
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     if (doc.isObject()) {
@@ -296,7 +317,7 @@ void SessionModel::saveSessions() {
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
-  QFile file(path + QStringLiteral("/cached_all_sessions.json"));
+  QFile file(path + QLatin1Char('/') + m_cacheFileName);
   if (file.open(QIODevice::WriteOnly)) {
     file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
     QJsonObject obj;
@@ -318,9 +339,7 @@ void SessionModel::setNextPageToken(const QString &token) {
   m_nextPageToken = token;
 }
 
-QString SessionModel::nextPageToken() const {
-  return m_nextPageToken;
-}
+QString SessionModel::nextPageToken() const { return m_nextPageToken; }
 
 void SessionModel::clearSessions() {
   beginResetModel();

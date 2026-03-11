@@ -2,11 +2,11 @@
 #define SESSIONMODEL_H
 
 #include <QAbstractTableModel>
+#include <QDateTime>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVector>
-#include <QDateTime>
 
 struct SessionData {
   QString id;
@@ -55,7 +55,9 @@ public:
     ColCount
   };
 
-  explicit SessionModel(QObject *parent = nullptr);
+  explicit SessionModel(
+      const QString &cacheFileName = QStringLiteral("cached_all_sessions.json"),
+      QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
   int columnCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -69,6 +71,7 @@ public:
   int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
+  void removeSession(int row);
   QJsonObject getSession(int row) const;
   void clear();
   void loadSessions();
@@ -81,6 +84,7 @@ private:
   QVector<SessionData> m_sessions;
   QHash<QString, int> m_idToIndex;
   QString m_nextPageToken;
+  QString m_cacheFileName;
 };
 
 #endif // SESSIONMODEL_H
