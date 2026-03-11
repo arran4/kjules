@@ -33,8 +33,12 @@ private:
   QLabel *m_statusLabel;
   QTimer *m_autoRefreshTimer;
   QComboBox *m_autoRefreshCombo;
+  QTextBrowser *m_detailsBrowser;
   QTextBrowser *m_activityBrowser;
   QTextBrowser *m_textBrowser;
+
+  QWidget *m_activityTabWidget;
+  class QLineEdit *m_chatInput;
 };
 
 #endif // SESSIONWINDOW_H

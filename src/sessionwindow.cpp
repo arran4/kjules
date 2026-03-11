@@ -12,6 +12,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTextBrowser>
@@ -131,6 +133,50 @@ void SessionWindow::onSessionReloaded(const QJsonObject &session) {
     QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
     m_textBrowser->setPlainText(jsonString);
 
+    QString title = m_sessionData.value(QStringLiteral("title")).toString();
+    QString sessionId = m_sessionData.value(QStringLiteral("id")).toString();
+    QString lastRefreshed =
+        m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
+    QString state = m_sessionData.value(QStringLiteral("state")).toString();
+    QString source = m_sessionData.value(QStringLiteral("sourceContext"))
+                         .toObject()
+                         .value(QStringLiteral("source"))
+                         .toString();
+    QString promptText =
+        m_sessionData.value(QStringLiteral("prompt")).toString();
+
+    QString detailsHtml =
+        QStringLiteral("<html><head><style>") +
+        QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                       "line-height: 1.6; }") +
+        QStringLiteral(
+            "th { text-align: left; padding-right: 15px; color: #555; }") +
+        QStringLiteral("</style></head><body><h2>") + i18n("Session Details") +
+        QStringLiteral("</h2><table>");
+
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
+                   QStringLiteral("</th><td>") + title.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
+                   QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") +
+                   QStringLiteral("</th><td>") + state.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") +
+                   QStringLiteral("</th><td>") + source.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") +
+                   QStringLiteral("</th><td>") +
+                   (lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed)
+                       .toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("</table><hr/><h3>") + i18n("Prompt") +
+                   QStringLiteral("</h3><pre>") + promptText.toHtmlEscaped() +
+                   QStringLiteral("</pre></body></html>");
+
+    m_detailsBrowser->setHtml(detailsHtml);
+
     // Just run the same logic for html activity feed without setting up ui
     QString html =
         QStringLiteral("<html><head><style>") +
@@ -248,24 +294,91 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_tabWidget = new QTabWidget(this);
   mainLayout->addWidget(m_tabWidget);
 
+  m_detailsBrowser = new QTextBrowser(this);
   m_activityBrowser = new QTextBrowser(this);
   m_textBrowser = new QTextBrowser(this);
 
-  m_tabWidget->addTab(m_activityBrowser, i18n("Activity Feed"));
+  m_activityTabWidget = new QWidget(this);
+  QVBoxLayout *activityLayout = new QVBoxLayout(m_activityTabWidget);
+  activityLayout->addWidget(m_activityBrowser);
+
+  QHBoxLayout *chatInputLayout = new QHBoxLayout();
+  m_chatInput = new QLineEdit(this);
+  m_chatInput->setPlaceholderText(i18n("Type a message..."));
+  QPushButton *sendButton = new QPushButton(
+      QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send"), this);
+  chatInputLayout->addWidget(m_chatInput);
+  chatInputLayout->addWidget(sendButton);
+  activityLayout->addLayout(chatInputLayout);
+
+  connect(sendButton, &QPushButton::clicked, this, [this]() {
+    QString text = m_chatInput->text().trimmed();
+    if (text.isEmpty())
+      return;
+    m_chatInput->clear();
+    if (m_statusLabel) {
+      m_statusLabel->setText(
+          i18n("Sending message not yet implemented by Jules API..."));
+    }
+  });
+  connect(m_chatInput, &QLineEdit::returnPressed, sendButton,
+          &QPushButton::click);
+
+  m_tabWidget->addTab(m_detailsBrowser, i18n("Details"));
+  m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));
   m_tabWidget->addTab(m_textBrowser, i18n("Raw JSON"));
 
   QString title = sessionData.value(QStringLiteral("title")).toString();
-  setWindowTitle(title.isEmpty() ? QStringLiteral("Session Details") : title);
+  QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+  if (title.isEmpty()) {
+    title = i18n("Session Details");
+  }
+  setWindowTitle(i18n("%1 - %2", title, sessionId));
 
   QJsonDocument doc(sessionData);
   QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
+  m_textBrowser->setPlainText(jsonString);
+
   QString lastRefreshed =
       sessionData.value(QStringLiteral("lastRefreshed")).toString();
-  QString detailsStr =
-      i18n("Last Refreshed: %1",
-           lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed) +
-      QStringLiteral("\n\n") + jsonString;
-  m_textBrowser->setPlainText(detailsStr);
+  QString state = sessionData.value(QStringLiteral("state")).toString();
+  QString source = sessionData.value(QStringLiteral("sourceContext"))
+                       .toObject()
+                       .value(QStringLiteral("source"))
+                       .toString();
+  QString promptText = sessionData.value(QStringLiteral("prompt")).toString();
+
+  QString detailsHtml =
+      QStringLiteral("<html><head><style>") +
+      QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                     "line-height: 1.6; }") +
+      QStringLiteral(
+          "th { text-align: left; padding-right: 15px; color: #555; }") +
+      QStringLiteral("</style></head><body><h2>") + i18n("Session Details") +
+      QStringLiteral("</h2><table>");
+
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
+                 QStringLiteral("</th><td>") + title.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
+                 QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") +
+                 QStringLiteral("</th><td>") + state.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") +
+                 QStringLiteral("</th><td>") + source.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") +
+                 QStringLiteral("</th><td>") +
+                 (lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed)
+                     .toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("</table><hr/><h3>") + i18n("Prompt") +
+                 QStringLiteral("</h3><pre>") + promptText.toHtmlEscaped() +
+                 QStringLiteral("</pre></body></html>");
+
+  m_detailsBrowser->setHtml(detailsHtml);
 
   // Parse activity feed
   QString html =

@@ -116,6 +116,9 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
 
+  // Load past sessions
+  m_sessionModel->loadSessions();
+
   // Load archive model
   m_archiveModel->loadSessions();
 
@@ -281,17 +284,6 @@ void MainWindow::setupUi() {
           QString githubUrl;
           if (!prUrl.isEmpty()) {
             githubUrl = prUrl;
-          } else if (provider == QStringLiteral("github")) {
-            QString owner = m_sessionModel
-                                ->data(m_sessionModel->index(
-                                    sourceIndex.row(), SessionModel::ColOwner))
-                                .toString();
-            QString repo = m_sessionModel
-                               ->data(m_sessionModel->index(
-                                   sourceIndex.row(), SessionModel::ColRepo))
-                               .toString();
-            githubUrl = QStringLiteral("https://github.com/") + owner +
-                        QLatin1Char('/') + repo;
           }
 
           QAction *openGithubUrlAction = nullptr;
