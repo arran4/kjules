@@ -19,6 +19,12 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QMenuBar>
+#include <QMenu>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QGuiApplication>
+#include <QClipboard>
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, QWidget *parent)
@@ -100,6 +106,67 @@ void SessionWindow::setupActions() {
   toolBar->addAction(closeAction);
 
   addToolBar(toolBar);
+
+  // Setup Menu Bar
+  QMenuBar *menuBarWidget = menuBar();
+
+  QMenu *sessionMenu = menuBarWidget->addMenu(i18n("&Session"));
+  sessionMenu->addAction(refreshAction);
+  sessionMenu->addAction(duplicateAction);
+
+  QAction *archiveAction = new QAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
+  connect(archiveAction, &QAction::triggered, this, [this]() {
+      Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString());
+  });
+  sessionMenu->addAction(archiveAction);
+
+  QAction *deleteAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+  connect(deleteAction, &QAction::triggered, this, [this]() {
+      Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString());
+  });
+  sessionMenu->addAction(deleteAction);
+  sessionMenu->addSeparator();
+  sessionMenu->addAction(closeAction);
+
+  QMenu *linksMenu = menuBarWidget->addMenu(i18n("&Links"));
+
+  QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
+  connect(openJulesAction, &QAction::triggered, this, [this]() {
+      QString id = m_sessionData.value(QStringLiteral("id")).toString();
+      QDesktopServices::openUrl(QUrl(QStringLiteral("https://jules.google.com/sessions/") + id));
+  });
+  linksMenu->addAction(openJulesAction);
+
+  QAction *copyJulesAction = new QAction(i18n("Copy Jules URL"), this);
+  connect(copyJulesAction, &QAction::triggered, this, [this]() {
+      QString id = m_sessionData.value(QStringLiteral("id")).toString();
+      QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/sessions/") + id);
+  });
+  linksMenu->addAction(copyJulesAction);
+
+  QString prUrlStr;
+  QJsonArray outputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
+  for (int i = 0; i < outputs.size(); ++i) {
+      QJsonObject outObj = outputs[i].toObject();
+      if (outObj.contains(QStringLiteral("pullRequest"))) {
+          prUrlStr = outObj.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
+      }
+  }
+
+  if (!prUrlStr.isEmpty()) {
+      linksMenu->addSeparator();
+      QAction *openPrAction = new QAction(i18n("Open Pull Request URL"), this);
+      connect(openPrAction, &QAction::triggered, this, [prUrlStr]() {
+          QDesktopServices::openUrl(QUrl(prUrlStr));
+      });
+      linksMenu->addAction(openPrAction);
+
+      QAction *copyPrAction = new QAction(i18n("Copy Pull Request URL"), this);
+      connect(copyPrAction, &QAction::triggered, this, [prUrlStr]() {
+          QGuiApplication::clipboard()->setText(prUrlStr);
+      });
+      linksMenu->addAction(copyPrAction);
+  }
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
@@ -323,11 +390,13 @@ void SessionWindow::renderDetailsAndDiff() {
     }
   }
 
-  detailsHtml += QStringLiteral("<hr/><h3>") + i18n("Prompt") +
-                 QStringLiteral("</h3><pre>") + promptText.toHtmlEscaped() +
-                 QStringLiteral("</pre></body></html>");
+  detailsHtml += QStringLiteral("</body></html>");
 
   m_detailsBrowser->setHtml(detailsHtml);
+
+  if (m_promptBrowser) {
+    m_promptBrowser->setMarkdown(promptText);
+  }
 
   if (m_diffBrowser) {
     if (diffText.isEmpty()) {
@@ -367,6 +436,8 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_detailsBrowser = new QTextBrowser(this);
   m_detailsBrowser->setOpenExternalLinks(true);
 
+  m_promptBrowser = new QTextBrowser(this);
+
   m_diffBrowser = new QTextBrowser(this);
   m_diffBrowser->setStyleSheet(QStringLiteral("font-family: monospace;"));
 
@@ -401,6 +472,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
           &QPushButton::click);
 
   m_tabWidget->addTab(m_detailsBrowser, i18n("Details"));
+  m_tabWidget->addTab(m_promptBrowser, i18n("Prompt"));
   m_tabWidget->addTab(m_diffBrowser, i18n("Diff"));
   m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));
   m_tabWidget->addTab(m_rawActivitiesBrowser, i18n("Raw Activities"));

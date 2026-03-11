@@ -37,6 +37,7 @@ private:
   QTimer *m_autoRefreshTimer;
   QComboBox *m_autoRefreshCombo;
   QTextBrowser *m_detailsBrowser;
+  QTextBrowser *m_promptBrowser;
   QTextBrowser *m_diffBrowser;
   QTextBrowser *m_activityBrowser;
   QTextBrowser *m_rawActivitiesBrowser;
@@ -44,6 +45,10 @@ private:
 
   QWidget *m_activityTabWidget;
   class QLineEdit *m_chatInput;
+
+Q_SIGNALS:
+  void archiveRequested(const QString &id);
+  void deleteRequested(const QString &id);
 };
 
 #endif // SESSIONWINDOW_H

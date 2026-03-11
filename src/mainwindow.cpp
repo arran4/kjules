@@ -433,6 +433,7 @@ void MainWindow::setupUi() {
                 QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
                 if (!sessionData.isEmpty()) {
                     SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+                    connectSessionWindow(window);
                     window->show();
                 } else {
                     QString id = m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
@@ -463,10 +464,17 @@ void MainWindow::setupUi() {
         const QSortFilterProxyModel *proxy =
             qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
         QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_apiManager->getSession(id);
-        updateStatus(i18n("Fetching details for session %1...", id));
+        QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
+        if (!sessionData.isEmpty()) {
+            SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+            connectSessionWindow(window);
+            window->show();
+        } else {
+            QString id =
+                m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+            m_apiManager->getSession(id);
+            updateStatus(i18n("Fetching details for session %1...", id));
+        }
       });
 
   tabWidget->addTab(m_archiveView, i18n("Archive"));
@@ -1357,8 +1365,36 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   dialog.exec();
 }
 
+void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::archiveRequested, this, [this, window](const QString &id) {
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_archiveModel->saveSessions();
+        m_sessionModel->removeSession(i);
+        updateStatus(i18n("Session archived."));
+        window->close();
+        break;
+      }
+    }
+  });
+
+  connect(window, &SessionWindow::deleteRequested, this, [this, window](const QString &id) {
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
+        m_sessionModel->removeSession(i);
+        updateStatus(i18n("Session deleted."));
+        window->close();
+        break;
+      }
+    }
+  });
+}
+
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   SessionWindow *window = new SessionWindow(session, m_apiManager, this);
+  connectSessionWindow(window);
   window->show();
 }
 
@@ -1376,6 +1412,7 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
       updateStatus(i18n("Fetching details for session %1...", id));
   } else {
       SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+      connectSessionWindow(window);
       window->show();
   }
 }
