@@ -72,6 +72,11 @@ private Q_SLOTS:
   void toggleQueueState();
   void loadQueueSettings();
 
+#ifdef MOCK_UI_TEST
+public:
+  void loadMockData();
+#endif
+
 private:
   void setupUi();
   void setupTrayIcon();

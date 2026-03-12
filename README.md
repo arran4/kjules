@@ -8,6 +8,30 @@ When you click on the notification, it presents you with its own version of:
 *   The GitHub feed/wall
 *   Explore
 
+## Features & Screenshots
+
+The application provides a tabbed interface for managing your sources and sessions:
+
+### Sources
+View your available sources (e.g., GitHub repositories).
+![Sources Tab](.jules/mock/screenshots/screenshot_tab_0.png)
+
+### Past Sessions
+Review past sessions you have created.
+![Past Sessions Tab](.jules/mock/screenshots/screenshot_tab_1.png)
+
+### Drafts
+Create and save draft sessions to send later.
+![Drafts Tab](.jules/mock/screenshots/screenshot_tab_2.png)
+
+### Queue
+Manage your queue of sessions to be processed.
+![Queue Tab](.jules/mock/screenshots/screenshot_tab_3.png)
+
+### Errors
+Review and retry sessions that have encountered errors.
+![Errors Tab](.jules/mock/screenshots/screenshot_tab_4.png)
+
 ## Build Instructions
 
 ### Prerequisites

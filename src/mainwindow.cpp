@@ -14,6 +14,14 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+
+#ifdef MOCK_UI_TEST
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QDateTime>
+#include <QTimer>
+#endif
+
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -72,6 +80,10 @@ MainWindow::MainWindow(QWidget *parent)
   loadQueueSettings();
   setupTrayIcon();
   createActions();
+
+#ifdef MOCK_UI_TEST
+  loadMockData();
+#endif
 
   // Connect API Manager signals
   connect(m_apiManager, &APIManager::sourcesReceived, this,
@@ -1454,3 +1466,49 @@ void MainWindow::restoreData() {
     updateStatus(i18n("No files were restored."));
   }
 }
+
+#ifdef MOCK_UI_TEST
+void MainWindow::loadMockData() {
+  QJsonArray mockSources;
+
+  QJsonObject source1;
+  source1["name"] = "github/kde/kjules";
+  source1["lastActivity"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+  mockSources.append(source1);
+
+  QJsonObject source2;
+  source2["name"] = "github/kde/kdenlive";
+  source2["lastActivity"] = QDateTime::currentDateTime().addDays(-1).toString(Qt::ISODate);
+  mockSources.append(source2);
+
+  m_sourceModel->addSources(mockSources);
+
+  QJsonObject session1;
+  session1["id"] = "session-12345";
+  session1["prompt"] = "Fix the crash when adding a new item";
+  session1["status"] = "COMPLETED";
+  session1["source"] = "github/kde/kjules";
+  session1["created"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+  m_sessionModel->addSession(session1);
+
+  QJsonObject draft1;
+  draft1["prompt"] = "Update README.md with build instructions";
+  QJsonObject sourceContext;
+  sourceContext["source"] = "github/kde/kjules";
+  draft1["sourceContext"] = sourceContext;
+  draft1["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+  m_draftsModel->addDraft(draft1);
+
+  // Load a fake queue item
+  m_queueModel->enqueue(draft1);
+
+  m_statusLabel->setText("Mock data loaded for UI testing");
+
+  // Disable actions so we don't accidentally run stuff
+  if (m_refreshSourcesAction) m_refreshSourcesAction->setEnabled(false);
+  if (m_refreshSourceAction) m_refreshSourceAction->setEnabled(false);
+  if (m_cancelRefreshBtn) m_cancelRefreshBtn->setEnabled(false);
+  m_queuePaused = true;
+  if (m_queueTimer) m_queueTimer->stop();
+}
+#endif
