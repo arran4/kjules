@@ -87,14 +87,17 @@ int main(int argc, char *argv[]) {
 
                 // We want to grab the main window as it contains the menu bar,
                 // but the popup menu itself might be a separate top-level widget.
-                // Let's grab the screen around the window.
                 // However, headless QMenu sometimes doesn't render properly with grab().
-                // We'll just grab the main window which hopefully includes the opened menu.
+                // We'll grab the whole virtual screen to try and capture window borders
+                // and any popup widget.
 
-                QPixmap menuPix = window.grab();
-                QString filename = QString("screenshot_menu_%1.png").arg(title.toLower());
-                menuPix.save(filename);
-                qDebug() << "Saved" << filename;
+                QScreen *screen = QApplication::primaryScreen();
+                if (screen) {
+                    QPixmap menuPix = screen->grabWindow(0);
+                    QString filename = QString("screenshot_menu_%1.png").arg(title.toLower());
+                    menuPix.save(filename);
+                    qDebug() << "Saved" << filename;
+                }
 
                 menu->hide();
                 QApplication::processEvents();
