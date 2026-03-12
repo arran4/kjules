@@ -14,6 +14,7 @@
 #include "apimanager.h"
 #include <QMenuBar>
 #include <QMenu>
+#include <QPainter>
 
 // Define MOCK_UI_TEST if not defined by compiler
 #ifndef MOCK_UI_TEST
@@ -87,17 +88,25 @@ int main(int argc, char *argv[]) {
 
                 // We want to grab the main window as it contains the menu bar,
                 // but the popup menu itself might be a separate top-level widget.
-                // However, headless QMenu sometimes doesn't render properly with grab().
-                // We'll grab the whole virtual screen to try and capture window borders
-                // and any popup widget.
+                // Since `screen->grabWindow(0)` and `window.grab()` can fail to capture headless popups,
+                // we will composite the image manually by grabbing both and painting the menu over the window.
 
-                QScreen *screen = QApplication::primaryScreen();
-                if (screen) {
-                    QPixmap menuPix = screen->grabWindow(0);
-                    QString filename = QString("screenshot_menu_%1.png").arg(title.toLower());
-                    menuPix.save(filename);
-                    qDebug() << "Saved" << filename;
-                }
+                QPixmap windowPix = window.grab();
+                QPixmap popupPix = menu->grab();
+
+                QPainter painter(&windowPix);
+
+                // Get position of the menu item in the menu bar to draw it accurately
+                QAction* menuAction = menu->menuAction();
+                QRect actionRect = menuBar->actionGeometry(menuAction);
+
+                // Draw the popup right below its action in the menu bar
+                painter.drawPixmap(actionRect.left(), menuBar->height(), popupPix);
+                painter.end();
+
+                QString filename = QString("screenshot_menu_%1.png").arg(title.toLower());
+                windowPix.save(filename);
+                qDebug() << "Saved" << filename;
 
                 menu->hide();
                 QApplication::processEvents();
