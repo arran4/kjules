@@ -1504,6 +1504,10 @@ void MainWindow::loadMockData() {
   // Load a fake queue item
   m_queueModel->enqueue(draft1);
 
+  // Clear out jobs since last wait if we don't want a wait item immediately
+  // But actually the mockup looks better with just the single draft task in the queue
+  // No changes needed here, just leaving one task to avoid wait item confusion
+
   m_statusLabel->setText("Mock data loaded for UI testing");
 
   // Disable actions so we don't accidentally run stuff

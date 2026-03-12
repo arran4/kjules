@@ -32,6 +32,18 @@ Manage your queue of sessions to be processed.
 Review and retry sessions that have encountered errors.
 ![Errors Tab](.jules/mock/screenshots/screenshot_tab_4.png)
 
+### Settings Dialog
+Configure your API keys and application preferences.
+![Settings Dialog](.jules/mock/screenshots/screenshot_settings.png)
+
+### New Session Dialog
+Create a new session with your selected sources.
+![New Session Dialog](.jules/mock/screenshots/screenshot_newsession.png)
+
+### System Tray Menu
+Quick access to common actions from your system tray.
+![System Tray Menu](.jules/mock/screenshots/screenshot_traymenu.png)
+
 ## Build Instructions
 
 ### Prerequisites

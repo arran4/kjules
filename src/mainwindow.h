@@ -75,6 +75,7 @@ private Q_SLOTS:
 #ifdef MOCK_UI_TEST
 public:
   void loadMockData();
+  QMenu* getTrayMenu() const { return m_trayMenu; }
 #endif
 
 private:

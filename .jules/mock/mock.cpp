@@ -8,6 +8,12 @@
 #include <QPixmap>
 #include <QTabWidget>
 #include "mainwindow.h"
+#include "settingsdialog.h"
+#include "newsessiondialog.h"
+#include "sourcemodel.h"
+#include "apimanager.h"
+#include <QMenuBar>
+#include <QMenu>
 
 // Define MOCK_UI_TEST if not defined by compiler
 #ifndef MOCK_UI_TEST
@@ -45,6 +51,34 @@ int main(int argc, char *argv[]) {
 
     QTimer::singleShot(1000, [&window]() {
         takeScreenshots(&window);
+
+        // Settings Dialog
+        APIManager apiManager;
+        SettingsDialog settingsDlg(&apiManager, &window);
+        settingsDlg.show();
+        QApplication::processEvents();
+        settingsDlg.grab().save("screenshot_settings.png");
+        qDebug() << "Saved screenshot_settings.png";
+        settingsDlg.close();
+
+        // New Session Dialog
+        SourceModel sourceModel;
+        NewSessionDialog sessionDlg(&sourceModel, true, &window);
+        sessionDlg.resize(800, 600);
+        sessionDlg.show();
+        QApplication::processEvents();
+        sessionDlg.grab().save("screenshot_newsession.png");
+        qDebug() << "Saved screenshot_newsession.png";
+        sessionDlg.close();
+
+        // Tray Menu
+        if (QMenu* trayMenu = window.getTrayMenu()) {
+            trayMenu->show();
+            QApplication::processEvents();
+            trayMenu->grab().save("screenshot_traymenu.png");
+            qDebug() << "Saved screenshot_traymenu.png";
+            trayMenu->hide();
+        }
     });
 
     // Run for a while then quit
