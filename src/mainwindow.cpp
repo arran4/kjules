@@ -140,6 +140,8 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 }
 
 void MainWindow::setupUi() {
+  resize(800, 600);
+
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
 

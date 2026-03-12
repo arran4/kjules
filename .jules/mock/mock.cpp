@@ -38,6 +38,7 @@ int main(int argc, char *argv[]) {
 
     // Create the window
     MainWindow window;
+    window.resize(800, 600);
 
     // In MOCK_UI_TEST, the MainWindow should initialize mock models and disable actions.
     window.show();
