@@ -71,13 +71,34 @@ int main(int argc, char *argv[]) {
         qDebug() << "Saved screenshot_newsession.png";
         sessionDlg.close();
 
-        // Tray Menu
-        if (QMenu* trayMenu = window.getTrayMenu()) {
-            trayMenu->show();
+        // Main Menus
+        QMenuBar *menuBar = window.menuBar();
+        if (menuBar) {
+            // Give it some geometry just in case it doesn't have it initialized
             QApplication::processEvents();
-            trayMenu->grab().save("screenshot_traymenu.png");
-            qDebug() << "Saved screenshot_traymenu.png";
-            trayMenu->hide();
+
+            QList<QMenu*> menus = window.findChildren<QMenu*>();
+            for (QMenu* menu : menus) {
+                QString title = menu->title().remove('&');
+                if (title.isEmpty() || menu->actions().isEmpty()) continue;
+
+                menu->popup(menuBar->mapToGlobal(QPoint(0, menuBar->height())));
+                QApplication::processEvents();
+
+                // We want to grab the main window as it contains the menu bar,
+                // but the popup menu itself might be a separate top-level widget.
+                // Let's grab the screen around the window.
+                // However, headless QMenu sometimes doesn't render properly with grab().
+                // We'll just grab the main window which hopefully includes the opened menu.
+
+                QPixmap menuPix = window.grab();
+                QString filename = QString("screenshot_menu_%1.png").arg(title.toLower());
+                menuPix.save(filename);
+                qDebug() << "Saved" << filename;
+
+                menu->hide();
+                QApplication::processEvents();
+            }
         }
     });
 

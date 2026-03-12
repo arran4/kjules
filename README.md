@@ -40,9 +40,11 @@ Configure your API keys and application preferences.
 Create a new session with your selected sources.
 ![New Session Dialog](.jules/mock/screenshots/screenshot_newsession.png)
 
-### System Tray Menu
-Quick access to common actions from your system tray.
-![System Tray Menu](.jules/mock/screenshots/screenshot_traymenu.png)
+### Application Menus
+Access additional features via the main menu bar.
+![File Menu](.jules/mock/screenshots/screenshot_menu_file.png)
+![Settings Menu](.jules/mock/screenshots/screenshot_menu_settings.png)
+![Help Menu](.jules/mock/screenshots/screenshot_menu_help.png)
 
 ## Build Instructions
 
