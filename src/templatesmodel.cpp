@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
 
@@ -19,48 +20,79 @@ QVariant TemplatesModel::data(const QModelIndex &index, int role) const {
   if (!index.isValid() || index.row() >= m_templates.size())
     return QVariant();
 
-  QJsonObject tmpl = m_templates[index.row()].toObject();
+  const QJsonObject tmpl = m_templates[index.row()].toObject();
 
-  if (role == Qt::DisplayRole || role == PromptRole) {
-    QString prompt = tmpl.value(QStringLiteral("prompt")).toString();
-    if (role == Qt::DisplayRole) {
-      QString display = prompt;
-      display.replace(QLatin1Char('\n'), QLatin1Char(' '));
-      if (display.length() > 50) {
-        display = display.left(47) + QStringLiteral("...");
+  switch (role) {
+  case SourceRole: {
+    if (tmpl.contains(QStringLiteral("sources"))) {
+      QJsonArray sourcesArray =
+          tmpl.value(QStringLiteral("sources")).toArray();
+      QStringList sourcesList;
+      for (const QJsonValue &val : sourcesArray) {
+        sourcesList.append(val.toString());
       }
-      return display.isEmpty() ? QStringLiteral("Empty Template") : display;
+      return sourcesList.join(QStringLiteral(", "));
     }
-    return prompt;
-  } else if (role == AutomationModeRole) {
+    return tmpl.value(QStringLiteral("source")).toString();
+  }
+  case PromptRole:
+    return tmpl.value(QStringLiteral("prompt")).toString();
+  case AutomationModeRole:
     return tmpl.value(QStringLiteral("automationMode")).toString();
+  case TemplatesModel::NameRole:
+    return tmpl.value(QStringLiteral("name")).toString();
+  case TemplatesModel::DescriptionRole:
+    return tmpl.value(QStringLiteral("description")).toString();
+  case Qt::DisplayRole: {
+    QString name = tmpl.value(QStringLiteral("name")).toString();
+    if (!name.isEmpty()) return name;
+    return tmpl.value(QStringLiteral("prompt")).toString(); // Fallback
   }
 
-  return QVariant();
+case Qt::ToolTipRole:
+    return tmpl.value(QStringLiteral("description")).toString();
+  default:
+    return QVariant();
+  }
 }
 
 QHash<int, QByteArray> TemplatesModel::roleNames() const {
   QHash<int, QByteArray> roles;
+  roles[SourceRole] = "source";
   roles[PromptRole] = "prompt";
   roles[AutomationModeRole] = "automationMode";
   return roles;
 }
 
-void TemplatesModel::addTemplate(const QJsonObject &templateData) {
+void TemplatesModel::addTemplate(const QJsonObject &tmpl) {
   beginInsertRows(QModelIndex(), 0, 0);
-  m_templates.insert(0, templateData);
+  m_templates.insert(0, tmpl);
   endInsertRows();
   saveTemplates();
 }
 
-void TemplatesModel::removeTemplate(int row) {
-  if (row < 0 || row >= m_templates.size())
-    return;
+void TemplatesModel::updateTemplate(int row, const QJsonObject &tmpl) {
+  if (row >= 0 && row < m_templates.size()) {
+    m_templates[row] = tmpl;
+    QModelIndex idx = index(row, 0);
+    Q_EMIT dataChanged(idx, idx);
+    saveTemplates();
+  }
+}
 
-  beginRemoveRows(QModelIndex(), row, row);
-  m_templates.removeAt(row);
-  endRemoveRows();
-  saveTemplates();
+void TemplatesModel::clear() {
+  beginResetModel();
+  m_templates = QJsonArray();
+  endResetModel();
+}
+
+void TemplatesModel::removeTemplate(int row) {
+  if (row >= 0 && row < m_templates.size()) {
+    beginRemoveRows(QModelIndex(), row, row);
+    m_templates.removeAt(row);
+    endRemoveRows();
+    saveTemplates();
+  }
 }
 
 QJsonObject TemplatesModel::getTemplate(int row) const {

@@ -1,4 +1,6 @@
 #include "newsessiondialog.h"
+#include "savedialog.h"
+#include "templateselectiondialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
@@ -43,9 +45,9 @@ private:
   bool m_showSelected;
 };
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
                                    QWidget *parent)
-    : QDialog(parent), m_sourceModel(sourceModel) {
+    : QDialog(parent), m_sourceModel(sourceModel), m_templatesModel(templatesModel) {
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
 
@@ -153,7 +155,23 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
 
   // Prompt
   m_promptEdit = new QTextEdit(this);
-  formLayout->addRow(tr("Prompt:"), m_promptEdit);
+  m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
+  connect(m_loadTemplateButton, &QPushButton::clicked, this, [this]() {
+    TemplateSelectionDialog dlg(m_templatesModel, this);
+    if (dlg.exec() == QDialog::Accepted) {
+      setTemplateData(dlg.selectedTemplate());
+    }
+  });
+
+  QVBoxLayout *promptLayout = new QVBoxLayout();
+  promptLayout->addWidget(m_loadTemplateButton, 0, Qt::AlignLeft);
+  promptLayout->addWidget(m_promptEdit);
+
+  connect(m_promptEdit, &QTextEdit::textChanged, this, [this]() {
+    m_loadTemplateButton->setVisible(m_promptEdit->toPlainText().trimmed().isEmpty());
+  });
+
+  formLayout->addRow(tr("Prompt:"), promptLayout);
 
   // Require Plan Approval
   m_requirePlanApprovalCheckBox = new QCheckBox(this);
@@ -171,6 +189,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
   connect(draftButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveDraft);
+
+  m_saveTemplateButton = new QPushButton(tr("Save as Template"), this);
+  connect(m_saveTemplateButton, &QPushButton::clicked, this,
+          &NewSessionDialog::onSaveTemplate);
 
   m_createButton = new QPushButton(tr("Create Session"), this);
 
@@ -196,6 +218,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, bool hasApiKey,
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
   buttonLayout->addWidget(draftButton);
+  buttonLayout->addWidget(m_saveTemplateButton);
   buttonLayout->addWidget(m_createButton);
   buttonLayout->addWidget(m_createPRButton);
 
@@ -221,6 +244,12 @@ void NewSessionDialog::setEditMode(bool isEdit) {
     m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
+  if (data.contains(QStringLiteral("comment"))) {
+    m_draftComment = data.value(QStringLiteral("comment")).toString();
+  } else {
+    m_draftComment.clear();
+  }
+
   // Check for "sources" array, fallback to "source" string
   QStringList sources;
   if (data.contains(QStringLiteral("sources"))) {
@@ -239,6 +268,15 @@ void NewSessionDialog::setEditMode(bool isEdit) {
     m_selectedSources.insert(src);
   }
   updateModels();
+}
+
+void NewSessionDialog::setTemplateData(const QJsonObject &data) {
+  QString prompt = data.value(QStringLiteral("prompt")).toString();
+  m_promptEdit->setPlainText(prompt);
+
+  if (data.contains(QStringLiteral("requirePlanApproval"))) {
+    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+  }
 }
 
 void NewSessionDialog::updateModels() {
@@ -307,6 +345,14 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 }
 
 void NewSessionDialog::onSaveDraft() {
+  SaveDialog dlg(QStringLiteral("Draft"), this);
+  if (!m_draftComment.isEmpty()) {
+    dlg.setInitialData(m_draftComment);
+  }
+  if (dlg.exec() != QDialog::Accepted) {
+    return;
+  }
+
   QJsonArray sourcesArr;
   QStringList sources(m_selectedSources.begin(), m_selectedSources.end());
   sources.sort();
@@ -320,8 +366,39 @@ void NewSessionDialog::onSaveDraft() {
   QJsonObject draft;
   draft[QStringLiteral("sources")] = sourcesArr;
   draft[QStringLiteral("prompt")] = prompt;
+  draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveDraftRequested(draft);
   accept();
+}
+
+void NewSessionDialog::onSaveTemplate() {
+  SaveDialog dlg(QStringLiteral("Template"), this);
+  if (dlg.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  QJsonArray sourcesArr;
+  QStringList sources(m_selectedSources.begin(), m_selectedSources.end());
+  sources.sort();
+  for (const QString &src : sources) {
+    sourcesArr.append(src);
+  }
+
+  QString prompt = m_promptEdit->toPlainText();
+  bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
+
+  QJsonObject tmpl;
+  // A template might not necessarily need sources but we save them anyway
+  // as the requirement "a template doesn't set the sources in an existing new session window"
+  // means we ignore sources when loading in an *existing* window.
+  tmpl[QStringLiteral("sources")] = sourcesArr;
+  tmpl[QStringLiteral("prompt")] = prompt;
+  tmpl[QStringLiteral("name")] = dlg.nameOrComment();
+  tmpl[QStringLiteral("description")] = dlg.description();
+  tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
+
+  Q_EMIT saveTemplateRequested(tmpl);
+  // We do not close the dialog when saving a template, it can be used multiple times
 }

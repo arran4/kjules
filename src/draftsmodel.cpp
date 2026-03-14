@@ -38,9 +38,13 @@ QVariant DraftsModel::data(const QModelIndex &index, int role) const {
     return draft.value(QStringLiteral("prompt")).toString();
   case AutomationModeRole:
     return draft.value(QStringLiteral("automationMode")).toString();
-  case Qt::DisplayRole:
-    return draft.value(QStringLiteral("prompt"))
-        .toString(); // Display prompt as title
+  case CommentRole:
+    return draft.value(QStringLiteral("comment")).toString();
+  case Qt::DisplayRole: {
+    QString comment = draft.value(QStringLiteral("comment")).toString();
+    if (!comment.isEmpty()) return comment;
+    return draft.value(QStringLiteral("prompt")).toString(); // Fallback
+  }
   default:
     return QVariant();
   }

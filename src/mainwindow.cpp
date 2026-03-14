@@ -4,6 +4,7 @@
 #include "restoredialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "templatesmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "newsessiondialog.h"
@@ -14,6 +15,8 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+#include "savedialog.h"
+#include "templateeditdialog.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -60,7 +63,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_archiveModel(new SessionModel(
           QStringLiteral("cached_archive_sessions.json"), this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
+      m_draftsModel(new DraftsModel(this)), m_templatesModel(new TemplatesModel(this)),
+      m_queueModel(new QueueModel(this)),
       m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
@@ -381,7 +385,24 @@ void MainWindow::setupUi() {
 
           connect(saveTemplateAction, &QAction::triggered, [this]() {
             updateStatus(
-                i18n("TODO: Save prompt as template not yet implemented."));
+                i18n("TODO: Save prompt as template not yet implemented. (or merge)"));
+          });
+
+
+          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+          connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+            SaveDialog dlg(QStringLiteral("Template"), this);
+            if (dlg.exec() == QDialog::Accepted) {
+              QJsonObject sessionData;
+              QString prompt = m_sessionModel->data(index, SessionModel::PromptRole).toString();
+              QString source = m_sessionModel->data(index, SessionModel::SourceRole).toString();
+              sessionData[QStringLiteral("prompt")] = prompt;
+              sessionData[QStringLiteral("source")] = source;
+              sessionData[QStringLiteral("name")] = dlg.nameOrComment();
+              sessionData[QStringLiteral("description")] = dlg.description();
+              m_templatesModel->addTemplate(sessionData);
+              updateStatus(i18n("Template created from session."));
+            }
           });
 
           menu.exec(m_sessionView->mapToGlobal(pos));
@@ -495,6 +516,7 @@ void MainWindow::setupUi() {
               QMenu menu;
               QAction *submitAction = menu.addAction(i18n("Submit Now"));
               QAction *duplicateAction = menu.addAction(i18n("Duplicate"));
+              QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
               QAction *deleteAction = menu.addAction(i18n("Delete"));
 
               connect(submitAction, &QAction::triggered,
@@ -504,6 +526,17 @@ void MainWindow::setupUi() {
                 QJsonObject draft = m_draftsModel->getDraft(index.row());
                 m_draftsModel->addDraft(draft);
                 updateStatus(i18n("Draft duplicated."));
+              });
+
+              connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+                SaveDialog dlg(QStringLiteral("Template"), this);
+                if (dlg.exec() == QDialog::Accepted) {
+                  QJsonObject draft = m_draftsModel->getDraft(index.row());
+                  draft[QStringLiteral("name")] = dlg.nameOrComment();
+                  draft[QStringLiteral("description")] = dlg.description();
+                  m_templatesModel->addTemplate(draft);
+                  updateStatus(i18n("Template created from draft."));
+                }
               });
 
               connect(deleteAction, &QAction::triggered, [this, index]() {
@@ -521,6 +554,48 @@ void MainWindow::setupUi() {
           &MainWindow::onDraftActivated);
 
   tabWidget->addTab(m_draftsView, i18n("Drafts"));
+
+  // Templates View
+  m_templatesView = new QListView(this);
+  m_templatesView->setModel(m_templatesModel);
+  m_templatesView->setItemDelegate(new DraftDelegate(this));
+  m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_templatesView, &QListView::customContextMenuRequested,
+          [this](const QPoint &pos) {
+            QModelIndex index = m_templatesView->indexAt(pos);
+            if (index.isValid()) {
+              QMenu menu;
+              QAction *useAction = menu.addAction(i18n("Use Template"));
+              connect(useAction, &QAction::triggered,
+                      [this, index]() { onTemplateActivated(index); });
+
+              QAction *editAction = menu.addAction(i18n("Edit Template"));
+              connect(editAction, &QAction::triggered, [this, index]() {
+                TemplateEditDialog dlg(this);
+                dlg.setInitialData(m_templatesModel->getTemplate(index.row()));
+                if (dlg.exec() == QDialog::Accepted) {
+                  m_templatesModel->updateTemplate(index.row(), dlg.templateData());
+                  updateStatus(i18n("Template updated."));
+                }
+              });
+
+              QAction *deleteAction = menu.addAction(i18n("Delete Template"));
+              connect(deleteAction, &QAction::triggered, [this, index]() {
+                if (QMessageBox::question(this, i18n("Delete Template"),
+                                          i18n("Are you sure you want to "
+                                               "delete this template?")) ==
+                    QMessageBox::Yes) {
+                  m_templatesModel->removeTemplate(index.row());
+                  updateStatus(i18n("Template deleted."));
+                }
+              });
+              menu.exec(m_templatesView->mapToGlobal(pos));
+            }
+          });
+  connect(m_templatesView, &QListView::doubleClicked, this,
+          &MainWindow::onTemplateActivated);
+
+  tabWidget->addTab(m_templatesView, i18n("Templates"));
 
   // Queue View
   m_queueView = new QListView(this);
@@ -970,11 +1045,13 @@ void MainWindow::refreshSources() {
 
 void MainWindow::showNewSessionDialog() {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   connect(&dialog, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
+  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
   dialog.exec();
 }
 
@@ -1124,6 +1201,32 @@ void MainWindow::onDraftSaved(const QJsonObject &draft) {
   updateStatus(i18n("Draft saved."));
 }
 
+void MainWindow::onTemplateSaved(const QJsonObject &tmpl) {
+  m_templatesModel->addTemplate(tmpl);
+  updateStatus(i18n("Template saved."));
+}
+
+void MainWindow::onTemplateActivated(const QModelIndex &index) {
+  QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
+
+  // Create template dialog
+  QJsonObject templateData = tmpl;
+
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  dialog.setInitialData(templateData);
+
+  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+          &MainWindow::onSessionCreated);
+  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+          &MainWindow::onDraftSaved);
+  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
+
+  dialog.exec();
+}
+
+
 void MainWindow::onQueueActivated(const QModelIndex &index) {
   if (!index.isValid())
     return;
@@ -1160,6 +1263,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   QAction *draftAction =
       menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
                      i18n("Convert to Draft"));
+  QAction *copyTemplateAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
   QAction *sendAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
 
@@ -1177,6 +1282,15 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     }
   } else if (selected == draftAction) {
     convertQueueItemToDraft(row);
+  } else if (selected == copyTemplateAction) {
+    SaveDialog dlg(QStringLiteral("Template"), this);
+    if (dlg.exec() == QDialog::Accepted) {
+      QJsonObject data = item.requestData;
+      data[QStringLiteral("name")] = dlg.nameOrComment();
+      data[QStringLiteral("description")] = dlg.description();
+      m_templatesModel->addTemplate(data);
+      updateStatus(i18n("Template created from queued item."));
+    }
   } else if (selected == sendAction) {
     sendQueueItemNow(row);
   }
@@ -1218,7 +1332,7 @@ void MainWindow::editQueueItem(int row) {
     return;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setEditMode(true);
   dialog.setInitialData(item.requestData);
 
@@ -1294,7 +1408,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(request);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
@@ -1317,7 +1431,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(draft);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
@@ -1333,6 +1447,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Draft updated."));
           });
+  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
 
   dialog.exec();
 }
@@ -1360,7 +1476,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(initData);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested, this,

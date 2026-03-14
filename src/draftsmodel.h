@@ -12,7 +12,8 @@ public:
   enum DraftRoles {
     SourceRole = Qt::UserRole + 1,
     PromptRole,
-    AutomationModeRole
+    AutomationModeRole,
+    CommentRole
   };
 
   explicit DraftsModel(QObject *parent = nullptr);

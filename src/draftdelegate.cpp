@@ -1,5 +1,6 @@
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "templatesmodel.h"
 #include <QDebug>
 #include <QJsonArray>
 #include <QPainter>
@@ -17,16 +18,23 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
     painter->fillRect(option.rect, option.palette.highlight());
   }
 
+  QString displayTitle = index.data(Qt::DisplayRole).toString();
+  if (displayTitle.isEmpty()) {
+      displayTitle = index.data(DraftsModel::PromptRole).toString();
+  }
+
   QString prompt = index.data(DraftsModel::PromptRole).toString();
   QString automationMode =
       index.data(DraftsModel::AutomationModeRole).toString();
   QString source = index.data(DraftsModel::SourceRole).toString();
 
-  // Let's assume prompt is primary identifier.
+  // Try to get comment/description to show in details
+  QString comment = index.data(DraftsModel::CommentRole).toString();
+  QString description = index.data(TemplatesModel::DescriptionRole).toString();
 
   QRect r = option.rect.adjusted(5, 5, -5, -5);
 
-  // Prompt (Title)
+  // Title
   QFont promptFont = option.font;
   promptFont.setBold(true);
   painter->setFont(promptFont);
@@ -34,13 +42,13 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                       ? option.palette.highlightedText().color()
                       : option.palette.text().color());
 
-  QString displayPrompt = prompt.left(50);
-  if (prompt.length() > 50)
-    displayPrompt += QStringLiteral("...");
+  QString displayTitleShort = displayTitle.left(50);
+  if (displayTitle.length() > 50)
+    displayTitleShort += QStringLiteral("...");
 
   QRect promptRect =
-      painter->boundingRect(r, Qt::AlignLeft | Qt::AlignTop, displayPrompt);
-  painter->drawText(r, Qt::AlignLeft | Qt::AlignTop, displayPrompt);
+      painter->boundingRect(r, Qt::AlignLeft | Qt::AlignTop, displayTitleShort);
+  painter->drawText(r, Qt::AlignLeft | Qt::AlignTop, displayTitleShort);
 
   // Details
   QFont detailsFont = option.font;
@@ -50,7 +58,14 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                       ? option.palette.highlightedText().color()
                       : option.palette.placeholderText().color());
 
-  QString details = QStringLiteral("Draft");
+  QString details = QStringLiteral("Draft / Template");
+  if (!comment.isEmpty() && comment != displayTitle)
+    details += QStringLiteral(" | ") + comment;
+  if (!description.isEmpty())
+    details += QStringLiteral(" | ") + description;
+  if (comment.isEmpty() && description.isEmpty() && prompt != displayTitle)
+    details += QStringLiteral(" | Prompt: ") + prompt.left(30) + (prompt.length() > 30 ? QStringLiteral("...") : QStringLiteral(""));
+
   if (!automationMode.isEmpty())
     details += QStringLiteral(" | Auto: ") + automationMode;
   if (!source.isEmpty())

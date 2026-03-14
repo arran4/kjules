@@ -39,6 +39,8 @@
     </MenuBar>
     <ToolBar name="mainToolBar">
         <text>Main Toolbar</text>
+        <Action name="new_session" />
+        <Separator />
         <Action name="toggle_queue" />
         <Separator />
         <Action name="refresh_sources" />
