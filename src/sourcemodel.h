@@ -10,7 +10,7 @@ class SourceModel : public QAbstractTableModel {
 
 public:
   enum SourceRoles { NameRole = Qt::UserRole + 1, IdRole, RawDataRole };
-  enum Columns { ColName = 0, ColCount };
+  enum Columns { ColName = 0, ColLastUsed, ColSessionCount, ColHeat, ColFirstSeen, ColLastChanged, ColCount };
 
   explicit SourceModel(QObject *parent = nullptr);
 
@@ -26,8 +26,9 @@ public:
   int addSources(const QJsonArray &sources);
   void loadSources();
   void saveSources();
-  void updateSource(const QJsonObject &source);
+  void updateSource(const QJsonObject &sourceConst);
   void clear();
+  void recordSessionCreated(const QString &sourceId);
 
 private:
   QJsonArray m_sources;
