@@ -48,6 +48,7 @@ set(kjules_SRCS
     src/mainwindow.cpp
     src/apimanager.cpp
     src/backupdialog.cpp
+    src/restoredialog.cpp
     src/sessionmodel.cpp
     src/sourcemodel.cpp
     src/draftsmodel.cpp
