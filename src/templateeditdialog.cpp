@@ -46,6 +46,7 @@ TemplateEditDialog::TemplateEditDialog(QWidget *parent) : QDialog(parent) {
 }
 
 void TemplateEditDialog::setInitialData(const QJsonObject &data) {
+  m_originalData = data;
   m_nameEdit->setText(data.value(QStringLiteral("name")).toString());
   m_descEdit->setPlainText(data.value(QStringLiteral("description")).toString());
   m_promptEdit->setPlainText(data.value(QStringLiteral("prompt")).toString());
@@ -58,7 +59,7 @@ void TemplateEditDialog::setInitialData(const QJsonObject &data) {
 }
 
 QJsonObject TemplateEditDialog::templateData() const {
-  QJsonObject data;
+  QJsonObject data = m_originalData;
   data[QStringLiteral("name")] = m_nameEdit->text();
   data[QStringLiteral("description")] = m_descEdit->toPlainText();
   data[QStringLiteral("prompt")] = m_promptEdit->toPlainText();

@@ -22,6 +22,7 @@ private:
   QTextEdit *m_descEdit;
   QTextEdit *m_promptEdit;
   QCheckBox *m_requirePlanApprovalCheckBox;
+  QJsonObject m_originalData;
 };
 
 #endif // TEMPLATEEDITDIALOG_H

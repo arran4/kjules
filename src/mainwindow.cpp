@@ -238,7 +238,6 @@ void MainWindow::setupUi() {
           QAction *viewSessionsAction = menu.addAction(i18n("View Sessions"));
           QAction *openUrlAction = menu.addAction(i18n("Open URL"));
           QAction *copyUrlAction = menu.addAction(i18n("Copy URL"));
-          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
 
           connect(viewSessionsAction, &QAction::triggered, [this, index]() {
             QString source =
@@ -277,6 +276,7 @@ void MainWindow::setupUi() {
             updateStatus(i18n("URL copied to clipboard."));
           });
 
+          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
@@ -995,10 +995,8 @@ void MainWindow::onTemplateSaved(const QJsonObject &tmpl) {
 void MainWindow::onTemplateActivated(const QModelIndex &index) {
   QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
 
-  // Create template dialog with prompt but NO sources
+  // Create template dialog
   QJsonObject templateData = tmpl;
-  templateData.remove(QStringLiteral("sources"));
-  templateData.remove(QStringLiteral("source"));
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);

@@ -31,6 +31,7 @@ Q_SIGNALS:
                               const QString &automationMode, bool requirePlanApproval);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
+  void loadTemplateRequested();
 
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
