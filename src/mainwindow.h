@@ -14,7 +14,6 @@ class SessionWindow;
 class DraftsModel;
 class QueueModel;
 class ErrorsModel;
-class TemplatesModel;
 class QListView;
 class QTreeView;
 class QLabel;
@@ -40,7 +39,6 @@ private Q_SLOTS:
                         const QString &automationMode,
                         bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
-  void onTemplateActivated(const QModelIndex &index);
   void onDraftActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
   void onQueueContextMenu(const QPoint &pos);
@@ -87,12 +85,10 @@ private:
   DraftsModel *m_draftsModel;
   QueueModel *m_queueModel;
   ErrorsModel *m_errorsModel;
-  TemplatesModel *m_templatesModel;
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;
   QTreeView *m_archiveView;
-  QListView *m_templatesView;
   QListView *m_draftsView;
   QListView *m_queueView;
   QListView *m_errorsView;

@@ -13,8 +13,6 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
-#include "templatedelegate.h"
-#include "templatesmodel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -62,8 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
           QStringLiteral("cached_archive_sessions.json"), this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_queueModel(new QueueModel(this)),
-      m_errorsModel(new ErrorsModel(this)),
-      m_templatesModel(new TemplatesModel(this)), m_isRefreshingSources(false),
+      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false), m_queuePaused(false) {
@@ -119,10 +116,7 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
 
-  // Load past sessions
   m_sessionModel->loadSessions();
-
-  // Load archive model
   m_archiveModel->loadSessions();
 
   // Initial refresh
@@ -249,7 +243,6 @@ void MainWindow::setupUi() {
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sessionView->header()->setStretchLastSection(true);
-
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
       m_sessionView, &QTreeView::customContextMenuRequested,
@@ -260,6 +253,7 @@ void MainWindow::setupUi() {
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
           QMenu menu;
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
@@ -267,9 +261,9 @@ void MainWindow::setupUi() {
           QAction *refreshSessionAction =
               menu.addAction(i18n("Refresh session details"));
           menu.addSeparator();
+
           QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole)
                            .toString();
-
           QAction *openJulesUrlAction = nullptr;
           QAction *copyJulesUrlAction = nullptr;
           if (!id.isEmpty()) {
@@ -277,21 +271,12 @@ void MainWindow::setupUi() {
             copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
           }
 
-          QString provider =
-              m_sessionModel->data(sourceIndex, SessionModel::ProviderRole)
-                  .toString();
           QString prUrl =
               m_sessionModel->data(sourceIndex, SessionModel::PrUrlRole)
                   .toString();
-
-          QString githubUrl;
-          if (!prUrl.isEmpty()) {
-            githubUrl = prUrl;
-          }
-
           QAction *openGithubUrlAction = nullptr;
           QAction *copyGithubUrlAction = nullptr;
-          if (!githubUrl.isEmpty()) {
+          if (!prUrl.isEmpty()) {
             openGithubUrlAction = menu.addAction(i18n("Open Github URL"));
             copyGithubUrlAction = menu.addAction(i18n("Copy Github URL"));
           }
@@ -331,7 +316,6 @@ void MainWindow::setupUi() {
               QDesktopServices::openUrl(QUrl(urlStr));
               updateStatus(i18n("Opened session %1", id));
             });
-
             connect(copyJulesUrlAction, &QAction::triggered, [this, id]() {
               QGuiApplication::clipboard()->setText(
                   QStringLiteral("https://jules.google.com/sessions/") + id);
@@ -340,17 +324,14 @@ void MainWindow::setupUi() {
           }
 
           if (openGithubUrlAction && copyGithubUrlAction) {
-            connect(openGithubUrlAction, &QAction::triggered,
-                    [this, githubUrl]() {
-                      QDesktopServices::openUrl(QUrl(githubUrl));
-                      updateStatus(i18n("Opened Github URL"));
-                    });
-
-            connect(copyGithubUrlAction, &QAction::triggered,
-                    [this, githubUrl]() {
-                      QGuiApplication::clipboard()->setText(githubUrl);
-                      updateStatus(i18n("Github URL copied to clipboard."));
-                    });
+            connect(openGithubUrlAction, &QAction::triggered, [this, prUrl]() {
+              QDesktopServices::openUrl(QUrl(prUrl));
+              updateStatus(i18n("Opened Github URL"));
+            });
+            connect(copyGithubUrlAction, &QAction::triggered, [this, prUrl]() {
+              QGuiApplication::clipboard()->setText(prUrl);
+              updateStatus(i18n("Github URL copied to clipboard."));
+            });
           }
 
           connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
@@ -377,7 +358,6 @@ void MainWindow::setupUi() {
                             .toObject()
                             .value(QStringLiteral("source"))
                             .toString();
-
                     QJsonObject initData;
                     initData[QStringLiteral("prompt")] = prompt;
                     if (!source.isEmpty()) {
@@ -385,11 +365,9 @@ void MainWindow::setupUi() {
                       sourcesArr.append(source);
                       initData[QStringLiteral("sources")] = sourcesArr;
                     }
-
                     bool hasApiKey = !m_apiManager->apiKey().isEmpty();
                     NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
                     dialog.setInitialData(initData);
-
                     connect(&dialog, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(&dialog, &NewSessionDialog::saveDraftRequested,
@@ -397,18 +375,10 @@ void MainWindow::setupUi() {
                     dialog.exec();
                   });
 
-          connect(
-              saveTemplateAction, &QAction::triggered, [this, sourceIndex]() {
-                QJsonObject session =
-                    m_sessionModel->getSession(sourceIndex.row());
-                QJsonObject templateData;
-                templateData[QStringLiteral("prompt")] =
-                    session.value(QStringLiteral("prompt")).toString();
-                templateData[QStringLiteral("automationMode")] =
-                    session.value(QStringLiteral("automationMode")).toString();
-                m_templatesModel->addTemplate(templateData);
-                updateStatus(i18n("Prompt saved as template."));
-              });
+          connect(saveTemplateAction, &QAction::triggered, [this]() {
+            updateStatus(
+                i18n("TODO: Save prompt as template not yet implemented."));
+          });
 
           menu.exec(m_sessionView->mapToGlobal(pos));
         }
@@ -417,7 +387,6 @@ void MainWindow::setupUi() {
           &MainWindow::onSessionActivated);
 
   tabWidget->addTab(m_sessionView, i18n("Past"));
-
   // Archive View
   m_archiveView = new QTreeView(this);
   QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
@@ -480,18 +449,10 @@ void MainWindow::setupUi() {
             updateStatus(i18n("Session deleted from archive."));
           });
 
-          connect(
-              saveTemplateAction, &QAction::triggered, [this, sourceIndex]() {
-                QJsonObject session =
-                    m_archiveModel->getSession(sourceIndex.row());
-                QJsonObject templateData;
-                templateData[QStringLiteral("prompt")] =
-                    session.value(QStringLiteral("prompt")).toString();
-                templateData[QStringLiteral("automationMode")] =
-                    session.value(QStringLiteral("automationMode")).toString();
-                m_templatesModel->addTemplate(templateData);
-                updateStatus(i18n("Prompt saved as template."));
-              });
+          connect(saveTemplateAction, &QAction::triggered, [this]() {
+            updateStatus(
+                i18n("TODO: Save prompt as template not yet implemented."));
+          });
 
           menu.exec(m_archiveView->mapToGlobal(pos));
         }
@@ -517,38 +478,6 @@ void MainWindow::setupUi() {
       });
 
   tabWidget->addTab(m_archiveView, i18n("Archive"));
-
-  // Templates View
-  m_templatesView = new QListView(this);
-  m_templatesView->setModel(m_templatesModel);
-  m_templatesView->setItemDelegate(new TemplateDelegate(this));
-  m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(m_templatesView, &QListView::customContextMenuRequested,
-          [this](const QPoint &pos) {
-            QModelIndex index = m_templatesView->indexAt(pos);
-            if (index.isValid()) {
-              QMenu menu;
-              QAction *useAction = menu.addAction(i18n("Use Template"));
-              QAction *deleteAction = menu.addAction(i18n("Delete"));
-
-              connect(useAction, &QAction::triggered,
-                      [this, index]() { onTemplateActivated(index); });
-
-              connect(deleteAction, &QAction::triggered, [this, index]() {
-                if (QMessageBox::question(this, i18n("Delete Template"),
-                                          i18n("Are you sure?")) ==
-                    QMessageBox::Yes) {
-                  m_templatesModel->removeTemplate(index.row());
-                }
-              });
-
-              menu.exec(m_templatesView->mapToGlobal(pos));
-            }
-          });
-  connect(m_templatesView, &QListView::doubleClicked, this,
-          &MainWindow::onTemplateActivated);
-
-  tabWidget->addTab(m_templatesView, i18n("Templates"));
 
   // Drafts View
   m_draftsView = new QListView(this);
@@ -1380,27 +1309,6 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   dialog.exec();
 }
 
-void MainWindow::onTemplateActivated(const QModelIndex &index) {
-  QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
-  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
-  dialog.setInitialData(tmpl);
-
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this](const QStringList &sources, const QString &p, const QString &a,
-                 bool requirePlanApproval) {
-            onSessionCreated(sources, p, a, requirePlanApproval);
-          });
-
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this](const QJsonObject &d) {
-            m_draftsModel->addDraft(d);
-            updateStatus(i18n("Draft saved from template."));
-          });
-
-  dialog.exec();
-}
-
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
@@ -1459,9 +1367,9 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::templateRequested, this,
-          [this](const QJsonObject &templateData) {
-            m_templatesModel->addTemplate(templateData);
-            updateStatus(i18n("Prompt saved as template."));
+          [this](const QJsonObject &) {
+            updateStatus(
+                i18n("TODO: Save prompt as template not yet implemented."));
           });
 
   connect(window, &SessionWindow::archiveRequested, this,
@@ -1503,15 +1411,12 @@ void MainWindow::showSessionWindow(const QJsonObject &session) {
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
-  // Pass the basic cached session data to show the window instantly, then let
-  // SessionWindow refresh itself
   const QSortFilterProxyModel *proxy =
       qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
   if (sessionData.isEmpty()) {
-    // Fallback
     QString id =
         m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
     m_apiManager->getSession(id);
@@ -1669,6 +1574,9 @@ void MainWindow::backupData() {
       if (filesToBackup.contains(QStringLiteral("cached_sessions.json")) ||
           filesToBackup.contains(QStringLiteral("cached_all_sessions.json")))
         m_sessionModel->clear();
+      if (filesToBackup.contains(
+              QStringLiteral("cached_archive_sessions.json")))
+        m_archiveModel->clear();
       if (filesToBackup.contains(QStringLiteral("drafts.json")))
         m_draftsModel->clear();
       if (filesToBackup.contains(QStringLiteral("queue.json")))

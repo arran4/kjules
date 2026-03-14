@@ -7,24 +7,24 @@
 #include <KSharedConfig>
 #include <KToolBar>
 #include <QAction>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDesktopServices>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTextBrowser>
 #include <QTimer>
-#include <QVBoxLayout>
-#include <QMenuBar>
-#include <QMenu>
-#include <QDesktopServices>
 #include <QUrl>
-#include <QGuiApplication>
-#include <QClipboard>
+#include <QVBoxLayout>
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, QWidget *parent)
@@ -114,25 +114,33 @@ void SessionWindow::setupActions() {
   sessionMenu->addAction(refreshAction);
   sessionMenu->addAction(duplicateAction);
 
-  QAction *saveTemplateAction = new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Save prompt as template"), this);
+  QAction *saveTemplateAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
+                  i18n("Save prompt as template"), this);
   connect(saveTemplateAction, &QAction::triggered, this, [this]() {
-      QJsonObject templateData;
-      templateData[QStringLiteral("prompt")] = m_sessionData.value(QStringLiteral("prompt")).toString();
-      templateData[QStringLiteral("automationMode")] = m_sessionData.value(QStringLiteral("automationMode")).toString();
-      Q_EMIT templateRequested(templateData);
+    QJsonObject templateData;
+    templateData[QStringLiteral("prompt")] =
+        m_sessionData.value(QStringLiteral("prompt")).toString();
+    templateData[QStringLiteral("automationMode")] =
+        m_sessionData.value(QStringLiteral("automationMode")).toString();
+    Q_EMIT templateRequested(templateData);
   });
   sessionMenu->addAction(saveTemplateAction);
   sessionMenu->addSeparator();
 
-  QAction *archiveAction = new QAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
+  QAction *archiveAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
-      Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT archiveRequested(
+        m_sessionData.value(QStringLiteral("id")).toString());
   });
   sessionMenu->addAction(archiveAction);
 
-  QAction *deleteAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+  QAction *deleteAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
-      Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT deleteRequested(
+        m_sessionData.value(QStringLiteral("id")).toString());
   });
   sessionMenu->addAction(deleteAction);
   sessionMenu->addSeparator();
@@ -142,40 +150,43 @@ void SessionWindow::setupActions() {
 
   QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
   connect(openJulesAction, &QAction::triggered, this, [this]() {
-      QString id = m_sessionData.value(QStringLiteral("id")).toString();
-      QDesktopServices::openUrl(QUrl(QStringLiteral("https://jules.google.com/sessions/") + id));
+    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    QDesktopServices::openUrl(
+        QUrl(QStringLiteral("https://jules.google.com/sessions/") + id));
   });
   linksMenu->addAction(openJulesAction);
 
   QAction *copyJulesAction = new QAction(i18n("Copy Jules URL"), this);
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
-      QString id = m_sessionData.value(QStringLiteral("id")).toString();
-      QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/sessions/") + id);
+    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    QGuiApplication::clipboard()->setText(
+        QStringLiteral("https://jules.google.com/sessions/") + id);
   });
   linksMenu->addAction(copyJulesAction);
 
   QString prUrlStr;
   QJsonArray outputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
   for (int i = 0; i < outputs.size(); ++i) {
-      QJsonObject outObj = outputs[i].toObject();
-      if (outObj.contains(QStringLiteral("pullRequest"))) {
-          prUrlStr = outObj.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
-      }
+    QJsonObject outObj = outputs[i].toObject();
+    if (outObj.contains(QStringLiteral("pullRequest"))) {
+      prUrlStr = outObj.value(QStringLiteral("pullRequest"))
+                     .toObject()
+                     .value(QStringLiteral("url"))
+                     .toString();
+    }
   }
 
   if (!prUrlStr.isEmpty()) {
-      linksMenu->addSeparator();
-      QAction *openPrAction = new QAction(i18n("Open Pull Request URL"), this);
-      connect(openPrAction, &QAction::triggered, this, [prUrlStr]() {
-          QDesktopServices::openUrl(QUrl(prUrlStr));
-      });
-      linksMenu->addAction(openPrAction);
+    linksMenu->addSeparator();
+    QAction *openPrAction = new QAction(i18n("Open Pull Request URL"), this);
+    connect(openPrAction, &QAction::triggered, this,
+            [prUrlStr]() { QDesktopServices::openUrl(QUrl(prUrlStr)); });
+    linksMenu->addAction(openPrAction);
 
-      QAction *copyPrAction = new QAction(i18n("Copy Pull Request URL"), this);
-      connect(copyPrAction, &QAction::triggered, this, [prUrlStr]() {
-          QGuiApplication::clipboard()->setText(prUrlStr);
-      });
-      linksMenu->addAction(copyPrAction);
+    QAction *copyPrAction = new QAction(i18n("Copy Pull Request URL"), this);
+    connect(copyPrAction, &QAction::triggered, this,
+            [prUrlStr]() { QGuiApplication::clipboard()->setText(prUrlStr); });
+    linksMenu->addAction(copyPrAction);
   }
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
@@ -205,7 +216,8 @@ void SessionWindow::onSessionReloaded(const QJsonObject &session) {
 
   if (currentId == incomingId) {
     m_sessionData = session;
-    m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    m_sessionData[QStringLiteral("lastRefreshed")] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     renderDetailsAndDiff();
 
@@ -287,7 +299,8 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
         }
       }
       if (content.isEmpty()) {
-        // Fallback to pretty-printing the JSON for unknown objects (e.g. tool calls, raw system messages)
+        // Fallback to pretty-printing the JSON for unknown objects (e.g. tool
+        // calls, raw system messages)
         QJsonDocument doc(turn);
         content = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
       }
@@ -313,7 +326,8 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
   m_activityBrowser->setHtml(html);
 
   QJsonDocument activitiesDoc(turns);
-  m_rawActivitiesBrowser->setPlainText(QString::fromUtf8(activitiesDoc.toJson(QJsonDocument::Indented)));
+  m_rawActivitiesBrowser->setPlainText(
+      QString::fromUtf8(activitiesDoc.toJson(QJsonDocument::Indented)));
 
   m_statusLabel->setText(
       i18n("Refreshed at %1",
@@ -350,12 +364,15 @@ void SessionWindow::renderDetailsAndDiff() {
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
                  QStringLiteral("</th><td>") + title.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
-  QString julesUrl = QStringLiteral("https://jules.google.com/sessions/") + sessionId;
+  QString julesUrl =
+      QStringLiteral("https://jules.google.com/sessions/") + sessionId;
   detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
                  QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Jules URL:") +
-                 QStringLiteral("</th><td><a href=\"") + julesUrl.toHtmlEscaped() + QStringLiteral("\">") + julesUrl.toHtmlEscaped() + QStringLiteral("</a></td></tr>");
+                 QStringLiteral("</th><td><a href=\"") +
+                 julesUrl.toHtmlEscaped() + QStringLiteral("\">") +
+                 julesUrl.toHtmlEscaped() + QStringLiteral("</a></td></tr>");
   detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") +
                  QStringLiteral("</th><td>") + state.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
@@ -500,7 +517,8 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   // Load activities initially if API manager exists, otherwise fallback to
   // embedded in onActivitiesReceived
   if (m_apiManager) {
-    if (m_statusLabel) m_statusLabel->setText(i18n("Loading activities..."));
+    if (m_statusLabel)
+      m_statusLabel->setText(i18n("Loading activities..."));
     m_apiManager->listActivities(sessionId);
   } else {
     onActivitiesReceived(sessionId, QJsonArray());

@@ -61,8 +61,6 @@ set(kjules_SRCS
     src/sessionwindow.cpp
     src/errorwindow.cpp
     src/sessionswindow.cpp
-    src/templatesmodel.cpp
-    src/templatedelegate.cpp
     src/kjules.qrc
 )
 
