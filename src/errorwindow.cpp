@@ -79,6 +79,14 @@ void ErrorWindow::setupUi() {
     accept();
   });
 
+  QPushButton *templateBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("edit-copy")),
+                      i18n("Copy as Template"), this);
+  connect(templateBtn, &QPushButton::clicked, [this]() {
+    Q_EMIT templateRequested(m_row);
+    accept();
+  });
+
   QPushButton *sendNowBtn = new QPushButton(
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"), this);
   connect(sendNowBtn, &QPushButton::clicked, [this]() {
@@ -93,6 +101,7 @@ void ErrorWindow::setupUi() {
   actionsLayout->addWidget(editBtn);
   actionsLayout->addWidget(deleteBtn);
   actionsLayout->addWidget(draftBtn);
+  actionsLayout->addWidget(templateBtn);
   actionsLayout->addWidget(sendNowBtn);
   actionsLayout->addWidget(copyErrorBtn);
   actionsLayout->addStretch();

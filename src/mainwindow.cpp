@@ -295,8 +295,7 @@ void MainWindow::setupUi() {
           menu.addSeparator();
           QAction *newSessionFromSessionAction =
               menu.addAction(i18n("New Session From Session"));
-          QAction *saveTemplateAction =
-              menu.addAction(i18n("Save prompt as template"));
+          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
 
           connect(openSessionAction, &QAction::triggered,
                   [this, index]() { onSessionActivated(index); });
@@ -374,7 +373,7 @@ void MainWindow::setupUi() {
                       initData[QStringLiteral("sources")] = sourcesArr;
                     }
                     bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-                    NewSessionDialog dialog(m_sourceModel, hasApiKey, this);
+                    NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
                     dialog.setInitialData(initData);
                     connect(&dialog, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
@@ -383,13 +382,6 @@ void MainWindow::setupUi() {
                     dialog.exec();
                   });
 
-          connect(saveTemplateAction, &QAction::triggered, [this]() {
-            updateStatus(
-                i18n("TODO: Save prompt as template not yet implemented. (or merge)"));
-          });
-
-
-          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
@@ -440,8 +432,7 @@ void MainWindow::setupUi() {
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
-          QAction *saveTemplateAction =
-              menu.addAction(i18n("Save prompt as template"));
+          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
 
           connect(
               openSessionAction, &QAction::triggered, [this, sourceIndex]() {
@@ -474,9 +465,19 @@ void MainWindow::setupUi() {
             updateStatus(i18n("Session deleted from archive."));
           });
 
-          connect(saveTemplateAction, &QAction::triggered, [this]() {
-            updateStatus(
-                i18n("TODO: Save prompt as template not yet implemented."));
+          connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+            SaveDialog dlg(QStringLiteral("Template"), this);
+            if (dlg.exec() == QDialog::Accepted) {
+              QJsonObject sessionData;
+              QString prompt = m_archiveModel->data(index, SessionModel::PromptRole).toString();
+              QString source = m_archiveModel->data(index, SessionModel::SourceRole).toString();
+              sessionData[QStringLiteral("prompt")] = prompt;
+              sessionData[QStringLiteral("source")] = source;
+              sessionData[QStringLiteral("name")] = dlg.nameOrComment();
+              sessionData[QStringLiteral("description")] = dlg.description();
+              m_templatesModel->addTemplate(sessionData);
+              updateStatus(i18n("Template created from archived session."));
+            }
           });
 
           menu.exec(m_archiveView->mapToGlobal(pos));
@@ -622,10 +623,23 @@ void MainWindow::setupUi() {
           QMenu menu;
           QAction *editAction = menu.addAction(i18n("Edit / Modify"));
           QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
+          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered,
                   [this, index]() { onErrorActivated(index); });
+
+          connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+            SaveDialog dlg(QStringLiteral("Template"), this);
+            if (dlg.exec() == QDialog::Accepted) {
+              QJsonObject errData = m_errorsModel->getError(index.row());
+              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+              req[QStringLiteral("name")] = dlg.nameOrComment();
+              req[QStringLiteral("description")] = dlg.description();
+              m_templatesModel->addTemplate(req);
+              updateStatus(i18n("Template created from error item."));
+            }
+          });
 
           connect(rawTranscriptAction, &QAction::triggered, [this, index]() {
             QJsonObject errorData = m_errorsModel->getError(index.row());
@@ -658,6 +672,17 @@ void MainWindow::setupUi() {
               m_draftsModel->addDraft(req);
               m_errorsModel->removeError(row);
               updateStatus(i18n("Error converted to draft."));
+            });
+            connect(window, &ErrorWindow::templateRequested, [this](int row) {
+              SaveDialog dlg(QStringLiteral("Template"), this);
+              if (dlg.exec() == QDialog::Accepted) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+                req[QStringLiteral("name")] = dlg.nameOrComment();
+                req[QStringLiteral("description")] = dlg.description();
+                m_templatesModel->addTemplate(req);
+                updateStatus(i18n("Template created from error item."));
+              }
             });
             connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
               QJsonObject errData = m_errorsModel->getError(row);
@@ -1319,6 +1344,18 @@ void MainWindow::showErrorDetails(int row) {
   });
   connect(window, &ErrorWindow::draftRequested, this,
           &MainWindow::convertQueueItemToDraft);
+  connect(window, &ErrorWindow::templateRequested, this, [this, row]() {
+    QueueItem item = m_queueModel->getItem(row);
+    if (item.requestData.isEmpty()) return;
+    SaveDialog dlg(QStringLiteral("Template"), this);
+    if (dlg.exec() == QDialog::Accepted) {
+      QJsonObject data = item.requestData;
+      data[QStringLiteral("name")] = dlg.nameOrComment();
+      data[QStringLiteral("description")] = dlg.description();
+      m_templatesModel->addTemplate(data);
+      updateStatus(i18n("Template created from queued item."));
+    }
+  });
   connect(window, &ErrorWindow::sendNowRequested, this,
           &MainWindow::sendQueueItemNow);
 
@@ -1390,6 +1427,17 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
     m_draftsModel->addDraft(req);
     m_errorsModel->removeError(row);
     updateStatus(i18n("Error converted to draft."));
+  });
+  connect(window, &ErrorWindow::templateRequested, [this](int row) {
+    SaveDialog dlg(QStringLiteral("Template"), this);
+    if (dlg.exec() == QDialog::Accepted) {
+      QJsonObject errData = m_errorsModel->getError(row);
+      QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+      req[QStringLiteral("name")] = dlg.nameOrComment();
+      req[QStringLiteral("description")] = dlg.description();
+      m_templatesModel->addTemplate(req);
+      updateStatus(i18n("Template created from error item."));
+    }
   });
   connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
     QJsonObject errData = m_errorsModel->getError(row);
@@ -1488,9 +1536,15 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::templateRequested, this,
-          [this](const QJsonObject &) {
-            updateStatus(
-                i18n("TODO: Save prompt as template not yet implemented."));
+          [this](const QJsonObject &templateData) {
+            SaveDialog dlg(QStringLiteral("Template"), this);
+            if (dlg.exec() == QDialog::Accepted) {
+              QJsonObject data = templateData;
+              data[QStringLiteral("name")] = dlg.nameOrComment();
+              data[QStringLiteral("description")] = dlg.description();
+              m_templatesModel->addTemplate(data);
+              updateStatus(i18n("Template saved."));
+            }
           });
 
   connect(window, &SessionWindow::archiveRequested, this,

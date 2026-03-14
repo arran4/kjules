@@ -20,6 +20,7 @@ Q_SIGNALS:
   void editRequested(int row);
   void deleteRequested(int row);
   void draftRequested(int row);
+  void templateRequested(int row);
   void sendNowRequested(int row);
 
 private Q_SLOTS:
