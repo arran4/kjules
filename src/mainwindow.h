@@ -10,6 +10,7 @@
 class APIManager;
 class SessionModel;
 class SourceModel;
+class SessionWindow;
 class DraftsModel;
 class TemplatesModel;
 class QueueModel;
@@ -52,6 +53,7 @@ private Q_SLOTS:
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
+  void connectSessionWindow(SessionWindow *window);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
@@ -82,6 +84,7 @@ private:
 
   APIManager *m_apiManager;
   SessionModel *m_sessionModel;
+  SessionModel *m_archiveModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
   TemplatesModel *m_templatesModel;
@@ -89,7 +92,8 @@ private:
   ErrorsModel *m_errorsModel;
 
   QTreeView *m_sourceView;
-  QListView *m_sessionView;
+  QTreeView *m_sessionView;
+  QTreeView *m_archiveView;
   QListView *m_draftsView;
   QListView *m_templatesView;
   QListView *m_queueView;

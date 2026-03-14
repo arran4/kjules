@@ -27,6 +27,7 @@ private:
   QSpinBox *m_queueIntervalEdit;
   QSpinBox *m_queueBackoffEdit;
   QComboBox *m_tierComboBox;
+  QComboBox *m_globalAutoRefreshCombo;
 };
 
 #endif // SETTINGSDIALOG_H

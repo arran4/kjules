@@ -1,4 +1,5 @@
 #include "templatesmodel.h"
+
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -47,7 +48,8 @@ QVariant TemplatesModel::data(const QModelIndex &index, int role) const {
     if (!name.isEmpty()) return name;
     return tmpl.value(QStringLiteral("prompt")).toString(); // Fallback
   }
-  case Qt::ToolTipRole:
+
+case Qt::ToolTipRole:
     return tmpl.value(QStringLiteral("description")).toString();
   default:
     return QVariant();
@@ -106,7 +108,9 @@ void TemplatesModel::loadTemplates() {
   QFile file(path + QStringLiteral("/templates.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    beginResetModel();
     m_templates = doc.array();
+    endResetModel();
     file.close();
   }
 }
@@ -120,8 +124,16 @@ void TemplatesModel::saveTemplates() {
   }
   QFile file(path + QStringLiteral("/templates.json"));
   if (file.open(QIODevice::WriteOnly)) {
+    file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
     QJsonDocument doc(m_templates);
     file.write(doc.toJson());
     file.close();
   }
+}
+
+void TemplatesModel::clear() {
+  beginResetModel();
+  m_templates = QJsonArray();
+  endResetModel();
+  saveTemplates();
 }

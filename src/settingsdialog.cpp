@@ -10,8 +10,8 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QVBoxLayout>
 #include <QSpinBox>
+#include <QVBoxLayout>
 
 SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
     : QDialog(parent), m_apiManager(apiManager) {
@@ -58,10 +58,21 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
   int index = m_tierComboBox->findData(currentTier);
   if (index >= 0) {
-      m_tierComboBox->setCurrentIndex(index);
+    m_tierComboBox->setCurrentIndex(index);
   }
   formLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
 
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), "SessionWindow");
+  m_globalAutoRefreshCombo = new QComboBox(this);
+  m_globalAutoRefreshCombo->addItem(i18n("Off"), 0);
+  m_globalAutoRefreshCombo->addItem(i18n("10 seconds"), 10);
+  m_globalAutoRefreshCombo->addItem(i18n("30 seconds"), 30);
+  m_globalAutoRefreshCombo->addItem(i18n("1 minute"), 60);
+  m_globalAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
+  m_globalAutoRefreshCombo->setCurrentIndex(
+      sessionConfig.readEntry("AutoRefreshIndex", 0));
+  formLayout->addRow(i18n("Default session auto-refresh:"),
+                     m_globalAutoRefreshCombo);
 
   mainLayout->addLayout(formLayout);
 
@@ -112,6 +123,11 @@ void SettingsDialog::onSave() {
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
   queueConfig.sync();
+
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), "SessionWindow");
+  sessionConfig.writeEntry("AutoRefreshIndex",
+                           m_globalAutoRefreshCombo->currentIndex());
+  sessionConfig.sync();
 
   accept();
 }
