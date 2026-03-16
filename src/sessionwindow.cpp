@@ -344,10 +344,18 @@ void SessionWindow::renderDetailsAndDiff() {
   QString lastRefreshed =
       m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
   QString state = m_sessionData.value(QStringLiteral("state")).toString();
-  QString source = m_sessionData.value(QStringLiteral("sourceContext"))
-                       .toObject()
-                       .value(QStringLiteral("source"))
-                       .toString();
+
+  QJsonObject sourceContext = m_sessionData.value(QStringLiteral("sourceContext")).toObject();
+  QString source = sourceContext.value(QStringLiteral("source")).toString();
+  bool envVarsEnabled = sourceContext.value(QStringLiteral("environmentVariablesEnabled")).toBool();
+  QString startingBranch = sourceContext.value(QStringLiteral("githubRepoContext"))
+                                .toObject()
+                                .value(QStringLiteral("startingBranch"))
+                                .toString();
+
+  QString createTime = m_sessionData.value(QStringLiteral("createTime")).toString();
+  QString updateTime = m_sessionData.value(QStringLiteral("updateTime")).toString();
+
   QString promptText = m_sessionData.value(QStringLiteral("prompt")).toString();
 
   QString detailsHtml =
@@ -378,6 +386,18 @@ void SessionWindow::renderDetailsAndDiff() {
                  QStringLiteral("</td></tr>");
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") +
                  QStringLiteral("</th><td>") + source.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Starting Branch:") +
+                 QStringLiteral("</th><td>") + startingBranch.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Env Vars Enabled:") +
+                 QStringLiteral("</th><td>") + (envVarsEnabled ? i18n("Yes") : i18n("No")) +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Create Time:") +
+                 QStringLiteral("</th><td>") + createTime.toHtmlEscaped() +
+                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Update Time:") +
+                 QStringLiteral("</th><td>") + updateTime.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") +
                  QStringLiteral("</th><td>") +
