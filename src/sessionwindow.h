@@ -10,6 +10,7 @@ class QLabel;
 class QTimer;
 class QComboBox;
 class APIManager;
+class ActivityBrowser;
 
 class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -39,7 +40,7 @@ private:
   QTextBrowser *m_detailsBrowser;
   QTextBrowser *m_promptBrowser;
   QTextBrowser *m_diffBrowser;
-  QTextBrowser *m_activityBrowser;
+  ActivityBrowser *m_activityBrowser;
   QTextBrowser *m_rawActivitiesBrowser;
   QTextBrowser *m_textBrowser;
 
