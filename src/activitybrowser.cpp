@@ -52,19 +52,19 @@ void ActivityBrowser::renderHtml() {
       QStringLiteral("</style></head><body>");
 
   if (!m_prompt.isEmpty()) {
-      html += QStringLiteral("<div class='prompt'>") + i18n("Prompt") + QStringLiteral("</div><div style='margin-bottom: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 5px; font-family: monospace;'>");
+      html += QStringLiteral("<div class='prompt'>") + i18n("Prompt") + QStringLiteral("</div><div style='margin-bottom: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;'>");
 
       bool promptExpanded = m_expandedItems.contains(QStringLiteral("prompt_view"));
       QStringList lines = m_prompt.split(QLatin1Char('\n'));
 
       if (!promptExpanded && lines.size() > 5) {
-          html += lines.mid(0, 5).join(QStringLiteral("<br/>")).toHtmlEscaped() + QStringLiteral("<br/>...");
-          html += QStringLiteral("<br/><a href='expand:prompt_view' style='font-size: 0.9em; color: #3498db; text-decoration: none;'>") + i18n("Click to expand prompt") + QStringLiteral("</a>");
+          html += QStringLiteral("<div style='white-space: pre-wrap; font-family: monospace;'>") + lines.mid(0, 5).join(QLatin1Char('\n')).toHtmlEscaped() + QStringLiteral("\n...</div>");
+          html += QStringLiteral("<div style='margin-top: 10px;'><a href='expand:prompt_view' style='font-size: 0.9em; color: #3498db; text-decoration: none;'>") + i18n("Click to expand prompt") + QStringLiteral("</a></div>");
       } else if (promptExpanded && lines.size() > 5) {
-          html += m_prompt.replace(QLatin1Char('\n'), QStringLiteral("<br/>")).toHtmlEscaped();
-          html += QStringLiteral("<br/><a href='collapse:prompt_view' style='font-size: 0.9em; color: #3498db; text-decoration: none;'>") + i18n("Click to collapse prompt") + QStringLiteral("</a>");
+          html += QStringLiteral("<div style='white-space: pre-wrap; font-family: monospace;'>") + m_prompt.toHtmlEscaped() + QStringLiteral("</div>");
+          html += QStringLiteral("<div style='margin-top: 10px;'><a href='collapse:prompt_view' style='font-size: 0.9em; color: #3498db; text-decoration: none;'>") + i18n("Click to collapse prompt") + QStringLiteral("</a></div>");
       } else {
-          html += m_prompt.replace(QLatin1Char('\n'), QStringLiteral("<br/>")).toHtmlEscaped();
+          html += QStringLiteral("<div style='white-space: pre-wrap; font-family: monospace;'>") + m_prompt.toHtmlEscaped() + QStringLiteral("</div>");
       }
 
       html += QStringLiteral("</div><hr>");
@@ -147,11 +147,11 @@ void ActivityBrowser::renderHtml() {
       if (count > 1) {
           if (!expanded) {
               html += QStringLiteral("<div style='color: #888;'><i>") + i18n("Repeated %1 times", count) + QStringLiteral("</i></div>");
-              html += QStringLiteral("<a href='expand:") + id + QStringLiteral("'>") + i18n("Show") + QStringLiteral("</a>");
+              html += QStringLiteral("<div style='margin-top: 10px;'><a href='expand:") + id + QStringLiteral("' style='color: #3498db; text-decoration: none;'>") + i18n("Show All") + QStringLiteral("</a></div>");
           } else {
-              html += QStringLiteral("<div style='color: #888;'><i>") + i18n("Repeated %1 times", count) + QStringLiteral("</i></div>");
+              html += QStringLiteral("<div style='color: #888; margin-bottom: 10px;'><i>") + i18n("Repeated %1 times", count) + QStringLiteral("</i></div>");
               html += generateHtmlForActivity(activity, expanded);
-              html += QStringLiteral("<a href='collapse:") + id + QStringLiteral("'>") + i18n("Hide") + QStringLiteral("</a>");
+              html += QStringLiteral("<div style='margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px;'><a href='collapse:") + id + QStringLiteral("' style='color: #3498db; text-decoration: none;'>") + i18n("Hide Repeated Items") + QStringLiteral("</a></div>");
           }
       } else {
           html += generateHtmlForActivity(activity, expanded);
@@ -193,7 +193,7 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
   QString html;
 
   if (activity.contains(QStringLiteral("planGenerated"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("Plan Generated") + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("Plan Generated") + QStringLiteral(")</div>");
     QJsonObject pg = activity.value(QStringLiteral("planGenerated")).toObject();
     QJsonArray actions = pg.value(QStringLiteral("actions")).toArray();
     html += QStringLiteral("<div class='box'>");
@@ -203,12 +203,12 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     html += QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("planApproved"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("Plan Approved") + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("Plan Approved") + QStringLiteral(")</div>");
     QString org = activity.value(QStringLiteral("originator")).toString();
     html += QStringLiteral("<div class='box'>&#10003; ") + i18n("Plan approved by %1", org).toHtmlEscaped() + QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("progressUpdated"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("Progress Updated (%1)", activity.value(QStringLiteral("originator")).toString()) + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("Progress Updated - %1", activity.value(QStringLiteral("originator")).toString()) + QStringLiteral(")</div>");
     QJsonObject pu = activity.value(QStringLiteral("progressUpdated")).toObject();
     html += QStringLiteral("<div><b>") + pu.value(QStringLiteral("title")).toString().toHtmlEscaped() + QStringLiteral("</b></div>");
 
@@ -236,23 +236,29 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     }
 
   } else if (activity.contains(QStringLiteral("userMessaged"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("User") + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("User") + QStringLiteral(")</div>");
     html += QStringLiteral("<div class='content'>") + activity.value(QStringLiteral("userMessaged")).toObject().value(QStringLiteral("userMessage")).toString().toHtmlEscaped() + QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("agentMessaged"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("Agent") + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("Agent") + QStringLiteral(")</div>");
     html += QStringLiteral("<div class='content'>") + activity.value(QStringLiteral("agentMessaged")).toObject().value(QStringLiteral("agentMessage")).toString().toHtmlEscaped() + QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("sessionCompleted"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("Session Completed") + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("Session Completed") + QStringLiteral(")</div>");
     QJsonObject sc = activity.value(QStringLiteral("sessionCompleted")).toObject();
     QString prUrl;
     QString prTitle;
+    QString prBody;
+    QString prHeadBranch;
+    QString prBaseBranch;
 
     if (sc.contains(QStringLiteral("pullRequest"))) {
         QJsonObject pr = sc.value(QStringLiteral("pullRequest")).toObject();
         prUrl = pr.value(QStringLiteral("url")).toString();
         prTitle = pr.value(QStringLiteral("title")).toString();
+        prBody = pr.value(QStringLiteral("body")).toString();
+        prHeadBranch = pr.value(QStringLiteral("headBranch")).toString();
+        prBaseBranch = pr.value(QStringLiteral("baseBranch")).toString();
     } else if (activity.contains(QStringLiteral("outputs"))) {
         QJsonArray outs = activity.value(QStringLiteral("outputs")).toArray();
         for (int i=0; i<outs.size(); ++i) {
@@ -260,12 +266,23 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
                   QJsonObject pr = outs[i].toObject().value(QStringLiteral("pullRequest")).toObject();
                   prUrl = pr.value(QStringLiteral("url")).toString();
                   prTitle = pr.value(QStringLiteral("title")).toString();
+                  prBody = pr.value(QStringLiteral("body")).toString();
+                  prHeadBranch = pr.value(QStringLiteral("headBranch")).toString();
+                  prBaseBranch = pr.value(QStringLiteral("baseBranch")).toString();
              }
         }
     }
 
     if (!prTitle.isEmpty()) {
-        html += QStringLiteral("<div style='margin-bottom: 10px; font-weight: bold;'>") + prTitle.toHtmlEscaped() + QStringLiteral("</div>");
+        html += QStringLiteral("<div class='box'>");
+        html += QStringLiteral("<div style='margin-bottom: 5px; font-weight: bold; font-size: 1.1em;'>") + prTitle.toHtmlEscaped() + QStringLiteral("</div>");
+        if (!prHeadBranch.isEmpty() && !prBaseBranch.isEmpty()) {
+            html += QStringLiteral("<div style='margin-bottom: 10px; font-family: monospace; color: #555; background-color: #f1f1f1; padding: 4px; border-radius: 4px; display: inline-block;'>") + prBaseBranch.toHtmlEscaped() + QStringLiteral(" &larr; ") + prHeadBranch.toHtmlEscaped() + QStringLiteral("</div>");
+        }
+        if (!prBody.isEmpty()) {
+            html += QStringLiteral("<div style='white-space: pre-wrap; color: #444;'>") + prBody.toHtmlEscaped() + QStringLiteral("</div>");
+        }
+        html += QStringLiteral("</div>");
     }
 
     html += QStringLiteral("<div style='text-align: center; margin-top: 15px;'>");
@@ -276,7 +293,7 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     html += QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("artifacts"))) {
-    html += QStringLiteral("<div class='role'>") + i18n("Artifacts") + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + i18n("Artifacts") + QStringLiteral(")</div>");
     QJsonArray artifacts = activity.value(QStringLiteral("artifacts")).toArray();
     for (int i=0; i<artifacts.size(); ++i) {
       QJsonObject art = artifacts[i].toObject();
@@ -318,7 +335,7 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     if (role.isEmpty()) role = activity.value(QStringLiteral("author")).toString();
     if (role.isEmpty()) role = QStringLiteral("Unknown");
 
-    html += QStringLiteral("<div class='role'>") + role.toHtmlEscaped() + QStringLiteral("</div>");
+    html += QStringLiteral("<div class='role'>(") + role.toHtmlEscaped() + QStringLiteral(")</div>");
 
     QString content = activity.value(QStringLiteral("content")).toString();
     if (content.isEmpty()) content = activity.value(QStringLiteral("text")).toString();
