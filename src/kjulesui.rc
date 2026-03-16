@@ -28,6 +28,8 @@
             <Separator />
             <Action name="open_url" />
             <Action name="copy_url" />
+            <Separator />
+            <Action name="recalculate_stats" />
         </Menu>
         <Menu name="view">
             <Action name="toggle_window" />

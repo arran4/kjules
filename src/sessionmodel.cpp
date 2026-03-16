@@ -203,6 +203,7 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
     m_idToIndex[data.id] = i;
   }
   endResetModel();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 int SessionModel::addSessions(const QJsonArray &sessions) {
@@ -278,11 +279,20 @@ QJsonObject SessionModel::getSession(int row) const {
   return QJsonObject();
 }
 
+QJsonArray SessionModel::getAllSessions() const {
+  QJsonArray arr;
+  for (const SessionData &data : m_sessions) {
+    arr.append(data.rawObject);
+  }
+  return arr;
+}
+
 void SessionModel::clear() {
   beginResetModel();
   m_sessions.clear();
   m_idToIndex.clear();
   endResetModel();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 void SessionModel::removeSession(int row) {
@@ -298,6 +308,7 @@ void SessionModel::removeSession(int row) {
   }
   endRemoveRows();
   saveSessions();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 void SessionModel::loadSessions() {
@@ -340,6 +351,7 @@ void SessionModel::saveSessions() {
     file.write(doc.toJson());
     file.close();
   }
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 void SessionModel::setNextPageToken(const QString &token) {

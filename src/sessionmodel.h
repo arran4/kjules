@@ -76,12 +76,16 @@ public:
   void updateSession(const QJsonObject &session);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
+  QJsonArray getAllSessions() const;
   void clear();
   void loadSessions();
   void saveSessions();
   void clearSessions();
   void setNextPageToken(const QString &token);
   QString nextPageToken() const;
+
+Q_SIGNALS:
+  void sessionsLoadedOrUpdated();
 
 private:
   QVector<SessionData> m_sessions;
