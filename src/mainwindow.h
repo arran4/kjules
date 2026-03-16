@@ -106,6 +106,7 @@ private:
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
   QAction *m_refreshSourceAction;
+  QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
   QAction *m_showPastNewSessionsAction;

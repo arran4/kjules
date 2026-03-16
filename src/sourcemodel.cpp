@@ -432,38 +432,46 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
         }
     }
 
-    if (sessionCounts.contains(keyToUse)) {
-      int count = sessionCounts[keyToUse];
-      QJsonArray timestamps = sessionTimestamps[keyToUse];
-      QString lastUsed = lastUsedDates[keyToUse];
+    int count = sessionCounts.value(keyToUse, 0);
+    QJsonArray timestamps = sessionTimestamps.value(keyToUse, QJsonArray());
+    QString lastUsed = lastUsedDates.value(keyToUse, QString());
 
-      // Keep only recent timestamps
-      QJsonArray recentTimestamps;
-      for (int j = 0; j < timestamps.size(); ++j) {
-        qint64 ts = timestamps[j].toVariant().toLongLong();
-        if (ts >= thirtyDaysAgo) {
-          recentTimestamps.append(ts);
-        }
+    // Keep only recent timestamps
+    QJsonArray recentTimestamps;
+    for (int j = 0; j < timestamps.size(); ++j) {
+      qint64 ts = timestamps[j].toVariant().toLongLong();
+      if (ts >= thirtyDaysAgo) {
+        recentTimestamps.append(ts);
       }
+    }
 
-      double heat = 0.0;
-      for (int j = 0; j < recentTimestamps.size(); ++j) {
-        qint64 ts = recentTimestamps[j].toVariant().toLongLong();
-        if (ts <= now) {
-          double age = static_cast<double>(now - ts);
-          heat += std::exp(-(age / halfLifeSecs) * ln2);
-        }
+    double heat = 0.0;
+    for (int j = 0; j < recentTimestamps.size(); ++j) {
+      qint64 ts = recentTimestamps[j].toVariant().toLongLong();
+      if (ts <= now) {
+        double age = static_cast<double>(now - ts);
+        heat += std::exp(-(age / halfLifeSecs) * ln2);
       }
+    }
 
-      source[QStringLiteral("local_sessionCount")] = count;
-      source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
-      source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
-      if (!lastUsed.isEmpty()) {
-         source[QStringLiteral("local_lastUsed")] = lastUsed;
-      }
+    // Always update the source so it clears out sessions if they were deleted
+    source[QStringLiteral("local_sessionCount")] = count;
+    source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
+    source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
+    if (!lastUsed.isEmpty()) {
+       source[QStringLiteral("local_lastUsed")] = lastUsed;
+    } else {
+       // Only remove last used if it's currently set, but we usually want to keep it
+       // Wait, if there are 0 sessions, we might want to keep local_lastUsed to remember when it was last used.
+       // So do nothing if lastUsed is empty.
+    }
 
-      m_sources[i] = source;
-      changed = true;
+    // Only mark changed if we are actually modifying it. Since QJsonObject comparison
+    // can be tricky, we'll assume it changed if we process it. But wait, we should only emit
+    // if there's a difference.
+    if (m_sources[i].toObject() != source) {
+        m_sources[i] = source;
+        changed = true;
     }
   }
 

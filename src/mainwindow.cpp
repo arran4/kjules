@@ -140,6 +140,9 @@ MainWindow::MainWindow(QWidget *parent)
   m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();
 
+  // Manually trigger calculation once after load
+  updateSourceStats();
+
   // Initial refresh
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
 }
@@ -829,6 +832,22 @@ void MainWindow::createActions() {
   m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
+
+  m_recalculateStatsAction = new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")), i18n("Recalculate Session Stats"), this);
+  actionCollection()->addAction(QStringLiteral("recalculate_stats"), m_recalculateStatsAction);
+  connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
+    QJsonArray allSessions;
+    QJsonArray active = m_sessionModel->getAllSessions();
+    for (int i = 0; i < active.size(); ++i) {
+        allSessions.append(active[i]);
+    }
+    QJsonArray archived = m_archiveModel->getAllSessions();
+    for (int i = 0; i < archived.size(); ++i) {
+        allSessions.append(archived[i]);
+    }
+    m_sourceModel->recalculateStatsFromSessions(allSessions);
+    updateStatus(i18n("Session statistics recalculated successfully."));
+  });
   connect(m_refreshSourceAction, &QAction::triggered, this, [this]() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())

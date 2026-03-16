@@ -203,6 +203,7 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
     m_idToIndex[data.id] = i;
   }
   endResetModel();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 int SessionModel::addSessions(const QJsonArray &sessions) {
@@ -291,6 +292,7 @@ void SessionModel::clear() {
   m_sessions.clear();
   m_idToIndex.clear();
   endResetModel();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 void SessionModel::removeSession(int row) {
