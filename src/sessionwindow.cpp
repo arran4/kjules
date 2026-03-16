@@ -344,11 +344,26 @@ void SessionWindow::renderDetailsAndDiff() {
   QString lastRefreshed =
       m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
   QString state = m_sessionData.value(QStringLiteral("state")).toString();
-  QString source = m_sessionData.value(QStringLiteral("sourceContext"))
-                       .toObject()
-                       .value(QStringLiteral("source"))
-                       .toString();
+  QJsonObject sourceContext = m_sessionData.value(QStringLiteral("sourceContext")).toObject();
+  QString source = sourceContext.value(QStringLiteral("source")).toString();
+  bool environmentVariablesEnabled = sourceContext.value(QStringLiteral("environmentVariablesEnabled")).toBool();
+  QString startingBranch = sourceContext.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch")).toString();
+  QString createTime = m_sessionData.value(QStringLiteral("createTime")).toString();
+  QString updateTime = m_sessionData.value(QStringLiteral("updateTime")).toString();
   QString promptText = m_sessionData.value(QStringLiteral("prompt")).toString();
+
+  if (!createTime.isEmpty()) {
+      QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
+      if (dt.isValid()) {
+          createTime = dt.toLocalTime().toString(Qt::DefaultLocaleShortDate);
+      }
+  }
+  if (!updateTime.isEmpty()) {
+      QDateTime dt = QDateTime::fromString(updateTime, Qt::ISODate);
+      if (dt.isValid()) {
+          updateTime = dt.toLocalTime().toString(Qt::DefaultLocaleShortDate);
+      }
+  }
 
   QString detailsHtml =
       QStringLiteral("<html><head><style>") +
@@ -361,9 +376,6 @@ void SessionWindow::renderDetailsAndDiff() {
       QStringLiteral("</style></head><body><h2>") + i18n("Session Details") +
       QStringLiteral("</h2><table>");
 
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
-                 QStringLiteral("</th><td>") + title.toHtmlEscaped() +
-                 QStringLiteral("</td></tr>");
   QString julesUrl =
       QStringLiteral("https://jules.google.com/sessions/") + sessionId;
   detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
@@ -379,6 +391,24 @@ void SessionWindow::renderDetailsAndDiff() {
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") +
                  QStringLiteral("</th><td>") + source.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
+  if (!startingBranch.isEmpty()) {
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Starting Branch:") +
+                   QStringLiteral("</th><td>") + startingBranch.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+  }
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Env Vars Enabled:") +
+                 QStringLiteral("</th><td>") + (environmentVariablesEnabled ? i18n("Yes") : i18n("No")) +
+                 QStringLiteral("</td></tr>");
+  if (!createTime.isEmpty()) {
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Create Time:") +
+                   QStringLiteral("</th><td>") + createTime.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+  }
+  if (!updateTime.isEmpty()) {
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Update Time:") +
+                   QStringLiteral("</th><td>") + updateTime.toHtmlEscaped() +
+                   QStringLiteral("</td></tr>");
+  }
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") +
                  QStringLiteral("</th><td>") +
                  (lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed)
