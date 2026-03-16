@@ -1,6 +1,7 @@
 #include "sessionwindow.h"
 
 #include "apimanager.h"
+#include "activitybrowser.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -233,32 +234,6 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
   if (currentId != sessionId)
     return;
 
-  QString html =
-      QStringLiteral("<html><head><style>") +
-      QStringLiteral("body { font-family: sans-serif; }") +
-      QStringLiteral(".prompt { font-weight: bold; font-size: 1.1em; color: "
-                     "#2c3e50; margin-bottom: 10px; }") +
-      QStringLiteral(".turn { margin-bottom: 15px; padding: 10px; "
-                     "border-radius: 5px; }") +
-      QStringLiteral(".user { background-color: #e8f4f8; border-left: 4px "
-                     "solid #3498db; }") +
-      QStringLiteral(".system { background-color: #f9f9f9; border-left: 4px "
-                     "solid #95a5a6; }") +
-      QStringLiteral(".assistant { background-color: #eafaf1; border-left: "
-                     "4px solid #2ecc71; }") +
-      QStringLiteral(
-          ".role { font-weight: bold; text-transform: capitalize; "
-          "margin-bottom: 5px; color: #7f8c8d; font-size: 0.9em; }") +
-      QStringLiteral(".content { white-space: pre-wrap; }") +
-      QStringLiteral("</style></head><body>");
-
-  QString prompt = m_sessionData.value(QStringLiteral("prompt")).toString();
-  if (!prompt.isEmpty()) {
-    html += QStringLiteral("<div class='prompt'>") + i18n("Prompt:") +
-            QStringLiteral(" ") + prompt.toHtmlEscaped() +
-            QStringLiteral("</div><hr>");
-  }
-
   QJsonArray turns = activities;
   if (turns.isEmpty()) {
     if (m_sessionData.contains(QStringLiteral("turns"))) {
@@ -272,58 +247,9 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
     }
   }
 
-  if (turns.isEmpty()) {
-    html += QStringLiteral("<p><i>") + i18n("No activity feed available.") +
-            QStringLiteral("</i></p>");
-  } else {
-    for (int i = 0; i < turns.size(); ++i) {
-      QJsonObject turn = turns[i].toObject();
-      QString role = turn.value(QStringLiteral("role")).toString();
-      if (role.isEmpty()) {
-        role = turn.value(QStringLiteral("author")).toString();
-      }
-      if (role.isEmpty()) {
-        role = QStringLiteral("system");
-      }
-
-      QString content = turn.value(QStringLiteral("content")).toString();
-      if (content.isEmpty()) {
-        content = turn.value(QStringLiteral("text")).toString();
-      }
-      if (content.isEmpty() && turn.contains(QStringLiteral("parts"))) {
-        QJsonArray parts = turn.value(QStringLiteral("parts")).toArray();
-        for (int j = 0; j < parts.size(); ++j) {
-          content +=
-              parts[j].toObject().value(QStringLiteral("text")).toString() +
-              QStringLiteral("\n");
-        }
-      }
-      if (content.isEmpty()) {
-        // Fallback to pretty-printing the JSON for unknown objects (e.g. tool
-        // calls, raw system messages)
-        QJsonDocument doc(turn);
-        content = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
-      }
-
-      QString roleClass = role.toLower();
-      if (roleClass != QStringLiteral("user") &&
-          roleClass != QStringLiteral("assistant") &&
-          roleClass != QStringLiteral("system")) {
-        roleClass = QStringLiteral("system");
-      }
-
-      html += QStringLiteral("<div class='turn ") + roleClass +
-              QStringLiteral("'>");
-      html += QStringLiteral("<div class='role'>") + role.toHtmlEscaped() +
-              QStringLiteral("</div>");
-      html += QStringLiteral("<div class='content'>") +
-              content.toHtmlEscaped() + QStringLiteral("</div>");
-      html += QStringLiteral("</div>");
-    }
-  }
-
-  html += QStringLiteral("</body></html>");
-  m_activityBrowser->setHtml(html);
+  QString prompt = m_sessionData.value(QStringLiteral("prompt")).toString();
+  m_activityBrowser->setPrompt(prompt);
+  m_activityBrowser->setActivities(turns);
 
   QJsonDocument activitiesDoc(turns);
   m_rawActivitiesBrowser->setPlainText(
@@ -499,7 +425,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_diffBrowser->setStyleSheet(QStringLiteral("font-family: monospace;"));
 
   m_rawActivitiesBrowser = new QTextBrowser(this);
-  m_activityBrowser = new QTextBrowser(this);
+  m_activityBrowser = new ActivityBrowser(this);
   m_textBrowser = new QTextBrowser(this);
 
   m_activityTabWidget = new QWidget(this);
