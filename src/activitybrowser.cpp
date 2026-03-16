@@ -37,16 +37,15 @@ void ActivityBrowser::setPrompt(const QString &prompt) {
 void ActivityBrowser::renderHtml() {
   QString html =
       QStringLiteral("<html><head><style>") +
-      QStringLiteral("body { font-family: sans-serif; font-size: 13px; margin: 10px; }") +
-      QStringLiteral(".turn { margin-bottom: 25px; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; background-color: #fdfdfd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }") +
-      QStringLiteral(".user { background-color: #e8f4f8; border-left: 5px solid #3498db; }") +
-      QStringLiteral(".system { background-color: #f9f9f9; border-left: 5px solid #95a5a6; }") +
-      QStringLiteral(".unknown { background-color: #f5f5f5; border-left: 5px solid #7f8c8d; }") +
-      QStringLiteral(".assistant { background-color: #eafaf1; border-left: 5px solid #2ecc71; }") +
-      QStringLiteral(".role { font-weight: bold; text-transform: capitalize; margin-bottom: 8px; color: #333; font-size: 1.0em; border-bottom: 1px solid #eee; padding-bottom: 5px; }") +
+      QStringLiteral("body { font-family: sans-serif; font-size: 13px; margin: 10px; background-color: #fafafa; }") +
+      QStringLiteral(".turn { margin-bottom: 25px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }") +
+      QStringLiteral(".user-turn { margin-left: 15%; margin-right: 5%; background-color: #e3f2fd; border: 1px solid #bbdefb; }") +
+      QStringLiteral(".agent-turn { margin-left: 5%; margin-right: 15%; background-color: #ffffff; border: 1px solid #e0e0e0; }") +
+      QStringLiteral(".system-turn { margin-left: 10%; margin-right: 10%; background-color: #fff9c4; border: 1px solid #fff59d; }") +
+      QStringLiteral(".role { font-weight: bold; text-transform: capitalize; margin-bottom: 8px; color: #333; font-size: 1.0em; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 5px; }") +
       QStringLiteral(".content { white-space: pre-wrap; word-wrap: break-word; }") +
-      QStringLiteral(".box { background: #fff; border: 1px solid #ccc; padding: 10px; border-radius: 4px; margin-top: 5px; }") +
-      QStringLiteral(".code { font-family: monospace; background: #eee; padding: 8px; border-radius: 4px; display: block; white-space: pre-wrap; }") +
+      QStringLiteral(".box { background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.1); padding: 10px; border-radius: 4px; margin-top: 5px; }") +
+      QStringLiteral(".code { font-family: monospace; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; display: block; white-space: pre-wrap; }") +
       QStringLiteral(".btn { display: inline-block; padding: 5px 10px; background: #3498db; color: white; text-decoration: none; border-radius: 3px; font-weight: bold; margin-top: 5px; }") +
       QStringLiteral(".prompt { font-weight: bold; font-size: 1.1em; color: #2c3e50; margin-bottom: 10px; }") +
       QStringLiteral("</style></head><body>");
@@ -137,7 +136,16 @@ void ActivityBrowser::renderHtml() {
 
       QString timeTooltip = createTime.isValid() ? createTime.toString(Qt::DefaultLocaleLongDate) : i18n("Unknown time");
 
-      html += QStringLiteral("<div class='turn' title='") + timeTooltip.toHtmlEscaped() + QStringLiteral("'>");
+      QString turnClass = QStringLiteral("turn ");
+      if (activity.contains(QStringLiteral("userMessaged"))) {
+          turnClass += QStringLiteral("user-turn");
+      } else if (activity.contains(QStringLiteral("agentMessaged")) || activity.contains(QStringLiteral("progressUpdated")) || activity.contains(QStringLiteral("artifacts")) || activity.contains(QStringLiteral("planGenerated"))) {
+          turnClass += QStringLiteral("agent-turn");
+      } else {
+          turnClass += QStringLiteral("system-turn");
+      }
+
+      html += QStringLiteral("<div class='") + turnClass + QStringLiteral("' title='") + timeTooltip.toHtmlEscaped() + QStringLiteral("'>");
 
       // Add a small generic header with a link to open an action menu for this specific block
       html += QStringLiteral("<div style='text-align: right; float: right;'>") +
