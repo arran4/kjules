@@ -80,12 +80,6 @@ void TemplatesModel::updateTemplate(int row, const QJsonObject &tmpl) {
   }
 }
 
-void TemplatesModel::clear() {
-  beginResetModel();
-  m_templates = QJsonArray();
-  endResetModel();
-}
-
 void TemplatesModel::removeTemplate(int row) {
   if (row >= 0 && row < m_templates.size()) {
     beginRemoveRows(QModelIndex(), row, row);
