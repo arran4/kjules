@@ -192,8 +192,18 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
   QString id = activity.value(QStringLiteral("id")).toString();
   QString html;
 
+  QString originator = activity.value(QStringLiteral("originator")).toString();
+  if (originator.isEmpty()) {
+      originator = activity.value(QStringLiteral("author")).toString();
+  }
+
+  QString orgSuffix;
+  if (!originator.isEmpty()) {
+      orgSuffix = QStringLiteral(" (") + originator.toHtmlEscaped() + QStringLiteral(")");
+  }
+
   if (activity.contains(QStringLiteral("planGenerated"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("Plan Generated") + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Plan Generated") + orgSuffix + QStringLiteral("</div>");
     QJsonObject pg = activity.value(QStringLiteral("planGenerated")).toObject();
     QJsonArray actions = pg.value(QStringLiteral("actions")).toArray();
     html += QStringLiteral("<div class='box'>");
@@ -203,12 +213,12 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     html += QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("planApproved"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("Plan Approved") + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Plan Approved") + orgSuffix + QStringLiteral("</div>");
     QString org = activity.value(QStringLiteral("originator")).toString();
     html += QStringLiteral("<div class='box'>&#10003; ") + i18n("Plan approved by %1", org).toHtmlEscaped() + QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("progressUpdated"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("Progress Updated - %1", activity.value(QStringLiteral("originator")).toString()) + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Progress Updated") + orgSuffix + QStringLiteral("</div>");
     QJsonObject pu = activity.value(QStringLiteral("progressUpdated")).toObject();
     html += QStringLiteral("<div><b>") + pu.value(QStringLiteral("title")).toString().toHtmlEscaped() + QStringLiteral("</b></div>");
 
@@ -236,15 +246,15 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     }
 
   } else if (activity.contains(QStringLiteral("userMessaged"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("User") + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Message") + orgSuffix + QStringLiteral("</div>");
     html += QStringLiteral("<div class='content'>") + activity.value(QStringLiteral("userMessaged")).toObject().value(QStringLiteral("userMessage")).toString().toHtmlEscaped() + QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("agentMessaged"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("Agent") + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Message") + orgSuffix + QStringLiteral("</div>");
     html += QStringLiteral("<div class='content'>") + activity.value(QStringLiteral("agentMessaged")).toObject().value(QStringLiteral("agentMessage")).toString().toHtmlEscaped() + QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("sessionCompleted"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("Session Completed") + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Session Completed") + orgSuffix + QStringLiteral("</div>");
     QJsonObject sc = activity.value(QStringLiteral("sessionCompleted")).toObject();
     QString prUrl;
     QString prTitle;
@@ -293,7 +303,7 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     html += QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("artifacts"))) {
-    html += QStringLiteral("<div class='role'>(") + i18n("Artifacts") + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + i18n("Artifacts") + orgSuffix + QStringLiteral("</div>");
     QJsonArray artifacts = activity.value(QStringLiteral("artifacts")).toArray();
     for (int i=0; i<artifacts.size(); ++i) {
       QJsonObject art = artifacts[i].toObject();
@@ -335,7 +345,7 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     if (role.isEmpty()) role = activity.value(QStringLiteral("author")).toString();
     if (role.isEmpty()) role = QStringLiteral("Unknown");
 
-    html += QStringLiteral("<div class='role'>(") + role.toHtmlEscaped() + QStringLiteral(")</div>");
+    html += QStringLiteral("<div class='role'>") + role.toHtmlEscaped() + orgSuffix + QStringLiteral("</div>");
 
     QString content = activity.value(QStringLiteral("content")).toString();
     if (content.isEmpty()) content = activity.value(QStringLiteral("text")).toString();
