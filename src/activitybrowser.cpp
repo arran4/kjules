@@ -38,12 +38,12 @@ void ActivityBrowser::renderHtml() {
   QString html =
       QStringLiteral("<html><head><style>") +
       QStringLiteral("body { font-family: sans-serif; font-size: 13px; margin: 10px; }") +
-      QStringLiteral(".turn { margin-bottom: 15px; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }") +
-      QStringLiteral(".user { background-color: #e8f4f8; border-left: 4px solid #3498db; }") +
-      QStringLiteral(".system { background-color: #f9f9f9; border-left: 4px solid #95a5a6; }") +
-      QStringLiteral(".unknown { background-color: #f5f5f5; border-left: 4px solid #7f8c8d; }") +
-      QStringLiteral(".assistant { background-color: #eafaf1; border-left: 4px solid #2ecc71; }") +
-      QStringLiteral(".role { font-weight: bold; text-transform: capitalize; margin-bottom: 5px; color: #555; font-size: 0.9em; }") +
+      QStringLiteral(".turn { margin-bottom: 25px; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; background-color: #fdfdfd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }") +
+      QStringLiteral(".user { background-color: #e8f4f8; border-left: 5px solid #3498db; }") +
+      QStringLiteral(".system { background-color: #f9f9f9; border-left: 5px solid #95a5a6; }") +
+      QStringLiteral(".unknown { background-color: #f5f5f5; border-left: 5px solid #7f8c8d; }") +
+      QStringLiteral(".assistant { background-color: #eafaf1; border-left: 5px solid #2ecc71; }") +
+      QStringLiteral(".role { font-weight: bold; text-transform: capitalize; margin-bottom: 8px; color: #333; font-size: 1.0em; border-bottom: 1px solid #eee; padding-bottom: 5px; }") +
       QStringLiteral(".content { white-space: pre-wrap; word-wrap: break-word; }") +
       QStringLiteral(".box { background: #fff; border: 1px solid #ccc; padding: 10px; border-radius: 4px; margin-top: 5px; }") +
       QStringLiteral(".code { font-family: monospace; background: #eee; padding: 8px; border-radius: 4px; display: block; white-space: pre-wrap; }") +
@@ -52,9 +52,22 @@ void ActivityBrowser::renderHtml() {
       QStringLiteral("</style></head><body>");
 
   if (!m_prompt.isEmpty()) {
-      html += QStringLiteral("<div class='prompt'>") + i18n("Prompt:") +
-              QStringLiteral(" ") + m_prompt.toHtmlEscaped() +
-              QStringLiteral("</div><hr>");
+      html += QStringLiteral("<div class='prompt'>") + i18n("Prompt") + QStringLiteral("</div><div style='margin-bottom: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 5px; font-family: monospace;'>");
+
+      bool promptExpanded = m_expandedItems.contains(QStringLiteral("prompt_view"));
+      QStringList lines = m_prompt.split(QLatin1Char('\n'));
+
+      if (!promptExpanded && lines.size() > 5) {
+          html += lines.mid(0, 5).join(QStringLiteral("<br/>")).toHtmlEscaped() + QStringLiteral("<br/>...");
+          html += QStringLiteral("<br/><a href='expand:prompt_view' style='font-size: 0.9em; color: #3498db; text-decoration: none;'>") + i18n("Click to expand prompt") + QStringLiteral("</a>");
+      } else if (promptExpanded && lines.size() > 5) {
+          html += m_prompt.replace(QLatin1Char('\n'), QStringLiteral("<br/>")).toHtmlEscaped();
+          html += QStringLiteral("<br/><a href='collapse:prompt_view' style='font-size: 0.9em; color: #3498db; text-decoration: none;'>") + i18n("Click to collapse prompt") + QStringLiteral("</a>");
+      } else {
+          html += m_prompt.replace(QLatin1Char('\n'), QStringLiteral("<br/>")).toHtmlEscaped();
+      }
+
+      html += QStringLiteral("</div><hr>");
   }
 
   if (m_activities.isEmpty()) {
@@ -126,9 +139,9 @@ void ActivityBrowser::renderHtml() {
 
       html += QStringLiteral("<div class='turn' title='") + timeTooltip.toHtmlEscaped() + QStringLiteral("'>");
 
-      // Add a small generic header with a link to see raw JSON for this specific block
+      // Add a small generic header with a link to open an action menu for this specific block
       html += QStringLiteral("<div style='text-align: right; float: right;'>") +
-              QStringLiteral("<a href='raw:") + id + QStringLiteral("' style='color: #aaa; text-decoration: none; font-weight: bold;'>...</a>") +
+              QStringLiteral("<a href='action:") + id + QStringLiteral("' style='color: #aaa; text-decoration: none; font-weight: bold;'>...</a>") +
               QStringLiteral("</div>");
 
       if (count > 1) {
@@ -204,14 +217,22 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
         html += QStringLiteral("<div class='code' style='color:#555;'>$ ") + bo.value(QStringLiteral("command")).toString().toHtmlEscaped() + QStringLiteral("</div>");
     }
 
-    if (expanded) {
-      html += QStringLiteral("<div>") + pu.value(QStringLiteral("description")).toString().toHtmlEscaped() + QStringLiteral("</div>");
-      if (!bo.isEmpty()) {
-        html += QStringLiteral("<div class='code'>") + bo.value(QStringLiteral("output")).toString().toHtmlEscaped() + QStringLiteral("</div>");
-      }
-      html += QStringLiteral("<br/><a href='collapse:") + id + QStringLiteral("'>") + i18n("Show less") + QStringLiteral("</a>");
-    } else {
-      html += QStringLiteral("<br/><a href='expand:") + id + QStringLiteral("'>") + i18n("Show output & description") + QStringLiteral("</a>");
+    QString desc = pu.value(QStringLiteral("description")).toString();
+    QString out = bo.value(QStringLiteral("output")).toString();
+    bool hasDetails = !desc.isEmpty() || !out.isEmpty();
+
+    if (hasDetails) {
+        if (expanded) {
+          if (!desc.isEmpty()) {
+              html += QStringLiteral("<div>") + desc.toHtmlEscaped() + QStringLiteral("</div>");
+          }
+          if (!out.isEmpty()) {
+              html += QStringLiteral("<div class='code'>") + out.toHtmlEscaped() + QStringLiteral("</div>");
+          }
+          html += QStringLiteral("<br/><a href='collapse:") + id + QStringLiteral("' style='color: #888; text-decoration: none; font-size: 0.9em;'>") + i18n("Show less") + QStringLiteral("</a>");
+        } else {
+          html += QStringLiteral("<br/><a href='expand:") + id + QStringLiteral("' style='color: #888; text-decoration: none; font-size: 0.9em;'>") + i18n("Show output & description") + QStringLiteral("</a>");
+        }
     }
 
   } else if (activity.contains(QStringLiteral("userMessaged"))) {
@@ -225,23 +246,34 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
   } else if (activity.contains(QStringLiteral("sessionCompleted"))) {
     html += QStringLiteral("<div class='role'>") + i18n("Session Completed") + QStringLiteral("</div>");
     QJsonObject sc = activity.value(QStringLiteral("sessionCompleted")).toObject();
-    QString link;
+    QString prUrl;
+    QString prTitle;
+
     if (sc.contains(QStringLiteral("pullRequest"))) {
-        link = sc.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
+        QJsonObject pr = sc.value(QStringLiteral("pullRequest")).toObject();
+        prUrl = pr.value(QStringLiteral("url")).toString();
+        prTitle = pr.value(QStringLiteral("title")).toString();
     } else if (activity.contains(QStringLiteral("outputs"))) {
         QJsonArray outs = activity.value(QStringLiteral("outputs")).toArray();
         for (int i=0; i<outs.size(); ++i) {
              if (outs[i].toObject().contains(QStringLiteral("pullRequest"))) {
-                  link = outs[i].toObject().value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
+                  QJsonObject pr = outs[i].toObject().value(QStringLiteral("pullRequest")).toObject();
+                  prUrl = pr.value(QStringLiteral("url")).toString();
+                  prTitle = pr.value(QStringLiteral("title")).toString();
              }
         }
     }
 
-    if (!link.isEmpty()) {
-        html += QStringLiteral("<a class='btn' href='") + link.toHtmlEscaped() + QStringLiteral("'>") + i18n("View Pull Request on GitHub") + QStringLiteral("</a>");
-    } else {
-        html += QStringLiteral("<a class='btn' href='https://jules.google.com/sessions/") + activity.value(QStringLiteral("name")).toString().split(QLatin1Char('/')).value(1) + QStringLiteral("'>") + i18n("View on Jules") + QStringLiteral("</a>");
+    if (!prTitle.isEmpty()) {
+        html += QStringLiteral("<div style='margin-bottom: 10px; font-weight: bold;'>") + prTitle.toHtmlEscaped() + QStringLiteral("</div>");
     }
+
+    html += QStringLiteral("<div style='text-align: center; margin-top: 15px;'>");
+    if (!prUrl.isEmpty()) {
+        html += QStringLiteral("<a class='btn' style='margin-right: 10px; background-color: #2ecc71;' href='") + prUrl.toHtmlEscaped() + QStringLiteral("'>") + i18n("View Pull Request") + QStringLiteral("</a>");
+    }
+    html += QStringLiteral("<a class='btn' href='https://jules.google.com/sessions/") + activity.value(QStringLiteral("name")).toString().split(QLatin1Char('/')).value(1) + QStringLiteral("'>") + i18n("View on Jules") + QStringLiteral("</a>");
+    html += QStringLiteral("</div>");
 
   } else if (activity.contains(QStringLiteral("artifacts"))) {
     html += QStringLiteral("<div class='role'>") + i18n("Artifacts") + QStringLiteral("</div>");
@@ -339,6 +371,31 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
             dlg->setAttribute(Qt::WA_DeleteOnClose);
             dlg->show();
         }
+    } else if (scheme == QStringLiteral("action")) {
+        QMenu menu(this);
+        QAction *copyIdAction = menu.addAction(i18n("Copy ID"));
+        connect(copyIdAction, &QAction::triggered, this, [path]() {
+            QGuiApplication::clipboard()->setText(path);
+        });
+
+        QAction *showRawAction = menu.addAction(i18n("Show Raw JSON"));
+        connect(showRawAction, &QAction::triggered, this, [this, path]() {
+            QString rawJson = m_activityJsons.value(path);
+            if (!rawJson.isEmpty()) {
+                QDialog *dlg = new QDialog(this);
+                dlg->setWindowTitle(i18n("Raw Activity JSON"));
+                dlg->resize(600, 400);
+                QVBoxLayout *l = new QVBoxLayout(dlg);
+                QTextBrowser *tb = new QTextBrowser(dlg);
+                tb->setStyleSheet(QStringLiteral("font-family: monospace;"));
+                tb->setPlainText(rawJson);
+                l->addWidget(tb);
+                dlg->setAttribute(Qt::WA_DeleteOnClose);
+                dlg->show();
+            }
+        });
+
+        menu.exec(QCursor::pos());
     } else if (scheme == QStringLiteral("raw")) {
         QString rawJson = m_activityJsons.value(path);
         if (!rawJson.isEmpty()) {
@@ -410,9 +467,9 @@ void ActivityBrowser::onCustomContextMenu(const QPoint &pos) {
     });
 
     // If the user right clicked exactly on the '...' link, add an explicit entry
-    if (anchor.startsWith(QStringLiteral("raw:"))) {
+    if (anchor.startsWith(QStringLiteral("action:"))) {
          QAction *blockRawAction = menu.addAction(i18n("Show Block Raw JSON"));
-         QString id = anchor.mid(4);
+         QString id = anchor.mid(7);
          connect(blockRawAction, &QAction::triggered, this, [this, id]() {
              onAnchorClicked(QUrl(QStringLiteral("raw:") + id));
          });
