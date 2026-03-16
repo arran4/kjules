@@ -5,6 +5,7 @@
 #include <QStandardPaths>
 #include <QDateTime>
 #include <QIcon>
+#include <cmath>
 
 SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) {
   loadSources();
@@ -60,10 +61,23 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return QDateTime::fromString(valStr, Qt::ISODate);
       }
       return QVariant();
-    } else if (index.column() == ColSessionCount) {
+    } else if (index.column() == ColManagedSessions) {
       return source.value(QStringLiteral("local_sessionCount")).toInt();
     } else if (index.column() == ColHeat) {
-      return source.value(QStringLiteral("local_heat")).toInt();
+      QJsonArray timestamps = source.value(QStringLiteral("local_sessionTimestamps")).toArray();
+      qint64 now = QDateTime::currentDateTimeUtc().toSecsSinceEpoch();
+      double heat = 0.0;
+      double halfLifeSecs = 7.0 * 24.0 * 60.0 * 60.0; // 7 days half-life
+      double ln2 = 0.69314718056;
+
+      for (int i = 0; i < timestamps.size(); ++i) {
+        qint64 ts = timestamps[i].toVariant().toLongLong();
+        if (ts <= now) {
+          double age = static_cast<double>(now - ts);
+          heat += std::exp(-(age / halfLifeSecs) * ln2);
+        }
+      }
+      return std::round(heat * 10.0) / 10.0;
     } else if (index.column() == ColFirstSeen) {
       QString valStr = source.value(QStringLiteral("local_firstSeen")).toString();
       if (!valStr.isEmpty()) {
@@ -106,7 +120,7 @@ QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
     return QStringLiteral("Name");
   } else if (section == ColLastUsed) {
     return QStringLiteral("Last Used");
-  } else if (section == ColSessionCount) {
+  } else if (section == ColManagedSessions) {
     return QStringLiteral("Sessions");
   } else if (section == ColHeat) {
     return QStringLiteral("Heat");
@@ -282,18 +296,32 @@ void SourceModel::recordSessionCreated(const QString &sourceId) {
       timestamps.append(QDateTime::currentDateTimeUtc().toSecsSinceEpoch());
 
       qint64 now = QDateTime::currentDateTimeUtc().toSecsSinceEpoch();
-      qint64 sevenDaysAgo = now - (7 * 24 * 60 * 60);
+      qint64 thirtyDaysAgo = now - (30 * 24 * 60 * 60);
 
       QJsonArray recentTimestamps;
       for (int j = 0; j < timestamps.size(); ++j) {
         qint64 ts = timestamps[j].toVariant().toLongLong();
-        if (ts >= sevenDaysAgo) {
+        // Keep timestamps up to 30 days to allow for meaningful decay
+        if (ts >= thirtyDaysAgo) {
           recentTimestamps.append(ts);
         }
       }
 
       source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
-      source[QStringLiteral("local_heat")] = recentTimestamps.size();
+
+      // We calculate heat dynamically in data(), but update local_heat
+      // so it's somewhat indicative if accessed elsewhere.
+      double heat = 0.0;
+      double halfLifeSecs = 7.0 * 24.0 * 60.0 * 60.0;
+      double ln2 = 0.69314718056;
+      for (int j = 0; j < recentTimestamps.size(); ++j) {
+        qint64 ts = recentTimestamps[j].toVariant().toLongLong();
+        if (ts <= now) {
+          double age = static_cast<double>(now - ts);
+          heat += std::exp(-(age / halfLifeSecs) * ln2);
+        }
+      }
+      source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
 
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
