@@ -354,3 +354,121 @@ void SourceModel::saveSources() {
     file.close();
   }
 }
+
+void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
+  QHash<QString, int> sessionCounts;
+  QHash<QString, QJsonArray> sessionTimestamps;
+  QHash<QString, QString> lastUsedDates;
+
+  for (int i = 0; i < allSessions.size(); ++i) {
+    QJsonObject session = allSessions[i].toObject();
+
+    // Determine the source from the session
+    QString sourceId;
+    if (session.contains(QStringLiteral("sourceContext"))) {
+      sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+    }
+
+    // A fallback if the session data doesn't perfectly match
+    if (sourceId.isEmpty()) {
+       sourceId = session.value(QStringLiteral("source")).toString();
+    }
+
+    if (sourceId.isEmpty()) continue;
+
+    // Normalize source ID (e.g. sometimes it includes the 'sources/' prefix, sometimes it doesn't)
+    // Actually, recordSessionCreated expects the exact id or name string.
+
+    QString updateTimeStr = session.value(QStringLiteral("updateTime")).toString();
+    QString createTimeStr = session.value(QStringLiteral("createTime")).toString();
+    QString timeStr = updateTimeStr.isEmpty() ? createTimeStr : updateTimeStr;
+
+    qint64 ts = 0;
+    if (!timeStr.isEmpty()) {
+       QDateTime dt = QDateTime::fromString(timeStr, Qt::ISODate);
+       if (dt.isValid()) {
+           ts = dt.toSecsSinceEpoch();
+       }
+    }
+
+    sessionCounts[sourceId]++;
+    if (ts > 0) {
+       QJsonArray timestamps = sessionTimestamps[sourceId];
+       timestamps.append(ts);
+       sessionTimestamps[sourceId] = timestamps;
+
+       if (!lastUsedDates.contains(sourceId)) {
+          lastUsedDates[sourceId] = timeStr;
+       } else {
+          QDateTime currentLast = QDateTime::fromString(lastUsedDates[sourceId], Qt::ISODate);
+          QDateTime thisTime = QDateTime::fromString(timeStr, Qt::ISODate);
+          if (thisTime > currentLast) {
+             lastUsedDates[sourceId] = timeStr;
+          }
+       }
+    }
+  }
+
+  qint64 now = QDateTime::currentDateTimeUtc().toSecsSinceEpoch();
+  qint64 thirtyDaysAgo = now - (30 * 24 * 60 * 60);
+  double halfLifeSecs = 7.0 * 24.0 * 60.0 * 60.0;
+  double ln2 = 0.69314718056;
+
+  bool changed = false;
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject source = m_sources[i].toObject();
+    QString id = source.value(QStringLiteral("id")).toString();
+    if (id.isEmpty()) id = source.value(QStringLiteral("name")).toString();
+
+    // Check with direct id or with 'sources/' prepended or removed
+    QString keyToUse = id;
+    if (!sessionCounts.contains(id)) {
+        if (id.startsWith(QStringLiteral("sources/"))) {
+             QString sub = id.mid(8);
+             if (sessionCounts.contains(sub)) keyToUse = sub;
+        } else {
+             QString prepended = QStringLiteral("sources/") + id;
+             if (sessionCounts.contains(prepended)) keyToUse = prepended;
+        }
+    }
+
+    if (sessionCounts.contains(keyToUse)) {
+      int count = sessionCounts[keyToUse];
+      QJsonArray timestamps = sessionTimestamps[keyToUse];
+      QString lastUsed = lastUsedDates[keyToUse];
+
+      // Keep only recent timestamps
+      QJsonArray recentTimestamps;
+      for (int j = 0; j < timestamps.size(); ++j) {
+        qint64 ts = timestamps[j].toVariant().toLongLong();
+        if (ts >= thirtyDaysAgo) {
+          recentTimestamps.append(ts);
+        }
+      }
+
+      double heat = 0.0;
+      for (int j = 0; j < recentTimestamps.size(); ++j) {
+        qint64 ts = recentTimestamps[j].toVariant().toLongLong();
+        if (ts <= now) {
+          double age = static_cast<double>(now - ts);
+          heat += std::exp(-(age / halfLifeSecs) * ln2);
+        }
+      }
+
+      source[QStringLiteral("local_sessionCount")] = count;
+      source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
+      source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
+      if (!lastUsed.isEmpty()) {
+         source[QStringLiteral("local_lastUsed")] = lastUsed;
+      }
+
+      m_sources[i] = source;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+     Q_EMIT dataChanged(createIndex(0, 0), createIndex(m_sources.size() - 1, ColCount - 1));
+     saveSources();
+  }
+}

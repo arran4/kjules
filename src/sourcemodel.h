@@ -29,6 +29,7 @@ public:
   void updateSource(const QJsonObject &sourceConst);
   void clear();
   void recordSessionCreated(const QString &sourceId);
+  void recalculateStatsFromSessions(const QJsonArray &allSessions);
 
 private:
   QJsonArray m_sources;

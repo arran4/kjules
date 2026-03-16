@@ -121,6 +121,22 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
 
+  auto updateSourceStats = [this]() {
+    QJsonArray allSessions;
+    QJsonArray active = m_sessionModel->getAllSessions();
+    for (int i = 0; i < active.size(); ++i) {
+        allSessions.append(active[i]);
+    }
+    QJsonArray archived = m_archiveModel->getAllSessions();
+    for (int i = 0; i < archived.size(); ++i) {
+        allSessions.append(archived[i]);
+    }
+    m_sourceModel->recalculateStatsFromSessions(allSessions);
+  };
+
+  connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
+  connect(m_archiveModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
+
   m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();
 
