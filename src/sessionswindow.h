@@ -41,6 +41,10 @@ public:
                           QWidget *parent = nullptr);
   ~SessionsWindow();
 
+Q_SIGNALS:
+  void followRequested(const QJsonObject &sessionData);
+  void openSessionRequested(const QJsonObject &sessionData);
+
 private Q_SLOTS:
   void refreshSessions();
   void resumeRefresh();

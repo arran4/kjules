@@ -396,6 +396,21 @@ void SessionsWindow::setupUi() {
             m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
           });
 
+          menu.addSeparator();
+          QAction *followAction = menu.addAction(i18n("Follow"));
+          connect(followAction, &QAction::triggered, [this, selectedRows]() {
+            int count = 0;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+              QJsonObject sessionData = m_model->getSession(sourceIndex.row());
+              if (!sessionData.isEmpty()) {
+                Q_EMIT followRequested(sessionData);
+                count++;
+              }
+            }
+            m_statusLabel->setText(i18n("Followed %1 sessions.", count));
+          });
+
           menu.exec(m_listView->mapToGlobal(pos));
         }
       });
@@ -405,9 +420,15 @@ void SessionsWindow::setupUi() {
             QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
             QJsonObject rawData = m_model->getSession(sourceIndex.row());
 
-            SessionWindow *window =
-                new SessionWindow(rawData, m_apiManager, this);
-            window->show();
+            // SessionsWindow only shows global sessions, so they're unmanaged
+            // by default here, but to be 100% correct, we should check if they
+            // are in the MainWindow's managed list. However, SessionsWindow
+            // doesn't have access to MainWindow's m_sessionModel.
+            // A simple approach is to emit a signal, or just pass false for now
+            // and maybe let MainWindow intercept if it really cares.
+            // Since double-click opens it, and we don't have isManaged here,
+            // we will emit a signal to request the window be shown.
+            Q_EMIT openSessionRequested(rawData);
           });
 
   layout->addWidget(tabWidget);

@@ -287,6 +287,10 @@ QJsonArray SessionModel::getAllSessions() const {
   return arr;
 }
 
+bool SessionModel::contains(const QString &id) const {
+  return m_idToIndex.contains(id);
+}
+
 void SessionModel::clear() {
   beginResetModel();
   m_sessions.clear();

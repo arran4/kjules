@@ -77,6 +77,7 @@ public:
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QJsonArray getAllSessions() const;
+  bool contains(const QString &id) const;
   void clear();
   void loadSessions();
   void saveSessions();

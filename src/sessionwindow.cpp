@@ -27,7 +27,8 @@
 #include <QVBoxLayout>
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
-                             APIManager *apiManager, QWidget *parent)
+                             APIManager *apiManager, bool isManaged,
+                             QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData),
       m_apiManager(apiManager) {
   setAttribute(Qt::WA_DeleteOnClose);
@@ -43,7 +44,7 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onActivitiesReceived);
   }
 
-  setupActions();
+  setupActions(isManaged);
   setupUi(m_sessionData);
 
   KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
@@ -58,7 +59,7 @@ SessionWindow::~SessionWindow() {
   config.sync();
 }
 
-void SessionWindow::setupActions() {
+void SessionWindow::setupActions(bool isManaged) {
   QAction *refreshAction = new QAction(
       QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
   actionCollection()->addAction(QStringLiteral("refresh_session"),
@@ -128,6 +129,15 @@ void SessionWindow::setupActions() {
   sessionMenu->addAction(saveTemplateAction);
   sessionMenu->addSeparator();
 
+  if (!isManaged) {
+    QAction *followAction = new QAction(i18n("Follow"), this);
+    connect(followAction, &QAction::triggered, this, [this]() {
+      Q_EMIT followRequested(m_sessionData);
+      m_statusLabel->setText(i18n("Followed session."));
+    });
+    sessionMenu->addAction(followAction);
+  }
+
   QAction *archiveAction = new QAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
@@ -136,13 +146,15 @@ void SessionWindow::setupActions() {
   });
   sessionMenu->addAction(archiveAction);
 
-  QAction *deleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
-  connect(deleteAction, &QAction::triggered, this, [this]() {
-    Q_EMIT deleteRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
-  });
-  sessionMenu->addAction(deleteAction);
+  if (isManaged) {
+    QAction *deleteAction = new QAction(
+        QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+    connect(deleteAction, &QAction::triggered, this, [this]() {
+      Q_EMIT deleteRequested(
+          m_sessionData.value(QStringLiteral("id")).toString());
+    });
+    sessionMenu->addAction(deleteAction);
+  }
   sessionMenu->addSeparator();
   sessionMenu->addAction(closeAction);
 

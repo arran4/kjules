@@ -54,6 +54,7 @@ private Q_SLOTS:
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
   void connectSessionWindow(SessionWindow *window);
+  void connectSessionsWindow(class SessionsWindow *window);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();

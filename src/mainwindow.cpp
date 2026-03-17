@@ -242,6 +242,7 @@ void MainWindow::setupUi() {
               menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
             SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
+            connectSessionsWindow(window);
             window->show();
           });
           menu.addAction(m_refreshSourceAction);
@@ -327,6 +328,7 @@ void MainWindow::setupUi() {
                             .toString();
                     SessionsWindow *window =
                         new SessionsWindow(source, m_apiManager, this);
+                    connectSessionsWindow(window);
                     window->show();
                   });
 
@@ -458,8 +460,10 @@ void MainWindow::setupUi() {
                 QJsonObject sessionData =
                     m_archiveModel->getSession(sourceIndex.row());
                 if (!sessionData.isEmpty()) {
-                  SessionWindow *window =
-                      new SessionWindow(sessionData, m_apiManager, this);
+                  bool isManaged = m_sessionModel->contains(
+                      sessionData.value(QStringLiteral("id")).toString());
+                  SessionWindow *window = new SessionWindow(
+                      sessionData, m_apiManager, isManaged, this);
                   connectSessionWindow(window);
                   window->show();
                 } else {
@@ -510,8 +514,10 @@ void MainWindow::setupUi() {
         QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
         QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
         if (!sessionData.isEmpty()) {
+          bool isManaged = m_sessionModel->contains(
+              sessionData.value(QStringLiteral("id")).toString());
           SessionWindow *window =
-              new SessionWindow(sessionData, m_apiManager, this);
+              new SessionWindow(sessionData, m_apiManager, isManaged, this);
           connectSessionWindow(window);
           window->show();
         } else {
@@ -816,6 +822,7 @@ void MainWindow::createActions() {
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
     SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    connectSessionsWindow(window);
     window->show();
   });
 
@@ -879,6 +886,7 @@ void MainWindow::createActions() {
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
     SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    connectSessionsWindow(window);
     window->show();
   });
 
@@ -1570,6 +1578,15 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::followRequested, this,
+          [this](const QJsonObject &sessionData) {
+            QString id = sessionData.value(QStringLiteral("id")).toString();
+            if (!m_sessionModel->contains(id)) {
+              m_sessionModel->addSession(sessionData);
+              m_sessionModel->saveSessions();
+            }
+          });
+
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
             SaveDialog dlg(QStringLiteral("Template"), this);
@@ -1614,8 +1631,26 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
           });
 }
 
+void MainWindow::connectSessionsWindow(SessionsWindow *window) {
+  connect(window, &SessionsWindow::followRequested, this,
+          [this](const QJsonObject &sessionData) {
+            QString id = sessionData.value(QStringLiteral("id")).toString();
+            if (!m_sessionModel->contains(id)) {
+              m_sessionModel->addSession(sessionData);
+              m_sessionModel->saveSessions();
+            }
+          });
+  connect(window, &SessionsWindow::openSessionRequested, this,
+          [this](const QJsonObject &sessionData) {
+            showSessionWindow(sessionData);
+          });
+}
+
 void MainWindow::showSessionWindow(const QJsonObject &session) {
-  SessionWindow *window = new SessionWindow(session, m_apiManager, this);
+  bool isManaged = m_sessionModel->contains(
+      session.value(QStringLiteral("id")).toString());
+  SessionWindow *window =
+      new SessionWindow(session, m_apiManager, isManaged, this);
   connectSessionWindow(window);
   window->show();
 }
@@ -1632,7 +1667,8 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
-    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+    SessionWindow *window =
+        new SessionWindow(sessionData, m_apiManager, true, this);
     connectSessionWindow(window);
     window->show();
   }
