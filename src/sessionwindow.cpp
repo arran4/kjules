@@ -130,10 +130,10 @@ void SessionWindow::setupActions(bool isManaged) {
   sessionMenu->addSeparator();
 
   if (!isManaged) {
-    QAction *followAction = new QAction(i18n("Follow"), this);
+    QAction *followAction = new QAction(i18n("Watch"), this);
     connect(followAction, &QAction::triggered, this, [this]() {
       Q_EMIT followRequested(m_sessionData);
-      m_statusLabel->setText(i18n("Followed session."));
+      m_statusLabel->setText(i18n("Watching session."));
     });
     sessionMenu->addAction(followAction);
   }

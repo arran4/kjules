@@ -384,7 +384,7 @@ void SessionsWindow::setupUi() {
                 for (const QModelIndex &idx : selectedRows) {
                   QString id =
                       m_proxyModel->data(idx, SessionModel::IdRole).toString();
-                  m_apiManager->reloadSession(id);
+                  Q_EMIT refreshRequested(id);
                 }
                 m_statusLabel->setText(
                     i18n("Reloading %1 sessions...", selectedRows.size()));
@@ -403,7 +403,7 @@ void SessionsWindow::setupUi() {
           });
 
           menu.addSeparator();
-          QAction *followAction = menu.addAction(i18n("Follow"));
+          QAction *followAction = menu.addAction(i18n("Watch"));
           connect(followAction, &QAction::triggered, [this, selectedRows]() {
             int count = 0;
             for (const QModelIndex &idx : selectedRows) {
@@ -414,7 +414,7 @@ void SessionsWindow::setupUi() {
                 count++;
               }
             }
-            m_statusLabel->setText(i18n("Followed %1 sessions.", count));
+            m_statusLabel->setText(i18n("Watching %1 sessions.", count));
           });
 
           QAction *archiveAction = menu.addAction(i18n("Archive"));

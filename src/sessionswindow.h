@@ -47,6 +47,7 @@ Q_SIGNALS:
   void deleteRequested(const QString &id);
   void openSessionRequested(const QJsonObject &sessionData);
   void sessionsUpdated(const QJsonArray &sessions);
+  void refreshRequested(const QString &id);
 
 private Q_SLOTS:
   void refreshSessions();

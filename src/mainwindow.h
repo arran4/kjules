@@ -87,6 +87,7 @@ private:
   APIManager *m_apiManager;
   SessionModel *m_sessionModel;
   SessionModel *m_archiveModel;
+  SessionModel *m_watchModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
   TemplatesModel *m_templatesModel;
@@ -96,6 +97,7 @@ private:
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;
   QTreeView *m_archiveView;
+  QTreeView *m_watchView;
   QListView *m_draftsView;
   QListView *m_templatesView;
   QListView *m_queueView;
@@ -125,6 +127,7 @@ private:
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
+  QTimer *m_watchRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
 
   QTimer *m_queueTimer;
