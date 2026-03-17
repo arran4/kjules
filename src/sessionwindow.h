@@ -51,6 +51,7 @@ Q_SIGNALS:
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
   void followRequested(const QJsonObject &sessionData);
+  void refreshRequested(const QString &id);
 };
 
 #endif // SESSIONWINDOW_H

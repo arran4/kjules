@@ -217,8 +217,8 @@ void SessionWindow::updateAutoRefresh() {
 void SessionWindow::refreshSession() {
   if (m_apiManager) {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
-    m_apiManager->reloadSession(id);
-    m_statusLabel->setText(i18n("Refreshing..."));
+    Q_EMIT refreshRequested(id);
+    m_statusLabel->setText(i18n("Refreshing... (Queued)"));
   }
 }
 

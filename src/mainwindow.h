@@ -63,6 +63,7 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void updateQueueStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
@@ -102,6 +103,7 @@ private:
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
+  QLabel *m_queueStatusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;

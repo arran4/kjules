@@ -101,6 +101,16 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
             m_sessionModel->updateSession(session);
+            m_archiveModel->updateSession(session);
+            if (m_isProcessingQueue) {
+              QueueItem item = m_queueModel->peek();
+              if (item.isRefreshJob && item.requestData.value(QStringLiteral("id")).toString() == session.value(QStringLiteral("id")).toString()) {
+                m_queueModel->dequeue();
+                m_isProcessingQueue = false;
+                m_queueBackoffUntil = QDateTime(); // reset backoff
+                updateStatus(i18n("Session %1 refreshed successfully.", session.value(QStringLiteral("id")).toString()));
+              }
+            }
           });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
@@ -114,7 +124,13 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
           [this](const QString &msg, const QString &response) {
             if (m_isProcessingQueue) {
-              onSessionCreatedResult(false, QJsonObject(), msg, response);
+              QueueItem item = m_queueModel->peek();
+              if (item.isRefreshJob) {
+                // For refresh jobs, just fail them as we would creations
+                onSessionCreatedResult(false, QJsonObject(), msg, response);
+              } else {
+                onSessionCreatedResult(false, QJsonObject(), msg, response);
+              }
             }
           });
   connect(m_apiManager, &APIManager::logMessage, this,
@@ -745,6 +761,13 @@ void MainWindow::setupUi() {
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
 
+  m_queueStatusLabel = new QLabel(this);
+  statusBar()->addPermanentWidget(m_queueStatusLabel);
+  connect(m_queueModel, &QueueModel::rowsInserted, this, &MainWindow::updateQueueStats);
+  connect(m_queueModel, &QueueModel::rowsRemoved, this, &MainWindow::updateQueueStats);
+  connect(m_queueModel, &QueueModel::modelReset, this, &MainWindow::updateQueueStats);
+  updateQueueStats();
+
   m_sessionStatsLabel = new QLabel(this);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
@@ -834,6 +857,27 @@ void MainWindow::createActions() {
           &MainWindow::refreshSources);
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
+
+  QAction *refreshManagedSessionsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                  i18n("Refresh Managed Sessions"), this);
+  connect(refreshManagedSessionsAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QString id = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString();
+      m_queueModel->enqueueRefresh(id);
+      count++;
+    }
+    for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+      QString id = m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString();
+      m_queueModel->enqueueRefresh(id);
+      count++;
+    }
+    updateStatus(i18n("Queued %1 managed sessions for refresh.", count));
+    QTimer::singleShot(0, this, &MainWindow::processQueue);
+  });
+  actionCollection()->addAction(QStringLiteral("refresh_managed_sessions"),
+                                refreshManagedSessionsAction);
 
   m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
   actionCollection()->addAction(QStringLiteral("refresh_source"),
@@ -1225,7 +1269,11 @@ void MainWindow::processQueue() {
 
   m_isProcessingQueue = true;
   QueueItem item = m_queueModel->peek();
-  m_apiManager->createSessionAsync(item.requestData);
+  if (item.isRefreshJob) {
+    m_apiManager->reloadSession(item.requestData.value(QStringLiteral("id")).toString());
+  } else {
+    m_apiManager->createSessionAsync(item.requestData);
+  }
 }
 
 void MainWindow::onSessionCreatedResult(bool success,
@@ -1246,14 +1294,22 @@ void MainWindow::onSessionCreatedResult(bool success,
   m_isProcessingQueue = false;
 
   if (success) {
-    m_sessionModel->addSession(session);
-    QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
-    if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
-    updateStatus(i18n("Session created from queue."));
+    if (!item.isRefreshJob) {
+      m_sessionModel->addSession(session);
+      QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+      if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
+      updateStatus(i18n("Session created from queue."));
+    } else {
+      updateStatus(i18n("Session refreshed from queue."));
+    }
     m_queueBackoffUntil = QDateTime(); // reset backoff
     // The next item will be processed by the configured timer (m_queueTimer)
   } else {
-    updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
+    if (item.isRefreshJob) {
+      updateStatus(i18n("Failed to refresh session from queue: %1", errorMsg));
+    } else {
+      updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
+    }
     m_queueModel->requeueFailed(item, errorMsg, rawResponse);
 
     KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
@@ -1577,6 +1633,12 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::refreshRequested, this,
+          [this](const QString &id) {
+            m_queueModel->enqueueRefresh(id, true);
+            updateStatus(i18n("Priority queued session %1 for refresh.", id));
+            QTimer::singleShot(0, this, &MainWindow::processQueue);
+          });
   connect(window, &SessionWindow::followRequested, this,
           [this](const QJsonObject &sessionData) {
             QString id = sessionData.value(QStringLiteral("id")).toString();
@@ -1783,6 +1845,15 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
+}
+
+void MainWindow::updateQueueStats() {
+  int queueSize = m_queueModel->rowCount();
+  if (queueSize == 0) {
+    m_queueStatusLabel->setText(i18n("Queue: Empty"));
+  } else {
+    m_queueStatusLabel->setText(i18n("Queue: %1 active", queueSize));
+  }
 }
 
 void MainWindow::backupData() {

@@ -7,7 +7,8 @@
 #include <QVector>
 
 struct QueueItem {
-  QJsonObject requestData; // contains source, prompt, automationMode
+  QJsonObject requestData; // contains source, prompt, automationMode OR just id for refresh
+  bool isRefreshJob = false;
   int errorCount = 0;
   QString lastError;
   QString lastResponse;
@@ -42,6 +43,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void enqueue(const QJsonObject &requestData);
+  void enqueueRefresh(const QString &sessionId, bool prepend = false);
   void updateItem(int index, const QueueItem &item);
   QueueItem dequeue();
   QueueItem peek() const;
