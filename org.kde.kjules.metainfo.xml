@@ -4,7 +4,7 @@
   <name>kJules</name>
   <summary>Google Jules API Frontend</summary>
   <description>
-    <p>A C++ application built with Qt 5 and KDE Frameworks 5 that provides a desktop interface for interacting with the Google Jules API.</p>
+    <p>A C++ application built with KDE Frameworks that provides a desktop interface for interacting with the Google Jules API.</p>
   </description>
   <launchable type="desktop-id">org.kde.kjules.desktop</launchable>
   <metadata_license>CC0-1.0</metadata_license>
