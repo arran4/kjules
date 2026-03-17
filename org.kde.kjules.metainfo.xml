@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.kde.kjules</id>
+  <name>kJules</name>
+  <summary>Google Jules API Frontend</summary>
+  <description>
+    <p>A C++ application built with KDE Frameworks that provides a desktop interface for interacting with the Google Jules API.</p>
+  </description>
+  <launchable type="desktop-id">org.kde.kjules.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-3-Clause</project_license>
+</component>
