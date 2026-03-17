@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.kde.kjules</id>
+  <name>kJules</name>
+  <summary>Google Jules API Frontend</summary>
+  <description>
+    <p>A GitHub KDE task program written in C++ that notifies you when there is a new GitHub notification.</p>
+    <p>When you click on the notification, it presents you with its own version of GitHub Notifications, GitHub Pull Requests, the GitHub feed/wall, and Explore.</p>
+  </description>
+  <launchable type="desktop-id">org.kde.kjules.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-3-Clause</project_license>
+</component>
