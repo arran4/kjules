@@ -285,7 +285,9 @@ void MainWindow::setupUi() {
   m_sessionView->setSortingEnabled(true);
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_sessionView->header()->setStretchLastSection(true);
+  m_sessionView->header()->setStretchLastSection(false);
+  m_sessionView->header()->resizeSection(SessionModel::ColTitle, 750);
+  m_sessionView->header()->resizeSection(SessionModel::ColRepo, 300);
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
       m_sessionView, &QTreeView::customContextMenuRequested,
@@ -296,6 +298,13 @@ void MainWindow::setupUi() {
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
+          QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+          if (selectedRows.isEmpty() || !selectedRows.contains(index)) {
+            selectedRows.clear();
+            selectedRows.append(index);
+            m_sessionView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+          }
 
           QMenu menu;
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
@@ -377,17 +386,33 @@ void MainWindow::setupUi() {
             });
           }
 
-          connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
-            m_archiveModel->addSession(session);
+          connect(archiveAction, &QAction::triggered, [this, proxy, selectedRows]() {
+            QList<int> rowsToRemove;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex sourceIdx = proxy ? proxy->mapToSource(idx) : idx;
+              QJsonObject session = m_sessionModel->getSession(sourceIdx.row());
+              m_archiveModel->addSession(session);
+              rowsToRemove.append(sourceIdx.row());
+            }
             m_archiveModel->saveSessions();
-            m_sessionModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session archived."));
+            std::sort(rowsToRemove.begin(), rowsToRemove.end(), std::greater<int>());
+            for (int row : rowsToRemove) {
+              m_sessionModel->removeSession(row);
+            }
+            updateStatus(i18n("Archived %1 sessions.", selectedRows.size()));
           });
 
-          connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
-            m_sessionModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session deleted."));
+          connect(deleteAction, &QAction::triggered, [this, proxy, selectedRows]() {
+            QList<int> rowsToRemove;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex sourceIdx = proxy ? proxy->mapToSource(idx) : idx;
+              rowsToRemove.append(sourceIdx.row());
+            }
+            std::sort(rowsToRemove.begin(), rowsToRemove.end(), std::greater<int>());
+            for (int row : rowsToRemove) {
+              m_sessionModel->removeSession(row);
+            }
+            updateStatus(i18n("Deleted %1 sessions.", selectedRows.size()));
           });
 
           connect(newSessionFromSessionAction, &QAction::triggered,
@@ -451,7 +476,9 @@ void MainWindow::setupUi() {
   m_archiveView->setSortingEnabled(true);
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_archiveView->header()->setStretchLastSection(true);
+  m_archiveView->header()->setStretchLastSection(false);
+  m_archiveView->header()->resizeSection(SessionModel::ColTitle, 750);
+  m_archiveView->header()->resizeSection(SessionModel::ColRepo, 300);
 
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
@@ -463,6 +490,14 @@ void MainWindow::setupUi() {
               qobject_cast<const QSortFilterProxyModel *>(
                   m_archiveView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
+          QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
+          if (selectedRows.isEmpty() || !selectedRows.contains(index)) {
+            selectedRows.clear();
+            selectedRows.append(index);
+            m_archiveView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+          }
+
           QMenu menu;
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
@@ -490,17 +525,33 @@ void MainWindow::setupUi() {
                 }
               });
 
-          connect(unarchiveAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_archiveModel->getSession(sourceIndex.row());
-            m_sessionModel->addSession(session);
+          connect(unarchiveAction, &QAction::triggered, [this, proxy, selectedRows]() {
+            QList<int> rowsToRemove;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex sourceIdx = proxy ? proxy->mapToSource(idx) : idx;
+              QJsonObject session = m_archiveModel->getSession(sourceIdx.row());
+              m_sessionModel->addSession(session);
+              rowsToRemove.append(sourceIdx.row());
+            }
             m_sessionModel->saveSessions();
-            m_archiveModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session unarchived."));
+            std::sort(rowsToRemove.begin(), rowsToRemove.end(), std::greater<int>());
+            for (int row : rowsToRemove) {
+              m_archiveModel->removeSession(row);
+            }
+            updateStatus(i18n("Unarchived %1 sessions.", selectedRows.size()));
           });
 
-          connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
-            m_archiveModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session deleted from archive."));
+          connect(deleteAction, &QAction::triggered, [this, proxy, selectedRows]() {
+            QList<int> rowsToRemove;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex sourceIdx = proxy ? proxy->mapToSource(idx) : idx;
+              rowsToRemove.append(sourceIdx.row());
+            }
+            std::sort(rowsToRemove.begin(), rowsToRemove.end(), std::greater<int>());
+            for (int row : rowsToRemove) {
+              m_archiveModel->removeSession(row);
+            }
+            updateStatus(i18n("Deleted %1 sessions from archive.", selectedRows.size()));
           });
 
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
