@@ -44,6 +44,7 @@ public:
 Q_SIGNALS:
   void followRequested(const QJsonObject &sessionData);
   void openSessionRequested(const QJsonObject &sessionData);
+  void sessionsUpdated(const QJsonArray &sessions);
 
 private Q_SLOTS:
   void refreshSessions();

@@ -60,6 +60,7 @@ public:
 
   explicit SessionModel(
       const QString &cacheFileName = QStringLiteral("cached_all_sessions.json"),
+      bool isCache = false,
       QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -93,6 +94,7 @@ private:
   QHash<QString, int> m_idToIndex;
   QString m_nextPageToken;
   QString m_cacheFileName;
+  bool m_isCache;
 };
 
 #endif // SESSIONMODEL_H

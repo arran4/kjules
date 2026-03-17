@@ -59,9 +59,9 @@
 MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
       m_sessionModel(
-          new SessionModel(QStringLiteral("cached_all_sessions.json"), this)),
+          new SessionModel(QStringLiteral("cached_managed_sessions.json"), false, this)),
       m_archiveModel(new SessionModel(
-          QStringLiteral("cached_archive_sessions.json"), this)),
+          QStringLiteral("cached_archive_sessions.json"), false, this)),
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)), m_templatesModel(new TemplatesModel(this)),
       m_queueModel(new QueueModel(this)),
@@ -1643,6 +1643,29 @@ void MainWindow::connectSessionsWindow(SessionsWindow *window) {
   connect(window, &SessionsWindow::openSessionRequested, this,
           [this](const QJsonObject &sessionData) {
             showSessionWindow(sessionData);
+          });
+  connect(window, &SessionsWindow::sessionsUpdated, this,
+          [this](const QJsonArray &sessions) {
+            bool sessionUpdated = false;
+            bool archiveUpdated = false;
+            for (int i = 0; i < sessions.size(); ++i) {
+              QJsonObject sessionData = sessions[i].toObject();
+              QString id = sessionData.value(QStringLiteral("id")).toString();
+              if (m_sessionModel->contains(id)) {
+                m_sessionModel->updateSession(sessionData);
+                sessionUpdated = true;
+              }
+              if (m_archiveModel->contains(id)) {
+                m_archiveModel->updateSession(sessionData);
+                archiveUpdated = true;
+              }
+            }
+            if (sessionUpdated) {
+              m_sessionModel->saveSessions();
+            }
+            if (archiveUpdated) {
+              m_archiveModel->saveSessions();
+            }
           });
 }
 

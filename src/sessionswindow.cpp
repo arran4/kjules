@@ -90,7 +90,7 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
       m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
       m_pagesLoaded(0), m_isRefreshingAll(false) {
 
-  m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), this);
+  m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), true, this);
   m_proxyModel = new SessionsProxyModel(this);
   m_proxyModel->setSourceModel(m_model);
 
@@ -460,11 +460,23 @@ void SessionsWindow::setupUi() {
                                 m_loadRemainingAction);
   m_loadRemainingAction->setEnabled(false);
 
+  QAction *clearCacheAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("edit-clear-all")),
+      i18n("Clear Cache (Non-Managed Sessions)"), this);
+  connect(clearCacheAction, &QAction::triggered, this, [this]() {
+    m_model->clearSessions();
+    m_model->saveSessions();
+    m_statusLabel->setText(i18n("Session cache cleared."));
+  });
+
   // Menu
   QMenu *fileMenu = new QMenu(i18n("File"), this);
   fileMenu->addAction(refreshAction);
   fileMenu->addAction(m_resumeAction);
   fileMenu->addAction(m_loadRemainingAction);
+  fileMenu->addSeparator();
+  fileMenu->addAction(clearCacheAction);
+  fileMenu->addSeparator();
   QAction *quitAction =
       new QAction(QIcon::fromTheme(QStringLiteral("application-exit")),
                   i18n("Close"), this);
@@ -645,6 +657,8 @@ void SessionsWindow::onSessionsReceived(const QJsonArray &sessions,
   m_progressBar->setFormat(i18n("%1 sessions loaded", m_sessionsLoaded));
   m_statusLabel->setText(i18n("Loading page %1... Loaded %2 sessions total.",
                               m_pagesLoaded, m_sessionsLoaded));
+
+  Q_EMIT sessionsUpdated(sessions);
 }
 
 void SessionsWindow::updateRepoFilterList() {

@@ -8,8 +8,8 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
-SessionModel::SessionModel(const QString &cacheFileName, QObject *parent)
-    : QAbstractTableModel(parent), m_cacheFileName(cacheFileName) {}
+SessionModel::SessionModel(const QString &cacheFileName, bool isCache, QObject *parent)
+    : QAbstractTableModel(parent), m_cacheFileName(cacheFileName), m_isCache(isCache) {}
 
 SessionData parseSessionData(const QJsonObject &obj) {
   SessionData data;
@@ -316,8 +316,9 @@ void SessionModel::removeSession(int row) {
 }
 
 void SessionModel::loadSessions() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(
+      m_isCache ? QStandardPaths::CacheLocation
+                : QStandardPaths::AppDataLocation);
   QFile file(path + QLatin1Char('/') + m_cacheFileName);
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -333,8 +334,9 @@ void SessionModel::loadSessions() {
 }
 
 void SessionModel::saveSessions() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(
+      m_isCache ? QStandardPaths::CacheLocation
+                : QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
@@ -368,5 +370,7 @@ void SessionModel::clearSessions() {
   beginResetModel();
   m_sessions.clear();
   m_idToIndex.clear();
+  m_nextPageToken.clear();
   endResetModel();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
