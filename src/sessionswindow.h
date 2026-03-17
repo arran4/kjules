@@ -43,6 +43,8 @@ public:
 
 Q_SIGNALS:
   void followRequested(const QJsonObject &sessionData);
+  void archiveRequested(const QString &id);
+  void deleteRequested(const QString &id);
   void openSessionRequested(const QJsonObject &sessionData);
   void sessionsUpdated(const QJsonArray &sessions);
 
@@ -75,6 +77,7 @@ private:
   QAction *m_resumeAction;
   QAction *m_loadRemainingAction;
   QActionGroup *m_autoLoadGroup;
+  QAction *m_clearCacheOnRefreshAction;
 };
 
 #endif // SESSIONSWINDOW_H

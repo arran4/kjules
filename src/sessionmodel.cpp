@@ -252,6 +252,7 @@ void SessionModel::addSession(const QJsonObject &session) {
     m_idToIndex[m_sessions[i].id] = i;
   }
   endInsertRows();
+  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 void SessionModel::updateSession(const QJsonObject &session) {

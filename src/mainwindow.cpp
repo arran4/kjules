@@ -85,12 +85,11 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesReceived);
   connect(m_apiManager, &APIManager::sourcesRefreshFinished, this,
           &MainWindow::onSourcesRefreshFinished);
-  connect(m_apiManager, &APIManager::sessionsReceived, this,
-          [this](const QJsonArray &sessions) {
-            m_sessionModel->setSessions(sessions);
-            m_lastSessionRefreshTime = QDateTime::currentDateTime();
-            updateSessionStats();
-          });
+  // Note: We deliberately DO NOT connect APIManager::sessionsReceived to
+  // m_sessionModel->setSessions here. That signal is for the global cache
+  // (SessionsWindow), while m_sessionModel is for managed/followed sessions only.
+  // Instead, MainWindow updates its managed sessions progressively by listening to
+  // SessionsWindow::sessionsUpdated.
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           &MainWindow::onSessionCreationFailed);
   connect(m_apiManager, &APIManager::sessionCreated,
@@ -241,7 +240,7 @@ void MainWindow::setupUi() {
           QAction *sourceViewSessionsAction =
               menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
-            SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
+            SessionsWindow *window = new SessionsWindow(id, m_apiManager, nullptr);
             connectSessionsWindow(window);
             window->show();
           });
@@ -327,7 +326,7 @@ void MainWindow::setupUi() {
                             ->data(sourceIndex, SessionModel::SourceRole)
                             .toString();
                     SessionsWindow *window =
-                        new SessionsWindow(source, m_apiManager, this);
+                        new SessionsWindow(source, m_apiManager, nullptr);
                     connectSessionsWindow(window);
                     window->show();
                   });
@@ -821,7 +820,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, nullptr);
     connectSessionsWindow(window);
     window->show();
   });
@@ -885,7 +884,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, nullptr);
     connectSessionsWindow(window);
     window->show();
   });

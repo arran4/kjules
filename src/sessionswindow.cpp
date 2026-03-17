@@ -28,6 +28,7 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTextBrowser>
+#include <QTimer>
 #include <QToolBar>
 #include <QTreeView>
 #include <QUrl>
@@ -125,7 +126,12 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
       i18n("Loaded %1 cached sessions.", m_model->rowCount()));
 }
 
-SessionsWindow::~SessionsWindow() {}
+SessionsWindow::~SessionsWindow() {
+  KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+  config.writeEntry("ClearCacheOnRefresh",
+                    m_clearCacheOnRefreshAction->isChecked());
+  config.sync();
+}
 
 void SessionsWindow::setupUi() {
   setAttribute(Qt::WA_DeleteOnClose);
@@ -411,6 +417,28 @@ void SessionsWindow::setupUi() {
             m_statusLabel->setText(i18n("Followed %1 sessions.", count));
           });
 
+          QAction *archiveAction = menu.addAction(i18n("Archive"));
+          connect(archiveAction, &QAction::triggered, [this, selectedRows]() {
+            int count = 0;
+            for (const QModelIndex &idx : selectedRows) {
+              QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+              Q_EMIT archiveRequested(id);
+              count++;
+            }
+            m_statusLabel->setText(i18n("Archived %1 sessions.", count));
+          });
+
+          QAction *deleteAction = menu.addAction(i18n("Delete"));
+          connect(deleteAction, &QAction::triggered, [this, selectedRows]() {
+            int count = 0;
+            for (const QModelIndex &idx : selectedRows) {
+              QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+              Q_EMIT deleteRequested(id);
+              count++;
+            }
+            m_statusLabel->setText(i18n("Deleted %1 sessions.", count));
+          });
+
           menu.exec(m_listView->mapToGlobal(pos));
         }
       });
@@ -505,12 +533,19 @@ void SessionsWindow::setupUi() {
   m_autoLoadGroup->addAction(autoBottomAction);
 
   autoLoadMenu->addActions(m_autoLoadGroup->actions());
+
+  m_clearCacheOnRefreshAction = new QAction(i18n("Clear Cache On Manual Refresh"), this);
+  m_clearCacheOnRefreshAction->setCheckable(true);
+  prefsMenu->addAction(m_clearCacheOnRefreshAction);
+
   menuBar()->addMenu(prefsMenu);
 
   QMenu *viewMenu = new QMenu(i18n("View"), this);
   QMenu *columnsMenu = viewMenu->addMenu(i18n("Columns"));
 
   KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+  m_clearCacheOnRefreshAction->setChecked(
+      config.readEntry("ClearCacheOnRefresh", false));
   QString autoLoadMode = config.readEntry("AutoLoadMode", "manual");
   for (QAction *action : m_autoLoadGroup->actions()) {
     if (action->data().toString() == autoLoadMode) {
@@ -592,6 +627,11 @@ void SessionsWindow::refreshSessions() {
     return;
 
   m_isRefreshing = true;
+
+  if (m_clearCacheOnRefreshAction && m_clearCacheOnRefreshAction->isChecked()) {
+    m_model->clearSessions();
+    m_model->saveSessions();
+  }
 
   if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
       m_autoLoadGroup->checkedAction()->data().toString() ==
@@ -710,9 +750,20 @@ void SessionsWindow::onSessionsRefreshFinished() {
     m_model->saveSessions();
   }
 
-  if (!m_nextPageToken.isEmpty() && m_autoLoadGroup->checkedAction() &&
-      m_autoLoadGroup->checkedAction()->data().toString() ==
-          QStringLiteral("load_all")) {
-    resumeRefresh();
+  if (!m_nextPageToken.isEmpty() && m_autoLoadGroup->checkedAction()) {
+    QString mode = m_autoLoadGroup->checkedAction()->data().toString();
+    if (mode == QStringLiteral("load_all")) {
+      resumeRefresh();
+    } else if (mode == QStringLiteral("auto_bottom")) {
+      // If we are in auto_bottom mode and the scrollbar isn't visible (maximum == 0),
+      // we didn't fill the screen yet. Wait a tiny bit for layout to finish,
+      // then check and load more if needed.
+      QTimer::singleShot(100, this, [this]() {
+        QScrollBar *vBar = m_listView->verticalScrollBar();
+        if (vBar->maximum() == 0 && !m_isRefreshing && !m_nextPageToken.isEmpty()) {
+          resumeRefresh();
+        }
+      });
+    }
   }
 }
