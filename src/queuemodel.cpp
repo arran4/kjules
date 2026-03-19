@@ -201,6 +201,14 @@ void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg,
   save();
 }
 
+void QueueModel::requeueTransient(const QueueItem &item) {
+  // Place the item back at the front without recording an error
+  beginInsertRows(QModelIndex(), 0, 0);
+  m_items.prepend(item);
+  endInsertRows();
+  save();
+}
+
 void QueueModel::removeItem(int index) {
   if (index >= 0 && index < m_items.size()) {
     beginRemoveRows(QModelIndex(), index, index);

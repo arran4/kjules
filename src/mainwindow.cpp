@@ -1246,13 +1246,34 @@ void MainWindow::onSessionCreatedResult(bool success,
     m_queueBackoffUntil = QDateTime(); // reset backoff
     // The next item will be processed by the configured timer (m_queueTimer)
   } else {
-    updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-    m_queueModel->requeueFailed(item, errorMsg, rawResponse);
+    QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
+    bool isPrecondition = false;
+    if (errDoc.isObject()) {
+        QJsonObject errObj = errDoc.object().value(QStringLiteral("error")).toObject();
+        if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("FAILED_PRECONDITION")) {
+            isPrecondition = true;
+        }
+    }
 
-    KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
-    int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
-    m_queueBackoffUntil =
-        QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+    if (isPrecondition) {
+        updateStatus(i18n("Too many concurrent tasks, waiting before retrying..."));
+
+        // Requeue the item without incrementing the error count
+        m_queueModel->requeueTransient(item);
+
+        // Apply a short backoff (e.g. 5 minutes)
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+        int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
+        m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+    } else {
+        updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
+        m_queueModel->requeueFailed(item, errorMsg, rawResponse);
+
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+        int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
+        m_queueBackoffUntil =
+            QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+    }
   }
 }
 
