@@ -47,6 +47,7 @@ public:
   QueueItem peek() const;
   void requeueFailed(const QueueItem &item, const QString &errorMsg,
                      const QString &rawResponse = QString());
+  void requeueTransient(const QueueItem &item);
   void removeItem(int index);
   bool isEmpty() const;
   void clear();
