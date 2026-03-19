@@ -31,6 +31,8 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData),
       m_apiManager(apiManager) {
+  setObjectName(QStringLiteral("SessionWindow_%1").arg(
+      sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
 
   m_autoRefreshTimer = new QTimer(this);
@@ -46,6 +48,7 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
 
   setupActions();
   setupUi(m_sessionData);
+  setupGUI();
 
   KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
   int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);

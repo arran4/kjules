@@ -69,6 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false), m_queuePaused(false) {
+  setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
@@ -917,6 +918,8 @@ void MainWindow::createActions() {
       }
     }
     KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+    sessionsWindow->setObjectName(
+        QStringLiteral("PastNewSessions_%1").arg(id));
     SessionModel *localModel = new SessionModel(
         QStringLiteral("cached_all_sessions.json"), sessionsWindow);
     localModel->setSessions(filteredSessions);
@@ -934,6 +937,7 @@ void MainWindow::createActions() {
           updateStatus(i18n("Fetching details for session %1...", sessId));
         });
     sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->setupGUI();
     sessionsWindow->resize(600, 400);
     sessionsWindow->show();
   });
@@ -953,6 +957,7 @@ void MainWindow::createActions() {
         m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
             .toJsonObject();
     KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+    rawWindow->setObjectName(QStringLiteral("RawDataWindow"));
     rawWindow->setAttribute(Qt::WA_DeleteOnClose);
     rawWindow->setWindowTitle(i18n("Raw Data for Source"));
     QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
@@ -960,6 +965,7 @@ void MainWindow::createActions() {
     textBrowser->setPlainText(
         QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
     rawWindow->setCentralWidget(textBrowser);
+    rawWindow->setupGUI();
     rawWindow->resize(600, 400);
     rawWindow->show();
   });

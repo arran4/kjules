@@ -89,6 +89,7 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
     : KXmlGuiWindow(parent), m_apiManager(apiManager),
       m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
       m_pagesLoaded(0), m_isRefreshingAll(false) {
+  setObjectName(QStringLiteral("SessionsWindow"));
 
   m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), this);
   m_proxyModel = new SessionsProxyModel(this);
@@ -104,6 +105,7 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
   }
 
   setupUi();
+  setupGUI();
 
   if (!m_nextPageToken.isEmpty() && m_resumeAction) {
     m_resumeAction->setEnabled(true);
