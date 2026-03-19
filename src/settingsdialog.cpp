@@ -50,6 +50,12 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
   formLayout->addRow(i18n("Queue failure backoff:"), m_queueBackoffEdit);
 
+  m_waitTimeEdit = new QSpinBox(this);
+  m_waitTimeEdit->setRange(1, 10080);
+  m_waitTimeEdit->setSuffix(i18n(" minutes"));
+  m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
+  formLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
+
   m_tierComboBox = new QComboBox(this);
   m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
   m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
@@ -117,6 +123,7 @@ void SettingsDialog::onSave() {
   KConfigGroup config(KSharedConfig::openConfig(), "General");
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
+  config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.sync();
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");

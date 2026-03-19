@@ -26,6 +26,7 @@ private:
   QCheckBox *m_closeToTrayEdit;
   QSpinBox *m_queueIntervalEdit;
   QSpinBox *m_queueBackoffEdit;
+  QSpinBox *m_waitTimeEdit;
   QComboBox *m_tierComboBox;
   QComboBox *m_globalAutoRefreshCombo;
 };
