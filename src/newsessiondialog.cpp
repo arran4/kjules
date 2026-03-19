@@ -259,6 +259,15 @@ void NewSessionDialog::setEditMode(bool isEdit) {
     }
   } else if (data.contains(QStringLiteral("source"))) {
     sources.append(data.value(QStringLiteral("source")).toString());
+  } else if (data.contains(QStringLiteral("sourceContext"))) {
+    QJsonObject sc = data.value(QStringLiteral("sourceContext")).toObject();
+    if (sc.contains(QStringLiteral("source"))) {
+      QString s = sc.value(QStringLiteral("source")).toString();
+      if (s.startsWith(QStringLiteral("sources/"))) {
+        s = s.mid(8); // Remove "sources/" prefix to match the NameRole in SourceModel
+      }
+      sources.append(s);
+    }
   }
 
   m_promptEdit->setPlainText(prompt);
