@@ -1242,6 +1242,8 @@ void MainWindow::onSessionCreatedResult(bool success,
   }
 
   QueueItem item = m_queueModel->dequeue(); // Pop the item we were processing
+  m_queueModel->recordRun(); // Record that we completed a run successfully or not
+  m_queueModel->checkAndPrependDailyLimitWait(); // Dynamically check after a run
   m_isProcessingQueue = false;
 
   if (success) {
@@ -1254,10 +1256,13 @@ void MainWindow::onSessionCreatedResult(bool success,
   } else {
     QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
     bool isPrecondition = false;
+    bool isResourceExhausted = false;
     if (errDoc.isObject()) {
         QJsonObject errObj = errDoc.object().value(QStringLiteral("error")).toObject();
         if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("FAILED_PRECONDITION")) {
             isPrecondition = true;
+        } else if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("RESOURCE_EXHAUSTED") || errObj.value(QStringLiteral("code")).toInt() == 429) {
+            isResourceExhausted = true;
         }
     }
 
@@ -1271,6 +1276,19 @@ void MainWindow::onSessionCreatedResult(bool success,
         KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
         int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
         m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+    } else if (isResourceExhausted) {
+        updateStatus(i18n("API Rate limit hit, adding a wait item..."));
+
+        // Requeue the item without incrementing the error count
+        m_queueModel->requeueTransient(item);
+
+        // Prepend a wait item
+        QueueItem waitItem;
+        waitItem.isWaitItem = true;
+        int delayMins = 60; // default 1 hour
+        waitItem.waitSeconds = delayMins * 60;
+        m_queueModel->prependWaitItem(waitItem);
+        m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {
         updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
         m_queueModel->requeueFailed(item, errorMsg, rawResponse);
