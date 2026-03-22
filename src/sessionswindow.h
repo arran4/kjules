@@ -42,7 +42,7 @@ public:
   ~SessionsWindow();
 
 Q_SIGNALS:
-  void followRequested(const QJsonObject &sessionData);
+  void watchRequested(const QJsonObject &sessionData);
   void archiveRequested(const QString &id);
   void deleteRequested(const QString &id);
   void openSessionRequested(const QJsonObject &sessionData);
@@ -71,6 +71,7 @@ private:
   QComboBox *m_repoCombo;
   QString m_filterSource;
   int m_sessionsLoaded;
+  int m_sessionsUpdatedCount;
   bool m_isRefreshing;
   int m_pagesLoaded;
   bool m_isRefreshingAll;
@@ -78,7 +79,6 @@ private:
   QAction *m_resumeAction;
   QAction *m_loadRemainingAction;
   QActionGroup *m_autoLoadGroup;
-  QAction *m_clearCacheOnRefreshAction;
-};
+  };
 
 #endif // SESSIONSWINDOW_H

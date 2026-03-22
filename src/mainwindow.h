@@ -54,7 +54,6 @@ private Q_SLOTS:
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
   void connectSessionWindow(SessionWindow *window);
-  void connectSessionsWindow(class SessionsWindow *window);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
@@ -63,7 +62,6 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void cancelSourcesRefresh();
   void updateSessionStats();
-  void updateQueueStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
@@ -85,9 +83,8 @@ private:
   void createActions();
 
   APIManager *m_apiManager;
-  SessionModel *m_sessionModel;
-  SessionModel *m_archiveModel;
   SessionModel *m_watchModel;
+  SessionModel *m_archiveModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
   TemplatesModel *m_templatesModel;
@@ -95,9 +92,8 @@ private:
   ErrorsModel *m_errorsModel;
 
   QTreeView *m_sourceView;
-  QTreeView *m_sessionView;
-  QTreeView *m_archiveView;
   QTreeView *m_watchView;
+  QTreeView *m_archiveView;
   QListView *m_draftsView;
   QListView *m_templatesView;
   QListView *m_queueView;
@@ -105,8 +101,8 @@ private:
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
-  QLabel *m_queueStatusLabel;
   QLabel *m_sessionStatsLabel;
+  QLabel *m_queueStatsLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
@@ -114,7 +110,7 @@ private:
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
-  QAction *m_showPastNewSessionsAction;
+  QAction *m_showWatchingNewSessionsAction;
   QAction *m_viewRawDataAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
@@ -127,7 +123,6 @@ private:
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
-  QTimer *m_watchRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
 
   QTimer *m_queueTimer;

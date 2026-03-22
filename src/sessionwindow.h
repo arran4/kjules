@@ -50,7 +50,7 @@ Q_SIGNALS:
   void archiveRequested(const QString &id);
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
-  void followRequested(const QJsonObject &sessionData);
+  void watchRequested(const QJsonObject &sessionData);
   void refreshRequested(const QString &id);
 };
 

@@ -1,5 +1,9 @@
 Benchmarks should be placed in the `/bench` directory.
 
-- Managed sessions are those that are in the main window (e.g. `m_sessionModel` and `m_archiveModel`). They are treated as persistent user data and stored in the AppData directory.
-- The "Follow" action means adopting an unmanaged session (e.g. from All Sessions list) as a managed kjules session.
-- The "All Sessions" list (`SessionsWindow`) is strictly a cache (`cached_all_sessions.json`) and is stored in the system Cache directory. Refreshing it uses a progressive upsert logic (updating existing entries rather than clearing the list) and syncs those updates directly to any followed/managed sessions.
+## Terminology
+
+*   **Managed Sessions**: Sessions explicitly watched by the user, stored in `cached_watching_sessions.json`. These are shown in the main "Watching" tab and automatically refresh on a timer.
+*   **Archived Sessions**: Sessions the user has moved to the "Archive" tab (`cached_archive_sessions.json`), essentially stopping updates but keeping the history.
+*   **Unmanaged Sessions / All Sessions**: Raw sessions fetched directly from the API that the user is not explicitly tracking. They reside in `cached_all_sessions.json` (a cache file, not persistent app data) and are viewed via the `SessionsWindow`. Users can adopt an unmanaged session via the "Watch" action.
+
+* To build the project, ensure all required KF5 dependencies are installed, particularly `libkf5wallet-dev` and `libkf5notifications-dev`.

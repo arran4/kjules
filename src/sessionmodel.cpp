@@ -206,12 +206,13 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
   Q_EMIT sessionsLoadedOrUpdated();
 }
 
-int SessionModel::addSessions(const QJsonArray &sessions) {
+QPair<int, int> SessionModel::addSessions(const QJsonArray &sessions) {
   if (sessions.isEmpty()) {
-    return 0;
+    return {0, 0};
   }
 
   QVector<QJsonObject> newSessions;
+  int updatedCount = 0;
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
     QString id = obj.value(QStringLiteral("id")).toString();
@@ -221,13 +222,14 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       data.id = id; // Ensure ID matches
       m_sessions[row] = data;
       Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
+      updatedCount++;
     } else {
       newSessions.append(obj);
     }
   }
 
   if (newSessions.isEmpty()) {
-    return 0;
+    return {0, updatedCount};
   }
 
   beginInsertRows(QModelIndex(), m_sessions.size(),
@@ -239,7 +241,7 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
     m_idToIndex[data.id] = m_sessions.size() - 1;
   }
   endInsertRows();
-  return newSessions.size();
+  return {newSessions.size(), updatedCount};
 }
 
 void SessionModel::addSession(const QJsonObject &session) {
@@ -374,4 +376,24 @@ void SessionModel::clearSessions() {
   m_nextPageToken.clear();
   endResetModel();
   Q_EMIT sessionsLoadedOrUpdated();
+}
+
+
+QJsonObject SessionModel::getSessionById(const QString &id) const {
+  if (m_idToIndex.contains(id)) {
+    return getSession(m_idToIndex.value(id));
+  }
+  return QJsonObject();
+}
+
+void SessionModel::removeSessionById(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    removeSession(m_idToIndex.value(id));
+  }
+}
+
+void SessionModel::updateSessions(const QJsonArray &sessions) {
+  for (int i = 0; i < sessions.size(); ++i) {
+    updateSession(sessions[i].toObject());
+  }
 }
