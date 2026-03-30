@@ -27,8 +27,7 @@
 #include <QVBoxLayout>
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
-                             APIManager *apiManager, bool isManaged,
-                             QWidget *parent)
+                             APIManager *apiManager, QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData),
       m_apiManager(apiManager) {
   setAttribute(Qt::WA_DeleteOnClose);
@@ -44,22 +43,22 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onActivitiesReceived);
   }
 
-  setupActions(isManaged);
+  setupActions();
   setupUi(m_sessionData);
 
-  KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);
   m_autoRefreshCombo->setCurrentIndex(autoRefreshIndex);
   updateAutoRefresh();
 }
 
 SessionWindow::~SessionWindow() {
-  KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   config.writeEntry("AutoRefreshIndex", m_autoRefreshCombo->currentIndex());
   config.sync();
 }
 
-void SessionWindow::setupActions(bool isManaged) {
+void SessionWindow::setupActions() {
   QAction *refreshAction = new QAction(
       QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
   actionCollection()->addAction(QStringLiteral("refresh_session"),
@@ -81,7 +80,7 @@ void SessionWindow::setupActions(bool isManaged) {
       QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), this);
   actionCollection()->addAction(QStringLiteral("close_window"), closeAction);
   actionCollection()->setDefaultShortcut(closeAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_W));
+                                         QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
   setStandardToolBarMenuEnabled(true);
@@ -129,15 +128,6 @@ void SessionWindow::setupActions(bool isManaged) {
   sessionMenu->addAction(saveTemplateAction);
   sessionMenu->addSeparator();
 
-  if (!isManaged) {
-    QAction *watchAction = new QAction(i18n("Watch"), this);
-    connect(watchAction, &QAction::triggered, this, [this]() {
-      Q_EMIT watchRequested(m_sessionData);
-      m_statusLabel->setText(i18n("Watching session."));
-    });
-    sessionMenu->addAction(watchAction);
-  }
-
   QAction *archiveAction = new QAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
@@ -146,15 +136,13 @@ void SessionWindow::setupActions(bool isManaged) {
   });
   sessionMenu->addAction(archiveAction);
 
-  if (isManaged) {
-    QAction *deleteAction = new QAction(
-        QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
-    connect(deleteAction, &QAction::triggered, this, [this]() {
-      Q_EMIT deleteRequested(
-          m_sessionData.value(QStringLiteral("id")).toString());
-    });
-    sessionMenu->addAction(deleteAction);
-  }
+  QAction *deleteAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+  connect(deleteAction, &QAction::triggered, this, [this]() {
+    Q_EMIT deleteRequested(
+        m_sessionData.value(QStringLiteral("id")).toString());
+  });
+  sessionMenu->addAction(deleteAction);
   sessionMenu->addSeparator();
   sessionMenu->addAction(closeAction);
 
@@ -217,8 +205,8 @@ void SessionWindow::updateAutoRefresh() {
 void SessionWindow::refreshSession() {
   if (m_apiManager) {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
-    Q_EMIT refreshRequested(id);
-    m_statusLabel->setText(i18n("Refreshing... (Queued)"));
+    m_apiManager->reloadSession(id);
+    m_statusLabel->setText(i18n("Refreshing..."));
   }
 }
 
@@ -343,7 +331,7 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
 
   m_statusLabel->setText(
       i18n("Refreshed at %1",
-           QDateTime::currentDateTime().toString(Qt::DefaultLocaleShortDate)));
+           QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
 }
 
 void SessionWindow::renderDetailsAndDiff() {
@@ -367,13 +355,13 @@ void SessionWindow::renderDetailsAndDiff() {
   if (!createTime.isEmpty()) {
       QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
       if (dt.isValid()) {
-          createTime = dt.toLocalTime().toString(Qt::DefaultLocaleShortDate);
+          createTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
       }
   }
   if (!updateTime.isEmpty()) {
       QDateTime dt = QDateTime::fromString(updateTime, Qt::ISODate);
       if (dt.isValid()) {
-          updateTime = dt.toLocalTime().toString(Qt::DefaultLocaleShortDate);
+          updateTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
       }
   }
 

@@ -60,7 +60,6 @@ public:
 
   explicit SessionModel(
       const QString &cacheFileName = QStringLiteral("cached_all_sessions.json"),
-      bool isCache = false,
       QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -72,16 +71,12 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void setSessions(const QJsonArray &sessions);
-  QPair<int, int> addSessions(const QJsonArray &sessions);
+  int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QJsonArray getAllSessions() const;
-  bool contains(const QString &id) const;
-  QJsonObject getSessionById(const QString &id) const;
-  void removeSessionById(const QString &id);
-  void updateSessions(const QJsonArray &sessions);
   void clear();
   void loadSessions();
   void saveSessions();
@@ -97,7 +92,6 @@ private:
   QHash<QString, int> m_idToIndex;
   QString m_nextPageToken;
   QString m_cacheFileName;
-  bool m_isCache;
 };
 
 #endif // SESSIONMODEL_H

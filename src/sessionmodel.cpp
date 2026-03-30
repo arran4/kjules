@@ -8,8 +8,8 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
-SessionModel::SessionModel(const QString &cacheFileName, bool isCache, QObject *parent)
-    : QAbstractTableModel(parent), m_cacheFileName(cacheFileName), m_isCache(isCache) {}
+SessionModel::SessionModel(const QString &cacheFileName, QObject *parent)
+    : QAbstractTableModel(parent), m_cacheFileName(cacheFileName) {}
 
 SessionData parseSessionData(const QJsonObject &obj) {
   SessionData data;
@@ -102,9 +102,9 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ColPR:
       return session.prNumber;
     case ColUpdatedAt:
-      return session.updateTime.toString(Qt::DefaultLocaleShortDate);
+      return session.updateTime.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
     case ColCreatedAt:
-      return session.createTime.toString(Qt::DefaultLocaleShortDate);
+      return session.createTime.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
     case ColOwner:
       return session.owner;
     case ColRepo:
@@ -206,13 +206,12 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
   Q_EMIT sessionsLoadedOrUpdated();
 }
 
-QPair<int, int> SessionModel::addSessions(const QJsonArray &sessions) {
+int SessionModel::addSessions(const QJsonArray &sessions) {
   if (sessions.isEmpty()) {
-    return {0, 0};
+    return 0;
   }
 
   QVector<QJsonObject> newSessions;
-  int updatedCount = 0;
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
     QString id = obj.value(QStringLiteral("id")).toString();
@@ -222,14 +221,13 @@ QPair<int, int> SessionModel::addSessions(const QJsonArray &sessions) {
       data.id = id; // Ensure ID matches
       m_sessions[row] = data;
       Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
-      updatedCount++;
     } else {
       newSessions.append(obj);
     }
   }
 
   if (newSessions.isEmpty()) {
-    return {0, updatedCount};
+    return 0;
   }
 
   beginInsertRows(QModelIndex(), m_sessions.size(),
@@ -241,7 +239,7 @@ QPair<int, int> SessionModel::addSessions(const QJsonArray &sessions) {
     m_idToIndex[data.id] = m_sessions.size() - 1;
   }
   endInsertRows();
-  return {newSessions.size(), updatedCount};
+  return newSessions.size();
 }
 
 void SessionModel::addSession(const QJsonObject &session) {
@@ -254,7 +252,6 @@ void SessionModel::addSession(const QJsonObject &session) {
     m_idToIndex[m_sessions[i].id] = i;
   }
   endInsertRows();
-  Q_EMIT sessionsLoadedOrUpdated();
 }
 
 void SessionModel::updateSession(const QJsonObject &session) {
@@ -290,10 +287,6 @@ QJsonArray SessionModel::getAllSessions() const {
   return arr;
 }
 
-bool SessionModel::contains(const QString &id) const {
-  return m_idToIndex.contains(id);
-}
-
 void SessionModel::clear() {
   beginResetModel();
   m_sessions.clear();
@@ -319,9 +312,8 @@ void SessionModel::removeSession(int row) {
 }
 
 void SessionModel::loadSessions() {
-  QString path = QStandardPaths::writableLocation(
-      m_isCache ? QStandardPaths::CacheLocation
-                : QStandardPaths::AppDataLocation);
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QFile file(path + QLatin1Char('/') + m_cacheFileName);
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -337,9 +329,8 @@ void SessionModel::loadSessions() {
 }
 
 void SessionModel::saveSessions() {
-  QString path = QStandardPaths::writableLocation(
-      m_isCache ? QStandardPaths::CacheLocation
-                : QStandardPaths::AppDataLocation);
+  QString path =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
@@ -373,27 +364,5 @@ void SessionModel::clearSessions() {
   beginResetModel();
   m_sessions.clear();
   m_idToIndex.clear();
-  m_nextPageToken.clear();
   endResetModel();
-  Q_EMIT sessionsLoadedOrUpdated();
-}
-
-
-QJsonObject SessionModel::getSessionById(const QString &id) const {
-  if (m_idToIndex.contains(id)) {
-    return getSession(m_idToIndex.value(id));
-  }
-  return QJsonObject();
-}
-
-void SessionModel::removeSessionById(const QString &id) {
-  if (m_idToIndex.contains(id)) {
-    removeSession(m_idToIndex.value(id));
-  }
-}
-
-void SessionModel::updateSessions(const QJsonArray &sessions) {
-  for (int i = 0; i < sessions.size(); ++i) {
-    updateSession(sessions[i].toObject());
-  }
 }

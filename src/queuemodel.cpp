@@ -1,3 +1,4 @@
+#include <utility>
 #include "queuemodel.h"
 
 #include <KLocalizedString>
@@ -11,7 +12,6 @@
 QJsonObject QueueItem::toJson() const {
   QJsonObject obj;
   obj[QStringLiteral("requestData")] = requestData;
-  obj[QStringLiteral("isRefreshJob")] = isRefreshJob;
   obj[QStringLiteral("errorCount")] = errorCount;
   obj[QStringLiteral("lastError")] = lastError;
   obj[QStringLiteral("lastResponse")] = lastResponse;
@@ -29,7 +29,6 @@ QJsonObject QueueItem::toJson() const {
 QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   QueueItem item;
   item.requestData = obj.value(QStringLiteral("requestData")).toObject();
-  item.isRefreshJob = obj.value(QStringLiteral("isRefreshJob")).toBool(false);
   item.errorCount = obj.value(QStringLiteral("errorCount")).toInt();
   item.lastError = obj.value(QStringLiteral("lastError")).toString();
   item.lastResponse = obj.value(QStringLiteral("lastResponse")).toString();
@@ -75,10 +74,6 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     if (item.isWaitItem) {
         return i18n("Wait for %1 seconds", item.waitSeconds);
     }
-    if (item.isRefreshJob) {
-        QString id = item.requestData.value(QStringLiteral("id")).toString();
-        return i18n("Refresh Session: %1", id);
-    }
     QString source =
         item.requestData.value(QStringLiteral("source")).toString();
     QString prompt =
@@ -104,7 +99,7 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     }
     if (item.errorCount > 0) {
       QString timeStr = item.lastTry.isValid()
-                            ? item.lastTry.toString(Qt::DefaultLocaleShortDate)
+                            ? item.lastTry.toString(QLocale::system().dateFormat(QLocale::ShortFormat))
                             : i18n("Unknown time");
       return i18n("Failed %1 times (Last: %2). Error: %3", item.errorCount,
                   timeStr, item.lastError);
@@ -141,7 +136,7 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
   endInsertRows();
   m_jobsSinceLastWait++;
 
-  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   QString tier = config.readEntry("Tier", QStringLiteral("free"));
   int jobsBeforeWait = 3;
   if (tier == QStringLiteral("pro")) {
@@ -159,24 +154,6 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
       endInsertRows();
       m_jobsSinceLastWait = 0;
   }
-
-  save();
-}
-
-void QueueModel::enqueueRefresh(const QString &sessionId, bool prepend) {
-  int index = prepend ? 0 : m_items.size();
-  beginInsertRows(QModelIndex(), index, index);
-  QueueItem item;
-  QJsonObject req;
-  req[QStringLiteral("id")] = sessionId;
-  item.requestData = req;
-  item.isRefreshJob = true;
-  if (prepend) {
-      m_items.insert(0, item);
-  } else {
-      m_items.append(item);
-  }
-  endInsertRows();
 
   save();
 }
@@ -304,7 +281,7 @@ void QueueModel::save() {
   file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
 
   QJsonArray arr;
-  for (const QueueItem &item : qAsConst(m_items)) {
+  for (const QueueItem &item : std::as_const(m_items)) {
     arr.append(item.toJson());
   }
 

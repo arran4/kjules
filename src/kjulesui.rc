@@ -23,7 +23,7 @@
             <Action name="show_full_session_list" />
             <Separator />
             <Action name="view_sessions" />
-            <Action name="show_watching_new_sessions" />
+            <Action name="show_past_new_sessions" />
             <Action name="view_raw_data" />
             <Separator />
             <Action name="open_url" />

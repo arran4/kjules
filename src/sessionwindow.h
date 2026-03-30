@@ -16,12 +16,12 @@ class SessionWindow : public KXmlGuiWindow {
 
 public:
   explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager,
-                         bool isManaged = false, QWidget *parent = nullptr);
+                         QWidget *parent = nullptr);
   ~SessionWindow();
 
 private:
   void setupUi(const QJsonObject &sessionData);
-  void setupActions(bool isManaged);
+  void setupActions();
   void refreshSession();
   void onSessionReloaded(const QJsonObject &session);
   void onActivitiesReceived(const QString &sessionId,
@@ -50,8 +50,6 @@ Q_SIGNALS:
   void archiveRequested(const QString &id);
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
-  void watchRequested(const QJsonObject &sessionData);
-  void refreshRequested(const QString &id);
 };
 
 #endif // SESSIONWINDOW_H

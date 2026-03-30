@@ -26,9 +26,7 @@
 #include <QScrollBar>
 #include <QSortFilterProxyModel>
 #include <QStatusBar>
-#include <KNotification>
 #include <QTabWidget>
-#include <QTimer>
 #include <QTextBrowser>
 #include <QToolBar>
 #include <QTreeView>
@@ -89,10 +87,10 @@ bool SessionsProxyModel::filterAcceptsRow(
 SessionsWindow::SessionsWindow(const QString &filterSource,
                                APIManager *apiManager, QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(apiManager),
-      m_filterSource(filterSource), m_sessionsLoaded(0), m_sessionsUpdatedCount(0), m_isRefreshing(false),
+      m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
       m_pagesLoaded(0), m_isRefreshingAll(false) {
 
-  m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), true, this);
+  m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), this);
   m_proxyModel = new SessionsProxyModel(this);
   m_proxyModel->setSourceModel(m_model);
 
@@ -185,8 +183,7 @@ void SessionsWindow::setupUi() {
 
   // Header configuration
   m_listView->header()->setMinimumSectionSize(100);
-  m_listView->header()->resizeSection(SessionModel::ColTitle, 750);
-  m_listView->header()->resizeSection(SessionModel::ColRepo, 300);
+  m_listView->header()->resizeSection(SessionModel::ColTitle, 250);
   m_listView->header()->resizeSection(SessionModel::ColState, 100);
   m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
   m_listView->header()->resizeSection(SessionModel::ColPR, 80);
@@ -381,7 +378,7 @@ void SessionsWindow::setupUi() {
                 for (const QModelIndex &idx : selectedRows) {
                   QString id =
                       m_proxyModel->data(idx, SessionModel::IdRole).toString();
-                  Q_EMIT refreshRequested(id);
+                  m_apiManager->reloadSession(id);
                 }
                 m_statusLabel->setText(
                     i18n("Reloading %1 sessions...", selectedRows.size()));
@@ -399,32 +396,6 @@ void SessionsWindow::setupUi() {
             m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
           });
 
-          menu.addSeparator();
-          QAction *watchAction = menu.addAction(i18n("Watch"));
-          connect(watchAction, &QAction::triggered, [this, selectedRows]() {
-            int count = 0;
-            for (const QModelIndex &idx : selectedRows) {
-              QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
-              QJsonObject sessionData = m_model->getSession(sourceIndex.row());
-              if (!sessionData.isEmpty()) {
-                Q_EMIT watchRequested(sessionData);
-                count++;
-              }
-            }
-            m_statusLabel->setText(i18n("Watching %1 sessions.", count));
-          });
-
-          QAction *archiveAction = menu.addAction(i18n("Archive"));
-          connect(archiveAction, &QAction::triggered, [this, selectedRows]() {
-            int count = 0;
-            for (const QModelIndex &idx : selectedRows) {
-              QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
-              Q_EMIT archiveRequested(id);
-              count++;
-            }
-            m_statusLabel->setText(i18n("Archived %1 sessions.", count));
-          });
-
           menu.exec(m_listView->mapToGlobal(pos));
         }
       });
@@ -434,15 +405,9 @@ void SessionsWindow::setupUi() {
             QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
             QJsonObject rawData = m_model->getSession(sourceIndex.row());
 
-            // SessionsWindow only shows global sessions, so they're unmanaged
-            // by default here, but to be 100% correct, we should check if they
-            // are in the MainWindow's managed list. However, SessionsWindow
-            // doesn't have access to MainWindow's m_watchModel.
-            // A simple approach is to emit a signal, or just pass false for now
-            // and maybe let MainWindow intercept if it really cares.
-            // Since double-click opens it, and we don't have isManaged here,
-            // we will emit a signal to request the window be shown.
-            Q_EMIT openSessionRequested(rawData);
+            SessionWindow *window =
+                new SessionWindow(rawData, m_apiManager, this);
+            window->show();
           });
 
   layout->addWidget(tabWidget);
@@ -474,23 +439,11 @@ void SessionsWindow::setupUi() {
                                 m_loadRemainingAction);
   m_loadRemainingAction->setEnabled(false);
 
-  QAction *clearCacheAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-clear-all")),
-      i18n("Clear All Sessions Cache"), this);
-  connect(clearCacheAction, &QAction::triggered, this, [this]() {
-    m_model->clearSessions();
-    m_model->saveSessions();
-    m_statusLabel->setText(i18n("Session cache cleared."));
-  });
-
   // Menu
   QMenu *fileMenu = new QMenu(i18n("File"), this);
   fileMenu->addAction(refreshAction);
   fileMenu->addAction(m_resumeAction);
   fileMenu->addAction(m_loadRemainingAction);
-  fileMenu->addSeparator();
-  fileMenu->addAction(clearCacheAction);
-  fileMenu->addSeparator();
   QAction *quitAction =
       new QAction(QIcon::fromTheme(QStringLiteral("application-exit")),
                   i18n("Close"), this);
@@ -524,7 +477,7 @@ void SessionsWindow::setupUi() {
   QMenu *viewMenu = new QMenu(i18n("View"), this);
   QMenu *columnsMenu = viewMenu->addMenu(i18n("Columns"));
 
-  KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
   QString autoLoadMode = config.readEntry("AutoLoadMode", "manual");
   for (QAction *action : m_autoLoadGroup->actions()) {
     if (action->data().toString() == autoLoadMode) {
@@ -537,7 +490,7 @@ void SessionsWindow::setupUi() {
   }
 
   connect(m_autoLoadGroup, &QActionGroup::triggered, [this](QAction *action) {
-    KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+    KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
     config.writeEntry("AutoLoadMode", action->data().toString());
     config.sync();
   });
@@ -554,7 +507,7 @@ void SessionsWindow::setupUi() {
 
     connect(action, &QAction::toggled, [this, colIndex](bool checked) {
       m_listView->header()->setSectionHidden(colIndex, !checked);
-      KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+      KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
       config.writeEntry(QStringLiteral("ShowColumn_%1").arg(colIndex), checked);
       config.sync();
     });
@@ -616,7 +569,6 @@ void SessionsWindow::refreshSessions() {
   }
 
   m_sessionsLoaded = 0;
-  m_sessionsUpdatedCount = 0;
   m_pagesLoaded = 1;
   m_nextPageToken.clear();
   m_resumeAction->setEnabled(false);
@@ -665,19 +617,13 @@ void SessionsWindow::cancelRefresh() {
 
 void SessionsWindow::onSessionsReceived(const QJsonArray &sessions,
                                         const QString &nextPageToken) {
-  QPair<int, int> result = m_model->addSessions(sessions);
-  int added = result.first;
-  int updated = result.second;
+  int added = m_model->addSessions(sessions);
   m_sessionsLoaded += added;
-  m_sessionsUpdatedCount += updated;
-
   m_nextPageToken = nextPageToken;
   m_model->setNextPageToken(nextPageToken);
   m_progressBar->setFormat(i18n("%1 sessions loaded", m_sessionsLoaded));
   m_statusLabel->setText(i18n("Loading page %1... Loaded %2 sessions total.",
                               m_pagesLoaded, m_sessionsLoaded));
-
-  Q_EMIT sessionsUpdated(sessions);
 }
 
 void SessionsWindow::updateRepoFilterList() {
@@ -721,36 +667,17 @@ void SessionsWindow::onSessionsRefreshFinished() {
   m_isRefreshingAll = false;
   m_progressBar->hide();
   m_cancelBtn->hide();
-
-  QString msg = i18n("Finished refreshing. Added %1, updated %2 sessions.",
-                     m_sessionsLoaded, m_sessionsUpdatedCount);
-  m_statusLabel->setText(msg);
-
-  KNotification *notification = new KNotification(QStringLiteral("refresh_complete"), this);
-  notification->setTitle(i18n("Refresh Complete"));
-  notification->setText(msg);
-  notification->sendEvent();
-
+  m_statusLabel->setText(
+      i18n("Finished refreshing. Loaded %1 sessions.", m_sessionsLoaded));
   m_resumeAction->setEnabled(!m_nextPageToken.isEmpty());
   m_loadRemainingAction->setEnabled(!m_nextPageToken.isEmpty());
   if (m_filterSource.isEmpty()) {
     m_model->saveSessions();
   }
 
-  if (!m_nextPageToken.isEmpty() && m_autoLoadGroup->checkedAction()) {
-    QString mode = m_autoLoadGroup->checkedAction()->data().toString();
-    if (mode == QStringLiteral("load_all")) {
-      resumeRefresh();
-    } else if (mode == QStringLiteral("auto_bottom")) {
-      // If we are in auto_bottom mode and the scrollbar isn't visible (maximum == 0),
-      // we didn't fill the screen yet. Wait a tiny bit for layout to finish,
-      // then check and load more if needed.
-      QTimer::singleShot(100, this, [this]() {
-        QScrollBar *vBar = m_listView->verticalScrollBar();
-        if (vBar->maximum() == 0 && !m_isRefreshing && !m_nextPageToken.isEmpty()) {
-          resumeRefresh();
-        }
-      });
-    }
+  if (!m_nextPageToken.isEmpty() && m_autoLoadGroup->checkedAction() &&
+      m_autoLoadGroup->checkedAction()->data().toString() ==
+          QStringLiteral("load_all")) {
+    resumeRefresh();
   }
 }

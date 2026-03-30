@@ -83,7 +83,7 @@ private:
   void createActions();
 
   APIManager *m_apiManager;
-  SessionModel *m_watchModel;
+  SessionModel *m_sessionModel;
   SessionModel *m_archiveModel;
   SourceModel *m_sourceModel;
   DraftsModel *m_draftsModel;
@@ -92,7 +92,7 @@ private:
   ErrorsModel *m_errorsModel;
 
   QTreeView *m_sourceView;
-  QTreeView *m_watchView;
+  QTreeView *m_sessionView;
   QTreeView *m_archiveView;
   QListView *m_draftsView;
   QListView *m_templatesView;
@@ -102,7 +102,6 @@ private:
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
-  QLabel *m_queueStatsLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
@@ -110,7 +109,7 @@ private:
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
-  QAction *m_showWatchingNewSessionsAction;
+  QAction *m_showPastNewSessionsAction;
   QAction *m_viewRawDataAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;

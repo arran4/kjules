@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.16)
 
 project(kjules VERSION 0.1.0)
 
-set(QT_MAJOR_VERSION 6)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(QT_MIN_VERSION "5.15.2")
+set(KF_MIN_VERSION "5.80.0")
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -17,7 +21,7 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMInstallIcons)
 include(FeatureSummary)
 
-find_package(Qt6 CONFIG REQUIRED COMPONENTS
+find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
     Core
     Gui
     Widgets
@@ -25,7 +29,7 @@ find_package(Qt6 CONFIG REQUIRED COMPONENTS
     Test
 )
 
-find_package(KF6 REQUIRED COMPONENTS
+find_package(KF5 ${KF_MIN_VERSION} REQUIRED COMPONENTS
     CoreAddons
     I18n
     Wallet
@@ -73,19 +77,19 @@ add_executable(kjules ${kjules_SRCS})
 
 
 target_link_libraries(kjules
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Network
-    KF6::CoreAddons
-    KF6::I18n
-    KF6::Wallet
-    KF6::Notifications
-    KF6::XmlGui
-    KF6::ConfigCore
-    KF6::WidgetsAddons
-    KF6::GlobalAccel
-    KF6::Archive
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Network
+    KF5::CoreAddons
+    KF5::I18n
+    KF5::Wallet
+    KF5::Notifications
+    KF5::XmlGui
+    KF5::ConfigCore
+    KF5::WidgetsAddons
+    KF5::GlobalAccel
+    KF5::Archive
 )
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

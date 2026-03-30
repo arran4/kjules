@@ -58,7 +58,7 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent), m_apiManager(new APIManager(this)),
-      m_watchModel(
+      m_sessionModel(
           new SessionModel(QStringLiteral("cached_all_sessions.json"), this)),
       m_archiveModel(new SessionModel(
           QStringLiteral("cached_archive_sessions.json"), this)),
@@ -87,7 +87,7 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::sessionsReceived, this,
           [this](const QJsonArray &sessions) {
-            m_watchModel->setSessions(sessions);
+            m_sessionModel->setSessions(sessions);
             m_lastSessionRefreshTime = QDateTime::currentDateTime();
             updateSessionStats();
           });
@@ -101,7 +101,7 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
-            m_watchModel->updateSession(session);
+            m_sessionModel->updateSession(session);
           });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
@@ -123,7 +123,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   auto updateSourceStats = [this]() {
     QJsonArray allSessions;
-    QJsonArray active = m_watchModel->getAllSessions();
+    QJsonArray active = m_sessionModel->getAllSessions();
     for (int i = 0; i < active.size(); ++i) {
         allSessions.append(active[i]);
     }
@@ -134,10 +134,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_sourceModel->recalculateStatsFromSessions(allSessions);
   };
 
-  connect(m_watchModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
+  connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
   connect(m_archiveModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
 
-  m_watchModel->loadSessions();
+  m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();
 
   // Manually trigger calculation once after load
@@ -150,7 +150,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   bool closeToTray = config.readEntry("CloseToTray", false);
   if (closeToTray) {
     hide();
@@ -242,34 +242,11 @@ void MainWindow::setupUi() {
               menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
             SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
-  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) { m_watchModel->addSession(s); m_watchModel->saveSessions(); });
-  connect(window, &SessionsWindow::archiveRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) {
-      QJsonObject session = m_watchModel->getSessionById(id);
-      m_archiveModel->addSession(session);
-      m_archiveModel->saveSessions();
-      m_watchModel->removeSessionById(id);
-      m_watchModel->saveSessions();
-    }
-  });
-  connect(window, &SessionsWindow::deleteRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) { m_watchModel->removeSessionById(id); m_watchModel->saveSessions(); }
-    if (m_archiveModel->contains(id)) { m_archiveModel->removeSessionById(id); m_archiveModel->saveSessions(); }
-  });
-  connect(window, &SessionsWindow::openSessionRequested, this, &MainWindow::showSessionWindow);
-  connect(window, &SessionsWindow::sessionsUpdated, this, [this](const QJsonArray &s) {
-    m_watchModel->updateSessions(s);
-    m_watchModel->saveSessions();
-  });
-  connect(window, &SessionsWindow::refreshRequested, this, [this](const QString &id) {
-    m_queueModel->enqueueRefresh(id, true);
-  });
-
             window->show();
           });
           menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
-          menu.addAction(m_showWatchingNewSessionsAction);
+          menu.addAction(m_showPastNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
@@ -282,26 +259,26 @@ void MainWindow::setupUi() {
   tabWidget->addTab(m_sourceView, i18n("Sources"));
 
   // Sessions View
-  m_watchView = new QTreeView(this);
+  m_sessionView = new QTreeView(this);
   QSortFilterProxyModel *sessionProxyModel = new QSortFilterProxyModel(this);
-  sessionProxyModel->setSourceModel(m_watchModel);
+  sessionProxyModel->setSourceModel(m_sessionModel);
   sessionProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
   sessionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
-  m_watchView->setModel(sessionProxyModel);
-  m_watchView->setSortingEnabled(true);
-  m_watchView->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_watchView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_watchView->header()->setStretchLastSection(true);
-  m_watchView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_sessionView->setModel(sessionProxyModel);
+  m_sessionView->setSortingEnabled(true);
+  m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_sessionView->header()->setStretchLastSection(true);
+  m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
-      m_watchView, &QTreeView::customContextMenuRequested,
+      m_sessionView, &QTreeView::customContextMenuRequested,
       [this](const QPoint &pos) {
-        QModelIndex index = m_watchView->indexAt(pos);
+        QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
-                  m_watchView->model());
+                  m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           QMenu menu;
@@ -312,7 +289,7 @@ void MainWindow::setupUi() {
               menu.addAction(i18n("Refresh session details"));
           menu.addSeparator();
 
-          QString id = m_watchModel->data(sourceIndex, SessionModel::IdRole)
+          QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole)
                            .toString();
           QAction *openJulesUrlAction = nullptr;
           QAction *copyJulesUrlAction = nullptr;
@@ -322,7 +299,7 @@ void MainWindow::setupUi() {
           }
 
           QString prUrl =
-              m_watchModel->data(sourceIndex, SessionModel::PrUrlRole)
+              m_sessionModel->data(sourceIndex, SessionModel::PrUrlRole)
                   .toString();
           QAction *openGithubUrlAction = nullptr;
           QAction *copyGithubUrlAction = nullptr;
@@ -345,7 +322,7 @@ void MainWindow::setupUi() {
           connect(openSessionsForSourceAction, &QAction::triggered,
                   [this, sourceIndex]() {
                     QString source =
-                        m_watchModel
+                        m_sessionModel
                             ->data(sourceIndex, SessionModel::SourceRole)
                             .toString();
                     SessionsWindow *window =
@@ -384,22 +361,22 @@ void MainWindow::setupUi() {
           }
 
           connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_watchModel->getSession(sourceIndex.row());
+            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
             m_archiveModel->addSession(session);
             m_archiveModel->saveSessions();
-            m_watchModel->removeSession(sourceIndex.row());
+            m_sessionModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session archived."));
           });
 
           connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
-            m_watchModel->removeSession(sourceIndex.row());
+            m_sessionModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session deleted."));
           });
 
           connect(newSessionFromSessionAction, &QAction::triggered,
                   [this, sourceIndex]() {
                     QJsonObject session =
-                        m_watchModel->getSession(sourceIndex.row());
+                        m_sessionModel->getSession(sourceIndex.row());
                     QString prompt =
                         session.value(QStringLiteral("prompt")).toString();
                     QString source =
@@ -428,8 +405,8 @@ void MainWindow::setupUi() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
               QJsonObject sessionData;
-              QString prompt = m_watchModel->data(index, SessionModel::PromptRole).toString();
-              QString source = m_watchModel->data(index, SessionModel::SourceRole).toString();
+              QString prompt = m_sessionModel->data(index, SessionModel::PromptRole).toString();
+              QString source = m_sessionModel->data(index, SessionModel::SourceRole).toString();
               sessionData[QStringLiteral("prompt")] = prompt;
               sessionData[QStringLiteral("source")] = source;
               sessionData[QStringLiteral("name")] = dlg.nameOrComment();
@@ -439,13 +416,13 @@ void MainWindow::setupUi() {
             }
           });
 
-          menu.exec(m_watchView->mapToGlobal(pos));
+          menu.exec(m_sessionView->mapToGlobal(pos));
         }
       });
-  connect(m_watchView, &QTreeView::doubleClicked, this,
+  connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
-  tabWidget->addTab(m_watchView, i18n("Watching"));
+  tabWidget->addTab(m_sessionView, i18n("Past"));
   // Archive View
   m_archiveView = new QTreeView(this);
   QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
@@ -496,8 +473,8 @@ void MainWindow::setupUi() {
 
           connect(unarchiveAction, &QAction::triggered, [this, sourceIndex]() {
             QJsonObject session = m_archiveModel->getSession(sourceIndex.row());
-            m_watchModel->addSession(session);
-            m_watchModel->saveSessions();
+            m_sessionModel->addSession(session);
+            m_sessionModel->saveSessions();
             m_archiveModel->removeSession(sourceIndex.row());
             updateStatus(i18n("Session unarchived."));
           });
@@ -764,8 +741,6 @@ void MainWindow::setupUi() {
   statusBar()->addWidget(m_statusLabel);
 
   m_sessionStatsLabel = new QLabel(this);
-  m_queueStatsLabel = new QLabel(this);
-  statusBar()->addPermanentWidget(m_queueStatsLabel);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
 
@@ -833,7 +808,7 @@ void MainWindow::createActions() {
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
   actionCollection()->setDefaultShortcut(newSessionAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_N));
+                                         QKeySequence(Qt::CTRL | Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -841,29 +816,6 @@ void MainWindow::createActions() {
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
     SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
-  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) { m_watchModel->addSession(s); m_watchModel->saveSessions(); });
-  connect(window, &SessionsWindow::archiveRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) {
-      QJsonObject session = m_watchModel->getSessionById(id);
-      m_archiveModel->addSession(session);
-      m_archiveModel->saveSessions();
-      m_watchModel->removeSessionById(id);
-      m_watchModel->saveSessions();
-    }
-  });
-  connect(window, &SessionsWindow::deleteRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) { m_watchModel->removeSessionById(id); m_watchModel->saveSessions(); }
-    if (m_archiveModel->contains(id)) { m_archiveModel->removeSessionById(id); m_archiveModel->saveSessions(); }
-  });
-  connect(window, &SessionsWindow::openSessionRequested, this, &MainWindow::showSessionWindow);
-  connect(window, &SessionsWindow::sessionsUpdated, this, [this](const QJsonArray &s) {
-    m_watchModel->updateSessions(s);
-    m_watchModel->saveSessions();
-  });
-  connect(window, &SessionsWindow::refreshRequested, this, [this](const QString &id) {
-    m_queueModel->enqueueRefresh(id, true);
-  });
-
     window->show();
   });
 
@@ -885,7 +837,7 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("recalculate_stats"), m_recalculateStatsAction);
   connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
     QJsonArray allSessions;
-    QJsonArray active = m_watchModel->getAllSessions();
+    QJsonArray active = m_sessionModel->getAllSessions();
     for (int i = 0; i < active.size(); ++i) {
         allSessions.append(active[i]);
     }
@@ -918,7 +870,7 @@ void MainWindow::createActions() {
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
   actionCollection()->setDefaultShortcut(toggleWindowAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_M));
+                                         QKeySequence(Qt::CTRL | Qt::Key_M));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -927,37 +879,14 @@ void MainWindow::createActions() {
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
     SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
-  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) { m_watchModel->addSession(s); m_watchModel->saveSessions(); });
-  connect(window, &SessionsWindow::archiveRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) {
-      QJsonObject session = m_watchModel->getSessionById(id);
-      m_archiveModel->addSession(session);
-      m_archiveModel->saveSessions();
-      m_watchModel->removeSessionById(id);
-      m_watchModel->saveSessions();
-    }
-  });
-  connect(window, &SessionsWindow::deleteRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) { m_watchModel->removeSessionById(id); m_watchModel->saveSessions(); }
-    if (m_archiveModel->contains(id)) { m_archiveModel->removeSessionById(id); m_archiveModel->saveSessions(); }
-  });
-  connect(window, &SessionsWindow::openSessionRequested, this, &MainWindow::showSessionWindow);
-  connect(window, &SessionsWindow::sessionsUpdated, this, [this](const QJsonArray &s) {
-    m_watchModel->updateSessions(s);
-    m_watchModel->saveSessions();
-  });
-  connect(window, &SessionsWindow::refreshRequested, this, [this](const QString &id) {
-    m_queueModel->enqueueRefresh(id, true);
-  });
-
     window->show();
   });
 
-  m_showWatchingNewSessionsAction =
+  m_showPastNewSessionsAction =
       new QAction(i18n("Show past new sessions"), this);
   actionCollection()->addAction(QStringLiteral("show_past_new_sessions"),
-                                m_showWatchingNewSessionsAction);
-  connect(m_showWatchingNewSessionsAction, &QAction::triggered, this, [this]() {
+                                m_showPastNewSessionsAction);
+  connect(m_showPastNewSessionsAction, &QAction::triggered, this, [this]() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())
       return;
@@ -969,7 +898,7 @@ void MainWindow::createActions() {
 
     QString path =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QFile file(path + QStringLiteral("/cached_watching_sessions.json"));
+    QFile file(path + QStringLiteral("/cached_sessions.json"));
     QJsonArray cachedSessions;
     if (file.open(QIODevice::ReadOnly)) {
       QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -992,7 +921,7 @@ void MainWindow::createActions() {
         QStringLiteral("cached_all_sessions.json"), sessionsWindow);
     localModel->setSessions(filteredSessions);
     sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-    sessionsWindow->setWindowTitle(i18n("Watching New Sessions for %1", id));
+    sessionsWindow->setWindowTitle(i18n("Past New Sessions for %1", id));
     QListView *listView = new QListView(sessionsWindow);
     listView->setModel(localModel);
     listView->setItemDelegate(new SessionDelegate(listView));
@@ -1194,7 +1123,7 @@ void MainWindow::showSettingsDialog() {
 }
 
 void MainWindow::loadQueueSettings() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   int intervalMins = queueConfig.readEntry("TimerInterval", 1);
   m_queueTimer->setInterval(intervalMins * 60000);
 
@@ -1298,7 +1227,7 @@ void MainWindow::onSessionCreatedResult(bool success,
                                         const QString &rawResponse) {
   if (!m_isProcessingQueue) {
     if (success) {
-      m_watchModel->addSession(session);
+      m_sessionModel->addSession(session);
       QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
       if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
       updateStatus(i18n("Session created successfully."));
@@ -1310,7 +1239,7 @@ void MainWindow::onSessionCreatedResult(bool success,
   m_isProcessingQueue = false;
 
   if (success) {
-    m_watchModel->addSession(session);
+    m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
     if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
     updateStatus(i18n("Session created from queue."));
@@ -1320,7 +1249,7 @@ void MainWindow::onSessionCreatedResult(bool success,
     updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
     m_queueModel->requeueFailed(item, errorMsg, rawResponse);
 
-    KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+    KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
     int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
     m_queueBackoffUntil =
         QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
@@ -1655,14 +1584,14 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
   connect(window, &SessionWindow::archiveRequested, this,
           [this, window](const QString &id) {
-            for (int i = 0; i < m_watchModel->rowCount(); ++i) {
-              if (m_watchModel
-                      ->data(m_watchModel->index(i, 0), SessionModel::IdRole)
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
                       .toString() == id) {
-                QJsonObject session = m_watchModel->getSession(i);
+                QJsonObject session = m_sessionModel->getSession(i);
                 m_archiveModel->addSession(session);
                 m_archiveModel->saveSessions();
-                m_watchModel->removeSession(i);
+                m_sessionModel->removeSession(i);
                 updateStatus(i18n("Session archived."));
                 window->close();
                 break;
@@ -1672,11 +1601,11 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
   connect(window, &SessionWindow::deleteRequested, this,
           [this, window](const QString &id) {
-            for (int i = 0; i < m_watchModel->rowCount(); ++i) {
-              if (m_watchModel
-                      ->data(m_watchModel->index(i, 0), SessionModel::IdRole)
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
                       .toString() == id) {
-                m_watchModel->removeSession(i);
+                m_sessionModel->removeSession(i);
                 updateStatus(i18n("Session deleted."));
                 window->close();
                 break;
@@ -1687,59 +1616,23 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   SessionWindow *window = new SessionWindow(session, m_apiManager, this);
-  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) { m_watchModel->addSession(s); m_watchModel->saveSessions(); });
-  connect(window, &SessionWindow::archiveRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) {
-      QJsonObject session = m_watchModel->getSessionById(id);
-      m_archiveModel->addSession(session);
-      m_archiveModel->saveSessions();
-      m_watchModel->removeSessionById(id);
-      m_watchModel->saveSessions();
-    }
-  });
-  connect(window, &SessionWindow::deleteRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) { m_watchModel->removeSessionById(id); m_watchModel->saveSessions(); }
-    if (m_archiveModel->contains(id)) { m_archiveModel->removeSessionById(id); m_archiveModel->saveSessions(); }
-  });
-  connect(window, &SessionWindow::refreshRequested, this, [this](const QString &id) {
-    m_queueModel->enqueueRefresh(id, true);
-  });
-
   connectSessionWindow(window);
   window->show();
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
   const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_watchView->model());
+      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
-  QJsonObject sessionData = m_watchModel->getSession(sourceIndex.row());
+  QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
   if (sessionData.isEmpty()) {
     QString id =
-        m_watchModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
     SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
-  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) { m_watchModel->addSession(s); m_watchModel->saveSessions(); });
-  connect(window, &SessionWindow::archiveRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) {
-      QJsonObject session = m_watchModel->getSessionById(id);
-      m_archiveModel->addSession(session);
-      m_archiveModel->saveSessions();
-      m_watchModel->removeSessionById(id);
-      m_watchModel->saveSessions();
-    }
-  });
-  connect(window, &SessionWindow::deleteRequested, this, [this](const QString &id) {
-    if (m_watchModel->contains(id)) { m_watchModel->removeSessionById(id); m_watchModel->saveSessions(); }
-    if (m_archiveModel->contains(id)) { m_archiveModel->removeSessionById(id); m_archiveModel->saveSessions(); }
-  });
-  connect(window, &SessionWindow::refreshRequested, this, [this](const QString &id) {
-    m_queueModel->enqueueRefresh(id, true);
-  });
-
     connectSessionWindow(window);
     window->show();
   }
@@ -1817,7 +1710,7 @@ void MainWindow::cancelSourcesRefresh() {
 }
 
 void MainWindow::updateSessionStats() {
-  int sessionCount = m_watchModel->rowCount();
+  int sessionCount = m_sessionModel->rowCount();
   QString timeStr = i18n("Never");
 
   if (m_lastSessionRefreshTime.isValid()) {
@@ -1832,9 +1725,6 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
-  if (m_queueStatsLabel) {
-    m_queueStatsLabel->setText(i18n("Queue: %1", m_queueModel->rowCount()));
-  }
 }
 
 void MainWindow::backupData() {
@@ -1891,9 +1781,9 @@ void MainWindow::backupData() {
       // Clear models and UI since the underlying data has been removed
       if (filesToBackup.contains(QStringLiteral("sources.json")))
         m_sourceModel->clear();
-      if (filesToBackup.contains(QStringLiteral("cached_watching_sessions.json")) ||
+      if (filesToBackup.contains(QStringLiteral("cached_sessions.json")) ||
           filesToBackup.contains(QStringLiteral("cached_all_sessions.json")))
-        m_watchModel->clear();
+        m_sessionModel->clear();
       if (filesToBackup.contains(
               QStringLiteral("cached_archive_sessions.json")))
         m_archiveModel->clear();
@@ -2016,9 +1906,9 @@ void MainWindow::restoreData() {
       m_sourceModel->clear();
       refreshSources();
     }
-    if (filesToRestore.contains(QStringLiteral("cached_watching_sessions.json")) ||
+    if (filesToRestore.contains(QStringLiteral("cached_sessions.json")) ||
         filesToRestore.contains(QStringLiteral("cached_all_sessions.json"))) {
-      m_watchModel->clear();
+      m_sessionModel->clear();
     }
     if (filesToRestore.contains(QStringLiteral("drafts.json"))) {
       m_draftsModel->clear();
