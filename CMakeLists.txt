@@ -9,24 +9,25 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+
+set(QT_MAJOR_VERSION 6 CACHE STRING "Qt major version to use")
+set(KF_MAJOR_VERSION ${QT_MAJOR_VERSION})
+
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
+
 include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMInstallIcons)
 include(FeatureSummary)
 
 # Support Qt6 and KF6, falling back to Qt5 and KF5 if not found.
-find_package(Qt6 6.0.0 CONFIG COMPONENTS Core Gui Widgets Network Test)
-if(Qt6_FOUND)
-    set(QT_MAJOR_VERSION 6)
-    set(KF_MAJOR_VERSION 6)
+if(QT_MAJOR_VERSION STREQUAL "6")
+    find_package(Qt6 6.0.0 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Qml)
     find_package(KF6 6.0.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
 else()
-    set(QT_MAJOR_VERSION 5)
-    set(KF_MAJOR_VERSION 5)
     find_package(Qt5 5.15.2 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
     find_package(KF5 5.80.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
 endif()
