@@ -5,14 +5,11 @@ project(kjules VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(QT_MIN_VERSION "5.15.2")
-set(KF_MIN_VERSION "5.80.0")
-
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(ECM ${KF_MIN_VERSION} REQUIRED NO_MODULE)
+find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
 include(KDEInstallDirs)
@@ -21,25 +18,18 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMInstallIcons)
 include(FeatureSummary)
 
-find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
-    Core
-    Gui
-    Widgets
-    Network
-    Test
-)
-
-find_package(KF5 ${KF_MIN_VERSION} REQUIRED COMPONENTS
-    CoreAddons
-    I18n
-    Wallet
-    Notifications
-    XmlGui
-    Config
-    WidgetsAddons
-    GlobalAccel
-    Archive
-)
+# Support Qt6 and KF6, falling back to Qt5 and KF5 if not found.
+find_package(Qt6 6.0.0 CONFIG COMPONENTS Core Gui Widgets Network Test)
+if(Qt6_FOUND)
+    set(QT_MAJOR_VERSION 6)
+    set(KF_MAJOR_VERSION 6)
+    find_package(KF6 6.0.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+else()
+    set(QT_MAJOR_VERSION 5)
+    set(KF_MAJOR_VERSION 5)
+    find_package(Qt5 5.15.2 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
+    find_package(KF5 5.80.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+endif()
 
 add_definitions(-DQT_NO_CAST_FROM_ASCII
                 -DQT_NO_CAST_TO_ASCII
@@ -74,22 +64,20 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
-
-
 target_link_libraries(kjules
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Network
-    KF5::CoreAddons
-    KF5::I18n
-    KF5::Wallet
-    KF5::Notifications
-    KF5::XmlGui
-    KF5::ConfigCore
-    KF5::WidgetsAddons
-    KF5::GlobalAccel
-    KF5::Archive
+    Qt${QT_MAJOR_VERSION}::Core
+    Qt${QT_MAJOR_VERSION}::Gui
+    Qt${QT_MAJOR_VERSION}::Widgets
+    Qt${QT_MAJOR_VERSION}::Network
+    KF${KF_MAJOR_VERSION}::CoreAddons
+    KF${KF_MAJOR_VERSION}::I18n
+    KF${KF_MAJOR_VERSION}::Wallet
+    KF${KF_MAJOR_VERSION}::Notifications
+    KF${KF_MAJOR_VERSION}::XmlGui
+    KF${KF_MAJOR_VERSION}::ConfigCore
+    KF${KF_MAJOR_VERSION}::WidgetsAddons
+    KF${KF_MAJOR_VERSION}::GlobalAccel
+    KF${KF_MAJOR_VERSION}::Archive
 )
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
