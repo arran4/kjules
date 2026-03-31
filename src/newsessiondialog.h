@@ -42,6 +42,7 @@ private Q_SLOTS:
   void onAddSelected();
   void onRemoveSelected();
   void updateModels();
+  void applyFilter();
 
 private:
   SourceModel *m_sourceModel;
