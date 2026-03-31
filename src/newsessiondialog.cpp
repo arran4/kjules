@@ -130,12 +130,21 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   sourceLayout->addLayout(splitViewLayout);
 
-  connect(m_filterEdit, &QLineEdit::textChanged, m_unselectedProxy,
-          &QSortFilterProxyModel::setFilterFixedString);
-  connect(m_filterEdit, &QLineEdit::textChanged, m_selectedProxy,
-          &QSortFilterProxyModel::setFilterFixedString);
+  connect(m_filterEdit, &QLineEdit::textChanged, this, &NewSessionDialog::applyFilter);
 
-  connect(m_unselectedView, &QListView::doubleClicked, this,
+  connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
+    if (m_unselectedProxy->rowCount() == 1) {
+      QModelIndex idx = m_unselectedProxy->index(0, 0);
+      m_selectedSources.insert(idx.data(SourceModel::NameRole).toString());
+      updateModels();
+      m_filterEdit->clear();
+    } else if (m_unselectedProxy->rowCount() > 1) {
+      m_unselectedView->setFocus();
+      m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
+    }
+  });
+
+  connect(m_unselectedView, &QListView::activated, this,
           [this](const QModelIndex &idx) {
             m_selectedSources.insert(
                 idx.data(SourceModel::NameRole).toString());
@@ -143,7 +152,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
             m_unselectedView->clearSelection();
           });
 
-  connect(m_selectedView, &QListView::doubleClicked, this,
+  connect(m_selectedView, &QListView::activated, this,
           [this](const QModelIndex &idx) {
             m_selectedSources.remove(
                 idx.data(SourceModel::NameRole).toString());
@@ -214,6 +223,12 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   }
   connect(m_createPRButton, &QPushButton::clicked, this,
           [this]() { onSubmit(QStringLiteral("AUTO_CREATE_PR")); });
+
+  QShortcut *ctrlEnterShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), this);
+  connect(ctrlEnterShortcut, &QShortcut::activated, m_createPRButton, &QPushButton::click);
+
+  QShortcut *ctrlReturnShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
+  connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton, &QPushButton::click);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -291,6 +306,16 @@ void NewSessionDialog::setTemplateData(const QJsonObject &data) {
 void NewSessionDialog::updateModels() {
   m_unselectedProxy->updateSelection();
   m_selectedProxy->updateSelection();
+  applyFilter();
+}
+
+void NewSessionDialog::applyFilter() {
+  m_unselectedProxy->setFilterFixedString(m_filterEdit->text());
+  if (m_selectedSources.size() < 10) {
+    m_selectedProxy->setFilterFixedString(QStringLiteral(""));
+  } else {
+    m_selectedProxy->setFilterFixedString(m_filterEdit->text());
+  }
 }
 
 void NewSessionDialog::onAddSelected() {
