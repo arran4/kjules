@@ -9,6 +9,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+set(QT_MAJOR_VERSION 6)
+set(QT_VERSION_MAJOR 6)
+set(KF_MAJOR_VERSION 6)
+
+find_package(Qt6 6.0.0 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Qml)
+find_package(KF6 6.0.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
@@ -18,9 +25,6 @@ include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMInstallIcons)
 include(FeatureSummary)
-
-find_package(Qt6 6.0.0 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Qml)
-find_package(KF6 6.0.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
 
 add_definitions(-DQT_NO_CAST_FROM_ASCII
                 -DQT_NO_CAST_TO_ASCII
