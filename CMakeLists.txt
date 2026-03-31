@@ -9,10 +9,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-
-set(QT_MAJOR_VERSION 6 CACHE STRING "Qt major version to use")
-set(KF_MAJOR_VERSION ${QT_MAJOR_VERSION})
-
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
@@ -23,14 +19,8 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMInstallIcons)
 include(FeatureSummary)
 
-# Support Qt6 and KF6, falling back to Qt5 and KF5 if not found.
-if(QT_MAJOR_VERSION STREQUAL "6")
-    find_package(Qt6 6.0.0 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Qml)
-    find_package(KF6 6.0.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
-else()
-    find_package(Qt5 5.15.2 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
-    find_package(KF5 5.80.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
-endif()
+find_package(Qt6 6.0.0 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Qml)
+find_package(KF6 6.0.0 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
 
 add_definitions(-DQT_NO_CAST_FROM_ASCII
                 -DQT_NO_CAST_TO_ASCII
@@ -66,19 +56,19 @@ set(kjules_SRCS
 add_executable(kjules ${kjules_SRCS})
 
 target_link_libraries(kjules
-    Qt${QT_MAJOR_VERSION}::Core
-    Qt${QT_MAJOR_VERSION}::Gui
-    Qt${QT_MAJOR_VERSION}::Widgets
-    Qt${QT_MAJOR_VERSION}::Network
-    KF${KF_MAJOR_VERSION}::CoreAddons
-    KF${KF_MAJOR_VERSION}::I18n
-    KF${KF_MAJOR_VERSION}::Wallet
-    KF${KF_MAJOR_VERSION}::Notifications
-    KF${KF_MAJOR_VERSION}::XmlGui
-    KF${KF_MAJOR_VERSION}::ConfigCore
-    KF${KF_MAJOR_VERSION}::WidgetsAddons
-    KF${KF_MAJOR_VERSION}::GlobalAccel
-    KF${KF_MAJOR_VERSION}::Archive
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Network
+    KF6::CoreAddons
+    KF6::I18n
+    KF6::Wallet
+    KF6::Notifications
+    KF6::XmlGui
+    KF6::ConfigCore
+    KF6::WidgetsAddons
+    KF6::GlobalAccel
+    KF6::Archive
 )
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
