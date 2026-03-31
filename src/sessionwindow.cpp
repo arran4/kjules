@@ -26,10 +26,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-SessionWindow::SessionWindow(const QJsonObject &sessionData,
-                             APIManager *apiManager, QWidget *parent)
-    : KXmlGuiWindow(parent), m_sessionData(sessionData),
-      m_apiManager(apiManager) {
+SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged, QWidget *parent)
+    : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged) {
   setAttribute(Qt::WA_DeleteOnClose);
 
   m_autoRefreshTimer = new QTimer(this);
@@ -128,21 +126,34 @@ void SessionWindow::setupActions() {
   sessionMenu->addAction(saveTemplateAction);
   sessionMenu->addSeparator();
 
+  QAction *watchAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("visibility")), i18n("Watch Session"), this);
+  connect(watchAction, &QAction::triggered, this, [this, watchAction, sessionMenu]() {
+    Q_EMIT watchRequested(m_sessionData);
+    m_isManaged = true;
+    watchAction->setEnabled(false);
+  });
+  if (!m_isManaged) {
+    sessionMenu->addAction(watchAction);
+  }
+
   QAction *archiveAction = new QAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
-    Q_EMIT archiveRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString());
   });
-  sessionMenu->addAction(archiveAction);
+  if (m_isManaged) {
+      sessionMenu->addAction(archiveAction);
+  }
 
   QAction *deleteAction = new QAction(
       QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
-    Q_EMIT deleteRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString());
   });
-  sessionMenu->addAction(deleteAction);
+  if (m_isManaged) {
+      sessionMenu->addAction(deleteAction);
+  }
   sessionMenu->addSeparator();
   sessionMenu->addAction(closeAction);
 

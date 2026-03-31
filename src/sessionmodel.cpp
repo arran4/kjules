@@ -366,3 +366,7 @@ void SessionModel::clearSessions() {
   m_idToIndex.clear();
   endResetModel();
 }
+
+bool SessionModel::contains(const QString &id) const {
+  return m_idToIndex.contains(id);
+}

@@ -36,10 +36,14 @@ class SessionsWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit SessionsWindow(const QString &filterSource = QString(),
-                          APIManager *apiManager = nullptr,
-                          QWidget *parent = nullptr);
+  explicit SessionsWindow(const QString &filterSource = QString(), APIManager *apiManager = nullptr, SessionModel *managedModel = nullptr, QWidget *parent = nullptr);
   ~SessionsWindow();
+
+
+Q_SIGNALS:
+  void watchRequested(const QJsonObject &sessionData);
+  void archiveRequested(const QString &id);
+  void deleteRequested(const QString &id);
 
 private Q_SLOTS:
   void refreshSessions();
@@ -55,6 +59,7 @@ private:
 
   APIManager *m_apiManager;
   SessionModel *m_model;
+  SessionModel *m_managedModel;
   SessionsProxyModel *m_proxyModel;
   QTreeView *m_listView;
   QLabel *m_statusLabel;

@@ -84,9 +84,8 @@ bool SessionsProxyModel::filterAcceptsRow(
          QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
 }
 
-SessionsWindow::SessionsWindow(const QString &filterSource,
-                               APIManager *apiManager, QWidget *parent)
-    : KXmlGuiWindow(parent), m_apiManager(apiManager),
+SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel, QWidget *parent)
+    : KXmlGuiWindow(parent), m_apiManager(apiManager), m_managedModel(managedModel),
       m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
       m_pagesLoaded(0), m_isRefreshingAll(false) {
 

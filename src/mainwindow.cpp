@@ -241,7 +241,12 @@ void MainWindow::setupUi() {
           QAction *sourceViewSessionsAction =
               menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
-            SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
+            SessionsWindow *window = new SessionsWindow(id, m_apiManager, m_sessionModel, this);
+  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
             window->show();
           });
           menu.addAction(m_refreshSourceAction);
@@ -326,7 +331,7 @@ void MainWindow::setupUi() {
                             ->data(sourceIndex, SessionModel::SourceRole)
                             .toString();
                     SessionsWindow *window =
-                        new SessionsWindow(source, m_apiManager, this);
+                        new SessionsWindow(source, m_apiManager, m_sessionModel, this);
                     window->show();
                   });
 
@@ -815,7 +820,12 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
+  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
     window->show();
   });
 
@@ -878,7 +888,12 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
+  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
     window->show();
   });
 
@@ -1615,7 +1630,13 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 }
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
-  SessionWindow *window = new SessionWindow(session, m_apiManager, this);
+  QString sessionId = session.value(QStringLiteral("id")).toString();
+  SessionWindow *window = new SessionWindow(session, m_apiManager, m_sessionModel->contains(sessionId), this);
+  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
   connectSessionWindow(window);
   window->show();
 }
@@ -1632,7 +1653,13 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
-    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+    QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
+  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
     connectSessionWindow(window);
     window->show();
   }
