@@ -38,17 +38,20 @@ SessionsProxyModel::SessionsProxyModel(QObject *parent)
 
 void SessionsProxyModel::setTextFilter(const QString &text) {
   m_textFilter = text;
-  invalidateFilter();
+  beginResetModel();
+  endResetModel();
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
   m_statusFilter = status;
-  invalidateFilter();
+  beginResetModel();
+  endResetModel();
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
   m_repoFilter = repo;
-  invalidateFilter();
+  beginResetModel();
+  endResetModel();
 }
 
 bool SessionsProxyModel::filterAcceptsRow(

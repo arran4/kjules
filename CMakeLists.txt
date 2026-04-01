@@ -77,7 +77,7 @@ target_link_libraries(kjules
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
-install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/kjules)
+install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
 
 enable_testing()
 add_subdirectory(tests)

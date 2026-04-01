@@ -30,8 +30,8 @@ private:
   void renderDetailsAndDiff();
 
   QJsonObject m_sessionData;
-  bool m_isManaged;
   APIManager *m_apiManager;
+  bool m_isManaged;
   QTabWidget *m_tabWidget;
   QLabel *m_statusLabel;
   QTimer *m_autoRefreshTimer;
