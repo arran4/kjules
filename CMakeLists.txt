@@ -5,21 +5,29 @@ project(kjules VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(QT_DEFAULT_MAJOR_VERSION 6)
+if(NOT DEFINED QT_MAJOR_VERSION)
+    set(QT_MAJOR_VERSION 6)
+endif()
+
+set(QT_DEFAULT_MAJOR_VERSION ${QT_MAJOR_VERSION})
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-set(QT_MAJOR_VERSION 6)
-set(QT_VERSION_MAJOR 6)
-set(KF_MAJOR_VERSION 6)
+set(QT_VERSION_MAJOR ${QT_MAJOR_VERSION})
+set(KF_MAJOR_VERSION ${QT_MAJOR_VERSION})
 
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
-find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
-find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+if (QT_MAJOR_VERSION STREQUAL "6")
+    find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
+    find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+else()
+    find_package(Qt5 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
+    find_package(KF5 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+endif()
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
@@ -61,27 +69,49 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
-target_link_libraries(kjules
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Network
-    KF6::CoreAddons
-    KF6::I18n
-    KF6::Wallet
-    KF6::Notifications
-    KF6::XmlGui
-    KF6::ConfigCore
-    KF6::WidgetsAddons
-    KF6::GlobalAccel
-    KF6::Archive
-)
+if (QT_MAJOR_VERSION STREQUAL "6")
+    target_link_libraries(kjules
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Network
+        KF6::CoreAddons
+        KF6::I18n
+        KF6::Wallet
+        KF6::Notifications
+        KF6::XmlGui
+        KF6::ConfigCore
+        KF6::WidgetsAddons
+        KF6::GlobalAccel
+        KF6::Archive
+    )
+else()
+    target_link_libraries(kjules
+        Qt5::Core
+        Qt5::Gui
+        Qt5::Widgets
+        Qt5::Network
+        KF5::CoreAddons
+        KF5::I18n
+        KF5::Wallet
+        KF5::Notifications
+        KF5::XmlGui
+        KF5::ConfigCore
+        KF5::WidgetsAddons
+        KF5::GlobalAccel
+        KF5::Archive
+    )
+endif()
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES org.kde.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
-install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
+if (QT_MAJOR_VERSION STREQUAL "6")
+    install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
+else()
+    install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/kjules)
+endif()
 
 enable_testing()
 add_subdirectory(tests)
