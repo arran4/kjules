@@ -9,6 +9,9 @@
         <Menu name="file">
             <Action name="new_session" />
             <Separator />
+            <Action name="import_templates" />
+            <Action name="export_templates" />
+            <Separator />
             <Action name="backup_data" />
             <Action name="restore_data" />
             <Separator />

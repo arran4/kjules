@@ -32,6 +32,7 @@
 #include <QCursor>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QFileDialog>
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
@@ -624,6 +625,25 @@ void MainWindow::setupUi() {
                 }
               });
 
+              QAction *exportSingleAction = menu.addAction(i18n("Export Template..."));
+              connect(exportSingleAction, &QAction::triggered, [this, index]() {
+                QString filePath = QFileDialog::getSaveFileName(
+                    this, i18n("Export Template"), QString(), i18n("JSON Files (*.json)"));
+                if (filePath.isEmpty()) return;
+
+                QJsonArray exportArray;
+                exportArray.append(m_templatesModel->getTemplate(index.row()));
+                QJsonDocument doc(exportArray);
+                QFile file(filePath);
+                if (file.open(QIODevice::WriteOnly)) {
+                  file.write(doc.toJson(QJsonDocument::Indented));
+                  file.close();
+                  updateStatus(i18n("Template exported to %1", filePath));
+                } else {
+                  updateStatus(i18n("Failed to export template to %1", filePath));
+                }
+              });
+
               QAction *deleteAction = menu.addAction(i18n("Delete Template"));
               connect(deleteAction, &QAction::triggered, [this, index]() {
                 if (QMessageBox::question(this, i18n("Delete Template"),
@@ -1067,6 +1087,18 @@ void MainWindow::createActions() {
                                 m_backupDataAction);
   connect(m_backupDataAction, &QAction::triggered, this,
           &MainWindow::backupData);
+
+  m_importTemplatesAction = new QAction(i18n("Import Templates..."), this);
+  actionCollection()->addAction(QStringLiteral("import_templates"),
+                                m_importTemplatesAction);
+  connect(m_importTemplatesAction, &QAction::triggered, this,
+          &MainWindow::importTemplates);
+
+  m_exportTemplatesAction = new QAction(i18n("Export Templates..."), this);
+  actionCollection()->addAction(QStringLiteral("export_templates"),
+                                m_exportTemplatesAction);
+  connect(m_exportTemplatesAction, &QAction::triggered, this,
+          &MainWindow::exportTemplates);
 
   m_toggleQueueAction =
       new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
@@ -2048,4 +2080,58 @@ void MainWindow::restoreData() {
   } else {
     updateStatus(i18n("No files were restored."));
   }
+}
+
+void MainWindow::exportTemplates() {
+  QString filePath = QFileDialog::getSaveFileName(
+      this, i18n("Export Templates"), QString(), i18n("JSON Files (*.json)"));
+  if (filePath.isEmpty())
+    return;
+
+  QJsonArray exportArray;
+  for (int i = 0; i < m_templatesModel->rowCount(); ++i) {
+    exportArray.append(m_templatesModel->getTemplate(i));
+  }
+
+  QJsonDocument doc(exportArray);
+  QFile file(filePath);
+  if (file.open(QIODevice::WriteOnly)) {
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+    updateStatus(i18n("Templates exported to %1", filePath));
+  } else {
+    updateStatus(i18n("Failed to export templates to %1", filePath));
+  }
+}
+
+void MainWindow::importTemplates() {
+  QString filePath = QFileDialog::getOpenFileName(
+      this, i18n("Import Templates"), QString(), i18n("JSON Files (*.json)"));
+  if (filePath.isEmpty())
+    return;
+
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly)) {
+    updateStatus(i18n("Failed to open %1 for import", filePath));
+    return;
+  }
+
+  QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+  file.close();
+
+  if (!doc.isArray()) {
+    updateStatus(i18n("Invalid format: expected JSON array in %1", filePath));
+    return;
+  }
+
+  QJsonArray importArray = doc.array();
+  int importedCount = 0;
+  for (const QJsonValue &val : importArray) {
+    if (val.isObject()) {
+      m_templatesModel->addTemplate(val.toObject());
+      importedCount++;
+    }
+  }
+
+  updateStatus(i18n("Imported %1 template(s) from %2", importedCount, filePath));
 }
