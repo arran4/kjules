@@ -102,9 +102,11 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ColPR:
       return session.prNumber;
     case ColUpdatedAt:
-      return session.updateTime.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
+      return session.updateTime.toString(
+          QLocale::system().dateFormat(QLocale::ShortFormat));
     case ColCreatedAt:
-      return session.createTime.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
+      return session.createTime.toString(
+          QLocale::system().dateFormat(QLocale::ShortFormat));
     case ColOwner:
       return session.owner;
     case ColRepo:

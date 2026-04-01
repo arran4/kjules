@@ -14,7 +14,8 @@ public:
   // type can be "Template" or "Draft"
   explicit SaveDialog(const QString &type, QWidget *parent = nullptr);
 
-  void setInitialData(const QString &nameOrComment, const QString &description = QString());
+  void setInitialData(const QString &nameOrComment,
+                      const QString &description = QString());
 
   QString nameOrComment() const;
   QString description() const;

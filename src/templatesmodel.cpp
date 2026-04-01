@@ -25,8 +25,7 @@ QVariant TemplatesModel::data(const QModelIndex &index, int role) const {
   switch (role) {
   case SourceRole: {
     if (tmpl.contains(QStringLiteral("sources"))) {
-      QJsonArray sourcesArray =
-          tmpl.value(QStringLiteral("sources")).toArray();
+      QJsonArray sourcesArray = tmpl.value(QStringLiteral("sources")).toArray();
       QStringList sourcesList;
       for (const QJsonValue &val : sourcesArray) {
         sourcesList.append(val.toString());
@@ -45,11 +44,12 @@ QVariant TemplatesModel::data(const QModelIndex &index, int role) const {
     return tmpl.value(QStringLiteral("description")).toString();
   case Qt::DisplayRole: {
     QString name = tmpl.value(QStringLiteral("name")).toString();
-    if (!name.isEmpty()) return name;
+    if (!name.isEmpty())
+      return name;
     return tmpl.value(QStringLiteral("prompt")).toString(); // Fallback
   }
 
-case Qt::ToolTipRole:
+  case Qt::ToolTipRole:
     return tmpl.value(QStringLiteral("description")).toString();
   default:
     return QVariant();

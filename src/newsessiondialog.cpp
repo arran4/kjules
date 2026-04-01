@@ -26,7 +26,7 @@ public:
       : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
         m_showSelected(showSelected) {}
 
-  void updateSelection() { invalidateFilter(); }
+  void updateSelection() { invalidate(); }
 
 protected:
   bool filterAcceptsRow(int source_row,
@@ -45,9 +45,11 @@ private:
   bool m_showSelected;
 };
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
-                                   QWidget *parent)
-    : QDialog(parent), m_sourceModel(sourceModel), m_templatesModel(templatesModel) {
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
+                                   TemplatesModel *templatesModel,
+                                   bool hasApiKey, QWidget *parent)
+    : QDialog(parent), m_sourceModel(sourceModel),
+      m_templatesModel(templatesModel) {
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
 
@@ -130,7 +132,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   sourceLayout->addLayout(splitViewLayout);
 
-  connect(m_filterEdit, &QLineEdit::textChanged, this, &NewSessionDialog::applyFilter);
+  connect(m_filterEdit, &QLineEdit::textChanged, this,
+          &NewSessionDialog::applyFilter);
 
   connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
     if (m_unselectedProxy->rowCount() == 1) {
@@ -177,7 +180,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   promptLayout->addWidget(m_promptEdit);
 
   connect(m_promptEdit, &QTextEdit::textChanged, this, [this]() {
-    m_loadTemplateButton->setVisible(m_promptEdit->toPlainText().trimmed().isEmpty());
+    m_loadTemplateButton->setVisible(
+        m_promptEdit->toPlainText().trimmed().isEmpty());
   });
 
   formLayout->addRow(tr("Prompt:"), promptLayout);
@@ -185,7 +189,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   // Require Plan Approval
   m_requirePlanApprovalCheckBox = new QCheckBox(this);
   m_requirePlanApprovalCheckBox->setChecked(false);
-  formLayout->addRow(tr("Require Plan Approval:"), m_requirePlanApprovalCheckBox);
+  formLayout->addRow(tr("Require Plan Approval:"),
+                     m_requirePlanApprovalCheckBox);
 
   mainLayout->addLayout(formLayout);
 
@@ -224,11 +229,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   connect(m_createPRButton, &QPushButton::clicked, this,
           [this]() { onSubmit(QStringLiteral("AUTO_CREATE_PR")); });
 
-  QShortcut *ctrlEnterShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), this);
-  connect(ctrlEnterShortcut, &QShortcut::activated, m_createPRButton, &QPushButton::click);
+  QShortcut *ctrlEnterShortcut =
+      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), this);
+  connect(ctrlEnterShortcut, &QShortcut::activated, m_createPRButton,
+          &QPushButton::click);
 
-  QShortcut *ctrlReturnShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
-  connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton, &QPushButton::click);
+  QShortcut *ctrlReturnShortcut =
+      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
+  connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton,
+          &QPushButton::click);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -252,11 +261,12 @@ void NewSessionDialog::setEditMode(bool isEdit) {
   }
 }
 
-  void NewSessionDialog::setInitialData(const QJsonObject &data) {
+void NewSessionDialog::setInitialData(const QJsonObject &data) {
   QString prompt = data.value(QStringLiteral("prompt")).toString();
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
-    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+    m_requirePlanApprovalCheckBox->setChecked(
+        data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
   if (data.contains(QStringLiteral("comment"))) {
@@ -279,7 +289,8 @@ void NewSessionDialog::setEditMode(bool isEdit) {
     if (sc.contains(QStringLiteral("source"))) {
       QString s = sc.value(QStringLiteral("source")).toString();
       if (s.startsWith(QStringLiteral("sources/"))) {
-        s = s.mid(8); // Remove "sources/" prefix to match the NameRole in SourceModel
+        s = s.mid(
+            8); // Remove "sources/" prefix to match the NameRole in SourceModel
       }
       sources.append(s);
     }
@@ -299,7 +310,8 @@ void NewSessionDialog::setTemplateData(const QJsonObject &data) {
   m_promptEdit->setPlainText(prompt);
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
-    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+    m_requirePlanApprovalCheckBox->setChecked(
+        data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 }
 
@@ -374,7 +386,8 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
-  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval);
+  Q_EMIT createSessionRequested(sources, prompt, automationMode,
+                                requirePlanApproval);
   accept();
 }
 
@@ -425,8 +438,9 @@ void NewSessionDialog::onSaveTemplate() {
 
   QJsonObject tmpl;
   // A template might not necessarily need sources but we save them anyway
-  // as the requirement "a template doesn't set the sources in an existing new session window"
-  // means we ignore sources when loading in an *existing* window.
+  // as the requirement "a template doesn't set the sources in an existing new
+  // session window" means we ignore sources when loading in an *existing*
+  // window.
   tmpl[QStringLiteral("sources")] = sourcesArr;
   tmpl[QStringLiteral("prompt")] = prompt;
   tmpl[QStringLiteral("name")] = dlg.nameOrComment();
@@ -434,5 +448,6 @@ void NewSessionDialog::onSaveTemplate() {
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveTemplateRequested(tmpl);
-  // We do not close the dialog when saving a template, it can be used multiple times
+  // We do not close the dialog when saving a template, it can be used multiple
+  // times
 }

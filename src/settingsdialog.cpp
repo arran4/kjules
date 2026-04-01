@@ -36,7 +36,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
   formLayout->addRow(QString(), m_closeToTrayEdit);
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
 
   m_queueIntervalEdit = new QSpinBox(this);
   m_queueIntervalEdit->setRange(1, 1440); // 1 min to 24 hours
@@ -68,7 +69,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   }
   formLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
 
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
   m_globalAutoRefreshCombo = new QComboBox(this);
   m_globalAutoRefreshCombo->addItem(i18n("Off"), 0);
   m_globalAutoRefreshCombo->addItem(i18n("10 seconds"), 10);
@@ -126,12 +128,14 @@ void SettingsDialog::onSave() {
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.sync();
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
   queueConfig.sync();
 
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
   sessionConfig.writeEntry("AutoRefreshIndex",
                            m_globalAutoRefreshCombo->currentIndex());
   sessionConfig.sync();

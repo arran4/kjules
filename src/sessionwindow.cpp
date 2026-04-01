@@ -1,7 +1,7 @@
 #include "sessionwindow.h"
 
-#include "apimanager.h"
 #include "activitybrowser.h"
+#include "apimanager.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -27,10 +27,13 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged, QWidget *parent)
-    : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged) {
-  setObjectName(QStringLiteral("SessionWindow_%1").arg(
-      sessionData.value(QStringLiteral("id")).toString()));
+SessionWindow::SessionWindow(const QJsonObject &sessionData,
+                             APIManager *apiManager, bool isManaged,
+                             QWidget *parent)
+    : KXmlGuiWindow(parent), m_sessionData(sessionData),
+      m_apiManager(apiManager), m_isManaged(isManaged) {
+  setObjectName(QStringLiteral("SessionWindow_%1")
+                    .arg(sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
 
   m_autoRefreshTimer = new QTimer(this);
@@ -48,14 +51,16 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiMana
   setupUi(m_sessionData);
   setupGUI();
 
-  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("SessionWindow"));
   int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);
   m_autoRefreshCombo->setCurrentIndex(autoRefreshIndex);
   updateAutoRefresh();
 }
 
 SessionWindow::~SessionWindow() {
-  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("SessionWindow"));
   config.writeEntry("AutoRefreshIndex", m_autoRefreshCombo->currentIndex());
   config.sync();
 }
@@ -130,13 +135,15 @@ void SessionWindow::setupActions() {
   sessionMenu->addAction(saveTemplateAction);
   sessionMenu->addSeparator();
 
-  QAction *watchAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("visibility")), i18n("Watch Session"), this);
-  connect(watchAction, &QAction::triggered, this, [this, watchAction, sessionMenu]() {
-    Q_EMIT watchRequested(m_sessionData);
-    m_isManaged = true;
-    watchAction->setEnabled(false);
-  });
+  QAction *watchAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
+                  i18n("Watch Session"), this);
+  connect(watchAction, &QAction::triggered, this,
+          [this, watchAction, sessionMenu]() {
+            Q_EMIT watchRequested(m_sessionData);
+            m_isManaged = true;
+            watchAction->setEnabled(false);
+          });
   if (!m_isManaged) {
     sessionMenu->addAction(watchAction);
   }
@@ -144,19 +151,21 @@ void SessionWindow::setupActions() {
   QAction *archiveAction = new QAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
-    Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT archiveRequested(
+        m_sessionData.value(QStringLiteral("id")).toString());
   });
   if (m_isManaged) {
-      sessionMenu->addAction(archiveAction);
+    sessionMenu->addAction(archiveAction);
   }
 
   QAction *deleteAction = new QAction(
       QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
-    Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT deleteRequested(
+        m_sessionData.value(QStringLiteral("id")).toString());
   });
   if (m_isManaged) {
-      sessionMenu->addAction(deleteAction);
+    sessionMenu->addAction(deleteAction);
   }
   sessionMenu->addSeparator();
   sessionMenu->addAction(closeAction);
@@ -271,7 +280,8 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
 
   m_statusLabel->setText(
       i18n("Refreshed at %1",
-           QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
+           QDateTime::currentDateTime().toString(
+               QLocale::system().dateFormat(QLocale::ShortFormat))));
 }
 
 void SessionWindow::renderDetailsAndDiff() {
@@ -284,25 +294,36 @@ void SessionWindow::renderDetailsAndDiff() {
   QString lastRefreshed =
       m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
   QString state = m_sessionData.value(QStringLiteral("state")).toString();
-  QJsonObject sourceContext = m_sessionData.value(QStringLiteral("sourceContext")).toObject();
+  QJsonObject sourceContext =
+      m_sessionData.value(QStringLiteral("sourceContext")).toObject();
   QString source = sourceContext.value(QStringLiteral("source")).toString();
-  bool environmentVariablesEnabled = sourceContext.value(QStringLiteral("environmentVariablesEnabled")).toBool();
-  QString startingBranch = sourceContext.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch")).toString();
-  QString createTime = m_sessionData.value(QStringLiteral("createTime")).toString();
-  QString updateTime = m_sessionData.value(QStringLiteral("updateTime")).toString();
+  bool environmentVariablesEnabled =
+      sourceContext.value(QStringLiteral("environmentVariablesEnabled"))
+          .toBool();
+  QString startingBranch =
+      sourceContext.value(QStringLiteral("githubRepoContext"))
+          .toObject()
+          .value(QStringLiteral("startingBranch"))
+          .toString();
+  QString createTime =
+      m_sessionData.value(QStringLiteral("createTime")).toString();
+  QString updateTime =
+      m_sessionData.value(QStringLiteral("updateTime")).toString();
   QString promptText = m_sessionData.value(QStringLiteral("prompt")).toString();
 
   if (!createTime.isEmpty()) {
-      QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
-      if (dt.isValid()) {
-          createTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
-      }
+    QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
+    if (dt.isValid()) {
+      createTime = dt.toLocalTime().toString(
+          QLocale::system().dateFormat(QLocale::ShortFormat));
+    }
   }
   if (!updateTime.isEmpty()) {
-      QDateTime dt = QDateTime::fromString(updateTime, Qt::ISODate);
-      if (dt.isValid()) {
-          updateTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
-      }
+    QDateTime dt = QDateTime::fromString(updateTime, Qt::ISODate);
+    if (dt.isValid()) {
+      updateTime = dt.toLocalTime().toString(
+          QLocale::system().dateFormat(QLocale::ShortFormat));
+    }
   }
 
   QString detailsHtml =
@@ -333,11 +354,13 @@ void SessionWindow::renderDetailsAndDiff() {
                  QStringLiteral("</td></tr>");
   if (!startingBranch.isEmpty()) {
     detailsHtml += QStringLiteral("<tr><th>") + i18n("Starting Branch:") +
-                   QStringLiteral("</th><td>") + startingBranch.toHtmlEscaped() +
+                   QStringLiteral("</th><td>") +
+                   startingBranch.toHtmlEscaped() +
                    QStringLiteral("</td></tr>");
   }
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Env Vars Enabled:") +
-                 QStringLiteral("</th><td>") + (environmentVariablesEnabled ? i18n("Yes") : i18n("No")) +
+                 QStringLiteral("</th><td>") +
+                 (environmentVariablesEnabled ? i18n("Yes") : i18n("No")) +
                  QStringLiteral("</td></tr>");
   if (!createTime.isEmpty()) {
     detailsHtml += QStringLiteral("<tr><th>") + i18n("Create Time:") +

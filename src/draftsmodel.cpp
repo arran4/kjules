@@ -42,7 +42,8 @@ QVariant DraftsModel::data(const QModelIndex &index, int role) const {
     return draft.value(QStringLiteral("comment")).toString();
   case Qt::DisplayRole: {
     QString comment = draft.value(QStringLiteral("comment")).toString();
-    if (!comment.isEmpty()) return comment;
+    if (!comment.isEmpty())
+      return comment;
     return draft.value(QStringLiteral("prompt")).toString(); // Fallback
   }
   default:

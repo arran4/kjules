@@ -27,8 +27,7 @@ RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
   QHBoxLayout *fileLayout = new QHBoxLayout();
   m_fileEdit = new QLineEdit(defaultDir, this);
   QPushButton *browseBtn = new QPushButton(i18n("Browse..."), this);
-  connect(browseBtn, &QPushButton::clicked, this,
-          &RestoreDialog::browseFile);
+  connect(browseBtn, &QPushButton::clicked, this, &RestoreDialog::browseFile);
   fileLayout->addWidget(new QLabel(i18n("Backup File:"), this));
   fileLayout->addWidget(m_fileEdit);
   fileLayout->addWidget(browseBtn);
@@ -68,8 +67,8 @@ RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
   mainLayout->addLayout(filesLayout);
 
   // Options
-  m_mergeCheckBox =
-      new QCheckBox(i18n("Merge with existing data (overwrite if unchecked)"), this);
+  m_mergeCheckBox = new QCheckBox(
+      i18n("Merge with existing data (overwrite if unchecked)"), this);
   m_mergeCheckBox->setChecked(true);
   mainLayout->addWidget(m_mergeCheckBox);
 
@@ -84,8 +83,9 @@ RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
 }
 
 void RestoreDialog::browseFile() {
-  QString file = QFileDialog::getOpenFileName(
-      this, i18n("Select Backup File"), m_fileEdit->text(), i18n("Zip Archives (*.zip)"));
+  QString file = QFileDialog::getOpenFileName(this, i18n("Select Backup File"),
+                                              m_fileEdit->text(),
+                                              i18n("Zip Archives (*.zip)"));
   if (!file.isEmpty()) {
     m_fileEdit->setText(file);
   }
@@ -93,9 +93,7 @@ void RestoreDialog::browseFile() {
 
 QString RestoreDialog::restoreFile() const { return m_fileEdit->text(); }
 
-bool RestoreDialog::mergeData() const {
-  return m_mergeCheckBox->isChecked();
-}
+bool RestoreDialog::mergeData() const { return m_mergeCheckBox->isChecked(); }
 
 QStringList RestoreDialog::filesToRestore() const {
   QStringList files;

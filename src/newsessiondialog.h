@@ -20,7 +20,8 @@ class NewSessionDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
+  explicit NewSessionDialog(SourceModel *sourceModel,
+                            TemplatesModel *templatesModel, bool hasApiKey,
                             QWidget *parent = nullptr);
   void setInitialData(const QJsonObject &data);
   void setTemplateData(const QJsonObject &data);
@@ -28,7 +29,8 @@ public:
 
 Q_SIGNALS:
   void createSessionRequested(const QStringList &sources, const QString &prompt,
-                              const QString &automationMode, bool requirePlanApproval);
+                              const QString &automationMode,
+                              bool requirePlanApproval);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
