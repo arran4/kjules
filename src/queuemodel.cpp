@@ -260,7 +260,7 @@ void QueueModel::recordRun() {
 void QueueModel::checkAndPrependDailyLimitWait() {
     pruneRunTimestamps();
 
-    KConfigGroup config(KSharedConfig::openConfig(), "General");
+    KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
     QString tier = config.readEntry("Tier", QStringLiteral("free"));
     int dailyLimit = 15;
     if (tier == QStringLiteral("pro")) {
@@ -271,7 +271,7 @@ void QueueModel::checkAndPrependDailyLimitWait() {
 
     if (m_runTimestamps.size() >= dailyLimit) {
         bool hasDailyLimitWait = false;
-        for (const QueueItem& existingItem : qAsConst(m_items)) {
+        for (const QueueItem& existingItem : std::as_const(m_items)) {
             if (existingItem.isWaitItem && existingItem.isDailyLimitWait) {
                 hasDailyLimitWait = true;
                 break;
@@ -373,7 +373,7 @@ void QueueModel::save() {
   topObj[QStringLiteral("m_jobsSinceLastWait")] = m_jobsSinceLastWait;
 
   QJsonArray tsArr;
-  for (const QDateTime &dt : qAsConst(m_runTimestamps)) {
+  for (const QDateTime &dt : std::as_const(m_runTimestamps)) {
       tsArr.append(dt.toString(Qt::ISODate));
   }
   topObj[QStringLiteral("m_runTimestamps")] = tsArr;

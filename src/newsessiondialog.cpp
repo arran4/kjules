@@ -26,7 +26,7 @@ public:
       : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
         m_showSelected(showSelected) {}
 
-  void updateSelection() { invalidateFilter(); }
+  void updateSelection() { invalidate(); }
 
 protected:
   bool filterAcceptsRow(int source_row,

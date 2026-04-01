@@ -134,7 +134,7 @@ void ActivityBrowser::renderHtml() {
 
       bool expanded = m_expandedItems.contains(id);
 
-      QString timeTooltip = createTime.isValid() ? createTime.toString(Qt::DefaultLocaleLongDate) : i18n("Unknown time");
+      QString timeTooltip = createTime.isValid() ? QLocale::system().toString(createTime, QLocale::LongFormat) : i18n("Unknown time");
 
       QString turnClass = QStringLiteral("turn ");
       if (activity.contains(QStringLiteral("userMessaged"))) {

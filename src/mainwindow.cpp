@@ -1288,7 +1288,7 @@ void MainWindow::onSessionCreatedResult(bool success,
         m_queueModel->requeueTransient(item);
 
         // Apply a short backoff (e.g. 5 minutes)
-        KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
         int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
         m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
     } else if (isResourceExhausted) {
