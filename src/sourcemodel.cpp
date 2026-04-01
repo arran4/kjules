@@ -1,3 +1,4 @@
+#include <KI18n/KLocalizedString>
 #include "sourcemodel.h"
 #include <QDateTime>
 #include <QDir>
@@ -94,6 +95,24 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return QDateTime::fromString(valStr, Qt::ISODate);
       }
       return QVariant();
+    } else if (index.column() == ColDescription) {
+      return source.value(QStringLiteral("github")).toObject().value(QStringLiteral("description")).toString();
+    } else if (index.column() == ColArchived) {
+      if (source.contains(QStringLiteral("github"))) {
+        return source.value(QStringLiteral("github")).toObject().value(QStringLiteral("archived")).toBool() ? i18n("Yes") : i18n("No");
+      }
+    } else if (index.column() == ColFork) {
+      if (source.contains(QStringLiteral("github"))) {
+        return source.value(QStringLiteral("github")).toObject().value(QStringLiteral("fork")).toBool() ? i18n("Yes") : i18n("No");
+      }
+    } else if (index.column() == ColPrivate) {
+      if (source.contains(QStringLiteral("github"))) {
+        return source.value(QStringLiteral("github")).toObject().value(QStringLiteral("private")).toBool() ? i18n("Yes") : i18n("No");
+      } else if (source.contains(QStringLiteral("isPrivate"))) {
+        return source.value(QStringLiteral("isPrivate")).toBool() ? i18n("Yes") : i18n("No");
+      }
+    } else if (index.column() == ColLanguages) {
+      return source.value(QStringLiteral("github")).toObject().value(QStringLiteral("language")).toString();
     }
     return QVariant();
   } else if (role == Qt::DecorationRole) {
@@ -133,6 +152,16 @@ QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
     return QStringLiteral("First Seen");
   } else if (section == ColLastChanged) {
     return QStringLiteral("Last Changed");
+  } else if (section == ColDescription) {
+    return i18n("Description");
+  } else if (section == ColArchived) {
+    return i18n("Archived");
+  } else if (section == ColFork) {
+    return i18n("Fork");
+  } else if (section == ColPrivate) {
+    return i18n("Private");
+  } else if (section == ColLanguages) {
+    return i18n("Languages");
   }
   return QVariant();
 }

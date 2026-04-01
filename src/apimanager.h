@@ -44,8 +44,10 @@ public:
   void reloadSession(const QString &sessionId);
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
+  void fetchGithubInfo(const QString &sourceId);
 
 Q_SIGNALS:
+  void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished();
   void sessionsRefreshFinished();

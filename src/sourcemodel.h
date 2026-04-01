@@ -17,6 +17,11 @@ public:
     ColHeat,
     ColFirstSeen,
     ColLastChanged,
+    ColDescription,
+    ColArchived,
+    ColFork,
+    ColPrivate,
+    ColLanguages,
     ColCount
   };
 
