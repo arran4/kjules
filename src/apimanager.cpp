@@ -250,6 +250,39 @@ void APIManager::reloadSession(const QString &sessionId) {
   });
 }
 
+void APIManager::getGithubPrData(const QString &sessionId, const QString &owner,
+                                 const QString &repo, const QString &prNumber) {
+  if (m_githubToken.isEmpty()) {
+    return;
+  }
+
+  QString prNumClean = prNumber;
+  if (prNumClean.startsWith(QStringLiteral("#"))) {
+    prNumClean = prNumClean.mid(1);
+  }
+
+  QString endpoint = QStringLiteral("https://api.github.com/repos/") + owner +
+                     QStringLiteral("/") + repo + QStringLiteral("/pulls/") +
+                     prNumClean;
+  QNetworkRequest request((QUrl(endpoint)));
+  request.setRawHeader("Authorization",
+                       (QStringLiteral("Bearer ") + m_githubToken).toUtf8());
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("kjules"));
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      Q_EMIT githubPrDataReceived(sessionId, doc.object());
+    } else {
+      Q_EMIT logMessage(QStringLiteral("Failed to fetch PR data for session ") + sessionId + QStringLiteral(": ") + reply->errorString());
+    }
+    reply->deleteLater();
+  });
+}
+
 void APIManager::getSource(const QString &sourceId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(

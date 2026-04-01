@@ -44,6 +44,8 @@ public:
   void reloadSession(const QString &sessionId);
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
+  void getGithubPrData(const QString &sessionId, const QString &owner,
+                       const QString &repo, const QString &prNumber);
 
 Q_SIGNALS:
   void sourcesReceived(const QJsonArray &sources);
@@ -57,6 +59,8 @@ Q_SIGNALS:
   void sourceDetailsReceived(const QJsonObject &source);
   void activitiesReceived(const QString &sessionId,
                           const QJsonArray &activities);
+  void githubPrDataReceived(const QString &sessionId,
+                            const QJsonObject &data);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,

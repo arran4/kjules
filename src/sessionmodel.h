@@ -24,6 +24,8 @@ struct SessionData {
   bool hasChangeSet;
   QString prUrl;
   QString prNumber;
+  QString prStatus;
+  QJsonArray prLabels;
   QJsonObject rawObject;
 };
 
@@ -40,6 +42,8 @@ public:
     StateRole,
     ChangeSetRole,
     PrUrlRole,
+    PrStatusRole,
+    PrLabelsRole,
     ProviderRole,
     LastRefreshedRole
   };
@@ -49,6 +53,8 @@ public:
     ColState,
     ColChangeSet,
     ColPR,
+    ColPrStatus,
+    ColPrLabels,
     ColUpdatedAt,
     ColCreatedAt,
     ColOwner,

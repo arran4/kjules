@@ -67,6 +67,12 @@ SessionData parseSessionData(const QJsonObject &obj) {
     }
   }
 
+  if (obj.contains(QStringLiteral("githubPrData"))) {
+    QJsonObject prData = obj.value(QStringLiteral("githubPrData")).toObject();
+    data.prStatus = prData.value(QStringLiteral("state")).toString();
+    data.prLabels = prData.value(QStringLiteral("labels")).toArray();
+  }
+
   data.rawObject = obj;
   return data;
 }
@@ -101,6 +107,16 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return session.hasChangeSet ? i18n("has changes set") : QString();
     case ColPR:
       return session.prNumber;
+    case ColPrStatus:
+      return session.prStatus;
+    case ColPrLabels:
+      {
+        QStringList labels;
+        for (int i = 0; i < session.prLabels.size(); ++i) {
+          labels << session.prLabels[i].toObject().value(QStringLiteral("name")).toString();
+        }
+        return labels.join(QStringLiteral(", "));
+      }
     case ColUpdatedAt:
       return session.updateTime.toString(
           QLocale::system().dateFormat(QLocale::ShortFormat));
@@ -145,6 +161,10 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.hasChangeSet;
   case PrUrlRole:
     return session.prUrl;
+  case PrStatusRole:
+    return session.prStatus;
+  case PrLabelsRole:
+    return session.prLabels;
   case ProviderRole:
     return session.provider;
   default:
@@ -164,6 +184,10 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
       return i18n("Change Set");
     case ColPR:
       return i18n("PR");
+    case ColPrStatus:
+      return i18n("PR Status");
+    case ColPrLabels:
+      return i18n("PR Labels");
     case ColUpdatedAt:
       return i18n("Updated At");
     case ColCreatedAt:

@@ -104,6 +104,50 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
             m_sessionModel->updateSession(session);
+            if (!m_apiManager->githubToken().isEmpty()) {
+              QString sourceStr = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+              if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
+                QStringList parts = sourceStr.split(QLatin1Char('/'));
+                if (parts.size() >= 4) {
+                  QString owner = parts[2];
+                  QString repo = parts[3];
+                  QJsonArray outputs = session.value(QStringLiteral("outputs")).toArray();
+                  for (int i = 0; i < outputs.size(); ++i) {
+                    QJsonObject outObj = outputs[i].toObject();
+                    if (outObj.contains(QStringLiteral("pullRequest"))) {
+                      QString prUrl = outObj.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
+                      int lastSlash = prUrl.lastIndexOf(QLatin1Char('/'));
+                      if (lastSlash != -1) {
+                        QString prNum = prUrl.mid(lastSlash + 1);
+                        m_apiManager->getGithubPrData(session.value(QStringLiteral("id")).toString(), owner, repo, prNum);
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          });
+  connect(m_apiManager, &APIManager::githubPrDataReceived, this,
+          [this](const QString &sessionId, const QJsonObject &data) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              QJsonObject session = m_sessionModel->getSession(i);
+              if (session.value(QStringLiteral("id")).toString() == sessionId) {
+                session[QStringLiteral("githubPrData")] = data;
+                m_sessionModel->updateSession(session);
+                break;
+              }
+            }
+            if (m_archiveModel) {
+              for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+                QJsonObject session = m_archiveModel->getSession(i);
+                if (session.value(QStringLiteral("id")).toString() == sessionId) {
+                  session[QStringLiteral("githubPrData")] = data;
+                  m_archiveModel->updateSession(session);
+                  break;
+                }
+              }
+            }
           });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
