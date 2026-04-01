@@ -265,17 +265,24 @@ void MainWindow::setupUi() {
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
 
-          QJsonObject rawData = m_sourceModel->data(sourceIndex, SourceModel::RawDataRole).toJsonObject();
+          QJsonObject rawData =
+              m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
+                  .toJsonObject();
           if (rawData.contains(QStringLiteral("github"))) {
-            QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+            QJsonObject github =
+                rawData.value(QStringLiteral("github")).toObject();
             QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
 
-            auto addGithubLink = [this, githubMenu, urlStr](const QString &title, const QString &path) {
-              QAction *openAction = githubMenu->addAction(i18n("Open %1", title));
+            auto addGithubLink = [this, githubMenu,
+                                  urlStr](const QString &title,
+                                          const QString &path) {
+              QAction *openAction =
+                  githubMenu->addAction(i18n("Open %1", title));
               connect(openAction, &QAction::triggered, [urlStr, path]() {
                 QDesktopServices::openUrl(QUrl(urlStr + path));
               });
-              QAction *copyAction = githubMenu->addAction(i18n("Copy %1 URL", title));
+              QAction *copyAction =
+                  githubMenu->addAction(i18n("Copy %1 URL", title));
               connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
                 QGuiApplication::clipboard()->setText(urlStr + path);
                 updateStatus(i18n("URL copied to clipboard."));
@@ -286,19 +293,23 @@ void MainWindow::setupUi() {
               addGithubLink(QStringLiteral("Wiki"), QStringLiteral("/wiki"));
             }
             if (github.value(QStringLiteral("has_discussions")).toBool()) {
-              addGithubLink(QStringLiteral("Discussions"), QStringLiteral("/discussions"));
+              addGithubLink(QStringLiteral("Discussions"),
+                            QStringLiteral("/discussions"));
             }
             if (github.value(QStringLiteral("has_issues")).toBool()) {
-              addGithubLink(QStringLiteral("Issues"), QStringLiteral("/issues"));
+              addGithubLink(QStringLiteral("Issues"),
+                            QStringLiteral("/issues"));
             }
 
-            QString homepage = github.value(QStringLiteral("homepage")).toString();
+            QString homepage =
+                github.value(QStringLiteral("homepage")).toString();
             if (!homepage.isEmpty()) {
               QAction *openAction = githubMenu->addAction(i18n("Open Website"));
               connect(openAction, &QAction::triggered, [homepage]() {
                 QDesktopServices::openUrl(QUrl(homepage));
               });
-              QAction *copyAction = githubMenu->addAction(i18n("Copy Website URL"));
+              QAction *copyAction =
+                  githubMenu->addAction(i18n("Copy Website URL"));
               connect(copyAction, &QAction::triggered, [this, homepage]() {
                 QGuiApplication::clipboard()->setText(homepage);
                 updateStatus(i18n("URL copied to clipboard."));
@@ -1851,12 +1862,14 @@ void MainWindow::onSourcesReceived(const QJsonArray &sources) {
                     m_sourcesAddedCount));
 }
 
-void MainWindow::onGithubInfoReceived(const QString &sourceId, const QJsonObject &info) {
+void MainWindow::onGithubInfoReceived(const QString &sourceId,
+                                      const QJsonObject &info) {
   for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
     QModelIndex index = m_sourceModel->index(i, 0);
     QString id = m_sourceModel->data(index, SourceModel::IdRole).toString();
     if (id == sourceId) {
-      QJsonObject source = m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
+      QJsonObject source =
+          m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
       source[QStringLiteral("github")] = info;
       m_sourceModel->updateSource(source);
       break;

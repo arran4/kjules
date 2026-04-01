@@ -393,7 +393,8 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
     return; // Not a github source
   }
 
-  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
+  QNetworkRequest request(
+      QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
