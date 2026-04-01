@@ -148,8 +148,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(watchAction);
   }
 
-  QAction *markCompleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("task-complete")), i18n("Mark Complete"), this);
+  QAction *markCompleteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("task-complete")),
+                  i18n("Mark Complete"), this);
   connect(markCompleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());

@@ -112,20 +112,25 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint,
   return request;
 }
 
-void APIManager::checkPullRequestMerged(const QString &prUrl, const QString &sessionId) {
-  if (m_githubToken.isEmpty() || prUrl.isEmpty() || !prUrl.startsWith(QStringLiteral("https://github.com/"))) {
+void APIManager::checkPullRequestMerged(const QString &prUrl,
+                                        const QString &sessionId) {
+  if (m_githubToken.isEmpty() || prUrl.isEmpty() ||
+      !prUrl.startsWith(QStringLiteral("https://github.com/"))) {
     return;
   }
 
-  // convert https://github.com/owner/repo/pull/123 to https://api.github.com/repos/owner/repo/pulls/123
+  // convert https://github.com/owner/repo/pull/123 to
+  // https://api.github.com/repos/owner/repo/pulls/123
   QString apiUrl = prUrl;
-  apiUrl.replace(QStringLiteral("https://github.com/"), QStringLiteral("https://api.github.com/repos/"));
+  apiUrl.replace(QStringLiteral("https://github.com/"),
+                 QStringLiteral("https://api.github.com/repos/"));
   apiUrl.replace(QStringLiteral("/pull/"), QStringLiteral("/pulls/"));
 
   QNetworkRequest request((QUrl(apiUrl)));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QStringLiteral("application/json"));
-  request.setRawHeader("Authorization", (QStringLiteral("Bearer ") + m_githubToken).toUtf8());
+  request.setRawHeader("Authorization",
+                       (QStringLiteral("Bearer ") + m_githubToken).toUtf8());
 
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {

@@ -122,19 +122,22 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
-  connect(m_apiManager, &APIManager::pullRequestMerged, this, [this](const QString &sessionId) {
-    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == sessionId) {
-        QJsonObject session = m_sessionModel->getSession(i);
-        m_archiveModel->addSession(session);
-        m_archiveModel->saveSessions();
-        m_sessionModel->removeSession(i);
-        m_sessionModel->saveSessions();
-        updateStatus(i18n("Session archived due to merged PR."));
-        break;
-      }
-    }
-  });
+  connect(m_apiManager, &APIManager::pullRequestMerged, this,
+          [this](const QString &sessionId) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                      .toString() == sessionId) {
+                QJsonObject session = m_sessionModel->getSession(i);
+                m_archiveModel->addSession(session);
+                m_archiveModel->saveSessions();
+                m_sessionModel->removeSession(i);
+                m_sessionModel->saveSessions();
+                updateStatus(i18n("Session archived due to merged PR."));
+                break;
+              }
+            }
+          });
 
   auto updateSourceStats = [this]() {
     QJsonArray allSessions;
@@ -387,14 +390,16 @@ void MainWindow::setupUi() {
             });
           }
 
-          connect(markCompleteAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
-            m_archiveModel->addSession(session);
-            m_archiveModel->saveSessions();
-            m_sessionModel->removeSession(sourceIndex.row());
-            m_sessionModel->saveSessions();
-            updateStatus(i18n("Session marked as complete and archived."));
-          });
+          connect(
+              markCompleteAction, &QAction::triggered, [this, sourceIndex]() {
+                QJsonObject session =
+                    m_sessionModel->getSession(sourceIndex.row());
+                m_archiveModel->addSession(session);
+                m_archiveModel->saveSessions();
+                m_sessionModel->removeSession(sourceIndex.row());
+                m_sessionModel->saveSessions();
+                updateStatus(i18n("Session marked as complete and archived."));
+              });
 
           connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
             QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
@@ -1881,14 +1886,16 @@ void MainWindow::updateSessionStats() {
 
   for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
     QJsonObject session = m_sessionModel->getSession(i);
-    QString createTimeStr = session.value(QStringLiteral("createTime")).toString();
+    QString createTimeStr =
+        session.value(QStringLiteral("createTime")).toString();
     QDateTime createTime = QDateTime::fromString(createTimeStr, Qt::ISODate);
     QString id = session.value(QStringLiteral("id")).toString();
 
     bool archiveThis = false;
 
     if (autoArchive && createTime.isValid()) {
-      if (createTime.daysTo(QDateTime::currentDateTimeUtc()) >= autoArchiveDays) {
+      if (createTime.daysTo(QDateTime::currentDateTimeUtc()) >=
+          autoArchiveDays) {
         archiveThis = true;
       }
     }
@@ -1901,7 +1908,10 @@ void MainWindow::updateSessionStats() {
     }
 
     if (archiveOnMergedPR) {
-      QString prUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
+      QString prUrl =
+          m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole)
+              .toString();
       if (!prUrl.isEmpty()) {
         m_apiManager->checkPullRequestMerged(prUrl, id);
       }
