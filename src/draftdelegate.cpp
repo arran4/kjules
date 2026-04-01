@@ -39,7 +39,8 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
     }
     if (source.isEmpty()) {
       if (reqObj.contains(QStringLiteral("sources"))) {
-        QJsonArray sourcesArray = reqObj.value(QStringLiteral("sources")).toArray();
+        QJsonArray sourcesArray =
+            reqObj.value(QStringLiteral("sources")).toArray();
         QStringList sourcesList;
         for (const QJsonValue &val : sourcesArray) {
           sourcesList.append(val.toString());
@@ -87,12 +88,13 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
     details += QStringLiteral(" | ") + comment;
   if (!description.isEmpty())
     details += QStringLiteral(" | ") + description;
-  if (comment.isEmpty() && description.isEmpty() && prompt != displayTitle && !prompt.isEmpty()) {
+  if (comment.isEmpty() && description.isEmpty() && prompt != displayTitle &&
+      !prompt.isEmpty()) {
     QString shortPrompt = prompt;
     shortPrompt.replace(QStringLiteral("\n"), QStringLiteral(" "));
-    details +=
-        QStringLiteral(" | Prompt: ") + shortPrompt.left(30) +
-        (shortPrompt.length() > 30 ? QStringLiteral("...") : QStringLiteral(""));
+    details += QStringLiteral(" | Prompt: ") + shortPrompt.left(30) +
+               (shortPrompt.length() > 30 ? QStringLiteral("...")
+                                          : QStringLiteral(""));
   }
 
   if (!automationMode.isEmpty())
