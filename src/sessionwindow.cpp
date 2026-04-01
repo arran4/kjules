@@ -148,8 +148,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(watchAction);
   }
 
-  QAction *archiveAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"), this);
+  QAction *archiveAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("archive")),
+                  i18n("Archive Session"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
@@ -158,8 +159,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(archiveAction);
   }
 
-  QAction *deleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage Session"), this);
+  QAction *deleteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                  i18n("Unmanage Session"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());

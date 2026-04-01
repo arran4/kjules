@@ -519,33 +519,37 @@ void SessionsWindow::setupUi() {
       QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"));
   QAction *archiveMenuAction = actionsMenu->addAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"));
-  QAction *deleteMenuAction = actionsMenu->addAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage Session"));
+  QAction *deleteMenuAction =
+      actionsMenu->addAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                             i18n("Unmanage Session"));
 
-  connect(actionsMenu, &QMenu::aboutToShow, [this, watchMenuAction, archiveMenuAction, deleteMenuAction]() {
-    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
-    if (selectedRows.isEmpty()) {
-      watchMenuAction->setEnabled(false);
-      archiveMenuAction->setEnabled(false);
-      deleteMenuAction->setEnabled(false);
-      return;
-    }
+  connect(actionsMenu, &QMenu::aboutToShow,
+          [this, watchMenuAction, archiveMenuAction, deleteMenuAction]() {
+            QModelIndexList selectedRows =
+                m_listView->selectionModel()->selectedRows();
+            if (selectedRows.isEmpty()) {
+              watchMenuAction->setEnabled(false);
+              archiveMenuAction->setEnabled(false);
+              deleteMenuAction->setEnabled(false);
+              return;
+            }
 
-    bool allManaged = true;
-    bool allUnmanaged = true;
-    for (const QModelIndex &idx : selectedRows) {
-      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
-      if (m_managedModel && m_managedModel->contains(id)) {
-        allUnmanaged = false;
-      } else {
-        allManaged = false;
-      }
-    }
+            bool allManaged = true;
+            bool allUnmanaged = true;
+            for (const QModelIndex &idx : selectedRows) {
+              QString id =
+                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
+              if (m_managedModel && m_managedModel->contains(id)) {
+                allUnmanaged = false;
+              } else {
+                allManaged = false;
+              }
+            }
 
-    watchMenuAction->setEnabled(allUnmanaged);
-    archiveMenuAction->setEnabled(allManaged);
-    deleteMenuAction->setEnabled(allManaged);
-  });
+            watchMenuAction->setEnabled(allUnmanaged);
+            archiveMenuAction->setEnabled(allManaged);
+            deleteMenuAction->setEnabled(allManaged);
+          });
 
   connect(watchMenuAction, &QAction::triggered, [this]() {
     QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
