@@ -47,9 +47,9 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onActivitiesReceived);
   }
 
-  setupActions();
   setupUi(m_sessionData);
   setupGUI();
+  setupActions();
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("SessionWindow"));
@@ -137,7 +137,7 @@ void SessionWindow::setupActions() {
 
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
-                  i18n("Watch Session"), this);
+                  i18n("Follow Session"), this);
   connect(watchAction, &QAction::triggered, this,
           [this, watchAction, sessionMenu]() {
             Q_EMIT watchRequested(m_sessionData);
@@ -149,7 +149,7 @@ void SessionWindow::setupActions() {
   }
 
   QAction *archiveAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
+      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
@@ -159,7 +159,7 @@ void SessionWindow::setupActions() {
   }
 
   QAction *deleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage Session"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
