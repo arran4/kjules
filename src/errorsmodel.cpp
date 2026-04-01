@@ -1,4 +1,5 @@
 #include "errorsmodel.h"
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -30,6 +31,15 @@ QVariant ErrorsModel::data(const QModelIndex &index, int role) const {
     return error.value(QStringLiteral("message")).toString();
   case HttpDetailsRole:
     return error.value(QStringLiteral("httpDetails")).toString();
+  case TimestampRole:
+    if (error.contains(QStringLiteral("timestamp"))) {
+      QDateTime dt = QDateTime::fromString(
+          error.value(QStringLiteral("timestamp")).toString(), Qt::ISODate);
+      if (dt.isValid()) {
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+      }
+    }
+    return QVariant();
   case Qt::DisplayRole:
     return error.value(QStringLiteral("message"))
         .toString(); // Display error message as title
@@ -44,6 +54,7 @@ QHash<int, QByteArray> ErrorsModel::roleNames() const {
   roles[ResponseRole] = "response";
   roles[MessageRole] = "message";
   roles[HttpDetailsRole] = "httpDetails";
+  roles[TimestampRole] = "timestamp";
   return roles;
 }
 
@@ -57,6 +68,8 @@ void ErrorsModel::addError(const QJsonObject &request,
   if (!httpDetails.isEmpty()) {
     errorObj[QStringLiteral("httpDetails")] = httpDetails;
   }
+  errorObj[QStringLiteral("timestamp")] =
+      QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
   beginInsertRows(QModelIndex(), 0, 0);
   m_errors.insert(0, errorObj);
