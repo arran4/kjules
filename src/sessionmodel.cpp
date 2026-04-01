@@ -102,9 +102,9 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ColPR:
       return session.prNumber;
     case ColUpdatedAt:
-      return session.updateTime.toString(Qt::DefaultLocaleShortDate);
+      return session.updateTime.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
     case ColCreatedAt:
-      return session.createTime.toString(Qt::DefaultLocaleShortDate);
+      return session.createTime.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
     case ColOwner:
       return session.owner;
     case ColRepo:
@@ -365,4 +365,8 @@ void SessionModel::clearSessions() {
   m_sessions.clear();
   m_idToIndex.clear();
   endResetModel();
+}
+
+bool SessionModel::contains(const QString &id) const {
+  return m_idToIndex.contains(id);
 }

@@ -38,17 +38,20 @@ SessionsProxyModel::SessionsProxyModel(QObject *parent)
 
 void SessionsProxyModel::setTextFilter(const QString &text) {
   m_textFilter = text;
-  invalidateFilter();
+  beginResetModel();
+  endResetModel();
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
   m_statusFilter = status;
-  invalidateFilter();
+  beginResetModel();
+  endResetModel();
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
   m_repoFilter = repo;
-  invalidateFilter();
+  beginResetModel();
+  endResetModel();
 }
 
 bool SessionsProxyModel::filterAcceptsRow(
@@ -84,9 +87,8 @@ bool SessionsProxyModel::filterAcceptsRow(
          QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
 }
 
-SessionsWindow::SessionsWindow(const QString &filterSource,
-                               APIManager *apiManager, QWidget *parent)
-    : KXmlGuiWindow(parent), m_apiManager(apiManager),
+SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel, QWidget *parent)
+    : KXmlGuiWindow(parent), m_apiManager(apiManager), m_managedModel(managedModel),
       m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
       m_pagesLoaded(0), m_isRefreshingAll(false) {
   setObjectName(QStringLiteral("SessionsWindow"));
@@ -479,7 +481,7 @@ void SessionsWindow::setupUi() {
   QMenu *viewMenu = new QMenu(i18n("View"), this);
   QMenu *columnsMenu = viewMenu->addMenu(i18n("Columns"));
 
-  KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
   QString autoLoadMode = config.readEntry("AutoLoadMode", "manual");
   for (QAction *action : m_autoLoadGroup->actions()) {
     if (action->data().toString() == autoLoadMode) {
@@ -492,7 +494,7 @@ void SessionsWindow::setupUi() {
   }
 
   connect(m_autoLoadGroup, &QActionGroup::triggered, [this](QAction *action) {
-    KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+    KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
     config.writeEntry("AutoLoadMode", action->data().toString());
     config.sync();
   });
@@ -509,7 +511,7 @@ void SessionsWindow::setupUi() {
 
     connect(action, &QAction::toggled, [this, colIndex](bool checked) {
       m_listView->header()->setSectionHidden(colIndex, !checked);
-      KConfigGroup config(KSharedConfig::openConfig(), "SessionsWindow");
+      KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
       config.writeEntry(QStringLiteral("ShowColumn_%1").arg(colIndex), checked);
       config.sync();
     });

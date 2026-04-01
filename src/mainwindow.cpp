@@ -151,7 +151,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   bool closeToTray = config.readEntry("CloseToTray", false);
   if (closeToTray) {
     hide();
@@ -242,7 +242,12 @@ void MainWindow::setupUi() {
           QAction *sourceViewSessionsAction =
               menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
-            SessionsWindow *window = new SessionsWindow(id, m_apiManager, this);
+            SessionsWindow *window = new SessionsWindow(id, m_apiManager, m_sessionModel, this);
+  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
             window->show();
           });
           menu.addAction(m_refreshSourceAction);
@@ -327,7 +332,7 @@ void MainWindow::setupUi() {
                             ->data(sourceIndex, SessionModel::SourceRole)
                             .toString();
                     SessionsWindow *window =
-                        new SessionsWindow(source, m_apiManager, this);
+                        new SessionsWindow(source, m_apiManager, m_sessionModel, this);
                     window->show();
                   });
 
@@ -809,14 +814,19 @@ void MainWindow::createActions() {
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
   actionCollection()->setDefaultShortcut(newSessionAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_N));
+                                         QKeySequence(Qt::CTRL | Qt::Key_N));
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
+  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
     window->show();
   });
 
@@ -871,7 +881,7 @@ void MainWindow::createActions() {
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
   actionCollection()->setDefaultShortcut(toggleWindowAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_M));
+                                         QKeySequence(Qt::CTRL | Qt::Key_M));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -879,7 +889,12 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, this);
+    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
+  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
     window->show();
   });
 
@@ -1129,7 +1144,7 @@ void MainWindow::showSettingsDialog() {
 }
 
 void MainWindow::loadQueueSettings() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   int intervalMins = queueConfig.readEntry("TimerInterval", 1);
   m_queueTimer->setInterval(intervalMins * 60000);
 
@@ -1293,7 +1308,7 @@ void MainWindow::onSessionCreatedResult(bool success,
         updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
         m_queueModel->requeueFailed(item, errorMsg, rawResponse);
 
-        KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
         int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
         m_queueBackoffUntil =
             QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
@@ -1660,7 +1675,13 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 }
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
-  SessionWindow *window = new SessionWindow(session, m_apiManager, this);
+  QString sessionId = session.value(QStringLiteral("id")).toString();
+  SessionWindow *window = new SessionWindow(session, m_apiManager, m_sessionModel->contains(sessionId), this);
+  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
   connectSessionWindow(window);
   window->show();
 }
@@ -1677,7 +1698,13 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
-    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, this);
+    QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
+  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
+    m_sessionModel->addSession(s);
+    m_sessionModel->saveSessions();
+  });
+
     connectSessionWindow(window);
     window->show();
   }

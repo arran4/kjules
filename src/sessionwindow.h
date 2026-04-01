@@ -16,8 +16,7 @@ class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager,
-                         QWidget *parent = nullptr);
+  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged = true, QWidget *parent = nullptr);
   ~SessionWindow();
 
 private:
@@ -33,6 +32,7 @@ private:
 
   QJsonObject m_sessionData;
   APIManager *m_apiManager;
+  bool m_isManaged;
   QTabWidget *m_tabWidget;
   QLabel *m_statusLabel;
   QTimer *m_autoRefreshTimer;
@@ -48,9 +48,11 @@ private:
   class QLineEdit *m_chatInput;
 
 Q_SIGNALS:
+  void watchRequested(const QJsonObject &sessionData);
   void archiveRequested(const QString &id);
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
+  void refreshRequested(const QString &id);
 };
 
 #endif // SESSIONWINDOW_H

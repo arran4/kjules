@@ -27,10 +27,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-SessionWindow::SessionWindow(const QJsonObject &sessionData,
-                             APIManager *apiManager, QWidget *parent)
-    : KXmlGuiWindow(parent), m_sessionData(sessionData),
-      m_apiManager(apiManager) {
+SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged, QWidget *parent)
+    : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged) {
   setObjectName(QStringLiteral("SessionWindow_%1").arg(
       sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
@@ -50,14 +48,14 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
   setupUi(m_sessionData);
   setupGUI();
 
-  KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);
   m_autoRefreshCombo->setCurrentIndex(autoRefreshIndex);
   updateAutoRefresh();
 }
 
 SessionWindow::~SessionWindow() {
-  KConfigGroup config(KSharedConfig::openConfig(), "SessionWindow");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   config.writeEntry("AutoRefreshIndex", m_autoRefreshCombo->currentIndex());
   config.sync();
 }
@@ -84,7 +82,7 @@ void SessionWindow::setupActions() {
       QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), this);
   actionCollection()->addAction(QStringLiteral("close_window"), closeAction);
   actionCollection()->setDefaultShortcut(closeAction,
-                                         QKeySequence(Qt::CTRL + Qt::Key_W));
+                                         QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
   setStandardToolBarMenuEnabled(true);
@@ -132,21 +130,34 @@ void SessionWindow::setupActions() {
   sessionMenu->addAction(saveTemplateAction);
   sessionMenu->addSeparator();
 
+  QAction *watchAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("visibility")), i18n("Watch Session"), this);
+  connect(watchAction, &QAction::triggered, this, [this, watchAction, sessionMenu]() {
+    Q_EMIT watchRequested(m_sessionData);
+    m_isManaged = true;
+    watchAction->setEnabled(false);
+  });
+  if (!m_isManaged) {
+    sessionMenu->addAction(watchAction);
+  }
+
   QAction *archiveAction = new QAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
-    Q_EMIT archiveRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString());
   });
-  sessionMenu->addAction(archiveAction);
+  if (m_isManaged) {
+      sessionMenu->addAction(archiveAction);
+  }
 
   QAction *deleteAction = new QAction(
       QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
-    Q_EMIT deleteRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
+    Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString());
   });
-  sessionMenu->addAction(deleteAction);
+  if (m_isManaged) {
+      sessionMenu->addAction(deleteAction);
+  }
   sessionMenu->addSeparator();
   sessionMenu->addAction(closeAction);
 
@@ -260,7 +271,7 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
 
   m_statusLabel->setText(
       i18n("Refreshed at %1",
-           QDateTime::currentDateTime().toString(Qt::DefaultLocaleShortDate)));
+           QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
 }
 
 void SessionWindow::renderDetailsAndDiff() {
@@ -284,13 +295,13 @@ void SessionWindow::renderDetailsAndDiff() {
   if (!createTime.isEmpty()) {
       QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
       if (dt.isValid()) {
-          createTime = dt.toLocalTime().toString(Qt::DefaultLocaleShortDate);
+          createTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
       }
   }
   if (!updateTime.isEmpty()) {
       QDateTime dt = QDateTime::fromString(updateTime, Qt::ISODate);
       if (dt.isValid()) {
-          updateTime = dt.toLocalTime().toString(Qt::DefaultLocaleShortDate);
+          updateTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
       }
   }
 

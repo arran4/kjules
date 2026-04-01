@@ -1,3 +1,4 @@
+#include <utility>
 #include "queuemodel.h"
 
 #include <KLocalizedString>
@@ -100,7 +101,7 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     }
     if (item.errorCount > 0) {
       QString timeStr = item.lastTry.isValid()
-                            ? item.lastTry.toString(Qt::DefaultLocaleShortDate)
+                            ? item.lastTry.toString(QLocale::system().dateFormat(QLocale::ShortFormat))
                             : i18n("Unknown time");
       return i18n("Failed %1 times (Last: %2). Error: %3", item.errorCount,
                   timeStr, item.lastError);
@@ -137,7 +138,7 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
   endInsertRows();
   m_jobsSinceLastWait++;
 
-  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   QString tier = config.readEntry("Tier", QStringLiteral("free"));
   int jobsBeforeWait = 3;
   if (tier == QStringLiteral("pro")) {
@@ -364,7 +365,7 @@ void QueueModel::save() {
   file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
 
   QJsonArray arr;
-  for (const QueueItem &item : qAsConst(m_items)) {
+  for (const QueueItem &item : std::as_const(m_items)) {
     arr.append(item.toJson());
   }
 

@@ -31,12 +31,12 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
   formLayout->addRow(i18n("GitHub Token (Optional):"), m_githubTokenEdit);
 
-  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   m_closeToTrayEdit = new QCheckBox(i18n("Close to Tray"), this);
   m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
   formLayout->addRow(QString(), m_closeToTrayEdit);
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
 
   m_queueIntervalEdit = new QSpinBox(this);
   m_queueIntervalEdit->setRange(1, 1440); // 1 min to 24 hours
@@ -68,7 +68,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   }
   formLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
 
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), "SessionWindow");
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   m_globalAutoRefreshCombo = new QComboBox(this);
   m_globalAutoRefreshCombo->addItem(i18n("Off"), 0);
   m_globalAutoRefreshCombo->addItem(i18n("10 seconds"), 10);
@@ -120,18 +120,18 @@ void SettingsDialog::onSave() {
   m_apiManager->setApiKey(m_apiKeyEdit->text());
   m_apiManager->setGithubToken(m_githubTokenEdit->text());
 
-  KConfigGroup config(KSharedConfig::openConfig(), "General");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.sync();
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), "Queue");
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
   queueConfig.sync();
 
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), "SessionWindow");
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   sessionConfig.writeEntry("AutoRefreshIndex",
                            m_globalAutoRefreshCombo->currentIndex());
   sessionConfig.sync();

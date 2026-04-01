@@ -20,10 +20,10 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
-        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
-        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
-        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev
+        sudo apt-get install -y cmake extra-cmake-modules qt6-base-dev qt6-tools-dev \
+        libkf6coreaddons-dev libkf6i18n-dev libkf6wallet-dev libkf6notifications-dev \
+        libkf6xmlgui-dev libkf6config-dev libkf6widgetsaddons-dev libkf6auth-dev \
+        libkf6codecs-dev libkf6configwidgets-dev libkf6itemviews-dev libkf6iconthemes-dev
 
     - name: Configure CMake
       run: cmake -B build -S .
@@ -43,10 +43,10 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
-        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
-        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
-        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev \
+        sudo apt-get install -y cmake extra-cmake-modules qt6-base-dev qt6-tools-dev \
+        libkf6coreaddons-dev libkf6i18n-dev libkf6wallet-dev libkf6notifications-dev \
+        libkf6xmlgui-dev libkf6config-dev libkf6widgetsaddons-dev libkf6auth-dev \
+        libkf6codecs-dev libkf6configwidgets-dev libkf6itemviews-dev libkf6iconthemes-dev \
         clang-tidy
 
     - name: Configure CMake
@@ -108,10 +108,10 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake extra-cmake-modules qtbase5-dev qttools5-dev \
-        libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
-        libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev \
-        libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev
+        sudo apt-get install -y cmake extra-cmake-modules qt6-base-dev qt6-tools-dev \
+        libkf6coreaddons-dev libkf6i18n-dev libkf6wallet-dev libkf6notifications-dev \
+        libkf6xmlgui-dev libkf6config-dev libkf6widgetsaddons-dev libkf6auth-dev \
+        libkf6codecs-dev libkf6configwidgets-dev libkf6itemviews-dev libkf6iconthemes-dev
 
     - name: Configure CMake
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
