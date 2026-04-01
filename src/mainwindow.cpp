@@ -32,9 +32,9 @@
 #include <QCursor>
 #include <QDebug>
 #include <QDesktopServices>
-#include <QFileDialog>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -605,58 +605,61 @@ void MainWindow::setupUi() {
   m_templatesView->setModel(m_templatesModel);
   m_templatesView->setItemDelegate(new DraftDelegate(this));
   m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(m_templatesView, &QListView::customContextMenuRequested,
-          [this](const QPoint &pos) {
-            QModelIndex index = m_templatesView->indexAt(pos);
-            if (index.isValid()) {
-              QMenu menu;
-              QAction *useAction = menu.addAction(i18n("Use Template"));
-              connect(useAction, &QAction::triggered,
-                      [this, index]() { onTemplateActivated(index); });
+  connect(
+      m_templatesView, &QListView::customContextMenuRequested,
+      [this](const QPoint &pos) {
+        QModelIndex index = m_templatesView->indexAt(pos);
+        if (index.isValid()) {
+          QMenu menu;
+          QAction *useAction = menu.addAction(i18n("Use Template"));
+          connect(useAction, &QAction::triggered,
+                  [this, index]() { onTemplateActivated(index); });
 
-              QAction *editAction = menu.addAction(i18n("Edit Template"));
-              connect(editAction, &QAction::triggered, [this, index]() {
-                TemplateEditDialog dlg(this);
-                dlg.setInitialData(m_templatesModel->getTemplate(index.row()));
-                if (dlg.exec() == QDialog::Accepted) {
-                  m_templatesModel->updateTemplate(index.row(),
-                                                   dlg.templateData());
-                  updateStatus(i18n("Template updated."));
-                }
-              });
-
-              QAction *exportSingleAction = menu.addAction(i18n("Export Template..."));
-              connect(exportSingleAction, &QAction::triggered, [this, index]() {
-                QString filePath = QFileDialog::getSaveFileName(
-                    this, i18n("Export Template"), QString(), i18n("JSON Files (*.json)"));
-                if (filePath.isEmpty()) return;
-
-                QJsonArray exportArray;
-                exportArray.append(m_templatesModel->getTemplate(index.row()));
-                QJsonDocument doc(exportArray);
-                QFile file(filePath);
-                if (file.open(QIODevice::WriteOnly)) {
-                  file.write(doc.toJson(QJsonDocument::Indented));
-                  file.close();
-                  updateStatus(i18n("Template exported to %1", filePath));
-                } else {
-                  updateStatus(i18n("Failed to export template to %1", filePath));
-                }
-              });
-
-              QAction *deleteAction = menu.addAction(i18n("Delete Template"));
-              connect(deleteAction, &QAction::triggered, [this, index]() {
-                if (QMessageBox::question(this, i18n("Delete Template"),
-                                          i18n("Are you sure you want to "
-                                               "delete this template?")) ==
-                    QMessageBox::Yes) {
-                  m_templatesModel->removeTemplate(index.row());
-                  updateStatus(i18n("Template deleted."));
-                }
-              });
-              menu.exec(m_templatesView->mapToGlobal(pos));
+          QAction *editAction = menu.addAction(i18n("Edit Template"));
+          connect(editAction, &QAction::triggered, [this, index]() {
+            TemplateEditDialog dlg(this);
+            dlg.setInitialData(m_templatesModel->getTemplate(index.row()));
+            if (dlg.exec() == QDialog::Accepted) {
+              m_templatesModel->updateTemplate(index.row(), dlg.templateData());
+              updateStatus(i18n("Template updated."));
             }
           });
+
+          QAction *exportSingleAction =
+              menu.addAction(i18n("Export Template..."));
+          connect(exportSingleAction, &QAction::triggered, [this, index]() {
+            QString filePath = QFileDialog::getSaveFileName(
+                this, i18n("Export Template"), QString(),
+                i18n("JSON Files (*.json)"));
+            if (filePath.isEmpty())
+              return;
+
+            QJsonArray exportArray;
+            exportArray.append(m_templatesModel->getTemplate(index.row()));
+            QJsonDocument doc(exportArray);
+            QFile file(filePath);
+            if (file.open(QIODevice::WriteOnly)) {
+              file.write(doc.toJson(QJsonDocument::Indented));
+              file.close();
+              updateStatus(i18n("Template exported to %1", filePath));
+            } else {
+              updateStatus(i18n("Failed to export template to %1", filePath));
+            }
+          });
+
+          QAction *deleteAction = menu.addAction(i18n("Delete Template"));
+          connect(deleteAction, &QAction::triggered, [this, index]() {
+            if (QMessageBox::question(this, i18n("Delete Template"),
+                                      i18n("Are you sure you want to "
+                                           "delete this template?")) ==
+                QMessageBox::Yes) {
+              m_templatesModel->removeTemplate(index.row());
+              updateStatus(i18n("Template deleted."));
+            }
+          });
+          menu.exec(m_templatesView->mapToGlobal(pos));
+        }
+      });
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
 
@@ -2133,5 +2136,6 @@ void MainWindow::importTemplates() {
     }
   }
 
-  updateStatus(i18n("Imported %1 template(s) from %2", importedCount, filePath));
+  updateStatus(
+      i18n("Imported %1 template(s) from %2", importedCount, filePath));
 }
