@@ -26,6 +26,8 @@
 #include <KToolBar>
 #include <KZip>
 #include <QAction>
+#include <algorithm>
+#include <functional>
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QCoreApplication>
@@ -288,6 +290,10 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
+          if (!m_sessionView->selectionModel()->isSelected(index)) {
+            m_sessionView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            m_sessionView->setCurrentIndex(index);
+          }
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
                   m_sessionView->model());
@@ -373,17 +379,43 @@ void MainWindow::setupUi() {
             });
           }
 
-          connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
-            m_archiveModel->addSession(session);
+          connect(archiveAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+            QList<int> rowsToArchive;
+            const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              if (!rowsToArchive.contains(mappedIdx.row())) {
+                rowsToArchive.append(mappedIdx.row());
+              }
+            }
+            std::sort(rowsToArchive.begin(), rowsToArchive.end(), std::greater<int>());
+
+            for (int row : rowsToArchive) {
+              QJsonObject session = m_sessionModel->getSession(row);
+              m_archiveModel->addSession(session);
+              m_sessionModel->removeSession(row);
+            }
             m_archiveModel->saveSessions();
-            m_sessionModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session archived."));
+            updateStatus(i18np("1 session archived.", "%1 sessions archived.", rowsToArchive.size()));
           });
 
-          connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
-            m_sessionModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session deleted."));
+          connect(deleteAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+            QList<int> rowsToDelete;
+            const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              if (!rowsToDelete.contains(mappedIdx.row())) {
+                rowsToDelete.append(mappedIdx.row());
+              }
+            }
+            std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+            for (int row : rowsToDelete) {
+              m_sessionModel->removeSession(row);
+            }
+            updateStatus(i18np("1 session deleted.", "%1 sessions deleted.", rowsToDelete.size()));
           });
 
           connect(newSessionFromSessionAction, &QAction::triggered,
@@ -460,6 +492,10 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_archiveView->indexAt(pos);
         if (index.isValid()) {
+          if (!m_archiveView->selectionModel()->isSelected(index)) {
+            m_archiveView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            m_archiveView->setCurrentIndex(index);
+          }
           const QSortFilterProxyModel *proxy =
               qobject_cast<const QSortFilterProxyModel *>(
                   m_archiveView->model());
@@ -490,17 +526,43 @@ void MainWindow::setupUi() {
                 }
               });
 
-          connect(unarchiveAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_archiveModel->getSession(sourceIndex.row());
-            m_sessionModel->addSession(session);
+          connect(unarchiveAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
+            QList<int> rowsToUnarchive;
+            const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              if (!rowsToUnarchive.contains(mappedIdx.row())) {
+                rowsToUnarchive.append(mappedIdx.row());
+              }
+            }
+            std::sort(rowsToUnarchive.begin(), rowsToUnarchive.end(), std::greater<int>());
+
+            for (int row : rowsToUnarchive) {
+              QJsonObject session = m_archiveModel->getSession(row);
+              m_sessionModel->addSession(session);
+              m_archiveModel->removeSession(row);
+            }
             m_sessionModel->saveSessions();
-            m_archiveModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session unarchived."));
+            updateStatus(i18np("1 session unarchived.", "%1 sessions unarchived.", rowsToUnarchive.size()));
           });
 
-          connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
-            m_archiveModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session deleted from archive."));
+          connect(deleteAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
+            QList<int> rowsToDelete;
+            const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              if (!rowsToDelete.contains(mappedIdx.row())) {
+                rowsToDelete.append(mappedIdx.row());
+              }
+            }
+            std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+            for (int row : rowsToDelete) {
+              m_archiveModel->removeSession(row);
+            }
+            updateStatus(i18np("1 session deleted from archive.", "%1 sessions deleted from archive.", rowsToDelete.size()));
           });
 
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
