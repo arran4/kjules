@@ -14,7 +14,6 @@
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 #include "settingsdialog.h"
-#include <QMenuBar>
 #include "sourcemodel.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
@@ -42,6 +41,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
@@ -985,10 +985,12 @@ void MainWindow::createActions() {
           updateStatus(i18n("Fetching details for session %1...", sessId));
         });
     QMenu *fileMenu = new QMenu(i18n("File"), sessionsWindow);
-    QAction *closeAction = new QAction(
-        QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), sessionsWindow);
+    QAction *closeAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                    i18n("Close"), sessionsWindow);
     closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-    connect(closeAction, &QAction::triggered, sessionsWindow, &KXmlGuiWindow::close);
+    connect(closeAction, &QAction::triggered, sessionsWindow,
+            &KXmlGuiWindow::close);
     fileMenu->addAction(closeAction);
     sessionsWindow->menuBar()->addMenu(fileMenu);
 
@@ -1022,8 +1024,9 @@ void MainWindow::createActions() {
         QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
 
     QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
-    QAction *closeAction = new QAction(
-        QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), rawWindow);
+    QAction *closeAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                    i18n("Close"), rawWindow);
     closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
     connect(closeAction, &QAction::triggered, rawWindow, &KXmlGuiWindow::close);
     fileMenu->addAction(closeAction);
