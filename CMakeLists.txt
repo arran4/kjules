@@ -49,6 +49,7 @@ set(kjules_SRCS
     src/draftdelegate.cpp
     src/queuedelegate.cpp
     src/queuemodel.cpp
+    src/activitybrowser.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/errorwindow.cpp
@@ -76,6 +77,7 @@ target_link_libraries(kjules
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES org.kde.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
 install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
 

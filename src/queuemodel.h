@@ -14,6 +14,7 @@ struct QueueItem {
   QDateTime lastTry;
 
   bool isWaitItem = false;
+  bool isDailyLimitWait = false;
   int waitSeconds = 0;
   QDateTime waitStartTime;
 
@@ -47,6 +48,10 @@ public:
   QueueItem peek() const;
   void requeueFailed(const QueueItem &item, const QString &errorMsg,
                      const QString &rawResponse = QString());
+  void requeueTransient(const QueueItem &item);
+  void prependWaitItem(const QueueItem &item);
+  void recordRun();
+  void checkAndPrependDailyLimitWait();
   void removeItem(int index);
   bool isEmpty() const;
   void clear();
@@ -56,6 +61,8 @@ public:
 
 private:
   QVector<QueueItem> m_items;
+  QVector<QDateTime> m_runTimestamps;
+  void pruneRunTimestamps();
   int m_jobsSinceLastWait = 0;
   void load();
   void save();
