@@ -16,7 +16,8 @@ class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged = true, QWidget *parent = nullptr);
+  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager,
+                         bool isManaged = true, QWidget *parent = nullptr);
   ~SessionWindow();
 
 private:

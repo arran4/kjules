@@ -45,7 +45,8 @@ SaveDialog::SaveDialog(const QString &type, QWidget *parent)
   mainLayout->addLayout(buttonLayout);
 }
 
-void SaveDialog::setInitialData(const QString &nameOrComment, const QString &description) {
+void SaveDialog::setInitialData(const QString &nameOrComment,
+                                const QString &description) {
   m_nameEdit->setText(nameOrComment);
   m_descEdit->setPlainText(description);
 }

@@ -1,11 +1,11 @@
 #ifndef ACTIVITYBROWSER_H
 #define ACTIVITYBROWSER_H
 
-#include <QTextBrowser>
 #include <QJsonArray>
-#include <QSet>
 #include <QJsonObject>
 #include <QMap>
+#include <QSet>
+#include <QTextBrowser>
 
 class ActivityBrowser : public QTextBrowser {
   Q_OBJECT

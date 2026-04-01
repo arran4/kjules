@@ -26,7 +26,8 @@ TemplateEditDialog::TemplateEditDialog(QWidget *parent) : QDialog(parent) {
   formLayout->addRow(tr("Prompt:"), m_promptEdit);
 
   m_requirePlanApprovalCheckBox = new QCheckBox(this);
-  formLayout->addRow(tr("Require Plan Approval:"), m_requirePlanApprovalCheckBox);
+  formLayout->addRow(tr("Require Plan Approval:"),
+                     m_requirePlanApprovalCheckBox);
 
   mainLayout->addLayout(formLayout);
 
@@ -48,11 +49,13 @@ TemplateEditDialog::TemplateEditDialog(QWidget *parent) : QDialog(parent) {
 void TemplateEditDialog::setInitialData(const QJsonObject &data) {
   m_originalData = data;
   m_nameEdit->setText(data.value(QStringLiteral("name")).toString());
-  m_descEdit->setPlainText(data.value(QStringLiteral("description")).toString());
+  m_descEdit->setPlainText(
+      data.value(QStringLiteral("description")).toString());
   m_promptEdit->setPlainText(data.value(QStringLiteral("prompt")).toString());
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
-    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+    m_requirePlanApprovalCheckBox->setChecked(
+        data.value(QStringLiteral("requirePlanApproval")).toBool());
   } else {
     m_requirePlanApprovalCheckBox->setChecked(false);
   }
@@ -63,6 +66,7 @@ QJsonObject TemplateEditDialog::templateData() const {
   data[QStringLiteral("name")] = m_nameEdit->text();
   data[QStringLiteral("description")] = m_descEdit->toPlainText();
   data[QStringLiteral("prompt")] = m_promptEdit->toPlainText();
-  data[QStringLiteral("requirePlanApproval")] = m_requirePlanApprovalCheckBox->isChecked();
+  data[QStringLiteral("requirePlanApproval")] =
+      m_requirePlanApprovalCheckBox->isChecked();
   return data;
 }

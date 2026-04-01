@@ -1,10 +1,10 @@
 #include "sourcemodel.h"
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QStandardPaths>
-#include <QDateTime>
-#include <QIcon>
 #include <cmath>
 
 SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) {
@@ -56,7 +56,8 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
 
       return id;
     } else if (index.column() == ColLastUsed) {
-      QString valStr = source.value(QStringLiteral("local_lastUsed")).toString();
+      QString valStr =
+          source.value(QStringLiteral("local_lastUsed")).toString();
       if (!valStr.isEmpty()) {
         return QDateTime::fromString(valStr, Qt::ISODate);
       }
@@ -64,7 +65,8 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     } else if (index.column() == ColManagedSessions) {
       return source.value(QStringLiteral("local_sessionCount")).toInt();
     } else if (index.column() == ColHeat) {
-      QJsonArray timestamps = source.value(QStringLiteral("local_sessionTimestamps")).toArray();
+      QJsonArray timestamps =
+          source.value(QStringLiteral("local_sessionTimestamps")).toArray();
       qint64 now = QDateTime::currentDateTimeUtc().toSecsSinceEpoch();
       double heat = 0.0;
       double halfLifeSecs = 7.0 * 24.0 * 60.0 * 60.0; // 7 days half-life
@@ -79,13 +81,15 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       }
       return std::round(heat * 10.0) / 10.0;
     } else if (index.column() == ColFirstSeen) {
-      QString valStr = source.value(QStringLiteral("local_firstSeen")).toString();
+      QString valStr =
+          source.value(QStringLiteral("local_firstSeen")).toString();
       if (!valStr.isEmpty()) {
         return QDateTime::fromString(valStr, Qt::ISODate);
       }
       return QVariant();
     } else if (index.column() == ColLastChanged) {
-      QString valStr = source.value(QStringLiteral("local_lastChanged")).toString();
+      QString valStr =
+          source.value(QStringLiteral("local_lastChanged")).toString();
       if (!valStr.isEmpty()) {
         return QDateTime::fromString(valStr, Qt::ISODate);
       }
@@ -99,16 +103,17 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       }
     }
     return QVariant();
-  } else switch (role) {
-  case NameRole:
-    return source.value(QStringLiteral("name")).toString();
-  case IdRole:
-    return id;
-  case RawDataRole:
-    return source;
-  default:
-    return QVariant();
-  }
+  } else
+    switch (role) {
+    case NameRole:
+      return source.value(QStringLiteral("name")).toString();
+    case IdRole:
+      return id;
+    case RawDataRole:
+      return source;
+    default:
+      return QVariant();
+    }
 }
 
 QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
@@ -146,27 +151,45 @@ void SourceModel::setSources(const QJsonArray &sources) {
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
     QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty()) id = source.value(QStringLiteral("name")).toString();
+    if (id.isEmpty())
+      id = source.value(QStringLiteral("name")).toString();
 
     for (int j = 0; j < m_sources.size(); ++j) {
-      QString currentId = m_sources[j].toObject().value(QStringLiteral("id")).toString();
-      if (currentId.isEmpty()) currentId = m_sources[j].toObject().value(QStringLiteral("name")).toString();
+      QString currentId =
+          m_sources[j].toObject().value(QStringLiteral("id")).toString();
+      if (currentId.isEmpty())
+        currentId =
+            m_sources[j].toObject().value(QStringLiteral("name")).toString();
       if (currentId == id) {
         QJsonObject existing = m_sources[j].toObject();
-        if (existing.contains(QStringLiteral("local_firstSeen"))) source[QStringLiteral("local_firstSeen")] = existing[QStringLiteral("local_firstSeen")];
-        if (existing.contains(QStringLiteral("local_lastChanged"))) source[QStringLiteral("local_lastChanged")] = existing[QStringLiteral("local_lastChanged")];
-        if (existing.contains(QStringLiteral("local_lastUsed"))) source[QStringLiteral("local_lastUsed")] = existing[QStringLiteral("local_lastUsed")];
-        if (existing.contains(QStringLiteral("local_sessionCount"))) source[QStringLiteral("local_sessionCount")] = existing[QStringLiteral("local_sessionCount")];
-        if (existing.contains(QStringLiteral("local_heat"))) source[QStringLiteral("local_heat")] = existing[QStringLiteral("local_heat")];
-        if (existing.contains(QStringLiteral("local_sessionTimestamps"))) source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
+        if (existing.contains(QStringLiteral("local_firstSeen")))
+          source[QStringLiteral("local_firstSeen")] =
+              existing[QStringLiteral("local_firstSeen")];
+        if (existing.contains(QStringLiteral("local_lastChanged")))
+          source[QStringLiteral("local_lastChanged")] =
+              existing[QStringLiteral("local_lastChanged")];
+        if (existing.contains(QStringLiteral("local_lastUsed")))
+          source[QStringLiteral("local_lastUsed")] =
+              existing[QStringLiteral("local_lastUsed")];
+        if (existing.contains(QStringLiteral("local_sessionCount")))
+          source[QStringLiteral("local_sessionCount")] =
+              existing[QStringLiteral("local_sessionCount")];
+        if (existing.contains(QStringLiteral("local_heat")))
+          source[QStringLiteral("local_heat")] =
+              existing[QStringLiteral("local_heat")];
+        if (existing.contains(QStringLiteral("local_sessionTimestamps")))
+          source[QStringLiteral("local_sessionTimestamps")] =
+              existing[QStringLiteral("local_sessionTimestamps")];
         break;
       }
     }
     if (!source.contains(QStringLiteral("local_firstSeen"))) {
-      source[QStringLiteral("local_firstSeen")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      source[QStringLiteral("local_firstSeen")] =
+          QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
     }
     if (!source.contains(QStringLiteral("local_lastChanged"))) {
-      source[QStringLiteral("local_lastChanged")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      source[QStringLiteral("local_lastChanged")] =
+          QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
     }
     newSources.append(source);
   }
@@ -180,32 +203,50 @@ int SourceModel::addSources(const QJsonArray &sources) {
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
     QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty()) id = source.value(QStringLiteral("name")).toString();
+    if (id.isEmpty())
+      id = source.value(QStringLiteral("name")).toString();
     bool exists = false;
     for (int j = 0; j < m_sources.size(); ++j) {
-      QString currentId = m_sources[j].toObject().value(QStringLiteral("id")).toString();
-      if (currentId.isEmpty()) currentId = m_sources[j].toObject().value(QStringLiteral("name")).toString();
+      QString currentId =
+          m_sources[j].toObject().value(QStringLiteral("id")).toString();
+      if (currentId.isEmpty())
+        currentId =
+            m_sources[j].toObject().value(QStringLiteral("name")).toString();
       if (currentId == id) {
         exists = true;
         QJsonObject existing = m_sources[j].toObject();
-        if (existing.contains(QStringLiteral("local_firstSeen"))) source[QStringLiteral("local_firstSeen")] = existing[QStringLiteral("local_firstSeen")];
-        if (existing.contains(QStringLiteral("local_lastChanged"))) source[QStringLiteral("local_lastChanged")] = existing[QStringLiteral("local_lastChanged")];
-        if (existing.contains(QStringLiteral("local_lastUsed"))) source[QStringLiteral("local_lastUsed")] = existing[QStringLiteral("local_lastUsed")];
-        if (existing.contains(QStringLiteral("local_sessionCount"))) source[QStringLiteral("local_sessionCount")] = existing[QStringLiteral("local_sessionCount")];
-        if (existing.contains(QStringLiteral("local_heat"))) source[QStringLiteral("local_heat")] = existing[QStringLiteral("local_heat")];
-        if (existing.contains(QStringLiteral("local_sessionTimestamps"))) source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
+        if (existing.contains(QStringLiteral("local_firstSeen")))
+          source[QStringLiteral("local_firstSeen")] =
+              existing[QStringLiteral("local_firstSeen")];
+        if (existing.contains(QStringLiteral("local_lastChanged")))
+          source[QStringLiteral("local_lastChanged")] =
+              existing[QStringLiteral("local_lastChanged")];
+        if (existing.contains(QStringLiteral("local_lastUsed")))
+          source[QStringLiteral("local_lastUsed")] =
+              existing[QStringLiteral("local_lastUsed")];
+        if (existing.contains(QStringLiteral("local_sessionCount")))
+          source[QStringLiteral("local_sessionCount")] =
+              existing[QStringLiteral("local_sessionCount")];
+        if (existing.contains(QStringLiteral("local_heat")))
+          source[QStringLiteral("local_heat")] =
+              existing[QStringLiteral("local_heat")];
+        if (existing.contains(QStringLiteral("local_sessionTimestamps")))
+          source[QStringLiteral("local_sessionTimestamps")] =
+              existing[QStringLiteral("local_sessionTimestamps")];
         m_sources[j] = source;
         break;
       }
     }
     if (!exists) {
       if (!source.contains(QStringLiteral("local_firstSeen"))) {
-      source[QStringLiteral("local_firstSeen")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    }
-    if (!source.contains(QStringLiteral("local_lastChanged"))) {
-      source[QStringLiteral("local_lastChanged")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    }
-    newSources.append(source);
+        source[QStringLiteral("local_firstSeen")] =
+            QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      }
+      if (!source.contains(QStringLiteral("local_lastChanged"))) {
+        source[QStringLiteral("local_lastChanged")] =
+            QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      }
+      newSources.append(source);
       addedCount++;
     }
   }
@@ -254,10 +295,18 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
 
     if (currentId == id) {
       QJsonObject existing = m_sources[i].toObject();
-      if (existing.contains(QStringLiteral("local_lastUsed"))) source[QStringLiteral("local_lastUsed")] = existing[QStringLiteral("local_lastUsed")];
-      if (existing.contains(QStringLiteral("local_sessionCount"))) source[QStringLiteral("local_sessionCount")] = existing[QStringLiteral("local_sessionCount")];
-      if (existing.contains(QStringLiteral("local_heat"))) source[QStringLiteral("local_heat")] = existing[QStringLiteral("local_heat")];
-      if (existing.contains(QStringLiteral("local_sessionTimestamps"))) source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
+      if (existing.contains(QStringLiteral("local_lastUsed")))
+        source[QStringLiteral("local_lastUsed")] =
+            existing[QStringLiteral("local_lastUsed")];
+      if (existing.contains(QStringLiteral("local_sessionCount")))
+        source[QStringLiteral("local_sessionCount")] =
+            existing[QStringLiteral("local_sessionCount")];
+      if (existing.contains(QStringLiteral("local_heat")))
+        source[QStringLiteral("local_heat")] =
+            existing[QStringLiteral("local_heat")];
+      if (existing.contains(QStringLiteral("local_sessionTimestamps")))
+        source[QStringLiteral("local_sessionTimestamps")] =
+            existing[QStringLiteral("local_sessionTimestamps")];
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
       Q_EMIT dataChanged(index, index);
@@ -268,10 +317,12 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
 
   // Not found, append
   if (!source.contains(QStringLiteral("local_firstSeen"))) {
-    source[QStringLiteral("local_firstSeen")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    source[QStringLiteral("local_firstSeen")] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
   }
   if (!source.contains(QStringLiteral("local_lastChanged"))) {
-    source[QStringLiteral("local_lastChanged")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    source[QStringLiteral("local_lastChanged")] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
   }
   beginInsertRows(QModelIndex(), m_sources.size(), m_sources.size());
   m_sources.append(source);
@@ -287,12 +338,15 @@ void SourceModel::recordSessionCreated(const QString &sourceId) {
     }
 
     if (currentId == sourceId) {
-      source[QStringLiteral("local_lastUsed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-      source[QStringLiteral("local_lastChanged")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      source[QStringLiteral("local_lastUsed")] =
+          QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      source[QStringLiteral("local_lastChanged")] =
+          QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       int count = source.value(QStringLiteral("local_sessionCount")).toInt(0);
       source[QStringLiteral("local_sessionCount")] = count + 1;
 
-      QJsonArray timestamps = source.value(QStringLiteral("local_sessionTimestamps")).toArray();
+      QJsonArray timestamps =
+          source.value(QStringLiteral("local_sessionTimestamps")).toArray();
       timestamps.append(QDateTime::currentDateTimeUtc().toSecsSinceEpoch());
 
       qint64 now = QDateTime::currentDateTimeUtc().toSecsSinceEpoch();
@@ -366,46 +420,54 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     // Determine the source from the session
     QString sourceId;
     if (session.contains(QStringLiteral("sourceContext"))) {
-      sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+      sourceId = session.value(QStringLiteral("sourceContext"))
+                     .toObject()
+                     .value(QStringLiteral("source"))
+                     .toString();
     }
 
     // A fallback if the session data doesn't perfectly match
     if (sourceId.isEmpty()) {
-       sourceId = session.value(QStringLiteral("source")).toString();
+      sourceId = session.value(QStringLiteral("source")).toString();
     }
 
-    if (sourceId.isEmpty()) continue;
+    if (sourceId.isEmpty())
+      continue;
 
-    // Normalize source ID (e.g. sometimes it includes the 'sources/' prefix, sometimes it doesn't)
-    // Actually, recordSessionCreated expects the exact id or name string.
+    // Normalize source ID (e.g. sometimes it includes the 'sources/' prefix,
+    // sometimes it doesn't) Actually, recordSessionCreated expects the exact id
+    // or name string.
 
-    QString updateTimeStr = session.value(QStringLiteral("updateTime")).toString();
-    QString createTimeStr = session.value(QStringLiteral("createTime")).toString();
+    QString updateTimeStr =
+        session.value(QStringLiteral("updateTime")).toString();
+    QString createTimeStr =
+        session.value(QStringLiteral("createTime")).toString();
     QString timeStr = updateTimeStr.isEmpty() ? createTimeStr : updateTimeStr;
 
     qint64 ts = 0;
     if (!timeStr.isEmpty()) {
-       QDateTime dt = QDateTime::fromString(timeStr, Qt::ISODate);
-       if (dt.isValid()) {
-           ts = dt.toSecsSinceEpoch();
-       }
+      QDateTime dt = QDateTime::fromString(timeStr, Qt::ISODate);
+      if (dt.isValid()) {
+        ts = dt.toSecsSinceEpoch();
+      }
     }
 
     sessionCounts[sourceId]++;
     if (ts > 0) {
-       QJsonArray timestamps = sessionTimestamps[sourceId];
-       timestamps.append(ts);
-       sessionTimestamps[sourceId] = timestamps;
+      QJsonArray timestamps = sessionTimestamps[sourceId];
+      timestamps.append(ts);
+      sessionTimestamps[sourceId] = timestamps;
 
-       if (!lastUsedDates.contains(sourceId)) {
+      if (!lastUsedDates.contains(sourceId)) {
+        lastUsedDates[sourceId] = timeStr;
+      } else {
+        QDateTime currentLast =
+            QDateTime::fromString(lastUsedDates[sourceId], Qt::ISODate);
+        QDateTime thisTime = QDateTime::fromString(timeStr, Qt::ISODate);
+        if (thisTime > currentLast) {
           lastUsedDates[sourceId] = timeStr;
-       } else {
-          QDateTime currentLast = QDateTime::fromString(lastUsedDates[sourceId], Qt::ISODate);
-          QDateTime thisTime = QDateTime::fromString(timeStr, Qt::ISODate);
-          if (thisTime > currentLast) {
-             lastUsedDates[sourceId] = timeStr;
-          }
-       }
+        }
+      }
     }
   }
 
@@ -418,18 +480,21 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
     QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty()) id = source.value(QStringLiteral("name")).toString();
+    if (id.isEmpty())
+      id = source.value(QStringLiteral("name")).toString();
 
     // Check with direct id or with 'sources/' prepended or removed
     QString keyToUse = id;
     if (!sessionCounts.contains(id)) {
-        if (id.startsWith(QStringLiteral("sources/"))) {
-             QString sub = id.mid(8);
-             if (sessionCounts.contains(sub)) keyToUse = sub;
-        } else {
-             QString prepended = QStringLiteral("sources/") + id;
-             if (sessionCounts.contains(prepended)) keyToUse = prepended;
-        }
+      if (id.startsWith(QStringLiteral("sources/"))) {
+        QString sub = id.mid(8);
+        if (sessionCounts.contains(sub))
+          keyToUse = sub;
+      } else {
+        QString prepended = QStringLiteral("sources/") + id;
+        if (sessionCounts.contains(prepended))
+          keyToUse = prepended;
+      }
     }
 
     int count = sessionCounts.value(keyToUse, 0);
@@ -459,24 +524,26 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
     source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
     if (!lastUsed.isEmpty()) {
-       source[QStringLiteral("local_lastUsed")] = lastUsed;
+      source[QStringLiteral("local_lastUsed")] = lastUsed;
     } else {
-       // Only remove last used if it's currently set, but we usually want to keep it
-       // Wait, if there are 0 sessions, we might want to keep local_lastUsed to remember when it was last used.
-       // So do nothing if lastUsed is empty.
+      // Only remove last used if it's currently set, but we usually want to
+      // keep it Wait, if there are 0 sessions, we might want to keep
+      // local_lastUsed to remember when it was last used. So do nothing if
+      // lastUsed is empty.
     }
 
-    // Only mark changed if we are actually modifying it. Since QJsonObject comparison
-    // can be tricky, we'll assume it changed if we process it. But wait, we should only emit
-    // if there's a difference.
+    // Only mark changed if we are actually modifying it. Since QJsonObject
+    // comparison can be tricky, we'll assume it changed if we process it. But
+    // wait, we should only emit if there's a difference.
     if (m_sources[i].toObject() != source) {
-        m_sources[i] = source;
-        changed = true;
+      m_sources[i] = source;
+      changed = true;
     }
   }
 
   if (changed) {
-     Q_EMIT dataChanged(createIndex(0, 0), createIndex(m_sources.size() - 1, ColCount - 1));
-     saveSources();
+    Q_EMIT dataChanged(createIndex(0, 0),
+                       createIndex(m_sources.size() - 1, ColCount - 1));
+    saveSources();
   }
 }

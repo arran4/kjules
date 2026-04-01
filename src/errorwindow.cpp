@@ -19,9 +19,12 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
   setupUi();
 }
 
-ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse, const QString &lastError, const QString &httpDetails, QWidget *parent)
+ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData,
+                         const QString &lastResponse, const QString &lastError,
+                         const QString &httpDetails, QWidget *parent)
     : QDialog(parent), m_row(errorRow), m_requestData(requestData),
-      m_lastResponse(lastResponse), m_lastError(lastError), m_httpDetails(httpDetails) {
+      m_lastResponse(lastResponse), m_lastError(lastError),
+      m_httpDetails(httpDetails) {
   setWindowTitle(i18n("Error Details"));
   setupUi();
 }

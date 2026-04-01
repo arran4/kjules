@@ -1,6 +1,7 @@
 #include "templateselectiondialog.h"
 #include "templatesmodel.h"
 
+#include "draftdelegate.h"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -8,9 +9,9 @@
 #include <QPushButton>
 #include <QSortFilterProxyModel>
 #include <QVBoxLayout>
-#include "draftdelegate.h"
 
-TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel, QWidget *parent)
+TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel,
+                                                 QWidget *parent)
     : QDialog(parent), m_templatesModel(templatesModel) {
   setWindowTitle(tr("Select Template"));
   resize(500, 400);
@@ -48,9 +49,10 @@ TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel,
 
   mainLayout->addLayout(buttonLayout);
 
-  connect(m_filterEdit, &QLineEdit::textChanged, this, [this](const QString &text) {
-    m_proxyModel->setFilterFixedString(text);
-  });
+  connect(m_filterEdit, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            m_proxyModel->setFilterFixedString(text);
+          });
 
   connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
           this, &TemplateSelectionDialog::onSelectionChanged);

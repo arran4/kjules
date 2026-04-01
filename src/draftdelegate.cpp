@@ -20,7 +20,7 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
 
   QString displayTitle = index.data(Qt::DisplayRole).toString();
   if (displayTitle.isEmpty()) {
-      displayTitle = index.data(DraftsModel::PromptRole).toString();
+    displayTitle = index.data(DraftsModel::PromptRole).toString();
   }
 
   QString prompt = index.data(DraftsModel::PromptRole).toString();
@@ -64,7 +64,9 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   if (!description.isEmpty())
     details += QStringLiteral(" | ") + description;
   if (comment.isEmpty() && description.isEmpty() && prompt != displayTitle)
-    details += QStringLiteral(" | Prompt: ") + prompt.left(30) + (prompt.length() > 30 ? QStringLiteral("...") : QStringLiteral(""));
+    details +=
+        QStringLiteral(" | Prompt: ") + prompt.left(30) +
+        (prompt.length() > 30 ? QStringLiteral("...") : QStringLiteral(""));
 
   if (!automationMode.isEmpty())
     details += QStringLiteral(" | Auto: ") + automationMode;

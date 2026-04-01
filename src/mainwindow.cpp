@@ -1,22 +1,22 @@
 #include "mainwindow.h"
 #include "apimanager.h"
 #include "backupdialog.h"
-#include "restoredialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
-#include "templatesmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
+#include "restoredialog.h"
+#include "savedialog.h"
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
-#include "savedialog.h"
 #include "templateeditdialog.h"
+#include "templatesmodel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -63,10 +63,11 @@ MainWindow::MainWindow(QWidget *parent)
       m_archiveModel(new SessionModel(
           QStringLiteral("cached_archive_sessions.json"), this)),
       m_sourceModel(new SourceModel(this)),
-      m_draftsModel(new DraftsModel(this)), m_templatesModel(new TemplatesModel(this)),
-      m_queueModel(new QueueModel(this)),
-      m_errorsModel(new ErrorsModel(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_draftsModel(new DraftsModel(this)),
+      m_templatesModel(new TemplatesModel(this)),
+      m_queueModel(new QueueModel(this)), m_errorsModel(new ErrorsModel(this)),
+      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_isProcessingQueue(false), m_queuePaused(false) {
   setObjectName(QStringLiteral("MainWindow"));
@@ -126,17 +127,19 @@ MainWindow::MainWindow(QWidget *parent)
     QJsonArray allSessions;
     QJsonArray active = m_sessionModel->getAllSessions();
     for (int i = 0; i < active.size(); ++i) {
-        allSessions.append(active[i]);
+      allSessions.append(active[i]);
     }
     QJsonArray archived = m_archiveModel->getAllSessions();
     for (int i = 0; i < archived.size(); ++i) {
-        allSessions.append(archived[i]);
+      allSessions.append(archived[i]);
     }
     m_sourceModel->recalculateStatsFromSessions(allSessions);
   };
 
-  connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
-  connect(m_archiveModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
+  connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this,
+          updateSourceStats);
+  connect(m_archiveModel, &SessionModel::sessionsLoadedOrUpdated, this,
+          updateSourceStats);
 
   m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();
@@ -179,7 +182,8 @@ void MainWindow::setupUi() {
 
   m_sourceView->setModel(proxyModel);
   m_sourceView->setSortingEnabled(true);
-  m_sourceView->header()->setSectionResizeMode(SourceModel::ColName, QHeaderView::Stretch);
+  m_sourceView->header()->setSectionResizeMode(SourceModel::ColName,
+                                               QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
   m_sourceView->sortByColumn(SourceModel::ColLastUsed, Qt::DescendingOrder);
@@ -242,11 +246,13 @@ void MainWindow::setupUi() {
           QAction *sourceViewSessionsAction =
               menu.addAction(i18n("View Sessions"));
           connect(sourceViewSessionsAction, &QAction::triggered, [this, id]() {
-            SessionsWindow *window = new SessionsWindow(id, m_apiManager, m_sessionModel, this);
-  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
-    m_sessionModel->addSession(s);
-    m_sessionModel->saveSessions();
-  });
+            SessionsWindow *window =
+                new SessionsWindow(id, m_apiManager, m_sessionModel, this);
+            connect(window, &SessionsWindow::watchRequested, this,
+                    [this](const QJsonObject &s) {
+                      m_sessionModel->addSession(s);
+                      m_sessionModel->saveSessions();
+                    });
 
             window->show();
           });
@@ -320,7 +326,8 @@ void MainWindow::setupUi() {
           menu.addSeparator();
           QAction *newSessionFromSessionAction =
               menu.addAction(i18n("New Session From Session"));
-          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+          QAction *copyTemplateAction =
+              menu.addAction(i18n("Copy as Template"));
 
           connect(openSessionAction, &QAction::triggered,
                   [this, index]() { onSessionActivated(index); });
@@ -331,8 +338,8 @@ void MainWindow::setupUi() {
                         m_sessionModel
                             ->data(sourceIndex, SessionModel::SourceRole)
                             .toString();
-                    SessionsWindow *window =
-                        new SessionsWindow(source, m_apiManager, m_sessionModel, this);
+                    SessionsWindow *window = new SessionsWindow(
+                        source, m_apiManager, m_sessionModel, this);
                     window->show();
                   });
 
@@ -398,7 +405,8 @@ void MainWindow::setupUi() {
                       initData[QStringLiteral("sources")] = sourcesArr;
                     }
                     bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-                    NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+                    NewSessionDialog dialog(m_sourceModel, m_templatesModel,
+                                            hasApiKey, this);
                     dialog.setInitialData(initData);
                     connect(&dialog, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
@@ -411,8 +419,12 @@ void MainWindow::setupUi() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
               QJsonObject sessionData;
-              QString prompt = m_sessionModel->data(index, SessionModel::PromptRole).toString();
-              QString source = m_sessionModel->data(index, SessionModel::SourceRole).toString();
+              QString prompt =
+                  m_sessionModel->data(index, SessionModel::PromptRole)
+                      .toString();
+              QString source =
+                  m_sessionModel->data(index, SessionModel::SourceRole)
+                      .toString();
               sessionData[QStringLiteral("prompt")] = prompt;
               sessionData[QStringLiteral("source")] = source;
               sessionData[QStringLiteral("name")] = dlg.nameOrComment();
@@ -457,7 +469,8 @@ void MainWindow::setupUi() {
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
-          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+          QAction *copyTemplateAction =
+              menu.addAction(i18n("Copy as Template"));
 
           connect(
               openSessionAction, &QAction::triggered, [this, sourceIndex]() {
@@ -494,8 +507,12 @@ void MainWindow::setupUi() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
               QJsonObject sessionData;
-              QString prompt = m_archiveModel->data(index, SessionModel::PromptRole).toString();
-              QString source = m_archiveModel->data(index, SessionModel::SourceRole).toString();
+              QString prompt =
+                  m_archiveModel->data(index, SessionModel::PromptRole)
+                      .toString();
+              QString source =
+                  m_archiveModel->data(index, SessionModel::SourceRole)
+                      .toString();
               sessionData[QStringLiteral("prompt")] = prompt;
               sessionData[QStringLiteral("source")] = source;
               sessionData[QStringLiteral("name")] = dlg.nameOrComment();
@@ -542,7 +559,8 @@ void MainWindow::setupUi() {
               QMenu menu;
               QAction *submitAction = menu.addAction(i18n("Submit Now"));
               QAction *duplicateAction = menu.addAction(i18n("Duplicate"));
-              QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+              QAction *copyTemplateAction =
+                  menu.addAction(i18n("Copy as Template"));
               QAction *deleteAction = menu.addAction(i18n("Delete"));
 
               connect(submitAction, &QAction::triggered,
@@ -600,7 +618,8 @@ void MainWindow::setupUi() {
                 TemplateEditDialog dlg(this);
                 dlg.setInitialData(m_templatesModel->getTemplate(index.row()));
                 if (dlg.exec() == QDialog::Accepted) {
-                  m_templatesModel->updateTemplate(index.row(), dlg.templateData());
+                  m_templatesModel->updateTemplate(index.row(),
+                                                   dlg.templateData());
                   updateStatus(i18n("Template updated."));
                 }
               });
@@ -648,7 +667,8 @@ void MainWindow::setupUi() {
           QMenu menu;
           QAction *editAction = menu.addAction(i18n("Edit / Modify"));
           QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
-          QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+          QAction *copyTemplateAction =
+              menu.addAction(i18n("Copy as Template"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered,
@@ -658,7 +678,8 @@ void MainWindow::setupUi() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
               QJsonObject errData = m_errorsModel->getError(index.row());
-              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
               req[QStringLiteral("name")] = dlg.nameOrComment();
               req[QStringLiteral("description")] = dlg.description();
               m_templatesModel->addTemplate(req);
@@ -702,7 +723,8 @@ void MainWindow::setupUi() {
               SaveDialog dlg(QStringLiteral("Template"), this);
               if (dlg.exec() == QDialog::Accepted) {
                 QJsonObject errData = m_errorsModel->getError(row);
-                QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
                 req[QStringLiteral("name")] = dlg.nameOrComment();
                 req[QStringLiteral("description")] = dlg.description();
                 m_templatesModel->addTemplate(req);
@@ -821,11 +843,13 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
                                 m_showFullSessionListAction);
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
-  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
-    m_sessionModel->addSession(s);
-    m_sessionModel->saveSessions();
-  });
+    SessionsWindow *window =
+        new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
+    connect(window, &SessionsWindow::watchRequested, this,
+            [this](const QJsonObject &s) {
+              m_sessionModel->addSession(s);
+              m_sessionModel->saveSessions();
+            });
 
     window->show();
   });
@@ -844,17 +868,20 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
 
-  m_recalculateStatsAction = new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")), i18n("Recalculate Session Stats"), this);
-  actionCollection()->addAction(QStringLiteral("recalculate_stats"), m_recalculateStatsAction);
+  m_recalculateStatsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")),
+                  i18n("Recalculate Session Stats"), this);
+  actionCollection()->addAction(QStringLiteral("recalculate_stats"),
+                                m_recalculateStatsAction);
   connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
     QJsonArray allSessions;
     QJsonArray active = m_sessionModel->getAllSessions();
     for (int i = 0; i < active.size(); ++i) {
-        allSessions.append(active[i]);
+      allSessions.append(active[i]);
     }
     QJsonArray archived = m_archiveModel->getAllSessions();
     for (int i = 0; i < archived.size(); ++i) {
-        allSessions.append(archived[i]);
+      allSessions.append(archived[i]);
     }
     m_sourceModel->recalculateStatsFromSessions(allSessions);
     updateStatus(i18n("Session statistics recalculated successfully."));
@@ -889,11 +916,13 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("view_sessions"),
                                 m_viewSessionsAction);
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
-    SessionsWindow *window = new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
-  connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
-    m_sessionModel->addSession(s);
-    m_sessionModel->saveSessions();
-  });
+    SessionsWindow *window =
+        new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
+    connect(window, &SessionsWindow::watchRequested, this,
+            [this](const QJsonObject &s) {
+              m_sessionModel->addSession(s);
+              m_sessionModel->saveSessions();
+            });
 
     window->show();
   });
@@ -933,8 +962,7 @@ void MainWindow::createActions() {
       }
     }
     KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-    sessionsWindow->setObjectName(
-        QStringLiteral("PastNewSessions_%1").arg(id));
+    sessionsWindow->setObjectName(QStringLiteral("PastNewSessions_%1").arg(id));
     SessionModel *localModel = new SessionModel(
         QStringLiteral("cached_all_sessions.json"), sessionsWindow);
     localModel->setSessions(filteredSessions);
@@ -1029,8 +1057,10 @@ void MainWindow::createActions() {
   });
 
   m_restoreDataAction = new QAction(i18n("Restore Data"), this);
-  actionCollection()->addAction(QStringLiteral("restore_data"), m_restoreDataAction);
-  connect(m_restoreDataAction, &QAction::triggered, this, &MainWindow::restoreData);
+  actionCollection()->addAction(QStringLiteral("restore_data"),
+                                m_restoreDataAction);
+  connect(m_restoreDataAction, &QAction::triggered, this,
+          &MainWindow::restoreData);
 
   m_backupDataAction = new QAction(i18n("Backup Data"), this);
   actionCollection()->addAction(QStringLiteral("backup_data"),
@@ -1144,7 +1174,8 @@ void MainWindow::showSettingsDialog() {
 }
 
 void MainWindow::loadQueueSettings() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
   int intervalMins = queueConfig.readEntry("TimerInterval", 1);
   m_queueTimer->setInterval(intervalMins * 60000);
 
@@ -1249,22 +1280,32 @@ void MainWindow::onSessionCreatedResult(bool success,
   if (!m_isProcessingQueue) {
     if (success) {
       m_sessionModel->addSession(session);
-      QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
-      if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
+      QString sourceId = session.value(QStringLiteral("sourceContext"))
+                             .toObject()
+                             .value(QStringLiteral("source"))
+                             .toString();
+      if (!sourceId.isEmpty())
+        m_sourceModel->recordSessionCreated(sourceId);
       updateStatus(i18n("Session created successfully."));
     }
     return;
   }
 
   QueueItem item = m_queueModel->dequeue(); // Pop the item we were processing
-  m_queueModel->recordRun(); // Record that we completed a run successfully or not
-  m_queueModel->checkAndPrependDailyLimitWait(); // Dynamically check after a run
+  m_queueModel
+      ->recordRun(); // Record that we completed a run successfully or not
+  m_queueModel
+      ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
   m_isProcessingQueue = false;
 
   if (success) {
     m_sessionModel->addSession(session);
-    QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
-    if (!sourceId.isEmpty()) m_sourceModel->recordSessionCreated(sourceId);
+    QString sourceId = session.value(QStringLiteral("sourceContext"))
+                           .toObject()
+                           .value(QStringLiteral("source"))
+                           .toString();
+    if (!sourceId.isEmpty())
+      m_sourceModel->recordSessionCreated(sourceId);
     updateStatus(i18n("Session created from queue."));
     m_queueBackoffUntil = QDateTime(); // reset backoff
     // The next item will be processed by the configured timer (m_queueTimer)
@@ -1273,45 +1314,53 @@ void MainWindow::onSessionCreatedResult(bool success,
     bool isPrecondition = false;
     bool isResourceExhausted = false;
     if (errDoc.isObject()) {
-        QJsonObject errObj = errDoc.object().value(QStringLiteral("error")).toObject();
-        if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("FAILED_PRECONDITION")) {
-            isPrecondition = true;
-        } else if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("RESOURCE_EXHAUSTED") || errObj.value(QStringLiteral("code")).toInt() == 429) {
-            isResourceExhausted = true;
-        }
+      QJsonObject errObj =
+          errDoc.object().value(QStringLiteral("error")).toObject();
+      if (errObj.value(QStringLiteral("status")).toString() ==
+          QStringLiteral("FAILED_PRECONDITION")) {
+        isPrecondition = true;
+      } else if (errObj.value(QStringLiteral("status")).toString() ==
+                     QStringLiteral("RESOURCE_EXHAUSTED") ||
+                 errObj.value(QStringLiteral("code")).toInt() == 429) {
+        isResourceExhausted = true;
+      }
     }
 
     if (isPrecondition) {
-        updateStatus(i18n("Too many concurrent tasks, waiting before retrying..."));
+      updateStatus(
+          i18n("Too many concurrent tasks, waiting before retrying..."));
 
-        // Requeue the item without incrementing the error count
-        m_queueModel->requeueTransient(item);
+      // Requeue the item without incrementing the error count
+      m_queueModel->requeueTransient(item);
 
-        // Apply a short backoff (e.g. 5 minutes)
-        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-        int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-        m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+      // Apply a short backoff (e.g. 5 minutes)
+      KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                               QStringLiteral("Queue"));
+      int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
+      m_queueBackoffUntil =
+          QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
     } else if (isResourceExhausted) {
-        updateStatus(i18n("API Rate limit hit, adding a wait item..."));
+      updateStatus(i18n("API Rate limit hit, adding a wait item..."));
 
-        // Requeue the item without incrementing the error count
-        m_queueModel->requeueTransient(item);
+      // Requeue the item without incrementing the error count
+      m_queueModel->requeueTransient(item);
 
-        // Prepend a wait item
-        QueueItem waitItem;
-        waitItem.isWaitItem = true;
-        int delayMins = 60; // default 1 hour
-        waitItem.waitSeconds = delayMins * 60;
-        m_queueModel->prependWaitItem(waitItem);
-        m_queueBackoffUntil = QDateTime(); // Clear backoff
+      // Prepend a wait item
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      int delayMins = 60; // default 1 hour
+      waitItem.waitSeconds = delayMins * 60;
+      m_queueModel->prependWaitItem(waitItem);
+      m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {
-        updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-        m_queueModel->requeueFailed(item, errorMsg, rawResponse);
+      updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
+      m_queueModel->requeueFailed(item, errorMsg, rawResponse);
 
-        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-        int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
-        m_queueBackoffUntil =
-            QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+      KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                               QStringLiteral("Queue"));
+      int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
+      m_queueBackoffUntil =
+          QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
     }
   }
 }
@@ -1345,7 +1394,6 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
 
   dialog.exec();
 }
-
 
 void MainWindow::onQueueActivated(const QModelIndex &index) {
   if (!index.isValid())
@@ -1441,7 +1489,8 @@ void MainWindow::showErrorDetails(int row) {
           &MainWindow::convertQueueItemToDraft);
   connect(window, &ErrorWindow::templateRequested, this, [this, row]() {
     QueueItem item = m_queueModel->getItem(row);
-    if (item.requestData.isEmpty()) return;
+    if (item.requestData.isEmpty())
+      return;
     SaveDialog dlg(QStringLiteral("Template"), this);
     if (dlg.exec() == QDialog::Accepted) {
       QJsonObject data = item.requestData;
@@ -1676,11 +1725,13 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
-  SessionWindow *window = new SessionWindow(session, m_apiManager, m_sessionModel->contains(sessionId), this);
-  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
-    m_sessionModel->addSession(s);
-    m_sessionModel->saveSessions();
-  });
+  SessionWindow *window = new SessionWindow(
+      session, m_apiManager, m_sessionModel->contains(sessionId), this);
+  connect(window, &SessionWindow::watchRequested, this,
+          [this](const QJsonObject &s) {
+            m_sessionModel->addSession(s);
+            m_sessionModel->saveSessions();
+          });
 
   connectSessionWindow(window);
   window->show();
@@ -1699,11 +1750,13 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
-    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
-  connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
-    m_sessionModel->addSession(s);
-    m_sessionModel->saveSessions();
-  });
+    SessionWindow *window = new SessionWindow(
+        sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
+    connect(window, &SessionWindow::watchRequested, this,
+            [this](const QJsonObject &s) {
+              m_sessionModel->addSession(s);
+              m_sessionModel->saveSessions();
+            });
 
     connectSessionWindow(window);
     window->show();
@@ -1922,7 +1975,8 @@ void MainWindow::restoreData() {
     if (merge && QFile::exists(destPath)) {
       QFile existingFile(destPath);
       if (existingFile.open(QIODevice::ReadOnly)) {
-        QJsonDocument existingDoc = QJsonDocument::fromJson(existingFile.readAll());
+        QJsonDocument existingDoc =
+            QJsonDocument::fromJson(existingFile.readAll());
         existingFile.close();
         QJsonDocument newDoc = QJsonDocument::fromJson(fileData);
 
@@ -1931,9 +1985,9 @@ void MainWindow::restoreData() {
           QJsonArray newArray = newDoc.array();
 
           for (const QJsonValue &val : newArray) {
-              if (!existingArray.contains(val)) {
-                  existingArray.append(val);
-              }
+            if (!existingArray.contains(val)) {
+              existingArray.append(val);
+            }
           }
 
           QFile outFile(destPath);
@@ -1950,12 +2004,12 @@ void MainWindow::restoreData() {
             restoredSomething = true;
           }
         } else {
-            // Type mismatch or not JSON array/object, fallback to overwrite
-            QFile outFile(destPath);
-            if (outFile.open(QIODevice::WriteOnly)) {
-              outFile.write(fileData);
-              restoredSomething = true;
-            }
+          // Type mismatch or not JSON array/object, fallback to overwrite
+          QFile outFile(destPath);
+          if (outFile.open(QIODevice::WriteOnly)) {
+            outFile.write(fileData);
+            restoredSomething = true;
+          }
         }
       }
     } else {

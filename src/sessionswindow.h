@@ -24,7 +24,8 @@ public:
   void setRepoFilter(const QString &repo);
 
 protected:
-  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
+  bool filterAcceptsRow(int source_row,
+                        const QModelIndex &source_parent) const override;
 
 private:
   QString m_textFilter;
@@ -36,9 +37,11 @@ class SessionsWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit SessionsWindow(const QString &filterSource = QString(), APIManager *apiManager = nullptr, SessionModel *managedModel = nullptr, QWidget *parent = nullptr);
+  explicit SessionsWindow(const QString &filterSource = QString(),
+                          APIManager *apiManager = nullptr,
+                          SessionModel *managedModel = nullptr,
+                          QWidget *parent = nullptr);
   ~SessionsWindow();
-
 
 Q_SIGNALS:
   void watchRequested(const QJsonObject &sessionData);
@@ -50,7 +53,8 @@ private Q_SLOTS:
   void resumeRefresh();
   void loadRemainingRefresh();
   void cancelRefresh();
-  void onSessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
+  void onSessionsReceived(const QJsonArray &sessions,
+                          const QString &nextPageToken);
   void onSessionsRefreshFinished();
   void updateRepoFilterList();
 
