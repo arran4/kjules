@@ -36,6 +36,20 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
   formLayout->addRow(QString(), m_closeToTrayEdit);
 
+  m_autoArchiveEdit = new QCheckBox(i18n("Automatically archive following managed sessions after N days after creation"), this);
+  m_autoArchiveEdit->setChecked(config.readEntry("AutoArchive", true));
+  formLayout->addRow(QString(), m_autoArchiveEdit);
+
+  m_autoArchiveDaysEdit = new QSpinBox(this);
+  m_autoArchiveDaysEdit->setRange(1, 365);
+  m_autoArchiveDaysEdit->setValue(config.readEntry("AutoArchiveDays", 30));
+  m_autoArchiveDaysEdit->setSuffix(i18n(" days"));
+  formLayout->addRow(i18n("Auto archive days:"), m_autoArchiveDaysEdit);
+
+  m_archiveOnMergedPREdit = new QCheckBox(i18n("When a following job has a PR that is merged move it to the archive"), this);
+  m_archiveOnMergedPREdit->setChecked(config.readEntry("ArchiveOnMergedPR", true));
+  formLayout->addRow(QString(), m_archiveOnMergedPREdit);
+
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
 
@@ -124,6 +138,9 @@ void SettingsDialog::onSave() {
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
+  config.writeEntry("AutoArchive", m_autoArchiveEdit->isChecked());
+  config.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
+  config.writeEntry("ArchiveOnMergedPR", m_archiveOnMergedPREdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.sync();

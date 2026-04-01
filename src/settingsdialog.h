@@ -29,6 +29,9 @@ private:
   QSpinBox *m_waitTimeEdit;
   QComboBox *m_tierComboBox;
   QComboBox *m_globalAutoRefreshCombo;
+  QCheckBox *m_autoArchiveEdit;
+  QSpinBox *m_autoArchiveDaysEdit;
+  QCheckBox *m_archiveOnMergedPREdit;
 };
 
 #endif // SETTINGSDIALOG_H

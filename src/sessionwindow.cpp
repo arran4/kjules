@@ -148,6 +148,13 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(watchAction);
   }
 
+  QAction *markCompleteAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("task-complete")), i18n("Mark Complete"), this);
+  connect(markCompleteAction, &QAction::triggered, this, [this]() {
+    Q_EMIT archiveRequested(
+        m_sessionData.value(QStringLiteral("id")).toString());
+  });
+
   QAction *archiveAction = new QAction(
       QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
@@ -155,6 +162,7 @@ void SessionWindow::setupActions() {
         m_sessionData.value(QStringLiteral("id")).toString());
   });
   if (m_isManaged) {
+    sessionMenu->addAction(markCompleteAction);
     sessionMenu->addAction(archiveAction);
   }
 

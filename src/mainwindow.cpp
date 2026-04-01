@@ -122,6 +122,19 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::logMessage, this,
           &MainWindow::updateStatus);
+  connect(m_apiManager, &APIManager::pullRequestMerged, this, [this](const QString &sessionId) {
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == sessionId) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_archiveModel->saveSessions();
+        m_sessionModel->removeSession(i);
+        m_sessionModel->saveSessions();
+        updateStatus(i18n("Session archived due to merged PR."));
+        break;
+      }
+    }
+  });
 
   auto updateSourceStats = [this]() {
     QJsonArray allSessions;
@@ -321,6 +334,7 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
+          QAction *markCompleteAction = menu.addAction(i18n("Mark Complete"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
@@ -372,6 +386,15 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Github URL copied to clipboard."));
             });
           }
+
+          connect(markCompleteAction, &QAction::triggered, [this, sourceIndex]() {
+            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
+            m_archiveModel->addSession(session);
+            m_archiveModel->saveSessions();
+            m_sessionModel->removeSession(sourceIndex.row());
+            m_sessionModel->saveSessions();
+            updateStatus(i18n("Session marked as complete and archived."));
+          });
 
           connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
             QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
@@ -440,7 +463,7 @@ void MainWindow::setupUi() {
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
-  tabWidget->addTab(m_sessionView, i18n("Past"));
+  tabWidget->addTab(m_sessionView, i18n("Following"));
   // Archive View
   m_archiveView = new QTreeView(this);
   QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
@@ -1850,6 +1873,46 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
+
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  bool autoArchive = config.readEntry("AutoArchive", true);
+  int autoArchiveDays = config.readEntry("AutoArchiveDays", 30);
+  bool archiveOnMergedPR = config.readEntry("ArchiveOnMergedPR", true);
+
+  for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+    QJsonObject session = m_sessionModel->getSession(i);
+    QString createTimeStr = session.value(QStringLiteral("createTime")).toString();
+    QDateTime createTime = QDateTime::fromString(createTimeStr, Qt::ISODate);
+    QString id = session.value(QStringLiteral("id")).toString();
+
+    bool archiveThis = false;
+
+    if (autoArchive && createTime.isValid()) {
+      if (createTime.daysTo(QDateTime::currentDateTimeUtc()) >= autoArchiveDays) {
+        archiveThis = true;
+      }
+    }
+
+    if (archiveThis) {
+      m_archiveModel->addSession(session);
+      m_sessionModel->removeSession(i);
+      updateStatus(i18n("Session %1 auto-archived.", id));
+      continue;
+    }
+
+    if (archiveOnMergedPR) {
+      QString prUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
+      if (!prUrl.isEmpty()) {
+        m_apiManager->checkPullRequestMerged(prUrl, id);
+      }
+    }
+  }
+
+  // Save if anything changed
+  if (sessionCount != m_sessionModel->rowCount()) {
+    m_sessionModel->saveSessions();
+    m_archiveModel->saveSessions();
+  }
 }
 
 void MainWindow::backupData() {
