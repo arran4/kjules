@@ -49,7 +49,8 @@ public:
 
 Q_SIGNALS:
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
-  void githubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
+  void githubPullRequestInfoReceived(const QString &prUrl,
+                                     const QJsonObject &info);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished();
   void sessionsRefreshFinished();

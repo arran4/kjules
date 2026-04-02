@@ -223,15 +223,24 @@ void SessionWindow::setupActions() {
     linksMenu->addAction(copyPrAction);
 
     if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
-      QJsonObject prInfo = m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+      QJsonObject prInfo =
+          m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
       if (prInfo.contains(QStringLiteral("head"))) {
-        QString branchName = prInfo.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
-        QString branchUrl = prInfo.value(QStringLiteral("head")).toObject().value(QStringLiteral("repo")).toObject().value(QStringLiteral("html_url")).toString() + QStringLiteral("/tree/") + branchName;
+        QString branchName = prInfo.value(QStringLiteral("head"))
+                                 .toObject()
+                                 .value(QStringLiteral("ref"))
+                                 .toString();
+        QString branchUrl = prInfo.value(QStringLiteral("head"))
+                                .toObject()
+                                .value(QStringLiteral("repo"))
+                                .toObject()
+                                .value(QStringLiteral("html_url"))
+                                .toString() +
+                            QStringLiteral("/tree/") + branchName;
 
         QAction *openBranchAction = new QAction(i18n("Open Branch URL"), this);
-        connect(openBranchAction, &QAction::triggered, this, [branchUrl]() {
-          QDesktopServices::openUrl(QUrl(branchUrl));
-        });
+        connect(openBranchAction, &QAction::triggered, this,
+                [branchUrl]() { QDesktopServices::openUrl(QUrl(branchUrl)); });
         linksMenu->addAction(openBranchAction);
 
         QAction *copyBranchAction = new QAction(i18n("Copy Branch URL"), this);
@@ -449,48 +458,77 @@ void SessionWindow::renderDetailsAndDiff() {
   m_detailsBrowser->setHtml(detailsHtml);
 
   if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
-    QJsonObject prInfo = m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
-    QString prHtml = QStringLiteral("<html><head><style>") +
-      QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; line-height: 1.6; }") +
-      QStringLiteral("th { text-align: left; padding-right: 15px; color: #555; }") +
-      QStringLiteral("a { color: #3498db; text-decoration: none; }") +
-      QStringLiteral("a:hover { text-decoration: underline; }") +
-      QStringLiteral("</style></head><body><h2>") + i18n("Pull Request Summary") +
-      QStringLiteral("</h2><table>");
+    QJsonObject prInfo =
+        m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+    QString prHtml =
+        QStringLiteral("<html><head><style>") +
+        QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                       "line-height: 1.6; }") +
+        QStringLiteral(
+            "th { text-align: left; padding-right: 15px; color: #555; }") +
+        QStringLiteral("a { color: #3498db; text-decoration: none; }") +
+        QStringLiteral("a:hover { text-decoration: underline; }") +
+        QStringLiteral("</style></head><body><h2>") +
+        i18n("Pull Request Summary") + QStringLiteral("</h2><table>");
 
-    prHtml += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") + prInfo.value(QStringLiteral("title")).toString().toHtmlEscaped() + QStringLiteral("</td></tr>");
+    prHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
+              QStringLiteral("</th><td>") +
+              prInfo.value(QStringLiteral("title")).toString().toHtmlEscaped() +
+              QStringLiteral("</td></tr>");
     QString state = prInfo.value(QStringLiteral("state")).toString();
     if (prInfo.value(QStringLiteral("merged_at")).isString()) {
       state = QStringLiteral("merged");
     }
-    prHtml += QStringLiteral("<tr><th>") + i18n("State:") + QStringLiteral("</th><td>") + state.toHtmlEscaped() + QStringLiteral("</td></tr>");
+    prHtml += QStringLiteral("<tr><th>") + i18n("State:") +
+              QStringLiteral("</th><td>") + state.toHtmlEscaped() +
+              QStringLiteral("</td></tr>");
 
     QJsonArray labels = prInfo.value(QStringLiteral("labels")).toArray();
     if (!labels.isEmpty()) {
       QStringList labelNames;
       for (int i = 0; i < labels.size(); ++i) {
-        labelNames.append(labels[i].toObject().value(QStringLiteral("name")).toString());
+        labelNames.append(
+            labels[i].toObject().value(QStringLiteral("name")).toString());
       }
-      prHtml += QStringLiteral("<tr><th>") + i18n("Labels:") + QStringLiteral("</th><td>") + labelNames.join(QStringLiteral(", ")).toHtmlEscaped() + QStringLiteral("</td></tr>");
+      prHtml += QStringLiteral("<tr><th>") + i18n("Labels:") +
+                QStringLiteral("</th><td>") +
+                labelNames.join(QStringLiteral(", ")).toHtmlEscaped() +
+                QStringLiteral("</td></tr>");
     }
 
     if (prInfo.contains(QStringLiteral("user"))) {
-      prHtml += QStringLiteral("<tr><th>") + i18n("Author:") + QStringLiteral("</th><td>") + prInfo.value(QStringLiteral("user")).toObject().value(QStringLiteral("login")).toString().toHtmlEscaped() + QStringLiteral("</td></tr>");
+      prHtml += QStringLiteral("<tr><th>") + i18n("Author:") +
+                QStringLiteral("</th><td>") +
+                prInfo.value(QStringLiteral("user"))
+                    .toObject()
+                    .value(QStringLiteral("login"))
+                    .toString()
+                    .toHtmlEscaped() +
+                QStringLiteral("</td></tr>");
     }
 
     if (prInfo.contains(QStringLiteral("head"))) {
-      QString branchName = prInfo.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
-      prHtml += QStringLiteral("<tr><th>") + i18n("Branch:") + QStringLiteral("</th><td>") + branchName.toHtmlEscaped() + QStringLiteral("</td></tr>");
+      QString branchName = prInfo.value(QStringLiteral("head"))
+                               .toObject()
+                               .value(QStringLiteral("ref"))
+                               .toString();
+      prHtml += QStringLiteral("<tr><th>") + i18n("Branch:") +
+                QStringLiteral("</th><td>") + branchName.toHtmlEscaped() +
+                QStringLiteral("</td></tr>");
     }
 
-    prHtml += QStringLiteral("</table><hr/><h3>") + i18n("Body") + QStringLiteral("</h3>");
+    prHtml += QStringLiteral("</table><hr/><h3>") + i18n("Body") +
+              QStringLiteral("</h3>");
 
     QString body = prInfo.value(QStringLiteral("body")).toString();
     if (body.isEmpty()) {
-      prHtml += QStringLiteral("<p><i>") + i18n("No body provided.") + QStringLiteral("</i></p>");
+      prHtml += QStringLiteral("<p><i>") + i18n("No body provided.") +
+                QStringLiteral("</i></p>");
     } else {
       // Very basic formatting for body
-      prHtml += QStringLiteral("<pre style=\"white-space: pre-wrap; font-family: sans-serif;\">") + body.toHtmlEscaped() + QStringLiteral("</pre>");
+      prHtml += QStringLiteral("<pre style=\"white-space: pre-wrap; "
+                               "font-family: sans-serif;\">") +
+                body.toHtmlEscaped() + QStringLiteral("</pre>");
     }
 
     prHtml += QStringLiteral("</body></html>");

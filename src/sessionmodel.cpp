@@ -75,7 +75,8 @@ SessionData parseSessionData(const QJsonObject &obj) {
     }
     QJsonArray labelsArr = prInfo.value(QStringLiteral("labels")).toArray();
     for (int i = 0; i < labelsArr.size(); ++i) {
-      data.prLabels.append(labelsArr[i].toObject().value(QStringLiteral("name")).toString());
+      data.prLabels.append(
+          labelsArr[i].toObject().value(QStringLiteral("name")).toString());
     }
   }
 

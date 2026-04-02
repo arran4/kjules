@@ -398,7 +398,8 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   }
 
   QString apiUrl = QStringLiteral("https://api.github.com/repos/") + parts[0] +
-                   QLatin1Char('/') + parts[1] + QStringLiteral("/pulls/") + parts[3];
+                   QLatin1Char('/') + parts[1] + QStringLiteral("/pulls/") +
+                   parts[3];
 
   QNetworkRequest request((QUrl(apiUrl)));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
