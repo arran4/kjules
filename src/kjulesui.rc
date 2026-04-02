@@ -19,7 +19,6 @@
             <Action name="toggle_queue" />
             <Separator />
             <Action name="refresh_sources" />
-            <Action name="refresh_source" />
             <Action name="show_full_session_list" />
             <Separator />
             <Action name="view_sessions" />
