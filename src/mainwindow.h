@@ -76,6 +76,8 @@ private Q_SLOTS:
   void restoreData();
   void exportTemplates();
   void importTemplates();
+  void copyTemplateToClipboard(const QModelIndex &index);
+  void pasteTemplateFromClipboard();
   void toggleQueueState();
   void loadQueueSettings();
 

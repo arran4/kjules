@@ -605,6 +605,10 @@ void MainWindow::setupUi() {
   m_templatesView->setModel(m_templatesModel);
   m_templatesView->setItemDelegate(new DraftDelegate(this));
   m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_templatesView->setDragEnabled(true);
+  m_templatesView->setAcceptDrops(true);
+  m_templatesView->setDropIndicatorShown(true);
+  m_templatesView->setDragDropMode(QAbstractItemView::DragDrop);
   connect(
       m_templatesView, &QListView::customContextMenuRequested,
       [this](const QPoint &pos) {
@@ -623,6 +627,16 @@ void MainWindow::setupUi() {
               m_templatesModel->updateTemplate(index.row(), dlg.templateData());
               updateStatus(i18n("Template updated."));
             }
+          });
+
+          QAction *copyClipboardAction = menu.addAction(i18n("Copy to Clipboard"));
+          connect(copyClipboardAction, &QAction::triggered, [this, index]() {
+            copyTemplateToClipboard(index);
+          });
+
+          QAction *pasteClipboardAction = menu.addAction(i18n("Paste from Clipboard"));
+          connect(pasteClipboardAction, &QAction::triggered, [this]() {
+            pasteTemplateFromClipboard();
           });
 
           QAction *exportSingleAction =
@@ -2138,4 +2152,45 @@ void MainWindow::importTemplates() {
 
   updateStatus(
       i18n("Imported %1 template(s) from %2", importedCount, filePath));
+}
+
+void MainWindow::copyTemplateToClipboard(const QModelIndex &index) {
+  if (!index.isValid()) return;
+  QJsonArray exportArray;
+  exportArray.append(m_templatesModel->getTemplate(index.row()));
+  QJsonDocument doc(exportArray);
+  QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+  updateStatus(i18n("Template copied to clipboard."));
+}
+
+void MainWindow::pasteTemplateFromClipboard() {
+  QString clipboardText = QGuiApplication::clipboard()->text();
+  if (clipboardText.isEmpty()) {
+    updateStatus(i18n("Clipboard is empty."));
+    return;
+  }
+  QJsonDocument doc = QJsonDocument::fromJson(clipboardText.toUtf8());
+  if (!doc.isArray() && !doc.isObject()) {
+    updateStatus(i18n("Clipboard does not contain valid template JSON."));
+    return;
+  }
+  int importedCount = 0;
+  if (doc.isArray()) {
+    QJsonArray importArray = doc.array();
+    for (const QJsonValue &val : importArray) {
+      if (val.isObject()) {
+        m_templatesModel->addTemplate(val.toObject());
+        importedCount++;
+      }
+    }
+  } else if (doc.isObject()) {
+    m_templatesModel->addTemplate(doc.object());
+    importedCount = 1;
+  }
+
+  if (importedCount > 0) {
+    updateStatus(i18n("Imported %1 template(s) from clipboard.", importedCount));
+  } else {
+    updateStatus(i18n("No templates found in clipboard JSON."));
+  }
 }
