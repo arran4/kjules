@@ -60,6 +60,7 @@ private Q_SLOTS:
   void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
+  void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void cancelSourcesRefresh();
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
