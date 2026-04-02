@@ -109,14 +109,16 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return session.prNumber;
     case ColPrStatus:
       return session.prStatus;
-    case ColPrLabels:
-      {
-        QStringList labels;
-        for (int i = 0; i < session.prLabels.size(); ++i) {
-          labels << session.prLabels[i].toObject().value(QStringLiteral("name")).toString();
-        }
-        return labels.join(QStringLiteral(", "));
+    case ColPrLabels: {
+      QStringList labels;
+      for (int i = 0; i < session.prLabels.size(); ++i) {
+        labels << session.prLabels[i]
+                      .toObject()
+                      .value(QStringLiteral("name"))
+                      .toString();
       }
+      return labels.join(QStringLiteral(", "));
+    }
     case ColUpdatedAt:
       return session.updateTime.toString(
           QLocale::system().dateFormat(QLocale::ShortFormat));

@@ -213,12 +213,27 @@ void SessionWindow::setupActions() {
     linksMenu->addAction(copyPrAction);
 
     if (m_sessionData.contains(QStringLiteral("githubPrData"))) {
-      QJsonObject prData = m_sessionData.value(QStringLiteral("githubPrData")).toObject();
-      QString authorUrl = prData.value(QStringLiteral("user")).toObject().value(QStringLiteral("html_url")).toString();
-      QString branchUrl = prData.value(QStringLiteral("head")).toObject().value(QStringLiteral("repo")).toObject().value(QStringLiteral("html_url")).toString() + QStringLiteral("/tree/") + prData.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
+      QJsonObject prData =
+          m_sessionData.value(QStringLiteral("githubPrData")).toObject();
+      QString authorUrl = prData.value(QStringLiteral("user"))
+                              .toObject()
+                              .value(QStringLiteral("html_url"))
+                              .toString();
+      QString branchUrl = prData.value(QStringLiteral("head"))
+                              .toObject()
+                              .value(QStringLiteral("repo"))
+                              .toObject()
+                              .value(QStringLiteral("html_url"))
+                              .toString() +
+                          QStringLiteral("/tree/") +
+                          prData.value(QStringLiteral("head"))
+                              .toObject()
+                              .value(QStringLiteral("ref"))
+                              .toString();
 
       if (!authorUrl.isEmpty()) {
-        QAction *copyAuthorUrlAction = new QAction(i18n("Copy PR Author URL"), this);
+        QAction *copyAuthorUrlAction =
+            new QAction(i18n("Copy PR Author URL"), this);
         connect(copyAuthorUrlAction, &QAction::triggered, this, [authorUrl]() {
           QGuiApplication::clipboard()->setText(authorUrl);
         });
@@ -226,7 +241,8 @@ void SessionWindow::setupActions() {
       }
 
       if (!branchUrl.isEmpty()) {
-        QAction *copyBranchUrlAction = new QAction(i18n("Copy PR Branch URL"), this);
+        QAction *copyBranchUrlAction =
+            new QAction(i18n("Copy PR Branch URL"), this);
         connect(copyBranchUrlAction, &QAction::triggered, this, [branchUrl]() {
           QGuiApplication::clipboard()->setText(branchUrl);
         });
@@ -438,32 +454,76 @@ void SessionWindow::renderDetailsAndDiff() {
 
   if (m_githubPrBrowser) {
     if (m_sessionData.contains(QStringLiteral("githubPrData"))) {
-      QJsonObject prData = m_sessionData.value(QStringLiteral("githubPrData")).toObject();
-      QString html = QStringLiteral("<html><head><style>") +
-                     QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; line-height: 1.6; }") +
-                     QStringLiteral("th { text-align: left; padding-right: 15px; color: #555; }") +
-                     QStringLiteral("a { color: #3498db; text-decoration: none; }") +
-                     QStringLiteral("a:hover { text-decoration: underline; }") +
-                     QStringLiteral("</style></head><body><h2>") + i18n("Pull Request Summary") +
-                     QStringLiteral("</h2><table>");
+      QJsonObject prData =
+          m_sessionData.value(QStringLiteral("githubPrData")).toObject();
+      QString html =
+          QStringLiteral("<html><head><style>") +
+          QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                         "line-height: 1.6; }") +
+          QStringLiteral(
+              "th { text-align: left; padding-right: 15px; color: #555; }") +
+          QStringLiteral("a { color: #3498db; text-decoration: none; }") +
+          QStringLiteral("a:hover { text-decoration: underline; }") +
+          QStringLiteral("</style></head><body><h2>") +
+          i18n("Pull Request Summary") + QStringLiteral("</h2><table>");
 
-      html += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") + prData.value(QStringLiteral("title")).toString().toHtmlEscaped() + QStringLiteral("</td></tr>");
-      html += QStringLiteral("<tr><th>") + i18n("State:") + QStringLiteral("</th><td>") + prData.value(QStringLiteral("state")).toString().toHtmlEscaped() + QStringLiteral("</td></tr>");
+      html += QStringLiteral("<tr><th>") + i18n("Title:") +
+              QStringLiteral("</th><td>") +
+              prData.value(QStringLiteral("title")).toString().toHtmlEscaped() +
+              QStringLiteral("</td></tr>");
+      html += QStringLiteral("<tr><th>") + i18n("State:") +
+              QStringLiteral("</th><td>") +
+              prData.value(QStringLiteral("state")).toString().toHtmlEscaped() +
+              QStringLiteral("</td></tr>");
 
       QJsonObject userObj = prData.value(QStringLiteral("user")).toObject();
-      html += QStringLiteral("<tr><th>") + i18n("Author:") + QStringLiteral("</th><td><a href=\"") + userObj.value(QStringLiteral("html_url")).toString().toHtmlEscaped() + QStringLiteral("\">") + userObj.value(QStringLiteral("login")).toString().toHtmlEscaped() + QStringLiteral("</a></td></tr>");
+      html +=
+          QStringLiteral("<tr><th>") + i18n("Author:") +
+          QStringLiteral("</th><td><a href=\"") +
+          userObj.value(QStringLiteral("html_url")).toString().toHtmlEscaped() +
+          QStringLiteral("\">") +
+          userObj.value(QStringLiteral("login")).toString().toHtmlEscaped() +
+          QStringLiteral("</a></td></tr>");
 
-      QString branchUrl = prData.value(QStringLiteral("head")).toObject().value(QStringLiteral("repo")).toObject().value(QStringLiteral("html_url")).toString() + QStringLiteral("/tree/") + prData.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
-      html += QStringLiteral("<tr><th>") + i18n("Branch:") + QStringLiteral("</th><td><a href=\"") + branchUrl.toHtmlEscaped() + QStringLiteral("\">") + prData.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString().toHtmlEscaped() + QStringLiteral("</a></td></tr>");
+      QString branchUrl = prData.value(QStringLiteral("head"))
+                              .toObject()
+                              .value(QStringLiteral("repo"))
+                              .toObject()
+                              .value(QStringLiteral("html_url"))
+                              .toString() +
+                          QStringLiteral("/tree/") +
+                          prData.value(QStringLiteral("head"))
+                              .toObject()
+                              .value(QStringLiteral("ref"))
+                              .toString();
+      html += QStringLiteral("<tr><th>") + i18n("Branch:") +
+              QStringLiteral("</th><td><a href=\"") +
+              branchUrl.toHtmlEscaped() + QStringLiteral("\">") +
+              prData.value(QStringLiteral("head"))
+                  .toObject()
+                  .value(QStringLiteral("ref"))
+                  .toString()
+                  .toHtmlEscaped() +
+              QStringLiteral("</a></td></tr>");
 
       QJsonArray labels = prData.value(QStringLiteral("labels")).toArray();
       QStringList labelStrs;
       for (int i = 0; i < labels.size(); ++i) {
-        labelStrs << labels[i].toObject().value(QStringLiteral("name")).toString().toHtmlEscaped();
+        labelStrs << labels[i]
+                         .toObject()
+                         .value(QStringLiteral("name"))
+                         .toString()
+                         .toHtmlEscaped();
       }
-      html += QStringLiteral("<tr><th>") + i18n("Labels:") + QStringLiteral("</th><td>") + labelStrs.join(QStringLiteral(", ")) + QStringLiteral("</td></tr>");
+      html += QStringLiteral("<tr><th>") + i18n("Labels:") +
+              QStringLiteral("</th><td>") +
+              labelStrs.join(QStringLiteral(", ")) +
+              QStringLiteral("</td></tr>");
 
-      html += QStringLiteral("</table><hr/><h3>") + i18n("Body") + QStringLiteral("</h3><pre style=\"white-space: pre-wrap;\">") + prData.value(QStringLiteral("body")).toString().toHtmlEscaped() + QStringLiteral("</pre></body></html>");
+      html += QStringLiteral("</table><hr/><h3>") + i18n("Body") +
+              QStringLiteral("</h3><pre style=\"white-space: pre-wrap;\">") +
+              prData.value(QStringLiteral("body")).toString().toHtmlEscaped() +
+              QStringLiteral("</pre></body></html>");
 
       m_githubPrBrowser->setHtml(html);
     } else {

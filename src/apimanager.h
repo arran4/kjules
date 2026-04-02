@@ -59,8 +59,7 @@ Q_SIGNALS:
   void sourceDetailsReceived(const QJsonObject &source);
   void activitiesReceived(const QString &sessionId,
                           const QJsonArray &activities);
-  void githubPrDataReceived(const QString &sessionId,
-                            const QJsonObject &data);
+  void githubPrDataReceived(const QString &sessionId, const QJsonObject &data);
   void connectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,

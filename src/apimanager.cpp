@@ -277,7 +277,9 @@ void APIManager::getGithubPrData(const QString &sessionId, const QString &owner,
       QJsonDocument doc = QJsonDocument::fromJson(data);
       Q_EMIT githubPrDataReceived(sessionId, doc.object());
     } else {
-      Q_EMIT logMessage(QStringLiteral("Failed to fetch PR data for session ") + sessionId + QStringLiteral(": ") + reply->errorString());
+      Q_EMIT logMessage(QStringLiteral("Failed to fetch PR data for session ") +
+                        sessionId + QStringLiteral(": ") +
+                        reply->errorString());
     }
     reply->deleteLater();
   });
