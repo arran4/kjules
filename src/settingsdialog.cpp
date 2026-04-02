@@ -103,6 +103,32 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   formLayout->addRow(i18n("Default session auto-refresh:"),
                      m_globalAutoRefreshCombo);
 
+  m_refreshFollowingIntervalEdit = new QSpinBox(this);
+  m_refreshFollowingIntervalEdit->setRange(0, 1440); // 0 to 24 hours
+  m_refreshFollowingIntervalEdit->setSuffix(i18n(" minutes (0 to disable)"));
+  m_refreshFollowingIntervalEdit->setValue(
+      sessionConfig.readEntry("RefreshFollowingInterval", 30));
+  formLayout->addRow(i18n("Refresh following every:"),
+                     m_refreshFollowingIntervalEdit);
+
+  m_refreshOnOpenEdit = new QCheckBox(i18n("Refresh on opening"), this);
+  m_refreshOnOpenEdit->setChecked(
+      sessionConfig.readEntry("RefreshOnOpen", false));
+  formLayout->addRow(QString(), m_refreshOnOpenEdit);
+
+  m_notifyAwaitingFeedbackEdit = new QCheckBox(
+      i18n("When a job moves from any status to 'awaiting user feedback'"),
+      this);
+  m_notifyAwaitingFeedbackEdit->setChecked(
+      config.readEntry("NotifyAwaitingFeedback", true));
+  formLayout->addRow(i18n("Notify:"), m_notifyAwaitingFeedbackEdit);
+
+  m_notifyInProgressChangedEdit = new QCheckBox(
+      i18n("When a job moves from in progress to any status"), this);
+  m_notifyInProgressChangedEdit->setChecked(
+      config.readEntry("NotifyInProgressChanged", true));
+  formLayout->addRow(QString(), m_notifyInProgressChangedEdit);
+
   mainLayout->addLayout(formLayout);
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -148,6 +174,10 @@ void SettingsDialog::onSave() {
   config.writeEntry("AutoArchive", m_autoArchiveEdit->isChecked());
   config.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
   config.writeEntry("ArchiveOnMergedPR", m_archiveOnMergedPREdit->isChecked());
+  config.writeEntry("NotifyAwaitingFeedback",
+                    m_notifyAwaitingFeedbackEdit->isChecked());
+  config.writeEntry("NotifyInProgressChanged",
+                    m_notifyInProgressChangedEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.sync();
@@ -162,6 +192,9 @@ void SettingsDialog::onSave() {
                              QStringLiteral("SessionWindow"));
   sessionConfig.writeEntry("AutoRefreshIndex",
                            m_globalAutoRefreshCombo->currentIndex());
+  sessionConfig.writeEntry("RefreshFollowingInterval",
+                           m_refreshFollowingIntervalEdit->value());
+  sessionConfig.writeEntry("RefreshOnOpen", m_refreshOnOpenEdit->isChecked());
   sessionConfig.sync();
 
   accept();

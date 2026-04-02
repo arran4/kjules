@@ -34,11 +34,12 @@ protected:
 
 private Q_SLOTS:
   void refreshSources();
+  void refreshFollowingSessions();
   void showNewSessionDialog();
   void showSettingsDialog();
   void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode,
-                        bool requirePlanApproval);
+                        const QString &automationMode, bool requirePlanApproval,
+                        bool follow = true);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onTemplateSaved(const QJsonObject &tmpl);
@@ -105,8 +106,11 @@ private:
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_refreshFollowingAction;
   QAction *m_refreshSourceAction;
   QAction *m_recalculateStatsAction;
+  QAction *m_archiveAllMergedAction;
+  QTimer *m_refreshFollowingTimer;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
   QAction *m_showPastNewSessionsAction;

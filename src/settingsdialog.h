@@ -32,6 +32,10 @@ private:
   QCheckBox *m_autoArchiveEdit;
   QSpinBox *m_autoArchiveDaysEdit;
   QCheckBox *m_archiveOnMergedPREdit;
+  QSpinBox *m_refreshFollowingIntervalEdit;
+  QCheckBox *m_refreshOnOpenEdit;
+  QCheckBox *m_notifyAwaitingFeedbackEdit;
+  QCheckBox *m_notifyInProgressChangedEdit;
 };
 
 #endif // SETTINGSDIALOG_H

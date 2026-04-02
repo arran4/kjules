@@ -19,7 +19,10 @@
             <Action name="toggle_queue" />
             <Separator />
             <Action name="refresh_sources" />
+            <Action name="refresh_following" />
             <Action name="refresh_source" />
+            <Separator />
+            <Action name="archive_all_merged" />
             <Action name="show_full_session_list" />
             <Separator />
             <Action name="view_sessions" />

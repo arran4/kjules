@@ -192,6 +192,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   formLayout->addRow(tr("Require Plan Approval:"),
                      m_requirePlanApprovalCheckBox);
 
+  m_followCheckBox = new QCheckBox(this);
+  m_followCheckBox->setChecked(true);
+  formLayout->addRow(tr("Follow:"), m_followCheckBox);
+
   mainLayout->addLayout(formLayout);
 
   // Buttons
@@ -385,9 +389,10 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
   }
 
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
+  bool follow = m_followCheckBox->isChecked();
 
   Q_EMIT createSessionRequested(sources, prompt, automationMode,
-                                requirePlanApproval);
+                                requirePlanApproval, follow);
   accept();
 }
 

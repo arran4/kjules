@@ -30,7 +30,7 @@ public:
 Q_SIGNALS:
   void createSessionRequested(const QStringList &sources, const QString &prompt,
                               const QString &automationMode,
-                              bool requirePlanApproval);
+                              bool requirePlanApproval, bool follow);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
@@ -56,6 +56,7 @@ private:
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
   QCheckBox *m_requirePlanApprovalCheckBox;
+  QCheckBox *m_followCheckBox;
   QPushButton *m_createButton;
   QPushButton *m_createPRButton;
   QPushButton *m_loadTemplateButton;

@@ -150,7 +150,7 @@ void SessionWindow::setupActions() {
 
   QAction *markCompleteAction =
       new QAction(QIcon::fromTheme(QStringLiteral("task-complete")),
-                  i18n("Mark Complete"), this);
+                  i18n("Mark Complete (Archive)"), this);
   connect(markCompleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());

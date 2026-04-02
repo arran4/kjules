@@ -101,10 +101,50 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
-  connect(m_apiManager, &APIManager::sessionReloaded, this,
-          [this](const QJsonObject &session) {
-            m_sessionModel->updateSession(session);
-          });
+  connect(
+      m_apiManager, &APIManager::sessionReloaded, this,
+      [this](const QJsonObject &session) {
+        QString id = session.value(QStringLiteral("id")).toString();
+        QString oldStatus;
+        for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+          if (m_sessionModel
+                  ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                  .toString() == id) {
+            QJsonObject oldSession = m_sessionModel->getSession(i);
+            oldStatus = oldSession.value(QStringLiteral("status")).toString();
+            break;
+          }
+        }
+        m_sessionModel->updateSession(session);
+        QString newStatus = session.value(QStringLiteral("status")).toString();
+
+        KConfigGroup config(KSharedConfig::openConfig(),
+                            QStringLiteral("General"));
+        bool notifyAwaiting = config.readEntry("NotifyAwaitingFeedback", true);
+        bool notifyInProgress =
+            config.readEntry("NotifyInProgressChanged", true);
+
+        if (oldStatus != newStatus) {
+          if (notifyAwaiting &&
+              newStatus == QStringLiteral("AWAITING_USER_FEEDBACK")) {
+            updateStatus(i18n("Session %1 is now awaiting user feedback.", id));
+            // Assuming we want a tray message, not just status bar:
+            if (m_trayIcon)
+              m_trayIcon->showMessage(
+                  i18n("Jules Client"),
+                  i18n("Session %1 is now awaiting user feedback.", id));
+          }
+          if (notifyInProgress && oldStatus == QStringLiteral("IN_PROGRESS")) {
+            updateStatus(i18n("Session %1 moved from IN_PROGRESS to %2.", id,
+                              newStatus));
+            if (m_trayIcon)
+              m_trayIcon->showMessage(
+                  i18n("Jules Client"),
+                  i18n("Session %1 moved from IN_PROGRESS to %2.", id,
+                       newStatus));
+          }
+        }
+      });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this,
@@ -165,6 +205,20 @@ MainWindow::MainWindow(QWidget *parent)
 
   // Initial refresh
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
+
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
+  if (sessionConfig.readEntry("RefreshOnOpen", false)) {
+    QTimer::singleShot(0, this, [this]() { refreshFollowingSessions(); });
+  }
+
+  m_refreshFollowingTimer = new QTimer(this);
+  connect(m_refreshFollowingTimer, &QTimer::timeout, this,
+          &MainWindow::refreshFollowingSessions);
+  int refreshMins = sessionConfig.readEntry("RefreshFollowingInterval", 30);
+  if (refreshMins > 0) {
+    m_refreshFollowingTimer->start(refreshMins * 60 * 1000);
+  }
 }
 
 MainWindow::~MainWindow() {}
@@ -337,7 +391,8 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
-          QAction *markCompleteAction = menu.addAction(i18n("Mark Complete"));
+          QAction *markCompleteAction =
+              menu.addAction(i18n("Mark Complete (Archive)"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
@@ -892,6 +947,39 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
 
+  m_refreshFollowingAction = new QAction(i18n("Refresh Following"), this);
+  actionCollection()->addAction(QStringLiteral("refresh_following"),
+                                m_refreshFollowingAction);
+  connect(m_refreshFollowingAction, &QAction::triggered, this,
+          &MainWindow::refreshFollowingSessions);
+
+  m_archiveAllMergedAction = new QAction(i18n("Archive all merged"), this);
+  actionCollection()->addAction(QStringLiteral("archive_all_merged"),
+                                m_archiveAllMergedAction);
+  connect(m_archiveAllMergedAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      QString prUrl =
+          m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole)
+              .toString();
+      if (!prUrl.isEmpty()) {
+        QString id =
+            m_sessionModel
+                ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                .toString();
+        m_apiManager->checkPullRequestMerged(prUrl, id);
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(i18np("Checking 1 session for merged PR...",
+                         "Checking %1 sessions for merged PRs...", count));
+    } else {
+      updateStatus(i18n("No sessions with PRs found."));
+    }
+  });
+
   m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
@@ -1164,6 +1252,16 @@ void MainWindow::createActions() {
   }
 }
 
+void MainWindow::refreshFollowingSessions() {
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QString id =
+        m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+            .toString();
+    m_apiManager->reloadSession(id);
+  }
+  updateStatus(i18n("Refreshing following sessions..."));
+}
+
 void MainWindow::refreshSources() {
   if (m_isRefreshingSources) {
     cancelSourcesRefresh();
@@ -1236,7 +1334,7 @@ void MainWindow::toggleQueueState() {
 void MainWindow::onSessionCreated(const QStringList &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
-                                  bool requirePlanApproval) {
+                                  bool requirePlanApproval, bool follow) {
   for (const QString &source : sources) {
     QJsonObject req;
     req[QStringLiteral("source")] = source;
@@ -1246,6 +1344,9 @@ void MainWindow::onSessionCreated(const QStringList &sources,
     }
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
+    }
+    if (follow) {
+      req[QStringLiteral("kjules_follow")] = true;
     }
     m_queueModel->enqueue(req);
   }
@@ -1307,7 +1408,9 @@ void MainWindow::onSessionCreatedResult(bool success,
                                         const QString &rawResponse) {
   if (!m_isProcessingQueue) {
     if (success) {
-      m_sessionModel->addSession(session);
+      bool follow = session.value(QStringLiteral("kjules_follow")).toBool(true);
+      if (follow)
+        m_sessionModel->addSession(session);
       QString sourceId = session.value(QStringLiteral("sourceContext"))
                              .toObject()
                              .value(QStringLiteral("source"))
@@ -1327,7 +1430,10 @@ void MainWindow::onSessionCreatedResult(bool success,
   m_isProcessingQueue = false;
 
   if (success) {
-    m_sessionModel->addSession(session);
+    bool follow =
+        item.requestData.value(QStringLiteral("kjules_follow")).toBool(true);
+    if (follow)
+      m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext"))
                            .toObject()
                            .value(QStringLiteral("source"))
