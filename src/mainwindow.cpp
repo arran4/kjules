@@ -219,6 +219,26 @@ MainWindow::MainWindow(QWidget *parent)
   if (refreshMins > 0) {
     m_refreshFollowingTimer->start(refreshMins * 60 * 1000);
   }
+
+  QTimer *countdownTimer = new QTimer(this);
+  connect(countdownTimer, &QTimer::timeout, this, [this]() {
+    if (m_refreshFollowingTimer->isActive() && m_refreshCountdownLabel) {
+      int remainingSecs = m_refreshFollowingTimer->remainingTime() / 1000;
+      if (remainingSecs >= 0) {
+        int mins = remainingSecs / 60;
+        int secs = remainingSecs % 60;
+        m_refreshCountdownLabel->setText(
+            i18n("Next refresh in %1:%2",
+                 QString::number(mins).rightJustified(2, QLatin1Char('0')),
+                 QString::number(secs).rightJustified(2, QLatin1Char('0'))));
+      } else {
+        m_refreshCountdownLabel->setText(QString());
+      }
+    } else if (m_refreshCountdownLabel) {
+      m_refreshCountdownLabel->setText(i18n("Auto-refresh disabled"));
+    }
+  });
+  countdownTimer->start(1000);
 }
 
 MainWindow::~MainWindow() {}
@@ -393,8 +413,7 @@ void MainWindow::setupUi() {
           menu.addSeparator();
           QAction *markCompleteAction =
               menu.addAction(i18n("Mark Complete (Archive)"));
-          QAction *archiveAction = menu.addAction(i18n("Archive"));
-          QAction *deleteAction = menu.addAction(i18n("Delete"));
+          QAction *deleteAction = menu.addAction(i18n("Unmanage"));
           menu.addSeparator();
           QAction *newSessionFromSessionAction =
               menu.addAction(i18n("New Session From Session"));
@@ -456,17 +475,9 @@ void MainWindow::setupUi() {
                 updateStatus(i18n("Session marked as complete and archived."));
               });
 
-          connect(archiveAction, &QAction::triggered, [this, sourceIndex]() {
-            QJsonObject session = m_sessionModel->getSession(sourceIndex.row());
-            m_archiveModel->addSession(session);
-            m_archiveModel->saveSessions();
-            m_sessionModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session archived."));
-          });
-
           connect(deleteAction, &QAction::triggered, [this, sourceIndex]() {
             m_sessionModel->removeSession(sourceIndex.row());
-            updateStatus(i18n("Session deleted."));
+            updateStatus(i18n("Session unmanaged."));
           });
 
           connect(newSessionFromSessionAction, &QAction::triggered,
@@ -843,6 +854,14 @@ void MainWindow::setupUi() {
 
   tabWidget->addTab(m_errorsView, i18n("Errors"));
 
+  connect(tabWidget, &QTabWidget::currentChanged, this,
+          [this, tabWidget](int index) {
+            if (m_archiveAllMergedAction) {
+              m_archiveAllMergedAction->setEnabled(tabWidget->tabText(index) ==
+                                                   i18n("Following"));
+            }
+          });
+
   mainLayout->addWidget(tabWidget);
 
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
@@ -850,6 +869,9 @@ void MainWindow::setupUi() {
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
+
+  m_refreshCountdownLabel = new QLabel(this);
+  statusBar()->addPermanentWidget(m_refreshCountdownLabel);
 
   m_sessionStatsLabel = new QLabel(this);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
@@ -954,6 +976,8 @@ void MainWindow::createActions() {
           &MainWindow::refreshFollowingSessions);
 
   m_archiveAllMergedAction = new QAction(i18n("Archive all merged"), this);
+  m_archiveAllMergedAction->setEnabled(
+      false); // Initially disabled, enabled when Following tab is focused
   actionCollection()->addAction(QStringLiteral("archive_all_merged"),
                                 m_archiveAllMergedAction);
   connect(m_archiveAllMergedAction, &QAction::triggered, this, [this]() {
@@ -1849,7 +1873,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
                       ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
                       .toString() == id) {
                 m_sessionModel->removeSession(i);
-                updateStatus(i18n("Session deleted."));
+                updateStatus(i18n("Session unmanaged."));
                 window->close();
                 break;
               }

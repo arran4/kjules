@@ -49,6 +49,7 @@
         <Action name="toggle_queue" />
         <Separator />
         <Action name="refresh_sources" />
+        <Action name="refresh_following" />
         <Action name="view_sessions" />
         <Action name="options_configure" />
         <Action name="toggle_window" />

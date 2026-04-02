@@ -102,6 +102,7 @@ private:
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
+  QLabel *m_refreshCountdownLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;

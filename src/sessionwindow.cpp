@@ -156,19 +156,12 @@ void SessionWindow::setupActions() {
         m_sessionData.value(QStringLiteral("id")).toString());
   });
 
-  QAction *archiveAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
-  connect(archiveAction, &QAction::triggered, this, [this]() {
-    Q_EMIT archiveRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
-  });
   if (m_isManaged) {
     sessionMenu->addAction(markCompleteAction);
-    sessionMenu->addAction(archiveAction);
   }
 
   QAction *deleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
