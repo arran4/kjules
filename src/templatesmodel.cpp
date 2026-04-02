@@ -5,8 +5,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
-#include <QUrl>
 #include <QTemporaryFile>
+#include <QUrl>
 #include <QUuid>
 
 TemplatesModel::TemplatesModel(QObject *parent) : QAbstractListModel(parent) {
@@ -168,7 +168,10 @@ QMimeData *TemplatesModel::mimeData(const QModelIndexList &indexes) const {
   mimeData->setData(QStringLiteral("application/json"), jsonData);
   mimeData->setText(QString::fromUtf8(jsonData));
 
-  QString tempFilePath = QDir::tempPath() + QStringLiteral("/kjules_templates_export_") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8) + QStringLiteral(".json");
+  QString tempFilePath =
+      QDir::tempPath() + QStringLiteral("/kjules_templates_export_") +
+      QUuid::createUuid().toString(QUuid::WithoutBraces).left(8) +
+      QStringLiteral(".json");
   QFile tempFile(tempFilePath);
   if (tempFile.open(QIODevice::WriteOnly)) {
     tempFile.write(jsonData);
@@ -185,15 +188,18 @@ bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
   if (action == Qt::IgnoreAction)
     return true;
 
-  if (!data->hasFormat(QStringLiteral("application/json")) && !data->hasText() && !data->hasUrls())
+  if (!data->hasFormat(QStringLiteral("application/json")) &&
+      !data->hasText() && !data->hasUrls())
     return false;
 
   QByteArray jsonData;
   if (data->hasUrls()) {
     QList<QUrl> urls = data->urls();
-    if (urls.isEmpty() || !urls.first().isLocalFile()) return false;
+    if (urls.isEmpty() || !urls.first().isLocalFile())
+      return false;
     QFile file(urls.first().toLocalFile());
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly))
+      return false;
     jsonData = file.readAll();
     file.close();
   } else if (data->hasFormat(QStringLiteral("application/json"))) {
@@ -221,7 +227,8 @@ bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     if (objectsToInsert.isEmpty())
       return false;
 
-    beginInsertRows(QModelIndex(), beginRow, beginRow + objectsToInsert.size() - 1);
+    beginInsertRows(QModelIndex(), beginRow,
+                    beginRow + objectsToInsert.size() - 1);
     for (int i = 0; i < objectsToInsert.size(); ++i) {
       m_templates.insert(beginRow + i, objectsToInsert[i]);
     }
