@@ -13,7 +13,8 @@ public:
     RequestRole = Qt::UserRole + 1,
     ResponseRole,
     MessageRole,
-    HttpDetailsRole
+    HttpDetailsRole,
+    TimestampRole
   };
 
   explicit ErrorsModel(QObject *parent = nullptr);

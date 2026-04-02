@@ -381,6 +381,39 @@ void APIManager::createSession(const QString &source, const QString &prompt,
   createSessionAsync(requestData);
 }
 
+void APIManager::fetchGithubInfo(const QString &sourceId) {
+  if (m_githubToken.isEmpty()) {
+    return;
+  }
+
+  QString cleanId = sourceId;
+  if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
+    cleanId = cleanId.mid(15);
+  } else {
+    return; // Not a github source
+  }
+
+  QNetworkRequest request(
+      QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    QVariant(QStringLiteral("application/json")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
+    reply->deleteLater();
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      if (doc.isObject()) {
+        Q_EMIT githubInfoReceived(sourceId, doc.object());
+      }
+    }
+  });
+}
+
 void APIManager::createSessionAsync(const QJsonObject &requestData) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(
