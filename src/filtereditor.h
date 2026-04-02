@@ -8,6 +8,8 @@ class QLineEdit;
 class QTreeView;
 class QStandardItemModel;
 class QStandardItem;
+class QListWidget;
+class QListWidget;
 class ASTNode;
 
 class FilterEditor : public QWidget {
@@ -34,6 +36,7 @@ private:
   QLineEdit *m_lineEdit;
   QTreeView *m_treeView;
   QStandardItemModel *m_treeModel;
+    QListWidget *m_paletteList;
   bool m_updating;
 };
 

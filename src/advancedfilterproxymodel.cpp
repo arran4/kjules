@@ -53,7 +53,11 @@ void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
     m_ast.reset();
     setFilterFixedString(m_query);
   }
-  invalidateFilter();
+  #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    invalidate();
+#else
+    invalidateFilter();
+#endif
 }
 
 bool AdvancedFilterProxyModel::filterAcceptsRow(

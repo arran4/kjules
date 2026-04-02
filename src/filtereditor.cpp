@@ -6,6 +6,9 @@
 #include <QDebug>
 #include <QHeaderView>
 #include <QItemSelectionModel>
+#include <QListWidget>
+#include <QHBoxLayout>
+#include <QSplitter>
 #include <QLineEdit>
 #include <QMenu>
 #include <QStandardItemModel>
@@ -42,8 +45,36 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_treeView->setDropIndicatorShown(true);
   m_treeView->setDragDropMode(QAbstractItemView::InternalMove);
   m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
-  m_treeView->setVisible(false);
-  layout->addWidget(m_treeView);
+
+  m_paletteList = new QListWidget(this);
+  m_paletteList->setDragEnabled(true);
+  m_paletteList->setAcceptDrops(false);
+  m_paletteList->setDropIndicatorShown(false);
+  m_paletteList->setDefaultDropAction(Qt::CopyAction);
+
+  QStringList paletteItems = {
+      QStringLiteral("AND"),
+      QStringLiteral("OR"),
+      QStringLiteral("NOT"),
+      QStringLiteral("IN"),
+      QStringLiteral("state:"),
+      QStringLiteral("repo:"),
+      QStringLiteral("owner:"),
+      QStringLiteral("created-before:"),
+      QStringLiteral("updated-after:")
+  };
+  for (const QString &itemText : paletteItems) {
+      QListWidgetItem *item = new QListWidgetItem(itemText, m_paletteList);
+      item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsDragEnabled | Qt::ItemIsEnabled);
+  }
+
+  QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+  splitter->addWidget(m_treeView);
+  splitter->addWidget(m_paletteList);
+  splitter->setStretchFactor(0, 3);
+  splitter->setStretchFactor(1, 1);
+  splitter->setVisible(false);
+  layout->addWidget(splitter);
 
   connect(m_lineEdit, &QLineEdit::textChanged, this,
           &FilterEditor::onTextChanged);
@@ -59,7 +90,39 @@ FilterEditor::FilterEditor(QWidget *parent)
     if (!m_updating)
       updateTextFromTree();
   });
-  connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
+      connect(m_paletteList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
+        if (!item) return;
+        QString text = item->text();
+        QModelIndexList sel = m_treeView->selectionModel()->selectedIndexes();
+        QStandardItem *parent = m_treeModel->invisibleRootItem();
+        if (!sel.isEmpty()) {
+            QStandardItem *selItem = m_treeModel->itemFromIndex(sel.first());
+            if (selItem && (selItem->data(NodeTypeRole).toInt() == TypeAnd || selItem->data(NodeTypeRole).toInt() == TypeOr || selItem->data(NodeTypeRole).toInt() == TypeNot)) {
+                parent = selItem;
+            } else if (selItem) {
+                parent = selItem->parent() ? selItem->parent() : m_treeModel->invisibleRootItem();
+            }
+        }
+
+        QStandardItem *newItem = new QStandardItem(text);
+        if (text == QStringLiteral("AND")) newItem->setData(TypeAnd, NodeTypeRole);
+        else if (text == QStringLiteral("OR")) newItem->setData(TypeOr, NodeTypeRole);
+        else if (text == QStringLiteral("NOT")) newItem->setData(TypeNot, NodeTypeRole);
+        else if (text == QStringLiteral("IN")) {
+            newItem->setData(TypeIn, NodeTypeRole);
+            newItem->setEditable(true);
+        } else if (text.endsWith(QLatin1Char(':'))) {
+            newItem->setData(TypeKV, NodeTypeRole);
+            newItem->setEditable(true);
+        } else {
+            newItem->setData(TypeKeyword, NodeTypeRole);
+            newItem->setEditable(true);
+        }
+        parent->appendRow(newItem);
+        updateTextFromTree();
+        m_treeView->expandAll();
+    });
+    connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
     if (!m_updating)
       updateTextFromTree();
   });
@@ -77,10 +140,10 @@ void FilterEditor::onTextChanged(const QString &text) {
 
   m_updating = true;
   if (text.startsWith(QLatin1String("="))) {
-    m_treeView->setVisible(true);
+    m_treeView->parentWidget()->setVisible(true);
     updateTreeFromText();
   } else {
-    m_treeView->setVisible(false);
+    m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
   m_updating = false;

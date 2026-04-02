@@ -71,7 +71,7 @@ public:
   QSharedPointer<ASTNode> parse() {
     if (m_tokens.isEmpty())
       return QSharedPointer<ASTNode>();
-    return parseOr();
+    return parseAnd();
   }
 
 private:
@@ -87,31 +87,31 @@ private:
   }
   bool atEnd() const { return m_pos >= m_tokens.size(); }
 
-  QSharedPointer<ASTNode> parseOr() {
-    QList<QSharedPointer<ASTNode>> nodes;
-    nodes.append(parseAnd());
-    while (!atEnd() && current().type == Token::OR) {
-      next();
-      nodes.append(parseAnd());
-    }
-    if (nodes.size() == 1)
-      return nodes.first();
-    return QSharedPointer<ASTNode>(new OrNode(nodes));
-  }
-
   QSharedPointer<ASTNode> parseAnd() {
     QList<QSharedPointer<ASTNode>> nodes;
-    nodes.append(parseUnary());
-    while (!atEnd() && current().type != Token::OR &&
-           current().type != Token::RPAREN) {
+    nodes.append(parseOr());
+    while (!atEnd() && current().type != Token::RPAREN) {
+      if (current().type == Token::OR) break;
       if (current().type == Token::AND) {
         next();
       }
-      nodes.append(parseUnary());
+      nodes.append(parseOr());
     }
     if (nodes.size() == 1)
       return nodes.first();
     return QSharedPointer<ASTNode>(new AndNode(nodes));
+  }
+
+  QSharedPointer<ASTNode> parseOr() {
+    QList<QSharedPointer<ASTNode>> nodes;
+    nodes.append(parseUnary());
+    while (!atEnd() && current().type == Token::OR) {
+      next();
+      nodes.append(parseUnary());
+    }
+    if (nodes.size() == 1)
+      return nodes.first();
+    return QSharedPointer<ASTNode>(new OrNode(nodes));
   }
 
   QSharedPointer<ASTNode> parseUnary() {
@@ -128,7 +128,7 @@ private:
 
     Token tok = next();
     if (tok.type == Token::LPAREN) {
-      QSharedPointer<ASTNode> node = parseOr();
+      QSharedPointer<ASTNode> node = parseAnd();
       if (!atEnd() && current().type == Token::RPAREN) {
         next();
       }
