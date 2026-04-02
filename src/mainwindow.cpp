@@ -629,15 +629,15 @@ void MainWindow::setupUi() {
             }
           });
 
-          QAction *copyClipboardAction = menu.addAction(i18n("Copy to Clipboard"));
-          connect(copyClipboardAction, &QAction::triggered, [this, index]() {
-            copyTemplateToClipboard(index);
-          });
+          QAction *copyClipboardAction =
+              menu.addAction(i18n("Copy to Clipboard"));
+          connect(copyClipboardAction, &QAction::triggered,
+                  [this, index]() { copyTemplateToClipboard(index); });
 
-          QAction *pasteClipboardAction = menu.addAction(i18n("Paste from Clipboard"));
-          connect(pasteClipboardAction, &QAction::triggered, [this]() {
-            pasteTemplateFromClipboard();
-          });
+          QAction *pasteClipboardAction =
+              menu.addAction(i18n("Paste from Clipboard"));
+          connect(pasteClipboardAction, &QAction::triggered,
+                  [this]() { pasteTemplateFromClipboard(); });
 
           QAction *exportSingleAction =
               menu.addAction(i18n("Export Template..."));
@@ -2155,11 +2155,13 @@ void MainWindow::importTemplates() {
 }
 
 void MainWindow::copyTemplateToClipboard(const QModelIndex &index) {
-  if (!index.isValid()) return;
+  if (!index.isValid())
+    return;
   QJsonArray exportArray;
   exportArray.append(m_templatesModel->getTemplate(index.row()));
   QJsonDocument doc(exportArray);
-  QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+  QGuiApplication::clipboard()->setText(
+      QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
   updateStatus(i18n("Template copied to clipboard."));
 }
 
@@ -2189,7 +2191,8 @@ void MainWindow::pasteTemplateFromClipboard() {
   }
 
   if (importedCount > 0) {
-    updateStatus(i18n("Imported %1 template(s) from clipboard.", importedCount));
+    updateStatus(
+        i18n("Imported %1 template(s) from clipboard.", importedCount));
   } else {
     updateStatus(i18n("No templates found in clipboard JSON."));
   }

@@ -185,13 +185,14 @@ bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
   if (!doc.isArray() && !doc.isObject())
     return false;
 
-  int beginRow = (row != -1) ? row
-                             : (parent.isValid() ? parent.row()
-                                                 : rowCount(QModelIndex()));
+  int beginRow =
+      (row != -1) ? row
+                  : (parent.isValid() ? parent.row() : rowCount(QModelIndex()));
 
   if (doc.isArray()) {
     QJsonArray importArray = doc.array();
-    if (importArray.isEmpty()) return false;
+    if (importArray.isEmpty())
+      return false;
     beginInsertRows(QModelIndex(), beginRow, beginRow + importArray.size() - 1);
     for (int i = 0; i < importArray.size(); ++i) {
       if (importArray[i].isObject()) {
