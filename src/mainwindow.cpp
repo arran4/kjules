@@ -227,15 +227,28 @@ MainWindow::MainWindow(QWidget *parent)
       if (remainingSecs >= 0) {
         int mins = remainingSecs / 60;
         int secs = remainingSecs % 60;
+
+        // Setting a pixmap and text on a QLabel isn't natively supported
+        // alongside text if we want them side-by-side easily without HTML or
+        // layouts, but QLabel supports rich text HTML.
+        QString timeStr =
+            QString::number(mins).rightJustified(2, QLatin1Char('0')) +
+            QLatin1Char(':') +
+            QString::number(secs).rightJustified(2, QLatin1Char('0'));
+        QString iconPath = QIcon::fromTheme(QStringLiteral("view-refresh"))
+                               .name(); // This doesn't directly map to HTML.
+
         m_refreshCountdownLabel->setText(
-            i18n("Next refresh in %1:%2",
-                 QString::number(mins).rightJustified(2, QLatin1Char('0')),
-                 QString::number(secs).rightJustified(2, QLatin1Char('0'))));
+            QStringLiteral(" <b><img src=\"image://theme/view-refresh\" "
+                           "width=\"16\" height=\"16\"> ") +
+            timeStr + QStringLiteral("</b>"));
       } else {
         m_refreshCountdownLabel->setText(QString());
       }
     } else if (m_refreshCountdownLabel) {
-      m_refreshCountdownLabel->setText(i18n("Auto-refresh disabled"));
+      m_refreshCountdownLabel->setText(
+          QStringLiteral(" <b><img src=\"image://theme/view-refresh\" "
+                         "width=\"16\" height=\"16\"> Disabled</b>"));
     }
   });
   countdownTimer->start(1000);
@@ -871,6 +884,8 @@ void MainWindow::setupUi() {
   statusBar()->addWidget(m_statusLabel);
 
   m_refreshCountdownLabel = new QLabel(this);
+  m_refreshCountdownLabel->setToolTip(
+      i18n("Time until next automatic refresh of following sessions"));
   statusBar()->addPermanentWidget(m_refreshCountdownLabel);
 
   m_sessionStatsLabel = new QLabel(this);
