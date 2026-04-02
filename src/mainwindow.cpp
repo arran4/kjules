@@ -93,11 +93,19 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::githubInfoReceived, this,
           &MainWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
+          &MainWindow::onGithubPullRequestInfoReceived);
   connect(m_apiManager, &APIManager::sessionsReceived, this,
           [this](const QJsonArray &sessions) {
             m_sessionModel->setSessions(sessions);
             m_lastSessionRefreshTime = QDateTime::currentDateTime();
             updateSessionStats();
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+                QString prUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
+                if (!prUrl.isEmpty()) {
+                    m_apiManager->fetchGithubPullRequest(prUrl);
+                }
+            }
           });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           &MainWindow::onSessionCreationFailed);
@@ -110,6 +118,16 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
             m_sessionModel->updateSession(session);
+            // We need to fetch github PR info if we have one
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+                if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == session.value(QStringLiteral("id")).toString()) {
+                    QString prUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
+                    if (!prUrl.isEmpty()) {
+                        m_apiManager->fetchGithubPullRequest(prUrl);
+                    }
+                    break;
+                }
+            }
           });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
@@ -149,6 +167,13 @@ MainWindow::MainWindow(QWidget *parent)
 
   m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();
+
+  for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+      QString prUrl = m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::PrUrlRole).toString();
+      if (!prUrl.isEmpty()) {
+          m_apiManager->fetchGithubPullRequest(prUrl);
+      }
+  }
 
   // Manually trigger calculation once after load
   updateSourceStats();
@@ -907,6 +932,7 @@ void MainWindow::setupUi() {
       m_templatesView, &QListView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_templatesView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
           if (!m_templatesView->selectionModel()->isSelected(index)) {
             m_templatesView->selectionModel()->select(
@@ -914,7 +940,6 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_templatesView->setCurrentIndex(index);
           }
-          QMenu menu;
           QAction *useAction = menu.addAction(i18n("Use Template"));
           connect(useAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
@@ -940,9 +965,9 @@ void MainWindow::setupUi() {
                   [this, index]() { copyTemplateToClipboard(index); });
         }
 
-        QAction *pasteClipboardAction =
+        QAction *pasteClipboardActionOuter =
             menu.addAction(i18n("Paste from Clipboard"));
-        connect(pasteClipboardAction, &QAction::triggered,
+        connect(pasteClipboardActionOuter, &QAction::triggered,
                 [this]() { pasteTemplateFromClipboard(); });
 
         if (index.isValid()) {
@@ -1218,6 +1243,28 @@ void MainWindow::updateTabTitles() {
       int count = m_errorsModel->rowCount();
       m_tabWidget->setTabText(
           i, count > 0 ? i18n("Errors (%1)", count) : i18n("Errors"));
+    }
+  }
+}
+
+void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info) {
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QModelIndex index = m_sessionModel->index(i, 0);
+    if (m_sessionModel->data(index, SessionModel::PrUrlRole).toString() == prUrl) {
+      QJsonObject session = m_sessionModel->getSession(i);
+      session[QStringLiteral("githubPrInfo")] = info;
+      m_sessionModel->updateSession(session);
+      // Let's also update archive model and watch model if needed.
+      // Actually, since they all use SessionModel, we'll iterate through them.
+    }
+  }
+
+  for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+    QModelIndex index = m_archiveModel->index(i, 0);
+    if (m_archiveModel->data(index, SessionModel::PrUrlRole).toString() == prUrl) {
+      QJsonObject session = m_archiveModel->getSession(i);
+      session[QStringLiteral("githubPrInfo")] = info;
+      m_archiveModel->updateSession(session);
     }
   }
 }

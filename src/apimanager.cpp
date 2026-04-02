@@ -381,6 +381,45 @@ void APIManager::createSession(const QString &source, const QString &prompt,
   createSessionAsync(requestData);
 }
 
+void APIManager::fetchGithubPullRequest(const QString &prUrl) {
+  if (m_githubToken.isEmpty()) {
+    return;
+  }
+
+  // prUrl format: https://github.com/owner/repo/pull/123
+  if (!prUrl.startsWith(QStringLiteral("https://github.com/"))) {
+    return;
+  }
+
+  QString path = prUrl.mid(19); // owner/repo/pull/123
+  QStringList parts = path.split(QLatin1Char('/'));
+  if (parts.size() < 4 || parts[2] != QStringLiteral("pull")) {
+    return;
+  }
+
+  QString apiUrl = QStringLiteral("https://api.github.com/repos/") + parts[0] +
+                   QLatin1Char('/') + parts[1] + QStringLiteral("/pulls/") + parts[3];
+
+  QNetworkRequest request((QUrl(apiUrl)));
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    QVariant(QStringLiteral("application/json")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, prUrl]() {
+    reply->deleteLater();
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      if (doc.isObject()) {
+        Q_EMIT githubPullRequestInfoReceived(prUrl, doc.object());
+      }
+    }
+  });
+}
+
 void APIManager::fetchGithubInfo(const QString &sourceId) {
   if (m_githubToken.isEmpty()) {
     return;

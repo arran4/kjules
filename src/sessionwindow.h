@@ -41,6 +41,7 @@ private:
   QTextBrowser *m_detailsBrowser;
   QTextBrowser *m_promptBrowser;
   QTextBrowser *m_diffBrowser;
+  QTextBrowser *m_prBrowser;
   ActivityBrowser *m_activityBrowser;
   QTextBrowser *m_rawActivitiesBrowser;
   QTextBrowser *m_textBrowser;
