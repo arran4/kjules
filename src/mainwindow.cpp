@@ -16,6 +16,8 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include "templateeditdialog.h"
+#include "filtereditor.h"
+#include "advancedfilterproxymodel.h"
 #include "templatesmodel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -170,14 +172,16 @@ void MainWindow::setupUi() {
 
   QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
+  m_filterEditor = new FilterEditor(this);
+  mainLayout->addWidget(m_filterEditor);
+
   QTabWidget *tabWidget = new QTabWidget(this);
 
   // Sources View
   m_sourceView = new QTreeView(this);
 
-  QSortFilterProxyModel *proxyModel = new QSortFilterProxyModel(this);
+  AdvancedFilterProxyModel *proxyModel = new AdvancedFilterProxyModel(this);
   proxyModel->setSourceModel(m_sourceModel);
-  proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
   proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
   m_sourceView->setModel(proxyModel);
@@ -200,8 +204,8 @@ void MainWindow::setupUi() {
           if (!m_sourceView->selectionModel()->isSelected(index)) {
             m_sourceView->setCurrentIndex(index);
           }
-          const QSortFilterProxyModel *proxy =
-              qobject_cast<const QSortFilterProxyModel *>(
+          const AdvancedFilterProxyModel *proxy =
+              qobject_cast<const AdvancedFilterProxyModel *>(
                   m_sourceView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
           QString id =
@@ -272,9 +276,8 @@ void MainWindow::setupUi() {
 
   // Sessions View
   m_sessionView = new QTreeView(this);
-  QSortFilterProxyModel *sessionProxyModel = new QSortFilterProxyModel(this);
+  AdvancedFilterProxyModel *sessionProxyModel = new AdvancedFilterProxyModel(this);
   sessionProxyModel->setSourceModel(m_sessionModel);
-  sessionProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
   sessionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
   m_sessionView->setModel(sessionProxyModel);
@@ -288,8 +291,8 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
-          const QSortFilterProxyModel *proxy =
-              qobject_cast<const QSortFilterProxyModel *>(
+          const AdvancedFilterProxyModel *proxy =
+              qobject_cast<const AdvancedFilterProxyModel *>(
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
@@ -443,9 +446,8 @@ void MainWindow::setupUi() {
   tabWidget->addTab(m_sessionView, i18n("Past"));
   // Archive View
   m_archiveView = new QTreeView(this);
-  QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
+  AdvancedFilterProxyModel *archiveProxyModel = new AdvancedFilterProxyModel(this);
   archiveProxyModel->setSourceModel(m_archiveModel);
-  archiveProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
   archiveProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
   m_archiveView->setModel(archiveProxyModel);
@@ -460,8 +462,8 @@ void MainWindow::setupUi() {
       [this](const QPoint &pos) {
         QModelIndex index = m_archiveView->indexAt(pos);
         if (index.isValid()) {
-          const QSortFilterProxyModel *proxy =
-              qobject_cast<const QSortFilterProxyModel *>(
+          const AdvancedFilterProxyModel *proxy =
+              qobject_cast<const AdvancedFilterProxyModel *>(
                   m_archiveView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
           QMenu menu;
@@ -528,8 +530,8 @@ void MainWindow::setupUi() {
   connect(
       m_archiveView, &QTreeView::doubleClicked, this,
       [this](const QModelIndex &index) {
-        const QSortFilterProxyModel *proxy =
-            qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+        const AdvancedFilterProxyModel *proxy =
+            qobject_cast<const AdvancedFilterProxyModel *>(m_archiveView->model());
         QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
         QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
         if (!sessionData.isEmpty()) {
@@ -760,6 +762,15 @@ void MainWindow::setupUi() {
 
   tabWidget->addTab(m_errorsView, i18n("Errors"));
 
+  connect(m_filterEditor, &FilterEditor::filterChanged, this, [this](const QString &text) {
+      if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_sourceView->model()))
+          pm->setFilterQuery(text);
+      if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_sessionView->model()))
+          pm->setFilterQuery(text);
+      if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_archiveView->model()))
+          pm->setFilterQuery(text);
+  });
+
   mainLayout->addWidget(tabWidget);
 
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
@@ -890,8 +901,8 @@ void MainWindow::createActions() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())
       return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    const AdvancedFilterProxyModel *proxy =
+        qobject_cast<const AdvancedFilterProxyModel *>(m_sourceView->model());
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QString id =
         m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
@@ -935,8 +946,8 @@ void MainWindow::createActions() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())
       return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    const AdvancedFilterProxyModel *proxy =
+        qobject_cast<const AdvancedFilterProxyModel *>(m_sourceView->model());
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QString id =
         m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
@@ -992,8 +1003,8 @@ void MainWindow::createActions() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())
       return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    const AdvancedFilterProxyModel *proxy =
+        qobject_cast<const AdvancedFilterProxyModel *>(m_sourceView->model());
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
     QJsonObject rawData =
@@ -1019,8 +1030,8 @@ void MainWindow::createActions() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())
       return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    const AdvancedFilterProxyModel *proxy =
+        qobject_cast<const AdvancedFilterProxyModel *>(m_sourceView->model());
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QString id =
         m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
@@ -1082,8 +1093,8 @@ void MainWindow::createActions() {
     QModelIndex index = m_sourceView->currentIndex();
     if (!index.isValid())
       return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    const AdvancedFilterProxyModel *proxy =
+        qobject_cast<const AdvancedFilterProxyModel *>(m_sourceView->model());
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QString id =
         m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
@@ -1647,8 +1658,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
 void MainWindow::onSourceActivated(const QModelIndex &index) {
   // Map index from proxy to source
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+  const AdvancedFilterProxyModel *proxy =
+      qobject_cast<const AdvancedFilterProxyModel *>(m_sourceView->model());
 
   QJsonObject initData;
   QJsonArray sourcesArr;
@@ -1738,8 +1749,8 @@ void MainWindow::showSessionWindow(const QJsonObject &session) {
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+  const AdvancedFilterProxyModel *proxy =
+      qobject_cast<const AdvancedFilterProxyModel *>(m_sessionView->model());
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 

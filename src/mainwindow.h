@@ -21,6 +21,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QAction;
+class FilterEditor;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -98,6 +99,7 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
+  FilterEditor *m_filterEditor;
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;

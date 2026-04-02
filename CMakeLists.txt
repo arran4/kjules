@@ -65,6 +65,9 @@ set(kjules_SRCS
     src/errorwindow.cpp
     src/sessionswindow.cpp
     src/kjules.qrc
+    src/filterparser.cpp
+    src/filtereditor.cpp
+    src/advancedfilterproxymodel.cpp
 )
 
 add_executable(kjules ${kjules_SRCS})
