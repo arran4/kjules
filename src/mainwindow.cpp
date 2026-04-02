@@ -613,8 +613,8 @@ void MainWindow::setupUi() {
       m_templatesView, &QListView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_templatesView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
-          QMenu menu;
           QAction *useAction = menu.addAction(i18n("Use Template"));
           connect(useAction, &QAction::triggered,
                   [this, index]() { onTemplateActivated(index); });
@@ -633,12 +633,14 @@ void MainWindow::setupUi() {
               menu.addAction(i18n("Copy to Clipboard"));
           connect(copyClipboardAction, &QAction::triggered,
                   [this, index]() { copyTemplateToClipboard(index); });
+        }
 
-          QAction *pasteClipboardAction =
-              menu.addAction(i18n("Paste from Clipboard"));
-          connect(pasteClipboardAction, &QAction::triggered,
-                  [this]() { pasteTemplateFromClipboard(); });
+        QAction *pasteClipboardAction =
+            menu.addAction(i18n("Paste from Clipboard"));
+        connect(pasteClipboardAction, &QAction::triggered,
+                [this]() { pasteTemplateFromClipboard(); });
 
+        if (index.isValid()) {
           QAction *exportSingleAction =
               menu.addAction(i18n("Export Template..."));
           connect(exportSingleAction, &QAction::triggered, [this, index]() {
@@ -671,8 +673,8 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template deleted."));
             }
           });
-          menu.exec(m_templatesView->mapToGlobal(pos));
         }
+        menu.exec(m_templatesView->mapToGlobal(pos));
       });
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
