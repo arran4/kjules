@@ -60,6 +60,7 @@ private Q_SLOTS:
   void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
+  void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void cancelSourcesRefresh();
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
@@ -80,6 +81,7 @@ private Q_SLOTS:
   void pasteTemplateFromClipboard();
   void toggleQueueState();
   void loadQueueSettings();
+  void updateTabTitles();
 
 private:
   void setupUi();
@@ -102,6 +104,7 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
+  QTabWidget *m_tabWidget;
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;

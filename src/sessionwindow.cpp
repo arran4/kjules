@@ -31,7 +31,11 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, bool isManaged,
                              QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData),
-      m_apiManager(apiManager), m_isManaged(isManaged) {
+      m_apiManager(apiManager), m_isManaged(isManaged), m_tabWidget(nullptr),
+      m_statusLabel(nullptr), m_autoRefreshTimer(nullptr),
+      m_autoRefreshCombo(nullptr), m_detailsBrowser(nullptr),
+      m_promptBrowser(nullptr), m_diffBrowser(nullptr),
+      m_activityBrowser(nullptr), m_rawActivitiesBrowser(nullptr) {
   setObjectName(QStringLiteral("SessionWindow_%1")
                     .arg(sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
@@ -47,9 +51,9 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onActivitiesReceived);
   }
 
-  setupActions();
   setupUi(m_sessionData);
   setupGUI();
+  setupActions();
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("SessionWindow"));
@@ -89,6 +93,10 @@ void SessionWindow::setupActions() {
   actionCollection()->setDefaultShortcut(closeAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
+
+  QMenu *fileMenu = new QMenu(i18n("File"), this);
+  fileMenu->addAction(closeAction);
+  menuBar()->addMenu(fileMenu);
 
   setStandardToolBarMenuEnabled(true);
 
@@ -137,7 +145,7 @@ void SessionWindow::setupActions() {
 
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
-                  i18n("Watch Session"), this);
+                  i18n("Follow Session"), this);
   connect(watchAction, &QAction::triggered, this,
           [this, watchAction, sessionMenu]() {
             Q_EMIT watchRequested(m_sessionData);
@@ -148,8 +156,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(watchAction);
   }
 
-  QAction *archiveAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
+  QAction *archiveAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("archive")),
+                  i18n("Archive Session"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
@@ -158,8 +167,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(archiveAction);
   }
 
-  QAction *deleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+  QAction *deleteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                  i18n("Unmanage Session"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
@@ -215,6 +225,10 @@ void SessionWindow::setupActions() {
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
+
+  if (m_apiManager) {
+    m_statusLabel->setText(i18n("Loading activities..."));
+  }
 }
 
 void SessionWindow::updateAutoRefresh() {
