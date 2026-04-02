@@ -170,7 +170,7 @@ void MainWindow::setupUi() {
 
   QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
-  QTabWidget *tabWidget = new QTabWidget(this);
+  m_tabWidget = new QTabWidget(this);
 
   // Sources View
   m_sourceView = new QTreeView(this);
@@ -268,7 +268,7 @@ void MainWindow::setupUi() {
       });
   connect(m_sourceView, &QTreeView::doubleClicked, this,
           &MainWindow::onSourceActivated);
-  tabWidget->addTab(m_sourceView, i18n("Sources"));
+  m_tabWidget->addTab(m_sourceView, i18n("Sources"));
 
   // Sessions View
   m_sessionView = new QTreeView(this);
@@ -440,7 +440,7 @@ void MainWindow::setupUi() {
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
-  tabWidget->addTab(m_sessionView, i18n("Past"));
+  m_tabWidget->addTab(m_sessionView, i18n("Past"));
   // Archive View
   m_archiveView = new QTreeView(this);
   QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
@@ -545,7 +545,7 @@ void MainWindow::setupUi() {
         }
       });
 
-  tabWidget->addTab(m_archiveView, i18n("Archive"));
+  m_tabWidget->addTab(m_archiveView, i18n("Archive"));
 
   // Drafts View
   m_draftsView = new QListView(this);
@@ -597,7 +597,7 @@ void MainWindow::setupUi() {
   connect(m_draftsView, &QListView::doubleClicked, this,
           &MainWindow::onDraftActivated);
 
-  tabWidget->addTab(m_draftsView, i18n("Drafts"));
+  m_tabWidget->addTab(m_draftsView, i18n("Drafts"));
 
   // Templates View
   m_templatesView = new QListView(this);
@@ -640,7 +640,7 @@ void MainWindow::setupUi() {
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
 
-  tabWidget->addTab(m_templatesView, i18n("Templates"));
+  m_tabWidget->addTab(m_templatesView, i18n("Templates"));
 
   // Queue View
   m_queueView = new QListView(this);
@@ -651,7 +651,7 @@ void MainWindow::setupUi() {
           &MainWindow::onQueueActivated);
   connect(m_queueView, &QListView::customContextMenuRequested, this,
           &MainWindow::onQueueContextMenu);
-  tabWidget->addTab(m_queueView, i18n("Queue"));
+  m_tabWidget->addTab(m_queueView, i18n("Queue"));
 
   // Errors View
   m_errorsView = new QListView(this);
@@ -758,9 +758,9 @@ void MainWindow::setupUi() {
   connect(m_errorsView, &QListView::doubleClicked, this,
           &MainWindow::onErrorActivated);
 
-  tabWidget->addTab(m_errorsView, i18n("Errors"));
+  m_tabWidget->addTab(m_errorsView, i18n("Errors"));
 
-  mainLayout->addWidget(tabWidget);
+  mainLayout->addWidget(m_tabWidget);
 
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
 
@@ -783,6 +783,53 @@ void MainWindow::setupUi() {
   connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
           &MainWindow::cancelSourcesRefresh);
   statusBar()->addPermanentWidget(m_cancelRefreshBtn);
+
+  // Connect model signals to update tab titles with counts
+  connect(m_draftsModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateTabTitles);
+  connect(m_draftsModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateTabTitles);
+  connect(m_draftsModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateTabTitles);
+
+  connect(m_templatesModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateTabTitles);
+  connect(m_templatesModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateTabTitles);
+  connect(m_templatesModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateTabTitles);
+
+  connect(m_errorsModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateTabTitles);
+  connect(m_errorsModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateTabTitles);
+  connect(m_errorsModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateTabTitles);
+
+  // Initial title update
+  updateTabTitles();
+}
+
+void MainWindow::updateTabTitles() {
+  if (!m_tabWidget)
+    return;
+
+  for (int i = 0; i < m_tabWidget->count(); ++i) {
+    QWidget *page = m_tabWidget->widget(i);
+    if (page == m_draftsView) {
+      int count = m_draftsModel->rowCount();
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Drafts (%1)", count)
+                                           : i18n("Drafts"));
+    } else if (page == m_templatesView) {
+      int count = m_templatesModel->rowCount();
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Templates (%1)", count)
+                                           : i18n("Templates"));
+    } else if (page == m_errorsView) {
+      int count = m_errorsModel->rowCount();
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Errors (%1)", count)
+                                           : i18n("Errors"));
+    }
+  }
 }
 
 void MainWindow::setupTrayIcon() {

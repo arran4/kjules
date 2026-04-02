@@ -1,8 +1,10 @@
 #include "draftdelegate.h"
 #include "draftsmodel.h"
+#include "errorsmodel.h"
 #include "templatesmodel.h"
 #include <QDebug>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QPainter>
 
 DraftDelegate::DraftDelegate(QObject *parent) : QStyledItemDelegate(parent) {}
@@ -28,9 +30,32 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
       index.data(DraftsModel::AutomationModeRole).toString();
   QString source = index.data(DraftsModel::SourceRole).toString();
 
+  // For ErrorsModel, we might need to extract data from RequestRole
+  QVariant requestVar = index.data(ErrorsModel::RequestRole);
+  if (requestVar.isValid() && !requestVar.isNull()) {
+    QJsonObject reqObj = requestVar.toJsonObject();
+    if (prompt.isEmpty()) {
+      prompt = reqObj.value(QStringLiteral("prompt")).toString();
+    }
+    if (source.isEmpty()) {
+      if (reqObj.contains(QStringLiteral("sources"))) {
+        QJsonArray sourcesArray =
+            reqObj.value(QStringLiteral("sources")).toArray();
+        QStringList sourcesList;
+        for (const QJsonValue &val : sourcesArray) {
+          sourcesList.append(val.toString());
+        }
+        source = sourcesList.join(QStringLiteral(", "));
+      } else {
+        source = reqObj.value(QStringLiteral("source")).toString();
+      }
+    }
+  }
+
   // Try to get comment/description to show in details
   QString comment = index.data(DraftsModel::CommentRole).toString();
   QString description = index.data(TemplatesModel::DescriptionRole).toString();
+  QString timestamp = index.data(ErrorsModel::TimestampRole).toString();
 
   QRect r = option.rect.adjusted(5, 5, -5, -5);
 
@@ -63,15 +88,21 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
     details += QStringLiteral(" | ") + comment;
   if (!description.isEmpty())
     details += QStringLiteral(" | ") + description;
-  if (comment.isEmpty() && description.isEmpty() && prompt != displayTitle)
-    details +=
-        QStringLiteral(" | Prompt: ") + prompt.left(30) +
-        (prompt.length() > 30 ? QStringLiteral("...") : QStringLiteral(""));
+  if (comment.isEmpty() && description.isEmpty() && prompt != displayTitle &&
+      !prompt.isEmpty()) {
+    QString shortPrompt = prompt;
+    shortPrompt.replace(QStringLiteral("\n"), QStringLiteral(" "));
+    details += QStringLiteral(" | Prompt: ") + shortPrompt.left(30) +
+               (shortPrompt.length() > 30 ? QStringLiteral("...")
+                                          : QStringLiteral(""));
+  }
 
   if (!automationMode.isEmpty())
     details += QStringLiteral(" | Auto: ") + automationMode;
   if (!source.isEmpty())
     details += QStringLiteral(" | Source: ") + source;
+  if (!timestamp.isEmpty())
+    details += QStringLiteral(" | ") + timestamp;
 
   QRect detailsRect = r;
   detailsRect.setTop(promptRect.bottom() + 5);
