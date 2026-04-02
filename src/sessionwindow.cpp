@@ -94,6 +94,10 @@ void SessionWindow::setupActions() {
                                          QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
+  QMenu *fileMenu = new QMenu(i18n("File"), this);
+  fileMenu->addAction(closeAction);
+  menuBar()->addMenu(fileMenu);
+
   setStandardToolBarMenuEnabled(true);
 
   KToolBar *toolBar = new KToolBar(QStringLiteral("mainToolBar"), this);

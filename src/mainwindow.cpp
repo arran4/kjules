@@ -41,6 +41,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
@@ -81,8 +82,8 @@ MainWindow::MainWindow(QWidget *parent)
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
   loadQueueSettings();
-  setupTrayIcon();
   createActions();
+  setupTrayIcon();
 
   // Connect API Manager signals
   connect(m_apiManager, &APIManager::sourcesReceived, this,
@@ -1205,6 +1206,10 @@ void MainWindow::setupTrayIcon() {
 
   m_trayMenu->addSeparator();
 
+  m_trayMenu->addAction(m_viewSessionsAction);
+
+  m_trayMenu->addSeparator();
+
   QAction *quitAction = new QAction(i18n("&Quit"), this);
   connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
   m_trayMenu->addAction(quitAction);
@@ -1389,11 +1394,20 @@ void MainWindow::createActions() {
             m_apiManager->getSession(sessId);
             updateStatus(i18n("Fetching details for session %1...", sessId));
           });
-      sessionsWindow->setCentralWidget(listView);
-      sessionsWindow->setupGUI();
-      sessionsWindow->resize(600, 400);
-      sessionsWindow->show();
-    }
+      QMenu *fileMenu = new QMenu(i18n("File"), sessionsWindow);
+    QAction *closeAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                    i18n("Close"), sessionsWindow);
+    closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    connect(closeAction, &QAction::triggered, sessionsWindow,
+            &KXmlGuiWindow::close);
+    fileMenu->addAction(closeAction);
+    sessionsWindow->menuBar()->addMenu(fileMenu);
+
+    sessionsWindow->setCentralWidget(listView);
+    sessionsWindow->setupGUI();
+    sessionsWindow->resize(600, 400);
+    sessionsWindow->show();}
   });
   m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
   actionCollection()->addAction(QStringLiteral("view_raw_data"),
@@ -1417,17 +1431,26 @@ void MainWindow::createActions() {
               .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
                        .toString()
                        .replace(QLatin1Char('/'), QLatin1Char('_'))));
-      rawWindow->setAttribute(Qt::WA_DeleteOnClose);
-      rawWindow->setWindowTitle(i18n("Raw Data for Source"));
-      QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
-      QJsonDocument doc(rawData);
-      textBrowser->setPlainText(
-          QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
-      rawWindow->setCentralWidget(textBrowser);
-      rawWindow->setupGUI();
-      rawWindow->resize(600, 400);
-      rawWindow->show();
-    }
+    rawWindow->setAttribute(Qt::WA_DeleteOnClose);
+    rawWindow->setWindowTitle(i18n("Raw Data for Source"));
+    QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+    QJsonDocument doc(rawData);
+    textBrowser->setPlainText(
+        QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+
+    QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
+    QAction *closeAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                    i18n("Close"), rawWindow);
+    closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    connect(closeAction, &QAction::triggered, rawWindow, &KXmlGuiWindow::close);
+    fileMenu->addAction(closeAction);
+    rawWindow->menuBar()->addMenu(fileMenu);
+
+    rawWindow->setCentralWidget(textBrowser);
+    rawWindow->setupGUI();
+    rawWindow->resize(600, 400);
+    rawWindow->show();}
   });
 
   m_openUrlAction = new QAction(i18n("Open URL"), this);

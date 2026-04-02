@@ -510,6 +510,7 @@ void SessionsWindow::setupUi() {
   QAction *quitAction =
       new QAction(QIcon::fromTheme(QStringLiteral("application-exit")),
                   i18n("Close"), this);
+  quitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(quitAction, &QAction::triggered, this, &SessionsWindow::close);
   fileMenu->addAction(quitAction);
   menuBar()->addMenu(fileMenu);
