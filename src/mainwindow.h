@@ -75,6 +75,10 @@ private Q_SLOTS:
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
   void restoreData();
+  void exportTemplates();
+  void importTemplates();
+  void copyTemplateToClipboard(const QModelIndex &index);
+  void pasteTemplateFromClipboard();
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
@@ -118,6 +122,8 @@ private:
   QAction *m_copyUrlAction;
   QAction *m_backupDataAction;
   QAction *m_restoreDataAction;
+  QAction *m_importTemplatesAction;
+  QAction *m_exportTemplatesAction;
   QAction *m_toggleQueueAction;
 
   bool m_isRefreshingSources;

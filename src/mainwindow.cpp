@@ -34,6 +34,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -898,6 +899,10 @@ void MainWindow::setupUi() {
   m_templatesView->setModel(m_templatesModel);
   m_templatesView->setItemDelegate(new DraftDelegate(this));
   m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_templatesView->setDragEnabled(true);
+  m_templatesView->setAcceptDrops(true);
+  m_templatesView->setDropIndicatorShown(true);
+  m_templatesView->setDragDropMode(QAbstractItemView::DragDrop);
   connect(
       m_templatesView, &QListView::customContextMenuRequested,
       [this](const QPoint &pos) {
@@ -929,17 +934,49 @@ void MainWindow::setupUi() {
             }
           });
 
+          QAction *copyClipboardAction =
+              menu.addAction(i18n("Copy to Clipboard"));
+          connect(copyClipboardAction, &QAction::triggered,
+                  [this, index]() { copyTemplateToClipboard(index); });
+        }
+
+        QAction *pasteClipboardAction =
+            menu.addAction(i18n("Paste from Clipboard"));
+        connect(pasteClipboardAction, &QAction::triggered,
+                [this]() { pasteTemplateFromClipboard(); });
+
+        if (index.isValid()) {
+          QAction *exportSingleAction =
+              menu.addAction(i18n("Export Template..."));
+          connect(exportSingleAction, &QAction::triggered, [this, index]() {
+            QString filePath = QFileDialog::getSaveFileName(
+                this, i18n("Export Template"), QString(),
+                i18n("JSON Files (*.json)"));
+            if (filePath.isEmpty())
+              return;
+
+            QJsonArray exportArray;
+            exportArray.append(m_templatesModel->getTemplate(index.row()));
+            QJsonDocument doc(exportArray);
+            QFile file(filePath);
+            if (file.open(QIODevice::WriteOnly)) {
+              file.write(doc.toJson(QJsonDocument::Indented));
+              file.close();
+              updateStatus(i18n("Template exported to %1", filePath));
+            } else {
+              updateStatus(i18n("Failed to export template to %1", filePath));
+            }
+          });
+
           QAction *deleteAction = menu.addAction(i18n("Delete Template"));
           connect(deleteAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_templatesView->selectionModel()->selectedRows();
-            if (QMessageBox::question(
-                    this,
-                    i18np("Delete Template", "Delete Templates",
-                          selectedRows.size()),
+            if (QMessageBox::question(this, i18np("Delete Template", "Delete Templates",
+                                      selectedRows.size()),
                     i18np("Are you sure you want to delete this template?",
-                          "Are you sure you want to delete these templates?",
-                          selectedRows.size())) == QMessageBox::Yes) {
+                "Are you sure you want to delete these templates?",
+                          selectedRows.size())) ==QMessageBox::Yes) {
               QList<int> rowsToDelete;
               for (const QModelIndex &idx : selectedRows) {
                 if (!rowsToDelete.contains(idx.row())) {
@@ -956,8 +993,8 @@ void MainWindow::setupUi() {
                                  selectedRows.size()));
             }
           });
-          menu.exec(m_templatesView->mapToGlobal(pos));
         }
+        menu.exec(m_templatesView->mapToGlobal(pos));
       });
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
@@ -1515,6 +1552,18 @@ void MainWindow::createActions() {
                                 m_backupDataAction);
   connect(m_backupDataAction, &QAction::triggered, this,
           &MainWindow::backupData);
+
+  m_importTemplatesAction = new QAction(i18n("Import Templates..."), this);
+  actionCollection()->addAction(QStringLiteral("import_templates"),
+                                m_importTemplatesAction);
+  connect(m_importTemplatesAction, &QAction::triggered, this,
+          &MainWindow::importTemplates);
+
+  m_exportTemplatesAction = new QAction(i18n("Export Templates..."), this);
+  actionCollection()->addAction(QStringLiteral("export_templates"),
+                                m_exportTemplatesAction);
+  connect(m_exportTemplatesAction, &QAction::triggered, this,
+          &MainWindow::exportTemplates);
 
   m_toggleQueueAction =
       new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
@@ -2530,5 +2579,104 @@ void MainWindow::restoreData() {
     }
   } else {
     updateStatus(i18n("No files were restored."));
+  }
+}
+
+void MainWindow::exportTemplates() {
+  QString filePath = QFileDialog::getSaveFileName(
+      this, i18n("Export Templates"), QString(), i18n("JSON Files (*.json)"));
+  if (filePath.isEmpty())
+    return;
+
+  QJsonArray exportArray;
+  for (int i = 0; i < m_templatesModel->rowCount(); ++i) {
+    exportArray.append(m_templatesModel->getTemplate(i));
+  }
+
+  QJsonDocument doc(exportArray);
+  QFile file(filePath);
+  if (file.open(QIODevice::WriteOnly)) {
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+    updateStatus(i18n("Templates exported to %1", filePath));
+  } else {
+    updateStatus(i18n("Failed to export templates to %1", filePath));
+  }
+}
+
+void MainWindow::importTemplates() {
+  QString filePath = QFileDialog::getOpenFileName(
+      this, i18n("Import Templates"), QString(), i18n("JSON Files (*.json)"));
+  if (filePath.isEmpty())
+    return;
+
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly)) {
+    updateStatus(i18n("Failed to open %1 for import", filePath));
+    return;
+  }
+
+  QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+  file.close();
+
+  if (!doc.isArray()) {
+    updateStatus(i18n("Invalid format: expected JSON array in %1", filePath));
+    return;
+  }
+
+  QJsonArray importArray = doc.array();
+  int importedCount = 0;
+  for (const QJsonValue &val : importArray) {
+    if (val.isObject()) {
+      m_templatesModel->addTemplate(val.toObject());
+      importedCount++;
+    }
+  }
+
+  updateStatus(
+      i18n("Imported %1 template(s) from %2", importedCount, filePath));
+}
+
+void MainWindow::copyTemplateToClipboard(const QModelIndex &index) {
+  if (!index.isValid())
+    return;
+  QJsonArray exportArray;
+  exportArray.append(m_templatesModel->getTemplate(index.row()));
+  QJsonDocument doc(exportArray);
+  QGuiApplication::clipboard()->setText(
+      QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+  updateStatus(i18n("Template copied to clipboard."));
+}
+
+void MainWindow::pasteTemplateFromClipboard() {
+  QString clipboardText = QGuiApplication::clipboard()->text();
+  if (clipboardText.isEmpty()) {
+    updateStatus(i18n("Clipboard is empty."));
+    return;
+  }
+  QJsonDocument doc = QJsonDocument::fromJson(clipboardText.toUtf8());
+  if (!doc.isArray() && !doc.isObject()) {
+    updateStatus(i18n("Clipboard does not contain valid template JSON."));
+    return;
+  }
+  int importedCount = 0;
+  if (doc.isArray()) {
+    QJsonArray importArray = doc.array();
+    for (const QJsonValue &val : importArray) {
+      if (val.isObject()) {
+        m_templatesModel->addTemplate(val.toObject());
+        importedCount++;
+      }
+    }
+  } else if (doc.isObject()) {
+    m_templatesModel->addTemplate(doc.object());
+    importedCount = 1;
+  }
+
+  if (importedCount > 0) {
+    updateStatus(
+        i18n("Imported %1 template(s) from clipboard.", importedCount));
+  } else {
+    updateStatus(i18n("No templates found in clipboard JSON."));
   }
 }
