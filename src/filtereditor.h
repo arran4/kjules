@@ -36,7 +36,7 @@ private:
   QLineEdit *m_lineEdit;
   QTreeView *m_treeView;
   QStandardItemModel *m_treeModel;
-    QListWidget *m_paletteList;
+  QListWidget *m_paletteList;
   bool m_updating;
 };
 

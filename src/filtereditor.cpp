@@ -4,13 +4,13 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QDebug>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QItemSelectionModel>
-#include <QListWidget>
-#include <QHBoxLayout>
-#include <QSplitter>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMenu>
+#include <QSplitter>
 #include <QStandardItemModel>
 #include <QTreeView>
 #include <QVBoxLayout>
@@ -53,19 +53,15 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_paletteList->setDefaultDropAction(Qt::CopyAction);
 
   QStringList paletteItems = {
-      QStringLiteral("AND"),
-      QStringLiteral("OR"),
-      QStringLiteral("NOT"),
-      QStringLiteral("IN"),
-      QStringLiteral("state:"),
-      QStringLiteral("repo:"),
-      QStringLiteral("owner:"),
-      QStringLiteral("created-before:"),
-      QStringLiteral("updated-after:")
-  };
+      QStringLiteral("AND"),           QStringLiteral("OR"),
+      QStringLiteral("NOT"),           QStringLiteral("IN"),
+      QStringLiteral("state:"),        QStringLiteral("repo:"),
+      QStringLiteral("owner:"),        QStringLiteral("created-before:"),
+      QStringLiteral("updated-after:")};
   for (const QString &itemText : paletteItems) {
-      QListWidgetItem *item = new QListWidgetItem(itemText, m_paletteList);
-      item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsDragEnabled | Qt::ItemIsEnabled);
+    QListWidgetItem *item = new QListWidgetItem(itemText, m_paletteList);
+    item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsDragEnabled |
+                   Qt::ItemIsEnabled);
   }
 
   QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
@@ -90,39 +86,48 @@ FilterEditor::FilterEditor(QWidget *parent)
     if (!m_updating)
       updateTextFromTree();
   });
-      connect(m_paletteList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
-        if (!item) return;
-        QString text = item->text();
-        QModelIndexList sel = m_treeView->selectionModel()->selectedIndexes();
-        QStandardItem *parent = m_treeModel->invisibleRootItem();
-        if (!sel.isEmpty()) {
-            QStandardItem *selItem = m_treeModel->itemFromIndex(sel.first());
-            if (selItem && (selItem->data(NodeTypeRole).toInt() == TypeAnd || selItem->data(NodeTypeRole).toInt() == TypeOr || selItem->data(NodeTypeRole).toInt() == TypeNot)) {
+  connect(m_paletteList, &QListWidget::itemDoubleClicked, this,
+          [this](QListWidgetItem *item) {
+            if (!item)
+              return;
+            QString text = item->text();
+            QModelIndexList sel =
+                m_treeView->selectionModel()->selectedIndexes();
+            QStandardItem *parent = m_treeModel->invisibleRootItem();
+            if (!sel.isEmpty()) {
+              QStandardItem *selItem = m_treeModel->itemFromIndex(sel.first());
+              if (selItem && (selItem->data(NodeTypeRole).toInt() == TypeAnd ||
+                              selItem->data(NodeTypeRole).toInt() == TypeOr ||
+                              selItem->data(NodeTypeRole).toInt() == TypeNot)) {
                 parent = selItem;
-            } else if (selItem) {
-                parent = selItem->parent() ? selItem->parent() : m_treeModel->invisibleRootItem();
+              } else if (selItem) {
+                parent = selItem->parent() ? selItem->parent()
+                                           : m_treeModel->invisibleRootItem();
+              }
             }
-        }
 
-        QStandardItem *newItem = new QStandardItem(text);
-        if (text == QStringLiteral("AND")) newItem->setData(TypeAnd, NodeTypeRole);
-        else if (text == QStringLiteral("OR")) newItem->setData(TypeOr, NodeTypeRole);
-        else if (text == QStringLiteral("NOT")) newItem->setData(TypeNot, NodeTypeRole);
-        else if (text == QStringLiteral("IN")) {
-            newItem->setData(TypeIn, NodeTypeRole);
-            newItem->setEditable(true);
-        } else if (text.endsWith(QLatin1Char(':'))) {
-            newItem->setData(TypeKV, NodeTypeRole);
-            newItem->setEditable(true);
-        } else {
-            newItem->setData(TypeKeyword, NodeTypeRole);
-            newItem->setEditable(true);
-        }
-        parent->appendRow(newItem);
-        updateTextFromTree();
-        m_treeView->expandAll();
-    });
-    connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
+            QStandardItem *newItem = new QStandardItem(text);
+            if (text == QStringLiteral("AND"))
+              newItem->setData(TypeAnd, NodeTypeRole);
+            else if (text == QStringLiteral("OR"))
+              newItem->setData(TypeOr, NodeTypeRole);
+            else if (text == QStringLiteral("NOT"))
+              newItem->setData(TypeNot, NodeTypeRole);
+            else if (text == QStringLiteral("IN")) {
+              newItem->setData(TypeIn, NodeTypeRole);
+              newItem->setEditable(true);
+            } else if (text.endsWith(QLatin1Char(':'))) {
+              newItem->setData(TypeKV, NodeTypeRole);
+              newItem->setEditable(true);
+            } else {
+              newItem->setData(TypeKeyword, NodeTypeRole);
+              newItem->setEditable(true);
+            }
+            parent->appendRow(newItem);
+            updateTextFromTree();
+            m_treeView->expandAll();
+          });
+  connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
     if (!m_updating)
       updateTextFromTree();
   });

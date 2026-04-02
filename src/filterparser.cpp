@@ -91,7 +91,8 @@ private:
     QList<QSharedPointer<ASTNode>> nodes;
     nodes.append(parseOr());
     while (!atEnd() && current().type != Token::RPAREN) {
-      if (current().type == Token::OR) break;
+      if (current().type == Token::OR)
+        break;
       if (current().type == Token::AND) {
         next();
       }
