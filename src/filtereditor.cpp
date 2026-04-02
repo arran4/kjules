@@ -1,272 +1,295 @@
 #include "filtereditor.h"
 #include "filterparser.h"
 
-#include <QLineEdit>
-#include <QTreeView>
-#include <QStandardItemModel>
-#include <QVBoxLayout>
-#include <QMenu>
-#include <QContextMenuEvent>
 #include <QAction>
+#include <QContextMenuEvent>
 #include <QDebug>
 #include <QHeaderView>
 #include <QItemSelectionModel>
+#include <QLineEdit>
+#include <QMenu>
+#include <QStandardItemModel>
+#include <QTreeView>
+#include <QVBoxLayout>
 
 enum FilterItemRoles {
-    NodeTypeRole = Qt::UserRole + 1,
-    NodeValueRole,
-    NodeKeyRole,
-    NodeChildCountRole
+  NodeTypeRole = Qt::UserRole + 1,
+  NodeValueRole,
+  NodeKeyRole,
+  NodeChildCountRole
 };
 
-enum NodeType {
-    TypeAnd, TypeOr, TypeNot, TypeIn, TypeKV, TypeKeyword
-};
+enum NodeType { TypeAnd, TypeOr, TypeNot, TypeIn, TypeKV, TypeKeyword };
 
 FilterEditor::FilterEditor(QWidget *parent)
     : QWidget(parent), m_updating(false) {
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(2);
+  QVBoxLayout *layout = new QVBoxLayout(this);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(2);
 
-    m_lineEdit = new QLineEdit(this);
-    m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula (e.g. =\"Update all\" state:PAUSED)"));
-    layout->addWidget(m_lineEdit);
+  m_lineEdit = new QLineEdit(this);
+  m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula "
+                                    "(e.g. =\"Update all\" state:PAUSED)"));
+  layout->addWidget(m_lineEdit);
 
-    m_treeView = new QTreeView(this);
-    m_treeModel = new QStandardItemModel(this);
-    m_treeModel->setHorizontalHeaderLabels({tr("Filter Query Structure")});
-    m_treeView->setModel(m_treeModel);
-    m_treeView->setHeaderHidden(true);
-    m_treeView->setDragEnabled(true);
-    m_treeView->setAcceptDrops(true);
-    m_treeView->setDropIndicatorShown(true);
-    m_treeView->setDragDropMode(QAbstractItemView::InternalMove);
-    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_treeView->setVisible(false);
-    layout->addWidget(m_treeView);
+  m_treeView = new QTreeView(this);
+  m_treeModel = new QStandardItemModel(this);
+  m_treeModel->setHorizontalHeaderLabels({tr("Filter Query Structure")});
+  m_treeView->setModel(m_treeModel);
+  m_treeView->setHeaderHidden(true);
+  m_treeView->setDragEnabled(true);
+  m_treeView->setAcceptDrops(true);
+  m_treeView->setDropIndicatorShown(true);
+  m_treeView->setDragDropMode(QAbstractItemView::InternalMove);
+  m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_treeView->setVisible(false);
+  layout->addWidget(m_treeView);
 
-    connect(m_lineEdit, &QLineEdit::textChanged, this, &FilterEditor::onTextChanged);
-    connect(m_treeView, &QTreeView::customContextMenuRequested, this, &FilterEditor::onTreeContextMenu);
-    connect(m_treeModel, &QStandardItemModel::itemChanged, this, &FilterEditor::onTreeItemChanged);
-    connect(m_treeModel, &QStandardItemModel::rowsInserted, this, [this]() {
-        if (!m_updating) updateTextFromTree();
-    });
-    connect(m_treeModel, &QStandardItemModel::rowsRemoved, this, [this]() {
-        if (!m_updating) updateTextFromTree();
-    });
-    connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
-        if (!m_updating) updateTextFromTree();
-    });
+  connect(m_lineEdit, &QLineEdit::textChanged, this,
+          &FilterEditor::onTextChanged);
+  connect(m_treeView, &QTreeView::customContextMenuRequested, this,
+          &FilterEditor::onTreeContextMenu);
+  connect(m_treeModel, &QStandardItemModel::itemChanged, this,
+          &FilterEditor::onTreeItemChanged);
+  connect(m_treeModel, &QStandardItemModel::rowsInserted, this, [this]() {
+    if (!m_updating)
+      updateTextFromTree();
+  });
+  connect(m_treeModel, &QStandardItemModel::rowsRemoved, this, [this]() {
+    if (!m_updating)
+      updateTextFromTree();
+  });
+  connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
+    if (!m_updating)
+      updateTextFromTree();
+  });
 }
 
-QString FilterEditor::filterText() const {
-    return m_lineEdit->text();
-}
+QString FilterEditor::filterText() const { return m_lineEdit->text(); }
 
 void FilterEditor::setFilterText(const QString &text) {
-    m_lineEdit->setText(text);
+  m_lineEdit->setText(text);
 }
 
 void FilterEditor::onTextChanged(const QString &text) {
-    if (m_updating) return;
+  if (m_updating)
+    return;
 
-    m_updating = true;
-    if (text.startsWith(QLatin1String("="))) {
-        m_treeView->setVisible(true);
-        updateTreeFromText();
-    } else {
-        m_treeView->setVisible(false);
-        m_treeModel->removeRows(0, m_treeModel->rowCount());
-    }
-    m_updating = false;
+  m_updating = true;
+  if (text.startsWith(QLatin1String("="))) {
+    m_treeView->setVisible(true);
+    updateTreeFromText();
+  } else {
+    m_treeView->setVisible(false);
+    m_treeModel->removeRows(0, m_treeModel->rowCount());
+  }
+  m_updating = false;
 
-    Q_EMIT filterChanged(text);
+  Q_EMIT filterChanged(text);
 }
 
 void FilterEditor::updateTreeFromText() {
-    m_treeModel->removeRows(0, m_treeModel->rowCount());
-    QSharedPointer<ASTNode> ast = FilterParser::parse(m_lineEdit->text());
-    if (ast) {
-        populateTree(m_treeModel->invisibleRootItem(), ast);
-        m_treeView->expandAll();
-    }
+  m_treeModel->removeRows(0, m_treeModel->rowCount());
+  QSharedPointer<ASTNode> ast = FilterParser::parse(m_lineEdit->text());
+  if (ast) {
+    populateTree(m_treeModel->invisibleRootItem(), ast);
+    m_treeView->expandAll();
+  }
 }
 
-void FilterEditor::populateTree(QStandardItem *parentItem, QSharedPointer<ASTNode> node) {
-    if (!node) return;
+void FilterEditor::populateTree(QStandardItem *parentItem,
+                                QSharedPointer<ASTNode> node) {
+  if (!node)
+    return;
 
-    QStandardItem *item = new QStandardItem();
-    item->setEditable(false);
-    item->setDropEnabled(true);
-    item->setDragEnabled(true);
+  QStandardItem *item = new QStandardItem();
+  item->setEditable(false);
+  item->setDropEnabled(true);
+  item->setDragEnabled(true);
 
-    if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
-        item->setText(QStringLiteral("AND"));
-        item->setData(TypeAnd, NodeTypeRole);
-        for (const auto &child : andNode->children()) {
-            populateTree(item, child);
-        }
-    } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
-        item->setText(QStringLiteral("OR"));
-        item->setData(TypeOr, NodeTypeRole);
-        for (const auto &child : orNode->children()) {
-            populateTree(item, child);
-        }
-    } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
-        item->setText(QStringLiteral("NOT"));
-        item->setData(TypeNot, NodeTypeRole);
-        populateTree(item, notNode->child());
-    } else if (auto inNode = qSharedPointerDynamicCast<InNode>(node)) {
-        item->setText(inNode->key() + QStringLiteral(" IN \"") + inNode->valuesStr() + QStringLiteral("\""));
-        item->setData(TypeIn, NodeTypeRole);
-        item->setData(inNode->key(), NodeKeyRole);
-        item->setData(inNode->valuesStr(), NodeValueRole);
-        item->setEditable(true);
-    } else if (auto kvNode = qSharedPointerDynamicCast<KeyValueNode>(node)) {
-        item->setText(kvNode->key() + QStringLiteral(":") + kvNode->value());
-        item->setData(TypeKV, NodeTypeRole);
-        item->setData(kvNode->key(), NodeKeyRole);
-        item->setData(kvNode->value(), NodeValueRole);
-        item->setEditable(true);
-    } else if (auto kwNode = qSharedPointerDynamicCast<KeywordNode>(node)) {
-        item->setText(kwNode->keyword());
-        item->setData(TypeKeyword, NodeTypeRole);
-        item->setData(kwNode->keyword(), NodeValueRole);
-        item->setEditable(true);
+  if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
+    item->setText(QStringLiteral("AND"));
+    item->setData(TypeAnd, NodeTypeRole);
+    for (const auto &child : andNode->children()) {
+      populateTree(item, child);
     }
+  } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
+    item->setText(QStringLiteral("OR"));
+    item->setData(TypeOr, NodeTypeRole);
+    for (const auto &child : orNode->children()) {
+      populateTree(item, child);
+    }
+  } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+    item->setText(QStringLiteral("NOT"));
+    item->setData(TypeNot, NodeTypeRole);
+    populateTree(item, notNode->child());
+  } else if (auto inNode = qSharedPointerDynamicCast<InNode>(node)) {
+    item->setText(inNode->key() + QStringLiteral(" IN \"") +
+                  inNode->valuesStr() + QStringLiteral("\""));
+    item->setData(TypeIn, NodeTypeRole);
+    item->setData(inNode->key(), NodeKeyRole);
+    item->setData(inNode->valuesStr(), NodeValueRole);
+    item->setEditable(true);
+  } else if (auto kvNode = qSharedPointerDynamicCast<KeyValueNode>(node)) {
+    item->setText(kvNode->key() + QStringLiteral(":") + kvNode->value());
+    item->setData(TypeKV, NodeTypeRole);
+    item->setData(kvNode->key(), NodeKeyRole);
+    item->setData(kvNode->value(), NodeValueRole);
+    item->setEditable(true);
+  } else if (auto kwNode = qSharedPointerDynamicCast<KeywordNode>(node)) {
+    item->setText(kwNode->keyword());
+    item->setData(TypeKeyword, NodeTypeRole);
+    item->setData(kwNode->keyword(), NodeValueRole);
+    item->setEditable(true);
+  }
 
-    parentItem->appendRow(item);
+  parentItem->appendRow(item);
 }
 
 void FilterEditor::onTreeContextMenu(const QPoint &pos) {
-    QModelIndex index = m_treeView->indexAt(pos);
-    if (!index.isValid()) return;
+  QModelIndex index = m_treeView->indexAt(pos);
+  if (!index.isValid())
+    return;
 
-    QStandardItem *item = m_treeModel->itemFromIndex(index);
-    if (!item) return;
+  QStandardItem *item = m_treeModel->itemFromIndex(index);
+  if (!item)
+    return;
 
-    QMenu menu(this);
-    NodeType type = static_cast<NodeType>(item->data(NodeTypeRole).toInt());
+  QMenu menu(this);
+  NodeType type = static_cast<NodeType>(item->data(NodeTypeRole).toInt());
 
-    if (type == TypeAnd) {
-        menu.addAction(tr("Switch to OR"), this, [this, item]() {
-            item->setData(TypeOr, NodeTypeRole);
-            item->setText(QStringLiteral("OR"));
-            updateTextFromTree();
-        });
-    } else if (type == TypeOr) {
-        menu.addAction(tr("Switch to AND"), this, [this, item]() {
-            item->setData(TypeAnd, NodeTypeRole);
-            item->setText(QStringLiteral("AND"));
-            updateTextFromTree();
-        });
-    }
-
-    if (type == TypeKV || type == TypeKeyword || type == TypeIn) {
-        menu.addAction(tr("Exclude (NOT this)"), this, [this, item]() {
-            QStandardItem *parent = item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
-            int row = item->row();
-            QStandardItem *taken = parent->takeRow(row).first();
-            QStandardItem *notItem = new QStandardItem(QStringLiteral("NOT"));
-            notItem->setData(TypeNot, NodeTypeRole);
-            notItem->appendRow(taken);
-            parent->insertRow(row, notItem);
-            updateTextFromTree();
-        });
-    } else if (type == TypeNot) {
-        menu.addAction(tr("Include (Remove NOT)"), this, [this, item]() {
-            QStandardItem *parent = item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
-            int row = item->row();
-            if (item->rowCount() > 0) {
-                QStandardItem *child = item->takeRow(0).first();
-                parent->removeRow(row);
-                parent->insertRow(row, child);
-            } else {
-                parent->removeRow(row);
-            }
-            updateTextFromTree();
-        });
-    }
-
-    menu.addAction(tr("Delete"), this, [this, item]() {
-        QStandardItem *parent = item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
-        parent->removeRow(item->row());
-        updateTextFromTree();
+  if (type == TypeAnd) {
+    menu.addAction(tr("Switch to OR"), this, [this, item]() {
+      item->setData(TypeOr, NodeTypeRole);
+      item->setText(QStringLiteral("OR"));
+      updateTextFromTree();
     });
+  } else if (type == TypeOr) {
+    menu.addAction(tr("Switch to AND"), this, [this, item]() {
+      item->setData(TypeAnd, NodeTypeRole);
+      item->setText(QStringLiteral("AND"));
+      updateTextFromTree();
+    });
+  }
 
-    menu.exec(m_treeView->mapToGlobal(pos));
+  if (type == TypeKV || type == TypeKeyword || type == TypeIn) {
+    menu.addAction(tr("Exclude (NOT this)"), this, [this, item]() {
+      QStandardItem *parent =
+          item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
+      int row = item->row();
+      QStandardItem *taken = parent->takeRow(row).first();
+      QStandardItem *notItem = new QStandardItem(QStringLiteral("NOT"));
+      notItem->setData(TypeNot, NodeTypeRole);
+      notItem->appendRow(taken);
+      parent->insertRow(row, notItem);
+      updateTextFromTree();
+    });
+  } else if (type == TypeNot) {
+    menu.addAction(tr("Include (Remove NOT)"), this, [this, item]() {
+      QStandardItem *parent =
+          item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
+      int row = item->row();
+      if (item->rowCount() > 0) {
+        QStandardItem *child = item->takeRow(0).first();
+        parent->removeRow(row);
+        parent->insertRow(row, child);
+      } else {
+        parent->removeRow(row);
+      }
+      updateTextFromTree();
+    });
+  }
+
+  menu.addAction(tr("Delete"), this, [this, item]() {
+    QStandardItem *parent =
+        item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
+    parent->removeRow(item->row());
+    updateTextFromTree();
+  });
+
+  menu.exec(m_treeView->mapToGlobal(pos));
 }
 
 void FilterEditor::onTreeItemChanged(QStandardItem *item) {
-    if (m_updating) return;
+  if (m_updating)
+    return;
 
-    // User edited the text of a KV, In, or Keyword node.
-    NodeType type = static_cast<NodeType>(item->data(NodeTypeRole).toInt());
-    QString text = item->text();
-    if (type == TypeKV) {
-        int idx = text.indexOf(QLatin1Char(':'));
-        if (idx > 0) {
-            item->setData(text.left(idx), NodeKeyRole);
-            item->setData(text.mid(idx+1), NodeValueRole);
-        }
-    } else if (type == TypeKeyword) {
-        item->setData(text, NodeValueRole);
-    } else if (type == TypeIn) {
-        int idx = text.indexOf(QStringLiteral(" IN "));
-        if (idx > 0) {
-            item->setData(text.left(idx), NodeKeyRole);
-            QString v = text.mid(idx + 4).trimmed();
-            if (v.startsWith(QLatin1Char('"')) && v.endsWith(QLatin1Char('"'))) v = v.mid(1, v.length()-2);
-            item->setData(v, NodeValueRole);
-        }
+  // User edited the text of a KV, In, or Keyword node.
+  NodeType type = static_cast<NodeType>(item->data(NodeTypeRole).toInt());
+  QString text = item->text();
+  if (type == TypeKV) {
+    int idx = text.indexOf(QLatin1Char(':'));
+    if (idx > 0) {
+      item->setData(text.left(idx), NodeKeyRole);
+      item->setData(text.mid(idx + 1), NodeValueRole);
     }
-    updateTextFromTree();
+  } else if (type == TypeKeyword) {
+    item->setData(text, NodeValueRole);
+  } else if (type == TypeIn) {
+    int idx = text.indexOf(QStringLiteral(" IN "));
+    if (idx > 0) {
+      item->setData(text.left(idx), NodeKeyRole);
+      QString v = text.mid(idx + 4).trimmed();
+      if (v.startsWith(QLatin1Char('"')) && v.endsWith(QLatin1Char('"')))
+        v = v.mid(1, v.length() - 2);
+      item->setData(v, NodeValueRole);
+    }
+  }
+  updateTextFromTree();
 }
 
 void FilterEditor::updateTextFromTree() {
-    if (m_updating) return;
+  if (m_updating)
+    return;
 
-    m_updating = true;
-    QStandardItem *rootItem = m_treeModel->invisibleRootItem();
-    QStringList parts;
-    for (int i = 0; i < rootItem->rowCount(); ++i) {
-        QSharedPointer<ASTNode> node = buildASTFromTree(rootItem->child(i));
-        if (node) parts.append(node->toString());
-    }
-    QString text = QStringLiteral("=") + parts.join(QLatin1Char(' '));
-    m_lineEdit->setText(text);
-    m_updating = false;
+  m_updating = true;
+  QStandardItem *rootItem = m_treeModel->invisibleRootItem();
+  QStringList parts;
+  for (int i = 0; i < rootItem->rowCount(); ++i) {
+    QSharedPointer<ASTNode> node = buildASTFromTree(rootItem->child(i));
+    if (node)
+      parts.append(node->toString());
+  }
+  QString text = QStringLiteral("=") + parts.join(QLatin1Char(' '));
+  m_lineEdit->setText(text);
+  m_updating = false;
 
-    Q_EMIT filterChanged(text);
+  Q_EMIT filterChanged(text);
 }
 
 QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
-    if (!item) return QSharedPointer<ASTNode>();
-
-    NodeType type = static_cast<NodeType>(item->data(NodeTypeRole).toInt());
-    if (type == TypeAnd) {
-        QList<QSharedPointer<ASTNode>> children;
-        for (int i = 0; i < item->rowCount(); ++i) {
-            children.append(buildASTFromTree(item->child(i)));
-        }
-        return QSharedPointer<ASTNode>(new AndNode(children));
-    } else if (type == TypeOr) {
-        QList<QSharedPointer<ASTNode>> children;
-        for (int i = 0; i < item->rowCount(); ++i) {
-            children.append(buildASTFromTree(item->child(i)));
-        }
-        return QSharedPointer<ASTNode>(new OrNode(children));
-    } else if (type == TypeNot) {
-        if (item->rowCount() > 0) {
-            return QSharedPointer<ASTNode>(new NotNode(buildASTFromTree(item->child(0))));
-        }
-    } else if (type == TypeIn) {
-        return QSharedPointer<ASTNode>(new InNode(item->data(NodeKeyRole).toString(), item->data(NodeValueRole).toString()));
-    } else if (type == TypeKV) {
-        return QSharedPointer<ASTNode>(new KeyValueNode(item->data(NodeKeyRole).toString(), item->data(NodeValueRole).toString()));
-    } else if (type == TypeKeyword) {
-        return QSharedPointer<ASTNode>(new KeywordNode(item->data(NodeValueRole).toString()));
-    }
+  if (!item)
     return QSharedPointer<ASTNode>();
+
+  NodeType type = static_cast<NodeType>(item->data(NodeTypeRole).toInt());
+  if (type == TypeAnd) {
+    QList<QSharedPointer<ASTNode>> children;
+    for (int i = 0; i < item->rowCount(); ++i) {
+      children.append(buildASTFromTree(item->child(i)));
+    }
+    return QSharedPointer<ASTNode>(new AndNode(children));
+  } else if (type == TypeOr) {
+    QList<QSharedPointer<ASTNode>> children;
+    for (int i = 0; i < item->rowCount(); ++i) {
+      children.append(buildASTFromTree(item->child(i)));
+    }
+    return QSharedPointer<ASTNode>(new OrNode(children));
+  } else if (type == TypeNot) {
+    if (item->rowCount() > 0) {
+      return QSharedPointer<ASTNode>(
+          new NotNode(buildASTFromTree(item->child(0))));
+    }
+  } else if (type == TypeIn) {
+    return QSharedPointer<ASTNode>(
+        new InNode(item->data(NodeKeyRole).toString(),
+                   item->data(NodeValueRole).toString()));
+  } else if (type == TypeKV) {
+    return QSharedPointer<ASTNode>(
+        new KeyValueNode(item->data(NodeKeyRole).toString(),
+                         item->data(NodeValueRole).toString()));
+  } else if (type == TypeKeyword) {
+    return QSharedPointer<ASTNode>(
+        new KeywordNode(item->data(NodeValueRole).toString()));
+  }
+  return QSharedPointer<ASTNode>();
 }

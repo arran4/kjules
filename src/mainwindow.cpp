@@ -1,10 +1,12 @@
 #include "mainwindow.h"
+#include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
+#include "filtereditor.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -16,8 +18,6 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include "templateeditdialog.h"
-#include "filtereditor.h"
-#include "advancedfilterproxymodel.h"
 #include "templatesmodel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -276,7 +276,8 @@ void MainWindow::setupUi() {
 
   // Sessions View
   m_sessionView = new QTreeView(this);
-  AdvancedFilterProxyModel *sessionProxyModel = new AdvancedFilterProxyModel(this);
+  AdvancedFilterProxyModel *sessionProxyModel =
+      new AdvancedFilterProxyModel(this);
   sessionProxyModel->setSourceModel(m_sessionModel);
   sessionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
@@ -446,7 +447,8 @@ void MainWindow::setupUi() {
   tabWidget->addTab(m_sessionView, i18n("Past"));
   // Archive View
   m_archiveView = new QTreeView(this);
-  AdvancedFilterProxyModel *archiveProxyModel = new AdvancedFilterProxyModel(this);
+  AdvancedFilterProxyModel *archiveProxyModel =
+      new AdvancedFilterProxyModel(this);
   archiveProxyModel->setSourceModel(m_archiveModel);
   archiveProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
@@ -527,25 +529,27 @@ void MainWindow::setupUi() {
           menu.exec(m_archiveView->mapToGlobal(pos));
         }
       });
-  connect(
-      m_archiveView, &QTreeView::doubleClicked, this,
-      [this](const QModelIndex &index) {
-        const AdvancedFilterProxyModel *proxy =
-            qobject_cast<const AdvancedFilterProxyModel *>(m_archiveView->model());
-        QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
-        QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
-        if (!sessionData.isEmpty()) {
-          SessionWindow *window =
-              new SessionWindow(sessionData, m_apiManager, this);
-          connectSessionWindow(window);
-          window->show();
-        } else {
-          QString id = m_archiveModel->data(sourceIndex, SessionModel::IdRole)
-                           .toString();
-          m_apiManager->getSession(id);
-          updateStatus(i18n("Fetching details for session %1...", id));
-        }
-      });
+  connect(m_archiveView, &QTreeView::doubleClicked, this,
+          [this](const QModelIndex &index) {
+            const AdvancedFilterProxyModel *proxy =
+                qobject_cast<const AdvancedFilterProxyModel *>(
+                    m_archiveView->model());
+            QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+            QJsonObject sessionData =
+                m_archiveModel->getSession(sourceIndex.row());
+            if (!sessionData.isEmpty()) {
+              SessionWindow *window =
+                  new SessionWindow(sessionData, m_apiManager, this);
+              connectSessionWindow(window);
+              window->show();
+            } else {
+              QString id =
+                  m_archiveModel->data(sourceIndex, SessionModel::IdRole)
+                      .toString();
+              m_apiManager->getSession(id);
+              updateStatus(i18n("Fetching details for session %1...", id));
+            }
+          });
 
   tabWidget->addTab(m_archiveView, i18n("Archive"));
 
@@ -762,14 +766,18 @@ void MainWindow::setupUi() {
 
   tabWidget->addTab(m_errorsView, i18n("Errors"));
 
-  connect(m_filterEditor, &FilterEditor::filterChanged, this, [this](const QString &text) {
-      if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_sourceView->model()))
-          pm->setFilterQuery(text);
-      if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_sessionView->model()))
-          pm->setFilterQuery(text);
-      if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_archiveView->model()))
-          pm->setFilterQuery(text);
-  });
+  connect(m_filterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_sourceView->model()))
+              pm->setFilterQuery(text);
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_sessionView->model()))
+              pm->setFilterQuery(text);
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_archiveView->model()))
+              pm->setFilterQuery(text);
+          });
 
   mainLayout->addWidget(tabWidget);
 
