@@ -403,6 +403,62 @@ void SessionsWindow::setupUi() {
             m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
           });
 
+          menu.addSeparator();
+
+          bool allManaged = true;
+          bool allUnmanaged = true;
+          for (const QModelIndex &idx : selectedRows) {
+            QString id =
+                m_proxyModel->data(idx, SessionModel::IdRole).toString();
+            if (m_managedModel && m_managedModel->contains(id)) {
+              allUnmanaged = false;
+            } else {
+              allManaged = false;
+            }
+          }
+
+          QAction *watchAction =
+              menu.addAction(QIcon::fromTheme(QStringLiteral("visibility")),
+                             i18n("Follow Session"));
+          if (!allUnmanaged) {
+            watchAction->setEnabled(false);
+          }
+          connect(watchAction, &QAction::triggered, [this, selectedRows]() {
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+              QJsonObject sessionData = m_model->getSession(sourceIndex.row());
+              Q_EMIT watchRequested(sessionData);
+            }
+          });
+
+          QAction *archiveAction =
+              menu.addAction(QIcon::fromTheme(QStringLiteral("archive")),
+                             i18n("Archive Session"));
+          if (!allManaged) {
+            archiveAction->setEnabled(false);
+          }
+          connect(archiveAction, &QAction::triggered, [this, selectedRows]() {
+            for (const QModelIndex &idx : selectedRows) {
+              QString id =
+                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
+              Q_EMIT archiveRequested(id);
+            }
+          });
+
+          QAction *deleteAction =
+              menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                             i18n("Unmanage Session"));
+          if (!allManaged) {
+            deleteAction->setEnabled(false);
+          }
+          connect(deleteAction, &QAction::triggered, [this, selectedRows]() {
+            for (const QModelIndex &idx : selectedRows) {
+              QString id =
+                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
+              Q_EMIT deleteRequested(id);
+            }
+          });
+
           menu.exec(m_listView->mapToGlobal(pos));
         }
       });
@@ -454,9 +510,74 @@ void SessionsWindow::setupUi() {
   QAction *quitAction =
       new QAction(QIcon::fromTheme(QStringLiteral("application-exit")),
                   i18n("Close"), this);
+  quitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(quitAction, &QAction::triggered, this, &SessionsWindow::close);
   fileMenu->addAction(quitAction);
   menuBar()->addMenu(fileMenu);
+
+  QMenu *actionsMenu = new QMenu(i18n("Actions"), this);
+  QAction *watchMenuAction = actionsMenu->addAction(
+      QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"));
+  QAction *archiveMenuAction = actionsMenu->addAction(
+      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"));
+  QAction *deleteMenuAction =
+      actionsMenu->addAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                             i18n("Unmanage Session"));
+
+  connect(actionsMenu, &QMenu::aboutToShow,
+          [this, watchMenuAction, archiveMenuAction, deleteMenuAction]() {
+            QModelIndexList selectedRows =
+                m_listView->selectionModel()->selectedRows();
+            if (selectedRows.isEmpty()) {
+              watchMenuAction->setEnabled(false);
+              archiveMenuAction->setEnabled(false);
+              deleteMenuAction->setEnabled(false);
+              return;
+            }
+
+            bool allManaged = true;
+            bool allUnmanaged = true;
+            for (const QModelIndex &idx : selectedRows) {
+              QString id =
+                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
+              if (m_managedModel && m_managedModel->contains(id)) {
+                allUnmanaged = false;
+              } else {
+                allManaged = false;
+              }
+            }
+
+            watchMenuAction->setEnabled(allUnmanaged);
+            archiveMenuAction->setEnabled(allManaged);
+            deleteMenuAction->setEnabled(allManaged);
+          });
+
+  connect(watchMenuAction, &QAction::triggered, [this]() {
+    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+      QJsonObject sessionData = m_model->getSession(sourceIndex.row());
+      Q_EMIT watchRequested(sessionData);
+    }
+  });
+
+  connect(archiveMenuAction, &QAction::triggered, [this]() {
+    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+    for (const QModelIndex &idx : selectedRows) {
+      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+      Q_EMIT archiveRequested(id);
+    }
+  });
+
+  connect(deleteMenuAction, &QAction::triggered, [this]() {
+    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+    for (const QModelIndex &idx : selectedRows) {
+      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+      Q_EMIT deleteRequested(id);
+    }
+  });
+
+  menuBar()->addMenu(actionsMenu);
 
   QMenu *prefsMenu = new QMenu(i18n("Preferences"), this);
   QMenu *autoLoadMenu = prefsMenu->addMenu(i18n("Auto Load Behavior"));

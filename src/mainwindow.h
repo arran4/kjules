@@ -63,6 +63,9 @@ private Q_SLOTS:
   void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
+  void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
+  void onGithubPullRequestInfoReceived(const QString &prUrl,
+                                       const QJsonObject &info);
   void cancelSourcesRefresh();
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
@@ -77,8 +80,13 @@ private Q_SLOTS:
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
   void restoreData();
+  void exportTemplates();
+  void importTemplates();
+  void copyTemplateToClipboard(const QModelIndex &index);
+  void pasteTemplateFromClipboard();
   void toggleQueueState();
   void loadQueueSettings();
+  void updateTabTitles();
 
 private:
   void setupUi();
@@ -107,6 +115,7 @@ private:
   QLineEdit *m_draftsFilter;
   QLineEdit *m_templatesFilter;
   QLineEdit *m_errorsFilter;
+  QTabWidget *m_tabWidget;
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
@@ -124,6 +133,8 @@ private:
   QAction *m_copyUrlAction;
   QAction *m_backupDataAction;
   QAction *m_restoreDataAction;
+  QAction *m_importTemplatesAction;
+  QAction *m_exportTemplatesAction;
   QAction *m_toggleQueueAction;
 
   bool m_isRefreshingSources;

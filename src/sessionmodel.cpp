@@ -67,6 +67,19 @@ SessionData parseSessionData(const QJsonObject &obj) {
     }
   }
 
+  if (obj.contains(QStringLiteral("githubPrInfo"))) {
+    QJsonObject prInfo = obj.value(QStringLiteral("githubPrInfo")).toObject();
+    data.prStatus = prInfo.value(QStringLiteral("state")).toString();
+    if (prInfo.value(QStringLiteral("merged_at")).isString()) {
+      data.prStatus = QStringLiteral("merged");
+    }
+    QJsonArray labelsArr = prInfo.value(QStringLiteral("labels")).toArray();
+    for (int i = 0; i < labelsArr.size(); ++i) {
+      data.prLabels.append(
+          labelsArr[i].toObject().value(QStringLiteral("name")).toString());
+    }
+  }
+
   data.rawObject = obj;
   return data;
 }
@@ -101,6 +114,10 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return session.hasChangeSet ? i18n("has changes set") : QString();
     case ColPR:
       return session.prNumber;
+    case ColPRStatus:
+      return session.prStatus;
+    case ColPRLabels:
+      return session.prLabels.join(QStringLiteral(", "));
     case ColUpdatedAt:
       return session.updateTime.toString(
           QLocale::system().dateFormat(QLocale::ShortFormat));
@@ -147,6 +164,10 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.prUrl;
   case ProviderRole:
     return session.provider;
+  case PrStatusRole:
+    return session.prStatus;
+  case PrLabelsRole:
+    return session.prLabels;
   default:
     return QVariant();
   }
@@ -164,6 +185,10 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
       return i18n("Change Set");
     case ColPR:
       return i18n("PR");
+    case ColPRStatus:
+      return i18n("PR Status");
+    case ColPRLabels:
+      return i18n("Labels");
     case ColUpdatedAt:
       return i18n("Updated At");
     case ColCreatedAt:

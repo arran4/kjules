@@ -9,6 +9,9 @@
         <Menu name="file">
             <Action name="new_session" />
             <Separator />
+            <Action name="import_templates" />
+            <Action name="export_templates" />
+            <Separator />
             <Action name="backup_data" />
             <Action name="restore_data" />
             <Separator />
@@ -19,7 +22,6 @@
             <Action name="toggle_queue" />
             <Separator />
             <Action name="refresh_sources" />
-            <Action name="refresh_source" />
             <Action name="show_full_session_list" />
             <Separator />
             <Action name="view_sessions" />
@@ -47,9 +49,7 @@
         <Separator />
         <Action name="refresh_sources" />
         <Action name="view_sessions" />
-        <Action name="options_configure" />
         <Action name="toggle_window" />
-        <Action name="file_quit" />
     </ToolBar>
     <ActionProperties>
         <Action name="toggle_window" icon="window-minimize" text="Minimize to Tray" />

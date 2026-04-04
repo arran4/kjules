@@ -31,7 +31,11 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, bool isManaged,
                              QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData),
-      m_apiManager(apiManager), m_isManaged(isManaged) {
+      m_apiManager(apiManager), m_isManaged(isManaged), m_tabWidget(nullptr),
+      m_statusLabel(nullptr), m_autoRefreshTimer(nullptr),
+      m_autoRefreshCombo(nullptr), m_detailsBrowser(nullptr),
+      m_promptBrowser(nullptr), m_diffBrowser(nullptr),
+      m_activityBrowser(nullptr), m_rawActivitiesBrowser(nullptr) {
   setObjectName(QStringLiteral("SessionWindow_%1")
                     .arg(sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
@@ -47,9 +51,9 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onActivitiesReceived);
   }
 
-  setupActions();
   setupUi(m_sessionData);
   setupGUI();
+  setupActions();
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("SessionWindow"));
@@ -89,6 +93,10 @@ void SessionWindow::setupActions() {
   actionCollection()->setDefaultShortcut(closeAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
+
+  QMenu *fileMenu = new QMenu(i18n("File"), this);
+  fileMenu->addAction(closeAction);
+  menuBar()->addMenu(fileMenu);
 
   setStandardToolBarMenuEnabled(true);
 
@@ -137,7 +145,7 @@ void SessionWindow::setupActions() {
 
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
-                  i18n("Watch Session"), this);
+                  i18n("Follow Session"), this);
   connect(watchAction, &QAction::triggered, this,
           [this, watchAction, sessionMenu]() {
             Q_EMIT watchRequested(m_sessionData);
@@ -148,8 +156,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(watchAction);
   }
 
-  QAction *archiveAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive"), this);
+  QAction *archiveAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("archive")),
+                  i18n("Archive Session"), this);
   connect(archiveAction, &QAction::triggered, this, [this]() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
@@ -158,8 +167,9 @@ void SessionWindow::setupActions() {
     sessionMenu->addAction(archiveAction);
   }
 
-  QAction *deleteAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+  QAction *deleteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                  i18n("Unmanage Session"), this);
   connect(deleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
@@ -211,10 +221,43 @@ void SessionWindow::setupActions() {
     connect(copyPrAction, &QAction::triggered, this,
             [prUrlStr]() { QGuiApplication::clipboard()->setText(prUrlStr); });
     linksMenu->addAction(copyPrAction);
+
+    if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
+      QJsonObject prInfo =
+          m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+      if (prInfo.contains(QStringLiteral("head"))) {
+        QString branchName = prInfo.value(QStringLiteral("head"))
+                                 .toObject()
+                                 .value(QStringLiteral("ref"))
+                                 .toString();
+        QString branchUrl = prInfo.value(QStringLiteral("head"))
+                                .toObject()
+                                .value(QStringLiteral("repo"))
+                                .toObject()
+                                .value(QStringLiteral("html_url"))
+                                .toString() +
+                            QStringLiteral("/tree/") + branchName;
+
+        QAction *openBranchAction = new QAction(i18n("Open Branch URL"), this);
+        connect(openBranchAction, &QAction::triggered, this,
+                [branchUrl]() { QDesktopServices::openUrl(QUrl(branchUrl)); });
+        linksMenu->addAction(openBranchAction);
+
+        QAction *copyBranchAction = new QAction(i18n("Copy Branch URL"), this);
+        connect(copyBranchAction, &QAction::triggered, this, [branchUrl]() {
+          QGuiApplication::clipboard()->setText(branchUrl);
+        });
+        linksMenu->addAction(copyBranchAction);
+      }
+    }
   }
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
+
+  if (m_apiManager) {
+    m_statusLabel->setText(i18n("Loading activities..."));
+  }
 }
 
 void SessionWindow::updateAutoRefresh() {
@@ -414,6 +457,86 @@ void SessionWindow::renderDetailsAndDiff() {
 
   m_detailsBrowser->setHtml(detailsHtml);
 
+  if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
+    QJsonObject prInfo =
+        m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+    QString prHtml =
+        QStringLiteral("<html><head><style>") +
+        QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                       "line-height: 1.6; }") +
+        QStringLiteral(
+            "th { text-align: left; padding-right: 15px; color: #555; }") +
+        QStringLiteral("a { color: #3498db; text-decoration: none; }") +
+        QStringLiteral("a:hover { text-decoration: underline; }") +
+        QStringLiteral("</style></head><body><h2>") +
+        i18n("Pull Request Summary") + QStringLiteral("</h2><table>");
+
+    prHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
+              QStringLiteral("</th><td>") +
+              prInfo.value(QStringLiteral("title")).toString().toHtmlEscaped() +
+              QStringLiteral("</td></tr>");
+    QString state = prInfo.value(QStringLiteral("state")).toString();
+    if (prInfo.value(QStringLiteral("merged_at")).isString()) {
+      state = QStringLiteral("merged");
+    }
+    prHtml += QStringLiteral("<tr><th>") + i18n("State:") +
+              QStringLiteral("</th><td>") + state.toHtmlEscaped() +
+              QStringLiteral("</td></tr>");
+
+    QJsonArray labels = prInfo.value(QStringLiteral("labels")).toArray();
+    if (!labels.isEmpty()) {
+      QStringList labelNames;
+      for (int i = 0; i < labels.size(); ++i) {
+        labelNames.append(
+            labels[i].toObject().value(QStringLiteral("name")).toString());
+      }
+      prHtml += QStringLiteral("<tr><th>") + i18n("Labels:") +
+                QStringLiteral("</th><td>") +
+                labelNames.join(QStringLiteral(", ")).toHtmlEscaped() +
+                QStringLiteral("</td></tr>");
+    }
+
+    if (prInfo.contains(QStringLiteral("user"))) {
+      prHtml += QStringLiteral("<tr><th>") + i18n("Author:") +
+                QStringLiteral("</th><td>") +
+                prInfo.value(QStringLiteral("user"))
+                    .toObject()
+                    .value(QStringLiteral("login"))
+                    .toString()
+                    .toHtmlEscaped() +
+                QStringLiteral("</td></tr>");
+    }
+
+    if (prInfo.contains(QStringLiteral("head"))) {
+      QString branchName = prInfo.value(QStringLiteral("head"))
+                               .toObject()
+                               .value(QStringLiteral("ref"))
+                               .toString();
+      prHtml += QStringLiteral("<tr><th>") + i18n("Branch:") +
+                QStringLiteral("</th><td>") + branchName.toHtmlEscaped() +
+                QStringLiteral("</td></tr>");
+    }
+
+    prHtml += QStringLiteral("</table><hr/><h3>") + i18n("Body") +
+              QStringLiteral("</h3>");
+
+    QString body = prInfo.value(QStringLiteral("body")).toString();
+    if (body.isEmpty()) {
+      prHtml += QStringLiteral("<p><i>") + i18n("No body provided.") +
+                QStringLiteral("</i></p>");
+    } else {
+      // Very basic formatting for body
+      prHtml += QStringLiteral("<pre style=\"white-space: pre-wrap; "
+                               "font-family: sans-serif;\">") +
+                body.toHtmlEscaped() + QStringLiteral("</pre>");
+    }
+
+    prHtml += QStringLiteral("</body></html>");
+    if (m_prBrowser) {
+      m_prBrowser->setHtml(prHtml);
+    }
+  }
+
   if (m_promptBrowser) {
     m_promptBrowser->setMarkdown(promptText);
   }
@@ -458,6 +581,9 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
   m_promptBrowser = new QTextBrowser(this);
 
+  m_prBrowser = new QTextBrowser(this);
+  m_prBrowser->setOpenExternalLinks(true);
+
   m_diffBrowser = new QTextBrowser(this);
   m_diffBrowser->setStyleSheet(QStringLiteral("font-family: monospace;"));
 
@@ -492,6 +618,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
           &QPushButton::click);
 
   m_tabWidget->addTab(m_detailsBrowser, i18n("Details"));
+  m_tabWidget->addTab(m_prBrowser, i18n("PR Details"));
   m_tabWidget->addTab(m_promptBrowser, i18n("Prompt"));
   m_tabWidget->addTab(m_diffBrowser, i18n("Diff"));
   m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));

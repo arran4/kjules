@@ -5,6 +5,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
+#include <QTemporaryFile>
+#include <QUrl>
+#include <QUuid>
 
 TemplatesModel::TemplatesModel(QObject *parent) : QAbstractListModel(parent) {
   loadTemplates();
@@ -130,4 +133,112 @@ void TemplatesModel::clear() {
   m_templates = QJsonArray();
   endResetModel();
   saveTemplates();
+}
+
+Qt::ItemFlags TemplatesModel::flags(const QModelIndex &index) const {
+  Qt::ItemFlags defaultFlags = QAbstractListModel::flags(index);
+  if (index.isValid()) {
+    return Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled | defaultFlags;
+  } else {
+    return Qt::ItemIsDropEnabled | defaultFlags;
+  }
+}
+
+Qt::DropActions TemplatesModel::supportedDropActions() const {
+  return Qt::CopyAction | Qt::MoveAction;
+}
+
+QStringList TemplatesModel::mimeTypes() const {
+  QStringList types;
+  types << QStringLiteral("application/json") << QStringLiteral("text/plain")
+        << QStringLiteral("text/uri-list");
+  return types;
+}
+
+QMimeData *TemplatesModel::mimeData(const QModelIndexList &indexes) const {
+  QMimeData *mimeData = new QMimeData();
+  QJsonArray exportArray;
+  for (const QModelIndex &index : indexes) {
+    if (index.isValid()) {
+      exportArray.append(m_templates[index.row()].toObject());
+    }
+  }
+  QJsonDocument doc(exportArray);
+  QByteArray jsonData = doc.toJson(QJsonDocument::Indented);
+  mimeData->setData(QStringLiteral("application/json"), jsonData);
+  mimeData->setText(QString::fromUtf8(jsonData));
+
+  QString tempFilePath =
+      QDir::tempPath() + QStringLiteral("/kjules_templates_export_") +
+      QUuid::createUuid().toString(QUuid::WithoutBraces).left(8) +
+      QStringLiteral(".json");
+  QFile tempFile(tempFilePath);
+  if (tempFile.open(QIODevice::WriteOnly)) {
+    tempFile.write(jsonData);
+    tempFile.close();
+    mimeData->setUrls(QList<QUrl>() << QUrl::fromLocalFile(tempFilePath));
+  }
+
+  return mimeData;
+}
+
+bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
+                                  int row, int /*column*/,
+                                  const QModelIndex &parent) {
+  if (action == Qt::IgnoreAction)
+    return true;
+
+  if (!data->hasFormat(QStringLiteral("application/json")) &&
+      !data->hasText() && !data->hasUrls())
+    return false;
+
+  QByteArray jsonData;
+  if (data->hasUrls()) {
+    QList<QUrl> urls = data->urls();
+    if (urls.isEmpty() || !urls.first().isLocalFile())
+      return false;
+    QFile file(urls.first().toLocalFile());
+    if (!file.open(QIODevice::ReadOnly))
+      return false;
+    jsonData = file.readAll();
+    file.close();
+  } else if (data->hasFormat(QStringLiteral("application/json"))) {
+    jsonData = data->data(QStringLiteral("application/json"));
+  } else {
+    jsonData = data->text().toUtf8();
+  }
+
+  QJsonDocument doc = QJsonDocument::fromJson(jsonData);
+  if (!doc.isArray() && !doc.isObject())
+    return false;
+
+  int beginRow =
+      (row != -1) ? row
+                  : (parent.isValid() ? parent.row() : rowCount(QModelIndex()));
+
+  if (doc.isArray()) {
+    QJsonArray importArray = doc.array();
+    QList<QJsonObject> objectsToInsert;
+    for (int i = 0; i < importArray.size(); ++i) {
+      if (importArray[i].isObject()) {
+        objectsToInsert.append(importArray[i].toObject());
+      }
+    }
+    if (objectsToInsert.isEmpty())
+      return false;
+
+    beginInsertRows(QModelIndex(), beginRow,
+                    beginRow + objectsToInsert.size() - 1);
+    for (int i = 0; i < objectsToInsert.size(); ++i) {
+      m_templates.insert(beginRow + i, objectsToInsert[i]);
+    }
+    endInsertRows();
+  } else if (doc.isObject()) {
+    beginInsertRows(QModelIndex(), beginRow, beginRow);
+    m_templates.insert(beginRow, doc.object());
+    endInsertRows();
+  }
+
+  saveTemplates();
+  return true;
 }
