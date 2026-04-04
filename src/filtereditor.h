@@ -2,6 +2,7 @@
 #define FILTEREDITOR_H
 
 #include <QSharedPointer>
+#include <QMap>
 #include <QWidget>
 
 class QLineEdit;
@@ -18,7 +19,8 @@ public:
   explicit FilterEditor(QWidget *parent = nullptr);
   QString filterText() const;
   void setFilterText(const QString &text);
-  void setCompletions(const QStringList &completions);
+  void setCompletions(const QMap<QString, QStringList> &completions);
+  void setSimplifiedMode(bool simplified);
 
 Q_SIGNALS:
   void filterChanged(const QString &text);
@@ -40,7 +42,7 @@ private:
   QStandardItemModel *m_treeModel;
   QListWidget *m_paletteList;
   bool m_updating;
-  QStringList m_completions;
+  QMap<QString, QStringList> m_completions;
 };
 
 #endif // FILTEREDITOR_H

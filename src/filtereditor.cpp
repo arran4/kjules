@@ -20,15 +20,23 @@
 #include <QVBoxLayout>
 
 #include <QCompleter>
+#include <QCompleter>
+#include <QComboBox>
+#include <QDateTimeEdit>
+
+#include <QCompleter>
+#include <QComboBox>
+#include <QDateTimeEdit>
+
 class FilterInputDialog : public QDialog {
 public:
   QString key;
   QString value;
   QLineEdit *keyEdit;
-  QLineEdit *valueEdit;
+  QWidget *valueWidget; // Can be QLineEdit, QComboBox, or QDateTimeEdit
 
   FilterInputDialog(const QString &promptKey, bool requireKey,
-                    const QStringList &completions, QWidget *parent = nullptr)
+                    const QStringList &completions, const QString &itemKey = QString(), QWidget *parent = nullptr)
       : QDialog(parent) {
     QVBoxLayout *layout = new QVBoxLayout(this);
     if (requireKey) {
@@ -40,13 +48,31 @@ public:
     }
 
     layout->addWidget(new QLabel(promptKey, this));
-    valueEdit = new QLineEdit(this);
-    if (!completions.isEmpty()) {
-      QCompleter *completer = new QCompleter(completions, this);
-      completer->setCaseSensitivity(Qt::CaseInsensitive);
-      valueEdit->setCompleter(completer);
+
+    QString lowerKey = itemKey.toLower();
+    bool isDate = lowerKey.endsWith(QStringLiteral("before")) || lowerKey.endsWith(QStringLiteral("after")) || lowerKey == QStringLiteral("createdat") || lowerKey == QStringLiteral("updatedat");
+
+    if (isDate) {
+        QDateTimeEdit *dtEdit = new QDateTimeEdit(QDateTime::currentDateTime(), this);
+        dtEdit->setCalendarPopup(true);
+        dtEdit->setDisplayFormat(QStringLiteral("yyyy-MM-ddTHH:mm:ss"));
+        valueWidget = dtEdit;
+    } else if (!completions.isEmpty() && !requireKey) {
+        QComboBox *cb = new QComboBox(this);
+        cb->setEditable(true);
+        cb->addItems(completions);
+        valueWidget = cb;
+    } else {
+        QLineEdit *le = new QLineEdit(this);
+        if (!completions.isEmpty()) {
+            QCompleter *completer = new QCompleter(completions, this);
+            completer->setCaseSensitivity(Qt::CaseInsensitive);
+            le->setCompleter(completer);
+        }
+        valueWidget = le;
     }
-    layout->addWidget(valueEdit);
+
+    layout->addWidget(valueWidget);
 
     QHBoxLayout *btnLayout = new QHBoxLayout();
     QPushButton *okBtn = new QPushButton(tr("OK"), this);
@@ -60,7 +86,16 @@ public:
   }
 
   QString getKey() const { return keyEdit ? keyEdit->text() : QString(); }
-  QString getValue() const { return valueEdit->text(); }
+  QString getValue() const {
+      if (QDateTimeEdit *dt = qobject_cast<QDateTimeEdit*>(valueWidget)) {
+          return dt->dateTime().toString(Qt::ISODate);
+      } else if (QComboBox *cb = qobject_cast<QComboBox*>(valueWidget)) {
+          return cb->currentText();
+      } else if (QLineEdit *le = qobject_cast<QLineEdit*>(valueWidget)) {
+          return le->text();
+      }
+      return QString();
+  }
 };
 
 enum FilterItemRoles {
@@ -183,7 +218,7 @@ FilterEditor::FilterEditor(QWidget *parent)
 
 QString FilterEditor::filterText() const { return m_lineEdit->text(); }
 
-void FilterEditor::setCompletions(const QStringList &completions) {
+void FilterEditor::setCompletions(const QMap<QString, QStringList> &completions) {
   m_completions = completions;
 }
 void FilterEditor::setFilterText(const QString &text) {
@@ -368,7 +403,7 @@ bool FilterEditor::handleNewItem(QStandardItem *newItem, const QString &text) {
     newItem->setData(TypeIn, NodeTypeRole);
     newItem->setEditable(true);
     FilterInputDialog dlg(tr("Enter values (comma separated):"), true,
-                          m_completions, this);
+                          QStringList(), QString(), this);
     if (dlg.exec() == QDialog::Accepted) {
       QString key = dlg.getKey();
       QString value = dlg.getValue();
@@ -383,7 +418,7 @@ bool FilterEditor::handleNewItem(QStandardItem *newItem, const QString &text) {
     QString key = text.left(text.length() - 1);
     newItem->setData(key, NodeKeyRole);
     FilterInputDialog dlg(tr("Enter value for ") + key + QStringLiteral(":"),
-                          false, m_completions, this);
+                          false, m_completions.value(key.toLower()), key, this);
     if (dlg.exec() == QDialog::Accepted) {
       QString value = dlg.getValue();
       newItem->setData(value, NodeValueRole);
@@ -455,4 +490,21 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
         new KeywordNode(item->data(NodeValueRole).toString()));
   }
   return QSharedPointer<ASTNode>();
+}
+
+void FilterEditor::setSimplifiedMode(bool simplified) {
+  if (simplified) {
+      m_paletteList->clear();
+      m_paletteList->addItems(QStringList{
+          QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+          QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:")});
+  } else {
+      m_paletteList->clear();
+      m_paletteList->addItems(QStringList{
+          QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+          QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+          QStringLiteral("state:"), QStringLiteral("title:"),
+          QStringLiteral("created-before:"), QStringLiteral("created-after:"),
+          QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
+  }
 }
