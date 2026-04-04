@@ -17,7 +17,16 @@ public:
            key.toLower() == QStringLiteral("owner")) &&
           header == QStringLiteral("name")) {
         QModelIndex idx = model->index(row, c, parent);
-        return model->data(idx, Qt::DisplayRole).toString();
+        QString fullName = model->data(idx, Qt::DisplayRole).toString();
+        // If the name is "owner/repo", we extract the relevant part.
+        if (fullName.contains(QLatin1Char('/'))) {
+            if (key.toLower() == QStringLiteral("owner")) {
+                return fullName.section(QLatin1Char('/'), 0, 0);
+            } else if (key.toLower() == QStringLiteral("repo")) {
+                return fullName.section(QLatin1Char('/'), 1, 1);
+            }
+        }
+        return fullName;
       }
       if (header == key.toLower() ||
           model->headerData(c, Qt::Horizontal, Qt::DisplayRole)
