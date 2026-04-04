@@ -1172,39 +1172,51 @@ void MainWindow::createActions() {
 
   // Set up XML GUI
 
-
-  connect(m_sourcesFilterEditor, &FilterEditor::filterChanged, this, [this](const QString &text) {
-    if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_sourceView->model()))
-      pm->setFilterQuery(text);
-    else if (auto *pm = qobject_cast<QSortFilterProxyModel *>(m_sourceView->model()))
-      pm->setFilterFixedString(text);
-  });
-  connect(m_pastFilterEditor, &FilterEditor::filterChanged, this, [this](const QString &text) {
-    if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_sessionView->model()))
-      pm->setFilterQuery(text);
-  });
-  connect(m_archiveFilterEditor, &FilterEditor::filterChanged, this, [this](const QString &text) {
-    if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(m_archiveView->model()))
-      pm->setFilterQuery(text);
-  });
-  connect(m_draftsFilter, &QLineEdit::textChanged, this, [this](const QString &text) {
-    if (auto *pm = qobject_cast<QSortFilterProxyModel *>(m_draftsView->model())) {
-      pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
-      pm->setFilterFixedString(text);
-    }
-  });
-  connect(m_templatesFilter, &QLineEdit::textChanged, this, [this](const QString &text) {
-    if (auto *pm = qobject_cast<QSortFilterProxyModel *>(m_templatesView->model())) {
-      pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
-      pm->setFilterFixedString(text);
-    }
-  });
-  connect(m_errorsFilter, &QLineEdit::textChanged, this, [this](const QString &text) {
-    if (auto *pm = qobject_cast<QSortFilterProxyModel *>(m_errorsView->model())) {
-      pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
-      pm->setFilterFixedString(text);
-    }
-  });
+  connect(m_sourcesFilterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_sourceView->model()))
+              pm->setFilterQuery(text);
+            else if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                         m_sourceView->model()))
+              pm->setFilterFixedString(text);
+          });
+  connect(m_pastFilterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_sessionView->model()))
+              pm->setFilterQuery(text);
+          });
+  connect(m_archiveFilterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_archiveView->model()))
+              pm->setFilterQuery(text);
+          });
+  connect(m_draftsFilter, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                    m_draftsView->model())) {
+              pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
+              pm->setFilterFixedString(text);
+            }
+          });
+  connect(m_templatesFilter, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                    m_templatesView->model())) {
+              pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
+              pm->setFilterFixedString(text);
+            }
+          });
+  connect(m_errorsFilter, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                    m_errorsView->model())) {
+              pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
+              pm->setFilterFixedString(text);
+            }
+          });
 
   setupGUI(Default, QStringLiteral("kjulesui.rc"));
 
