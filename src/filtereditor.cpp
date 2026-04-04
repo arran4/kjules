@@ -20,46 +20,47 @@
 #include <QVBoxLayout>
 
 #include <QCompleter>
-#include <QCompleter>
 class FilterInputDialog : public QDialog {
 public:
-    QString key;
-    QString value;
-    QLineEdit *keyEdit;
-    QLineEdit *valueEdit;
+  QString key;
+  QString value;
+  QLineEdit *keyEdit;
+  QLineEdit *valueEdit;
 
-    FilterInputDialog(const QString &promptKey, bool requireKey, const QStringList &completions, QWidget *parent = nullptr) : QDialog(parent) {
-        QVBoxLayout *layout = new QVBoxLayout(this);
-        if (requireKey) {
-            layout->addWidget(new QLabel(tr("Filter Key:"), this));
-            keyEdit = new QLineEdit(this);
-            layout->addWidget(keyEdit);
-        } else {
-            keyEdit = nullptr;
-        }
-
-        layout->addWidget(new QLabel(promptKey, this));
-        valueEdit = new QLineEdit(this);
-        if (!completions.isEmpty()) {
-            QCompleter *completer = new QCompleter(completions, this);
-            completer->setCaseSensitivity(Qt::CaseInsensitive);
-            valueEdit->setCompleter(completer);
-        }
-        layout->addWidget(valueEdit);
-
-        QHBoxLayout *btnLayout = new QHBoxLayout();
-        QPushButton *okBtn = new QPushButton(tr("OK"), this);
-        QPushButton *cancelBtn = new QPushButton(tr("Cancel"), this);
-        btnLayout->addWidget(okBtn);
-        btnLayout->addWidget(cancelBtn);
-        layout->addLayout(btnLayout);
-
-        connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
-        connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+  FilterInputDialog(const QString &promptKey, bool requireKey,
+                    const QStringList &completions, QWidget *parent = nullptr)
+      : QDialog(parent) {
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    if (requireKey) {
+      layout->addWidget(new QLabel(tr("Filter Key:"), this));
+      keyEdit = new QLineEdit(this);
+      layout->addWidget(keyEdit);
+    } else {
+      keyEdit = nullptr;
     }
 
-    QString getKey() const { return keyEdit ? keyEdit->text() : QString(); }
-    QString getValue() const { return valueEdit->text(); }
+    layout->addWidget(new QLabel(promptKey, this));
+    valueEdit = new QLineEdit(this);
+    if (!completions.isEmpty()) {
+      QCompleter *completer = new QCompleter(completions, this);
+      completer->setCaseSensitivity(Qt::CaseInsensitive);
+      valueEdit->setCompleter(completer);
+    }
+    layout->addWidget(valueEdit);
+
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    QPushButton *okBtn = new QPushButton(tr("OK"), this);
+    QPushButton *cancelBtn = new QPushButton(tr("Cancel"), this);
+    btnLayout->addWidget(okBtn);
+    btnLayout->addWidget(cancelBtn);
+    layout->addLayout(btnLayout);
+
+    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+  }
+
+  QString getKey() const { return keyEdit ? keyEdit->text() : QString(); }
+  QString getValue() const { return valueEdit->text(); }
 };
 
 enum FilterItemRoles {
@@ -366,7 +367,8 @@ bool FilterEditor::handleNewItem(QStandardItem *newItem, const QString &text) {
   } else if (text == QStringLiteral("IN")) {
     newItem->setData(TypeIn, NodeTypeRole);
     newItem->setEditable(true);
-    FilterInputDialog dlg(tr("Enter values (comma separated):"), true, m_completions, this);
+    FilterInputDialog dlg(tr("Enter values (comma separated):"), true,
+                          m_completions, this);
     if (dlg.exec() == QDialog::Accepted) {
       QString key = dlg.getKey();
       QString value = dlg.getValue();
