@@ -1,12 +1,12 @@
 #include "mainwindow.h"
 #include "advancedfilterproxymodel.h"
-#include "filtereditor.h"
 #include "apimanager.h"
 #include "backupdialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
+#include "filtereditor.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -287,7 +287,8 @@ void MainWindow::setupUi() {
   m_sessionView = new QTreeView(this);
   pastLayout->addWidget(m_sessionView);
 
-  AdvancedFilterProxyModel *sessionProxyModel = new AdvancedFilterProxyModel(this);
+  AdvancedFilterProxyModel *sessionProxyModel =
+      new AdvancedFilterProxyModel(this);
   sessionProxyModel->setSourceModel(m_sessionModel);
   m_sessionView->setModel(sessionProxyModel);
   m_sessionView->setSortingEnabled(true);
@@ -460,7 +461,8 @@ void MainWindow::setupUi() {
   archLayout->addWidget(m_archiveFilterEditor);
   m_archiveView = new QTreeView(this);
   archLayout->addWidget(m_archiveView);
-  AdvancedFilterProxyModel *archiveProxyModel = new AdvancedFilterProxyModel(this);
+  AdvancedFilterProxyModel *archiveProxyModel =
+      new AdvancedFilterProxyModel(this);
   archiveProxyModel->setSourceModel(m_archiveModel);
   m_archiveView->setModel(archiveProxyModel);
   m_archiveView->setSortingEnabled(true);
@@ -2093,15 +2095,16 @@ void MainWindow::restoreData() {
 
 void MainWindow::updateCompletions() {
   QMap<QString, QStringList> completions;
-  completions[QStringLiteral("state")] = QStringList{
-      QStringLiteral("RUNNING"), QStringLiteral("QUEUED"), QStringLiteral("PAUSED"),
-      QStringLiteral("ERROR"), QStringLiteral("CANCELED"), QStringLiteral("DONE")};
+  completions[QStringLiteral("state")] =
+      QStringList{QStringLiteral("RUNNING"),  QStringLiteral("QUEUED"),
+                  QStringLiteral("PAUSED"),   QStringLiteral("ERROR"),
+                  QStringLiteral("CANCELED"), QStringLiteral("DONE")};
 
   QStringList repos;
   QStringList owners;
   for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
-      QModelIndex idx = m_sourceModel->index(i, SourceModel::ColName);
-      repos.append(idx.data().toString());
+    QModelIndex idx = m_sourceModel->index(i, SourceModel::ColName);
+    repos.append(idx.data().toString());
   }
   repos.removeDuplicates();
   completions[QStringLiteral("repo")] = repos;

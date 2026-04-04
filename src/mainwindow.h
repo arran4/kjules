@@ -101,7 +101,7 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
-    FilterEditor *m_sourcesFilterEditor;
+  FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_pastFilterEditor;
   FilterEditor *m_archiveFilterEditor;
   QLineEdit *m_draftsFilter;

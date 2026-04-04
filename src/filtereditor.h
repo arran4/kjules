@@ -1,8 +1,8 @@
 #ifndef FILTEREDITOR_H
 #define FILTEREDITOR_H
 
-#include <QSharedPointer>
 #include <QMap>
+#include <QSharedPointer>
 #include <QWidget>
 
 class QLineEdit;

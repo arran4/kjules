@@ -19,13 +19,12 @@
 #include <QTreeView>
 #include <QVBoxLayout>
 
-#include <QCompleter>
-#include <QCompleter>
 #include <QComboBox>
+#include <QCompleter>
 #include <QDateTimeEdit>
 
-#include <QCompleter>
 #include <QComboBox>
+#include <QCompleter>
 #include <QDateTimeEdit>
 
 class FilterInputDialog : public QDialog {
@@ -36,7 +35,9 @@ public:
   QWidget *valueWidget; // Can be QLineEdit, QComboBox, or QDateTimeEdit
 
   FilterInputDialog(const QString &promptKey, bool requireKey,
-                    const QStringList &completions, const QString &itemKey = QString(), QWidget *parent = nullptr)
+                    const QStringList &completions,
+                    const QString &itemKey = QString(),
+                    QWidget *parent = nullptr)
       : QDialog(parent) {
     QVBoxLayout *layout = new QVBoxLayout(this);
     if (requireKey) {
@@ -50,26 +51,30 @@ public:
     layout->addWidget(new QLabel(promptKey, this));
 
     QString lowerKey = itemKey.toLower();
-    bool isDate = lowerKey.endsWith(QStringLiteral("before")) || lowerKey.endsWith(QStringLiteral("after")) || lowerKey == QStringLiteral("createdat") || lowerKey == QStringLiteral("updatedat");
+    bool isDate = lowerKey.endsWith(QStringLiteral("before")) ||
+                  lowerKey.endsWith(QStringLiteral("after")) ||
+                  lowerKey == QStringLiteral("createdat") ||
+                  lowerKey == QStringLiteral("updatedat");
 
     if (isDate) {
-        QDateTimeEdit *dtEdit = new QDateTimeEdit(QDateTime::currentDateTime(), this);
-        dtEdit->setCalendarPopup(true);
-        dtEdit->setDisplayFormat(QStringLiteral("yyyy-MM-ddTHH:mm:ss"));
-        valueWidget = dtEdit;
+      QDateTimeEdit *dtEdit =
+          new QDateTimeEdit(QDateTime::currentDateTime(), this);
+      dtEdit->setCalendarPopup(true);
+      dtEdit->setDisplayFormat(QStringLiteral("yyyy-MM-ddTHH:mm:ss"));
+      valueWidget = dtEdit;
     } else if (!completions.isEmpty() && !requireKey) {
-        QComboBox *cb = new QComboBox(this);
-        cb->setEditable(true);
-        cb->addItems(completions);
-        valueWidget = cb;
+      QComboBox *cb = new QComboBox(this);
+      cb->setEditable(true);
+      cb->addItems(completions);
+      valueWidget = cb;
     } else {
-        QLineEdit *le = new QLineEdit(this);
-        if (!completions.isEmpty()) {
-            QCompleter *completer = new QCompleter(completions, this);
-            completer->setCaseSensitivity(Qt::CaseInsensitive);
-            le->setCompleter(completer);
-        }
-        valueWidget = le;
+      QLineEdit *le = new QLineEdit(this);
+      if (!completions.isEmpty()) {
+        QCompleter *completer = new QCompleter(completions, this);
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        le->setCompleter(completer);
+      }
+      valueWidget = le;
     }
 
     layout->addWidget(valueWidget);
@@ -87,14 +92,14 @@ public:
 
   QString getKey() const { return keyEdit ? keyEdit->text() : QString(); }
   QString getValue() const {
-      if (QDateTimeEdit *dt = qobject_cast<QDateTimeEdit*>(valueWidget)) {
-          return dt->dateTime().toString(Qt::ISODate);
-      } else if (QComboBox *cb = qobject_cast<QComboBox*>(valueWidget)) {
-          return cb->currentText();
-      } else if (QLineEdit *le = qobject_cast<QLineEdit*>(valueWidget)) {
-          return le->text();
-      }
-      return QString();
+    if (QDateTimeEdit *dt = qobject_cast<QDateTimeEdit *>(valueWidget)) {
+      return dt->dateTime().toString(Qt::ISODate);
+    } else if (QComboBox *cb = qobject_cast<QComboBox *>(valueWidget)) {
+      return cb->currentText();
+    } else if (QLineEdit *le = qobject_cast<QLineEdit *>(valueWidget)) {
+      return le->text();
+    }
+    return QString();
   }
 };
 
@@ -218,7 +223,8 @@ FilterEditor::FilterEditor(QWidget *parent)
 
 QString FilterEditor::filterText() const { return m_lineEdit->text(); }
 
-void FilterEditor::setCompletions(const QMap<QString, QStringList> &completions) {
+void FilterEditor::setCompletions(
+    const QMap<QString, QStringList> &completions) {
   m_completions = completions;
 }
 void FilterEditor::setFilterText(const QString &text) {
@@ -494,17 +500,18 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
 
 void FilterEditor::setSimplifiedMode(bool simplified) {
   if (simplified) {
-      m_paletteList->clear();
-      m_paletteList->addItems(QStringList{
-          QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
-          QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:")});
+    m_paletteList->clear();
+    m_paletteList->addItems(
+        QStringList{QStringLiteral("OR"), QStringLiteral("AND"),
+                    QStringLiteral("NOT"), QStringLiteral("IN"),
+                    QStringLiteral("repo:"), QStringLiteral("owner:")});
   } else {
-      m_paletteList->clear();
-      m_paletteList->addItems(QStringList{
-          QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
-          QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
-          QStringLiteral("state:"), QStringLiteral("title:"),
-          QStringLiteral("created-before:"), QStringLiteral("created-after:"),
-          QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
+    m_paletteList->clear();
+    m_paletteList->addItems(QStringList{
+        QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+        QStringLiteral("state:"), QStringLiteral("title:"),
+        QStringLiteral("created-before:"), QStringLiteral("created-after:"),
+        QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
   }
 }

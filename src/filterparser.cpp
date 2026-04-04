@@ -237,9 +237,11 @@ bool KeyValueNode::evaluate(const FilterDataAccessor &accessor) const {
     return checkDateFilter(m_value, dateStr, isBefore);
   }
   QString val = accessor.getValue(m_key);
-  if (lowerKey == QStringLiteral("repo") || lowerKey == QStringLiteral("owner")) {
+  if (lowerKey == QStringLiteral("repo") ||
+      lowerKey == QStringLiteral("owner")) {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QRegularExpression re = QRegularExpression::fromWildcard(m_value, Qt::CaseInsensitive);
+    QRegularExpression re =
+        QRegularExpression::fromWildcard(m_value, Qt::CaseInsensitive);
     return re.match(val).hasMatch();
 #else
     QRegExp rx(m_value);
