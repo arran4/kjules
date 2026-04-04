@@ -24,6 +24,8 @@ struct SessionData {
   bool hasChangeSet;
   QString prUrl;
   QString prNumber;
+  QString prStatus;
+  QStringList prLabels;
   QJsonObject rawObject;
 };
 
@@ -41,7 +43,9 @@ public:
     ChangeSetRole,
     PrUrlRole,
     ProviderRole,
-    LastRefreshedRole
+    LastRefreshedRole,
+    PrStatusRole,
+    PrLabelsRole
   };
 
   enum Columns {
@@ -49,6 +53,8 @@ public:
     ColState,
     ColChangeSet,
     ColPR,
+    ColPRStatus,
+    ColPRLabels,
     ColUpdatedAt,
     ColCreatedAt,
     ColOwner,

@@ -93,11 +93,22 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::githubInfoReceived, this,
           &MainWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
+          &MainWindow::onGithubPullRequestInfoReceived);
   connect(m_apiManager, &APIManager::sessionsReceived, this,
           [this](const QJsonArray &sessions) {
             m_sessionModel->setSessions(sessions);
             m_lastSessionRefreshTime = QDateTime::currentDateTime();
             updateSessionStats();
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              QString prUrl = m_sessionModel
+                                  ->data(m_sessionModel->index(i, 0),
+                                         SessionModel::PrUrlRole)
+                                  .toString();
+              if (!prUrl.isEmpty()) {
+                m_apiManager->fetchGithubPullRequest(prUrl);
+              }
+            }
           });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           &MainWindow::onSessionCreationFailed);
@@ -110,6 +121,22 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
             m_sessionModel->updateSession(session);
+            // We need to fetch github PR info if we have one
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                      .toString() ==
+                  session.value(QStringLiteral("id")).toString()) {
+                QString prUrl = m_sessionModel
+                                    ->data(m_sessionModel->index(i, 0),
+                                           SessionModel::PrUrlRole)
+                                    .toString();
+                if (!prUrl.isEmpty()) {
+                  m_apiManager->fetchGithubPullRequest(prUrl);
+                }
+                break;
+              }
+            }
           });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
@@ -149,6 +176,16 @@ MainWindow::MainWindow(QWidget *parent)
 
   m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();
+
+  for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+    QString prUrl =
+        m_archiveModel
+            ->data(m_archiveModel->index(i, 0), SessionModel::PrUrlRole)
+            .toString();
+    if (!prUrl.isEmpty()) {
+      m_apiManager->fetchGithubPullRequest(prUrl);
+    }
+  }
 
   // Manually trigger calculation once after load
   updateSourceStats();
@@ -907,6 +944,7 @@ void MainWindow::setupUi() {
       m_templatesView, &QListView::customContextMenuRequested,
       [this](const QPoint &pos) {
         QModelIndex index = m_templatesView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
           if (!m_templatesView->selectionModel()->isSelected(index)) {
             m_templatesView->selectionModel()->select(
@@ -914,7 +952,6 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_templatesView->setCurrentIndex(index);
           }
-          QMenu menu;
           QAction *useAction = menu.addAction(i18n("Use Template"));
           connect(useAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
@@ -940,9 +977,9 @@ void MainWindow::setupUi() {
                   [this, index]() { copyTemplateToClipboard(index); });
         }
 
-        QAction *pasteClipboardAction =
+        QAction *pasteClipboardActionOuter =
             menu.addAction(i18n("Paste from Clipboard"));
-        connect(pasteClipboardAction, &QAction::triggered,
+        connect(pasteClipboardActionOuter, &QAction::triggered,
                 [this]() { pasteTemplateFromClipboard(); });
 
         if (index.isValid()) {
@@ -972,11 +1009,13 @@ void MainWindow::setupUi() {
           connect(deleteAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_templatesView->selectionModel()->selectedRows();
-            if (QMessageBox::question(this, i18np("Delete Template", "Delete Templates",
-                                      selectedRows.size()),
+            if (QMessageBox::question(
+                    this,
+                    i18np("Delete Template", "Delete Templates",
+                          selectedRows.size()),
                     i18np("Are you sure you want to delete this template?",
-                "Are you sure you want to delete these templates?",
-                          selectedRows.size())) ==QMessageBox::Yes) {
+                          "Are you sure you want to delete these templates?",
+                          selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
               for (const QModelIndex &idx : selectedRows) {
                 if (!rowsToDelete.contains(idx.row())) {
@@ -1208,16 +1247,41 @@ void MainWindow::updateTabTitles() {
     QWidget *page = m_tabWidget->widget(i);
     if (page == m_draftsView) {
       int count = m_draftsModel->rowCount();
-      m_tabWidget->setTabText(
-          i, count > 0 ? i18n("Drafts (%1)", count) : i18n("Drafts"));
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Drafts (%1)", count)
+                                           : i18n("Drafts"));
     } else if (page == m_templatesView) {
       int count = m_templatesModel->rowCount();
-      m_tabWidget->setTabText(
-          i, count > 0 ? i18n("Templates (%1)", count) : i18n("Templates"));
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Templates (%1)", count)
+                                           : i18n("Templates"));
     } else if (page == m_errorsView) {
       int count = m_errorsModel->rowCount();
-      m_tabWidget->setTabText(
-          i, count > 0 ? i18n("Errors (%1)", count) : i18n("Errors"));
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Errors (%1)", count)
+                                           : i18n("Errors"));
+    }
+  }
+}
+
+void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
+                                                 const QJsonObject &info) {
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QModelIndex index = m_sessionModel->index(i, 0);
+    if (m_sessionModel->data(index, SessionModel::PrUrlRole).toString() ==
+        prUrl) {
+      QJsonObject session = m_sessionModel->getSession(i);
+      session[QStringLiteral("githubPrInfo")] = info;
+      m_sessionModel->updateSession(session);
+      // Let's also update archive model and watch model if needed.
+      // Actually, since they all use SessionModel, we'll iterate through them.
+    }
+  }
+
+  for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+    QModelIndex index = m_archiveModel->index(i, 0);
+    if (m_archiveModel->data(index, SessionModel::PrUrlRole).toString() ==
+        prUrl) {
+      QJsonObject session = m_archiveModel->getSession(i);
+      session[QStringLiteral("githubPrInfo")] = info;
+      m_archiveModel->updateSession(session);
     }
   }
 }
@@ -1432,19 +1496,20 @@ void MainWindow::createActions() {
             updateStatus(i18n("Fetching details for session %1...", sessId));
           });
       QMenu *fileMenu = new QMenu(i18n("File"), sessionsWindow);
-    QAction *closeAction =
-        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
-                    i18n("Close"), sessionsWindow);
-    closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-    connect(closeAction, &QAction::triggered, sessionsWindow,
-            &KXmlGuiWindow::close);
-    fileMenu->addAction(closeAction);
-    sessionsWindow->menuBar()->addMenu(fileMenu);
+      QAction *closeAction =
+          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                      i18n("Close"), sessionsWindow);
+      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+      connect(closeAction, &QAction::triggered, sessionsWindow,
+              &KXmlGuiWindow::close);
+      fileMenu->addAction(closeAction);
+      sessionsWindow->menuBar()->addMenu(fileMenu);
 
-    sessionsWindow->setCentralWidget(listView);
-    sessionsWindow->setupGUI();
-    sessionsWindow->resize(600, 400);
-    sessionsWindow->show();}
+      sessionsWindow->setCentralWidget(listView);
+      sessionsWindow->setupGUI();
+      sessionsWindow->resize(600, 400);
+      sessionsWindow->show();
+    }
   });
   m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
   actionCollection()->addAction(QStringLiteral("view_raw_data"),
@@ -1468,26 +1533,28 @@ void MainWindow::createActions() {
               .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
                        .toString()
                        .replace(QLatin1Char('/'), QLatin1Char('_'))));
-    rawWindow->setAttribute(Qt::WA_DeleteOnClose);
-    rawWindow->setWindowTitle(i18n("Raw Data for Source"));
-    QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
-    QJsonDocument doc(rawData);
-    textBrowser->setPlainText(
-        QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      rawWindow->setAttribute(Qt::WA_DeleteOnClose);
+      rawWindow->setWindowTitle(i18n("Raw Data for Source"));
+      QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+      QJsonDocument doc(rawData);
+      textBrowser->setPlainText(
+          QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
 
-    QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
-    QAction *closeAction =
-        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
-                    i18n("Close"), rawWindow);
-    closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-    connect(closeAction, &QAction::triggered, rawWindow, &KXmlGuiWindow::close);
-    fileMenu->addAction(closeAction);
-    rawWindow->menuBar()->addMenu(fileMenu);
+      QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
+      QAction *closeAction =
+          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                      i18n("Close"), rawWindow);
+      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+      connect(closeAction, &QAction::triggered, rawWindow,
+              &KXmlGuiWindow::close);
+      fileMenu->addAction(closeAction);
+      rawWindow->menuBar()->addMenu(fileMenu);
 
-    rawWindow->setCentralWidget(textBrowser);
-    rawWindow->setupGUI();
-    rawWindow->resize(600, 400);
-    rawWindow->show();}
+      rawWindow->setCentralWidget(textBrowser);
+      rawWindow->setupGUI();
+      rawWindow->resize(600, 400);
+      rawWindow->show();
+    }
   });
 
   m_openUrlAction = new QAction(i18n("Open URL"), this);
