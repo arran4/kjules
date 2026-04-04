@@ -13,7 +13,9 @@ public:
                            .toString()
                            .remove(QLatin1Char(' '))
                            .toLower();
-      if ((key.toLower() == QStringLiteral("repo") || key.toLower() == QStringLiteral("owner")) && header == QStringLiteral("name")) {
+      if ((key.toLower() == QStringLiteral("repo") ||
+           key.toLower() == QStringLiteral("owner")) &&
+          header == QStringLiteral("name")) {
         QModelIndex idx = model->index(row, c, parent);
         return model->data(idx, Qt::DisplayRole).toString();
       }
