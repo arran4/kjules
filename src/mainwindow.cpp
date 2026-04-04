@@ -183,10 +183,8 @@ void MainWindow::setupUi() {
   m_sourceView = new QTreeView(this);
   srcLayout->addWidget(m_sourceView);
 
-  QSortFilterProxyModel *proxyModel = new QSortFilterProxyModel(this);
+  AdvancedFilterProxyModel *proxyModel = new AdvancedFilterProxyModel(this);
   proxyModel->setSourceModel(m_sourceModel);
-  proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
-  proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
   m_sourceView->setModel(proxyModel);
   m_sourceView->setSortingEnabled(true);
