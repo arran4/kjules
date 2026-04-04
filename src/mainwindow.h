@@ -17,6 +17,8 @@ class QueueModel;
 class ErrorsModel;
 class QListView;
 class QTreeView;
+class FilterEditor;
+class QLineEdit;
 class QLabel;
 class QProgressBar;
 class QPushButton;
@@ -33,6 +35,7 @@ protected:
   void closeEvent(QCloseEvent *event) override;
 
 private Q_SLOTS:
+  void updateCompletions();
   void refreshSources();
   void showNewSessionDialog();
   void showSettingsDialog();
@@ -106,6 +109,12 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
+  FilterEditor *m_sourcesFilterEditor;
+  FilterEditor *m_pastFilterEditor;
+  FilterEditor *m_archiveFilterEditor;
+  QLineEdit *m_draftsFilter;
+  QLineEdit *m_templatesFilter;
+  QLineEdit *m_errorsFilter;
   QTabWidget *m_tabWidget;
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;

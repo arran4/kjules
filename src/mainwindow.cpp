@@ -1,10 +1,12 @@
 #include "mainwindow.h"
+#include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
+#include "filtereditor.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -216,12 +218,16 @@ void MainWindow::setupUi() {
   m_tabWidget = new QTabWidget(this);
 
   // Sources View
+  QWidget *srcTab = new QWidget(this);
+  QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
+  m_sourcesFilterEditor = new FilterEditor(this);
+  m_sourcesFilterEditor->setSimplifiedMode(true);
+  srcLayout->addWidget(m_sourcesFilterEditor);
   m_sourceView = new QTreeView(this);
+  srcLayout->addWidget(m_sourceView);
 
-  QSortFilterProxyModel *proxyModel = new QSortFilterProxyModel(this);
+  AdvancedFilterProxyModel *proxyModel = new AdvancedFilterProxyModel(this);
   proxyModel->setSourceModel(m_sourceModel);
-  proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
-  proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
 
   m_sourceView->setModel(proxyModel);
   m_sourceView->setSortingEnabled(true);
@@ -373,15 +379,20 @@ void MainWindow::setupUi() {
       });
   connect(m_sourceView, &QTreeView::doubleClicked, this,
           &MainWindow::onSourceActivated);
-  m_tabWidget->addTab(m_sourceView, i18n("Sources"));
+  m_tabWidget->addTab(srcTab, i18n("Sources"));
 
   // Sessions View
-  m_sessionView = new QTreeView(this);
-  QSortFilterProxyModel *sessionProxyModel = new QSortFilterProxyModel(this);
-  sessionProxyModel->setSourceModel(m_sessionModel);
-  sessionProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
-  sessionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+  QWidget *pastTab = new QWidget(this);
+  QVBoxLayout *pastLayout = new QVBoxLayout(pastTab);
+  m_pastFilterEditor = new FilterEditor(this);
+  pastLayout->addWidget(m_pastFilterEditor);
 
+  m_sessionView = new QTreeView(this);
+  pastLayout->addWidget(m_sessionView);
+
+  AdvancedFilterProxyModel *sessionProxyModel =
+      new AdvancedFilterProxyModel(this);
+  sessionProxyModel->setSourceModel(m_sessionModel);
   m_sessionView->setModel(sessionProxyModel);
   m_sessionView->setSortingEnabled(true);
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -692,14 +703,17 @@ void MainWindow::setupUi() {
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
-  m_tabWidget->addTab(m_sessionView, i18n("Past"));
+  m_tabWidget->addTab(pastTab, i18n("Past"));
   // Archive View
+  QWidget *archTab = new QWidget(this);
+  QVBoxLayout *archLayout = new QVBoxLayout(archTab);
+  m_archiveFilterEditor = new FilterEditor(this);
+  archLayout->addWidget(m_archiveFilterEditor);
   m_archiveView = new QTreeView(this);
-  QSortFilterProxyModel *archiveProxyModel = new QSortFilterProxyModel(this);
+  archLayout->addWidget(m_archiveView);
+  AdvancedFilterProxyModel *archiveProxyModel =
+      new AdvancedFilterProxyModel(this);
   archiveProxyModel->setSourceModel(m_archiveModel);
-  archiveProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
-  archiveProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
-
   m_archiveView->setModel(archiveProxyModel);
   m_archiveView->setSortingEnabled(true);
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -844,11 +858,20 @@ void MainWindow::setupUi() {
         }
       });
 
-  m_tabWidget->addTab(m_archiveView, i18n("Archive"));
+  m_tabWidget->addTab(archTab, i18n("Archive"));
 
   // Drafts View
+  QWidget *draftsTab = new QWidget(this);
+  QVBoxLayout *draftsLayout = new QVBoxLayout(draftsTab);
+  m_draftsFilter = new QLineEdit(this);
+  m_draftsFilter->setPlaceholderText(i18n("Filter drafts..."));
+  draftsLayout->addWidget(m_draftsFilter);
   m_draftsView = new QListView(this);
-  m_draftsView->setModel(m_draftsModel);
+  draftsLayout->addWidget(m_draftsView);
+  QSortFilterProxyModel *draftsProxy = new QSortFilterProxyModel(this);
+  draftsProxy->setSourceModel(m_draftsModel);
+  draftsProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  m_draftsView->setModel(draftsProxy);
   m_draftsView->setItemDelegate(new DraftDelegate(this));
   m_draftsView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
@@ -929,11 +952,20 @@ void MainWindow::setupUi() {
   connect(m_draftsView, &QListView::doubleClicked, this,
           &MainWindow::onDraftActivated);
 
-  m_tabWidget->addTab(m_draftsView, i18n("Drafts"));
+  m_tabWidget->addTab(draftsTab, i18n("Drafts"));
 
   // Templates View
+  QWidget *tplTab = new QWidget(this);
+  QVBoxLayout *tplLayout = new QVBoxLayout(tplTab);
+  m_templatesFilter = new QLineEdit(this);
+  m_templatesFilter->setPlaceholderText(i18n("Filter templates..."));
+  tplLayout->addWidget(m_templatesFilter);
   m_templatesView = new QListView(this);
-  m_templatesView->setModel(m_templatesModel);
+  tplLayout->addWidget(m_templatesView);
+  QSortFilterProxyModel *tplProxy = new QSortFilterProxyModel(this);
+  tplProxy->setSourceModel(m_templatesModel);
+  tplProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  m_templatesView->setModel(tplProxy);
   m_templatesView->setItemDelegate(new DraftDelegate(this));
   m_templatesView->setContextMenuPolicy(Qt::CustomContextMenu);
   m_templatesView->setDragEnabled(true);
@@ -1038,7 +1070,7 @@ void MainWindow::setupUi() {
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
 
-  m_tabWidget->addTab(m_templatesView, i18n("Templates"));
+  m_tabWidget->addTab(tplTab, i18n("Templates"));
 
   // Queue View
   m_queueView = new QListView(this);
@@ -1052,8 +1084,17 @@ void MainWindow::setupUi() {
   m_tabWidget->addTab(m_queueView, i18n("Queue"));
 
   // Errors View
+  QWidget *errTab = new QWidget(this);
+  QVBoxLayout *errLayout = new QVBoxLayout(errTab);
+  m_errorsFilter = new QLineEdit(this);
+  m_errorsFilter->setPlaceholderText(i18n("Filter errors..."));
+  errLayout->addWidget(m_errorsFilter);
   m_errorsView = new QListView(this);
-  m_errorsView->setModel(m_errorsModel);
+  errLayout->addWidget(m_errorsView);
+  QSortFilterProxyModel *errProxy = new QSortFilterProxyModel(this);
+  errProxy->setSourceModel(m_errorsModel);
+  errProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+  m_errorsView->setModel(errProxy);
   m_errorsView->setItemDelegate(new DraftDelegate(
       this)); // Reusing DraftDelegate for simple display or create custom
   m_errorsView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1187,7 +1228,7 @@ void MainWindow::setupUi() {
   connect(m_errorsView, &QListView::doubleClicked, this,
           &MainWindow::onErrorActivated);
 
-  m_tabWidget->addTab(m_errorsView, i18n("Errors"));
+  m_tabWidget->addTab(errTab, i18n("Errors"));
 
   mainLayout->addWidget(m_tabWidget);
 
@@ -1702,6 +1743,52 @@ void MainWindow::createActions() {
   setStandardToolBarMenuEnabled(true);
 
   // Set up XML GUI
+
+  connect(m_sourcesFilterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_sourceView->model()))
+              pm->setFilterQuery(text);
+            else if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                         m_sourceView->model()))
+              pm->setFilterFixedString(text);
+          });
+  connect(m_pastFilterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_sessionView->model()))
+              pm->setFilterQuery(text);
+          });
+  connect(m_archiveFilterEditor, &FilterEditor::filterChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
+                    m_archiveView->model()))
+              pm->setFilterQuery(text);
+          });
+  connect(m_draftsFilter, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                    m_draftsView->model())) {
+              pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
+              pm->setFilterFixedString(text);
+            }
+          });
+  connect(m_templatesFilter, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                    m_templatesView->model())) {
+              pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
+              pm->setFilterFixedString(text);
+            }
+          });
+  connect(m_errorsFilter, &QLineEdit::textChanged, this,
+          [this](const QString &text) {
+            if (auto *pm = qobject_cast<QSortFilterProxyModel *>(
+                    m_errorsView->model())) {
+              pm->setFilterCaseSensitivity(Qt::CaseInsensitive);
+              pm->setFilterFixedString(text);
+            }
+          });
 
   setupGUI(Default, QStringLiteral("kjulesui.rc"));
 
@@ -2647,6 +2734,28 @@ void MainWindow::restoreData() {
   } else {
     updateStatus(i18n("No files were restored."));
   }
+}
+
+void MainWindow::updateCompletions() {
+  QMap<QString, QStringList> completions;
+  completions[QStringLiteral("state")] =
+      QStringList{QStringLiteral("RUNNING"),  QStringLiteral("QUEUED"),
+                  QStringLiteral("PAUSED"),   QStringLiteral("ERROR"),
+                  QStringLiteral("CANCELED"), QStringLiteral("DONE")};
+
+  QStringList repos;
+  QStringList owners;
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex idx = m_sourceModel->index(i, SourceModel::ColName);
+    repos.append(idx.data().toString());
+  }
+  repos.removeDuplicates();
+  completions[QStringLiteral("repo")] = repos;
+  completions[QStringLiteral("owner")] = repos; // just dummy for now
+
+  m_sourcesFilterEditor->setCompletions(completions);
+  m_pastFilterEditor->setCompletions(completions);
+  m_archiveFilterEditor->setCompletions(completions);
 }
 
 void MainWindow::exportTemplates() {
