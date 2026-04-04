@@ -4,16 +4,63 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QDebug>
+#include <QDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QItemSelectionModel>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
+#include <QPushButton>
 #include <QSplitter>
 #include <QStandardItemModel>
 #include <QTreeView>
 #include <QVBoxLayout>
+
+#include <QCompleter>
+#include <QCompleter>
+class FilterInputDialog : public QDialog {
+public:
+    QString key;
+    QString value;
+    QLineEdit *keyEdit;
+    QLineEdit *valueEdit;
+
+    FilterInputDialog(const QString &promptKey, bool requireKey, const QStringList &completions, QWidget *parent = nullptr) : QDialog(parent) {
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        if (requireKey) {
+            layout->addWidget(new QLabel(tr("Filter Key:"), this));
+            keyEdit = new QLineEdit(this);
+            layout->addWidget(keyEdit);
+        } else {
+            keyEdit = nullptr;
+        }
+
+        layout->addWidget(new QLabel(promptKey, this));
+        valueEdit = new QLineEdit(this);
+        if (!completions.isEmpty()) {
+            QCompleter *completer = new QCompleter(completions, this);
+            completer->setCaseSensitivity(Qt::CaseInsensitive);
+            valueEdit->setCompleter(completer);
+        }
+        layout->addWidget(valueEdit);
+
+        QHBoxLayout *btnLayout = new QHBoxLayout();
+        QPushButton *okBtn = new QPushButton(tr("OK"), this);
+        QPushButton *cancelBtn = new QPushButton(tr("Cancel"), this);
+        btnLayout->addWidget(okBtn);
+        btnLayout->addWidget(cancelBtn);
+        layout->addLayout(btnLayout);
+
+        connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+        connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    }
+
+    QString getKey() const { return keyEdit ? keyEdit->text() : QString(); }
+    QString getValue() const { return valueEdit->text(); }
+};
 
 enum FilterItemRoles {
   NodeTypeRole = Qt::UserRole + 1,
@@ -78,10 +125,24 @@ FilterEditor::FilterEditor(QWidget *parent)
           &FilterEditor::onTreeContextMenu);
   connect(m_treeModel, &QStandardItemModel::itemChanged, this,
           &FilterEditor::onTreeItemChanged);
-  connect(m_treeModel, &QStandardItemModel::rowsInserted, this, [this]() {
-    if (!m_updating)
-      updateTextFromTree();
-  });
+  connect(m_treeModel, &QStandardItemModel::rowsInserted, this,
+          [this](const QModelIndex &parent, int first, int last) {
+            if (m_updating)
+              return;
+            m_updating = true;
+            QStandardItem *parentItem = parent.isValid()
+                                            ? m_treeModel->itemFromIndex(parent)
+                                            : m_treeModel->invisibleRootItem();
+            for (int i = first; i <= last; ++i) {
+              QStandardItem *child = parentItem->child(i);
+              if (child && !child->data(NodeTypeRole).isValid()) {
+                QString text = child->text();
+                handleNewItem(child, text);
+              }
+            }
+            m_updating = false;
+            updateTextFromTree();
+          });
   connect(m_treeModel, &QStandardItemModel::rowsRemoved, this, [this]() {
     if (!m_updating)
       updateTextFromTree();
@@ -105,25 +166,11 @@ FilterEditor::FilterEditor(QWidget *parent)
                                            : m_treeModel->invisibleRootItem();
               }
             }
-
             QStandardItem *newItem = new QStandardItem(text);
-            if (text == QStringLiteral("AND"))
-              newItem->setData(TypeAnd, NodeTypeRole);
-            else if (text == QStringLiteral("OR"))
-              newItem->setData(TypeOr, NodeTypeRole);
-            else if (text == QStringLiteral("NOT"))
-              newItem->setData(TypeNot, NodeTypeRole);
-            else if (text == QStringLiteral("IN")) {
-              newItem->setData(TypeIn, NodeTypeRole);
-              newItem->setEditable(true);
-            } else if (text.endsWith(QLatin1Char(':'))) {
-              newItem->setData(TypeKV, NodeTypeRole);
-              newItem->setEditable(true);
-            } else {
-              newItem->setData(TypeKeyword, NodeTypeRole);
-              newItem->setEditable(true);
-            }
+            m_updating = true;
+            handleNewItem(newItem, text);
             parent->appendRow(newItem);
+            m_updating = false;
             updateTextFromTree();
             m_treeView->expandAll();
           });
@@ -135,6 +182,9 @@ FilterEditor::FilterEditor(QWidget *parent)
 
 QString FilterEditor::filterText() const { return m_lineEdit->text(); }
 
+void FilterEditor::setCompletions(const QStringList &completions) {
+  m_completions = completions;
+}
 void FilterEditor::setFilterText(const QString &text) {
   m_lineEdit->setText(text);
 }
@@ -304,6 +354,49 @@ void FilterEditor::onTreeItemChanged(QStandardItem *item) {
     }
   }
   updateTextFromTree();
+}
+
+bool FilterEditor::handleNewItem(QStandardItem *newItem, const QString &text) {
+  if (text == QStringLiteral("AND")) {
+    newItem->setData(TypeAnd, NodeTypeRole);
+  } else if (text == QStringLiteral("OR")) {
+    newItem->setData(TypeOr, NodeTypeRole);
+  } else if (text == QStringLiteral("NOT")) {
+    newItem->setData(TypeNot, NodeTypeRole);
+  } else if (text == QStringLiteral("IN")) {
+    newItem->setData(TypeIn, NodeTypeRole);
+    newItem->setEditable(true);
+    FilterInputDialog dlg(tr("Enter values (comma separated):"), true, m_completions, this);
+    if (dlg.exec() == QDialog::Accepted) {
+      QString key = dlg.getKey();
+      QString value = dlg.getValue();
+      newItem->setData(key, NodeKeyRole);
+      newItem->setData(value, NodeValueRole);
+      newItem->setText(key + QStringLiteral(" IN \"") + value +
+                       QStringLiteral("\""));
+    }
+  } else if (text.endsWith(QLatin1Char(':'))) {
+    newItem->setData(TypeKV, NodeTypeRole);
+    newItem->setEditable(true);
+    QString key = text.left(text.length() - 1);
+    newItem->setData(key, NodeKeyRole);
+    FilterInputDialog dlg(tr("Enter value for ") + key + QStringLiteral(":"),
+                          false, m_completions, this);
+    if (dlg.exec() == QDialog::Accepted) {
+      QString value = dlg.getValue();
+      newItem->setData(value, NodeValueRole);
+      if (value.contains(QLatin1Char(' ')))
+        newItem->setText(text + QStringLiteral("\"") + value +
+                         QStringLiteral("\""));
+      else
+        newItem->setText(text + value);
+    }
+  } else {
+    newItem->setData(TypeKeyword, NodeTypeRole);
+    newItem->setData(text, NodeValueRole);
+    newItem->setEditable(true);
+  }
+  return true;
 }
 
 void FilterEditor::updateTextFromTree() {

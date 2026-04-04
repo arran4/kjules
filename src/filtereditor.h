@@ -18,6 +18,7 @@ public:
   explicit FilterEditor(QWidget *parent = nullptr);
   QString filterText() const;
   void setFilterText(const QString &text);
+  void setCompletions(const QStringList &completions);
 
 Q_SIGNALS:
   void filterChanged(const QString &text);
@@ -29,6 +30,7 @@ private Q_SLOTS:
 
 private:
   void updateTreeFromText();
+  bool handleNewItem(QStandardItem *newItem, const QString &text);
   void updateTextFromTree();
   void populateTree(QStandardItem *parentItem, QSharedPointer<ASTNode> node);
   QSharedPointer<ASTNode> buildASTFromTree(QStandardItem *item);
@@ -38,6 +40,7 @@ private:
   QStandardItemModel *m_treeModel;
   QListWidget *m_paletteList;
   bool m_updating;
+  QStringList m_completions;
 };
 
 #endif // FILTEREDITOR_H
