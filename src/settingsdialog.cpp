@@ -82,6 +82,27 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   formLayout->addRow(i18n("Default session auto-refresh:"),
                      m_globalAutoRefreshCombo);
 
+  m_autoArchiveCheckbox = new QCheckBox(
+      i18n("Automatically archive following managed sessions"), this);
+  m_autoArchiveCheckbox->setChecked(
+      sessionConfig.readEntry("AutoArchiveEnabled", true));
+  formLayout->addRow(QString(), m_autoArchiveCheckbox);
+
+  m_autoArchiveDaysEdit = new QSpinBox(this);
+  m_autoArchiveDaysEdit->setRange(1, 3650);
+  m_autoArchiveDaysEdit->setSuffix(i18n(" days after creation"));
+  m_autoArchiveDaysEdit->setValue(
+      sessionConfig.readEntry("AutoArchiveDays", 30));
+  formLayout->addRow(i18n("Archive after:"), m_autoArchiveDaysEdit);
+
+  m_prMergeArchiveCheckbox =
+      new QCheckBox(i18n("When a following job has a PR that is merged move it "
+                         "to the archive"),
+                    this);
+  m_prMergeArchiveCheckbox->setChecked(
+      sessionConfig.readEntry("PrMergeArchiveEnabled", true));
+  formLayout->addRow(QString(), m_prMergeArchiveCheckbox);
+
   mainLayout->addLayout(formLayout);
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -138,6 +159,11 @@ void SettingsDialog::onSave() {
                              QStringLiteral("SessionWindow"));
   sessionConfig.writeEntry("AutoRefreshIndex",
                            m_globalAutoRefreshCombo->currentIndex());
+  sessionConfig.writeEntry("AutoArchiveEnabled",
+                           m_autoArchiveCheckbox->isChecked());
+  sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
+  sessionConfig.writeEntry("PrMergeArchiveEnabled",
+                           m_prMergeArchiveCheckbox->isChecked());
   sessionConfig.sync();
 
   accept();
