@@ -1,5 +1,5 @@
 #include "sourcemodel.h"
-#include <KI18n/KLocalizedString>
+#include <KLocalizedString>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
