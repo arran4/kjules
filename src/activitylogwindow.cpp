@@ -1,6 +1,6 @@
 #include "activitylogwindow.h"
 
-#include <KI18n/KLocalizedString>
+#include <KLocalizedString>
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QTextBrowser>
