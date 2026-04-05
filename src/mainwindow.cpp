@@ -35,6 +35,7 @@
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
 #include <QGuiApplication>
@@ -1236,6 +1237,12 @@ void MainWindow::setupUi() {
   m_tabWidget->addTab(errTab, i18n("Errors"));
 
   mainLayout->addWidget(m_tabWidget);
+
+  QDockWidget *logDock = new QDockWidget(i18n("Activity Log"), this);
+  logDock->setObjectName(QStringLiteral("ActivityLogDock"));
+  m_activityLogBrowser = new QTextBrowser(logDock);
+  logDock->setWidget(m_activityLogBrowser);
+  addDockWidget(Qt::BottomDockWidgetArea, logDock);
 
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
 
@@ -2493,6 +2500,13 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
   m_trayIcon->setToolTip(message);
+
+  if (m_activityLogBrowser) {
+    QString timeStr =
+        QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
+    m_activityLogBrowser->append(
+        QStringLiteral("[%1] %2").arg(timeStr, message));
+  }
 }
 
 void MainWindow::onError(const QString &message) {

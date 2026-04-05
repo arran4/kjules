@@ -10,6 +10,7 @@
 class APIManager;
 class SessionModel;
 class SourceModel;
+class QTextBrowser;
 class SessionWindow;
 class DraftsModel;
 class TemplatesModel;
@@ -110,6 +111,7 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
+  QTextBrowser *m_activityLogBrowser;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
