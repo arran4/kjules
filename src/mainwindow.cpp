@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "activitylogwindow.h"
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
@@ -1238,12 +1239,6 @@ void MainWindow::setupUi() {
 
   mainLayout->addWidget(m_tabWidget);
 
-  QDockWidget *logDock = new QDockWidget(i18n("Activity Log"), this);
-  logDock->setObjectName(QStringLiteral("ActivityLogDock"));
-  m_activityLogBrowser = new QTextBrowser(logDock);
-  logDock->setWidget(m_activityLogBrowser);
-  addDockWidget(Qt::BottomDockWidgetArea, logDock);
-
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
 
   // Status Bar
@@ -1344,6 +1339,9 @@ void MainWindow::checkAutoArchiveSessions() {
   if (!rowsToArchive.isEmpty()) {
     m_archiveModel->saveSessions();
     m_sessionModel->saveSessions();
+    ActivityLogWindow::instance()->logMessage(
+        i18np("Auto-archived 1 following session.",
+              "Auto-archived %1 following sessions.", rowsToArchive.size()));
   }
 }
 
@@ -1419,6 +1417,10 @@ void MainWindow::setupTrayIcon() {
 
   m_trayMenu->addAction(m_viewSessionsAction);
 
+  if (m_showActivityLogAction) {
+    m_trayMenu->addAction(m_showActivityLogAction);
+  }
+
   m_trayMenu->addSeparator();
 
   QAction *quitAction = new QAction(i18n("&Quit"), this);
@@ -1452,6 +1454,15 @@ void MainWindow::createActions() {
   KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
   actionCollection()->setDefaultShortcut(newSessionAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_N));
+
+  m_showActivityLogAction = new QAction(i18n("Show Activity Log"), this);
+  actionCollection()->addAction(QStringLiteral("show_activity_log"),
+                                m_showActivityLogAction);
+  connect(m_showActivityLogAction, &QAction::triggered, this, []() {
+    ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow();
+  });
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -2041,6 +2052,8 @@ void MainWindow::onSessionCreatedResult(bool success,
     if (!sourceId.isEmpty())
       m_sourceModel->recordSessionCreated(sourceId);
     updateStatus(i18n("Session created from queue."));
+    ActivityLogWindow::instance()->logMessage(
+        i18n("Processed schedule run: Session created for %1.", sourceId));
     m_queueBackoffUntil = QDateTime(); // reset backoff
     // The next item will be processed by the configured timer (m_queueTimer)
   } else {
@@ -2500,13 +2513,6 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
   m_trayIcon->setToolTip(message);
-
-  if (m_activityLogBrowser) {
-    QString timeStr =
-        QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
-    m_activityLogBrowser->append(
-        QStringLiteral("[%1] %2").arg(timeStr, message));
-  }
 }
 
 void MainWindow::onError(const QString &message) {
@@ -2576,6 +2582,12 @@ void MainWindow::onSourcesRefreshFinished() {
     updateStatus(
         i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
              m_sourcesLoadedCount, m_sourcesAddedCount));
+    if (m_sourcesAddedCount > 0) {
+      ActivityLogWindow::instance()->logMessage(
+          i18np("Source refresh completed: 1 new source found.",
+                "Source refresh completed: %1 new sources found.",
+                m_sourcesAddedCount));
+    }
   } else {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));

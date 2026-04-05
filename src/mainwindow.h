@@ -111,7 +111,6 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
-  QTextBrowser *m_activityLogBrowser;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
@@ -134,6 +133,7 @@ private:
   QAction *m_viewRawDataAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
+  QAction *m_showActivityLogAction;
   QAction *m_backupDataAction;
   QAction *m_restoreDataAction;
   QAction *m_importTemplatesAction;
