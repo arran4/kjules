@@ -212,9 +212,36 @@ void SessionsWindow::setupUi() {
 
   tabWidget->addTab(m_listView, i18n("All sessions"));
 
+  auto unmanageSelectedSessions = [this]() {
+    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty()) return;
+
+    bool allManaged = true;
+    for (const QModelIndex &idx : selectedRows) {
+      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+      if (!m_managedModel || !m_managedModel->contains(id)) {
+        allManaged = false;
+        break;
+      }
+    }
+
+    if (allManaged) {
+      for (const QModelIndex &idx : selectedRows) {
+        QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+        Q_EMIT deleteRequested(id);
+      }
+    }
+  };
+
+  QAction *listDeleteAction = new QAction(i18n("Unmanage Session"), m_listView);
+  listDeleteAction->setShortcut(QKeySequence::Delete);
+  listDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(listDeleteAction, &QAction::triggered, unmanageSelectedSessions);
+  m_listView->addAction(listDeleteAction);
+
   connect(
       m_listView, &QTreeView::customContextMenuRequested,
-      [this](const QPoint &pos) {
+      [this, unmanageSelectedSessions](const QPoint &pos) {
         QModelIndex index = m_listView->indexAt(pos);
         if (index.isValid()) {
           QModelIndexList selectedRows =
@@ -451,13 +478,7 @@ void SessionsWindow::setupUi() {
           if (!allManaged) {
             deleteAction->setEnabled(false);
           }
-          connect(deleteAction, &QAction::triggered, [this, selectedRows]() {
-            for (const QModelIndex &idx : selectedRows) {
-              QString id =
-                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
-              Q_EMIT deleteRequested(id);
-            }
-          });
+          connect(deleteAction, &QAction::triggered, unmanageSelectedSessions);
 
           menu.exec(m_listView->mapToGlobal(pos));
         }

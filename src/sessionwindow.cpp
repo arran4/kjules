@@ -170,6 +170,7 @@ void SessionWindow::setupActions() {
   QAction *deleteAction =
       new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
                   i18n("Unmanage Session"), this);
+  deleteAction->setShortcut(QKeySequence::Delete);
   connect(deleteAction, &QAction::triggered, this, [this]() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());

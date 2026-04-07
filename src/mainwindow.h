@@ -111,6 +111,7 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
+  std::function<void()> m_deleteQueueItemsLambda;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
