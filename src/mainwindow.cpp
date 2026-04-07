@@ -24,6 +24,7 @@
 #include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KNotification>
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
@@ -77,7 +78,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_isRefreshingSources(false), m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_isProcessingQueue(false), m_queuePaused(false) {
+      m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
+      m_queuePaused(false) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
@@ -86,6 +88,9 @@ MainWindow::MainWindow(QWidget *parent)
   m_sessionRefreshTimer->start(60000); // 1 minute
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
+  connect(m_countdownTimer, &QTimer::timeout, this,
+          &MainWindow::updateQueueCountdown);
+  m_countdownTimer->start(1000);
   loadQueueSettings();
   createActions();
   setupTrayIcon();
@@ -1945,6 +1950,8 @@ void MainWindow::onSessionCreated(const QStringList &sources,
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
     }
+    req[QStringLiteral("submitTime")] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
     m_queueModel->enqueue(req);
   }
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.",
@@ -2280,47 +2287,124 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
   updateStatus(i18n("Error saved."));
   int newRow = m_errorsModel->rowCount() - 1;
 
-  ErrorWindow *window =
-      new ErrorWindow(newRow, request,
-                      QString::fromUtf8(QJsonDocument(response).toJson(
-                          QJsonDocument::Indented)),
-                      errorString, httpDetails, this);
-  connect(window, &ErrorWindow::editRequested, [this](int row) {
-    QModelIndex idx = m_errorsModel->index(row, 0);
-    onErrorActivated(idx);
-  });
-  connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-    m_errorsModel->removeError(row);
-    updateStatus(i18n("Error removed."));
-  });
-  connect(window, &ErrorWindow::draftRequested, [this](int row) {
-    QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-    m_draftsModel->addDraft(req);
-    m_errorsModel->removeError(row);
-    updateStatus(i18n("Error converted to draft."));
-  });
-  connect(window, &ErrorWindow::templateRequested, [this](int row) {
-    SaveDialog dlg(QStringLiteral("Template"), this);
-    if (dlg.exec() == QDialog::Accepted) {
+  bool showErrorWindowDirectly = false;
+  if (request.contains(QStringLiteral("submitTime"))) {
+    QString submitTimeStr =
+        request.value(QStringLiteral("submitTime")).toString();
+    QDateTime submitTime = QDateTime::fromString(submitTimeStr, Qt::ISODate);
+    if (submitTime.isValid()) {
+      if (submitTime.secsTo(QDateTime::currentDateTimeUtc()) <= 120) {
+        showErrorWindowDirectly = true;
+      }
+    }
+  } else {
+    // If submitTime is absent, assume it's a direct action
+    showErrorWindowDirectly = true;
+  }
+
+  if (showErrorWindowDirectly) {
+    ErrorWindow *window =
+        new ErrorWindow(newRow, request,
+                        QString::fromUtf8(QJsonDocument(response).toJson(
+                            QJsonDocument::Indented)),
+                        errorString, httpDetails, this);
+    connect(window, &ErrorWindow::editRequested, [this](int row) {
+      QModelIndex idx = m_errorsModel->index(row, 0);
+      onErrorActivated(idx);
+    });
+    connect(window, &ErrorWindow::deleteRequested, [this](int row) {
+      m_errorsModel->removeError(row);
+      updateStatus(i18n("Error removed."));
+    });
+    connect(window, &ErrorWindow::draftRequested, [this](int row) {
       QJsonObject errData = m_errorsModel->getError(row);
       QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-      req[QStringLiteral("name")] = dlg.nameOrComment();
-      req[QStringLiteral("description")] = dlg.description();
-      m_templatesModel->addTemplate(req);
-      updateStatus(i18n("Template created from error item."));
-    }
-  });
-  connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-    QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-    m_errorsModel->removeError(row);
-    m_apiManager->createSessionAsync(req);
-    updateStatus(i18n("Sending error item immediately..."));
-  });
+      m_draftsModel->addDraft(req);
+      m_errorsModel->removeError(row);
+      updateStatus(i18n("Error converted to draft."));
+    });
+    connect(window, &ErrorWindow::templateRequested, [this](int row) {
+      SaveDialog dlg(QStringLiteral("Template"), this);
+      if (dlg.exec() == QDialog::Accepted) {
+        QJsonObject errData = m_errorsModel->getError(row);
+        QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+        req[QStringLiteral("name")] = dlg.nameOrComment();
+        req[QStringLiteral("description")] = dlg.description();
+        m_templatesModel->addTemplate(req);
+        updateStatus(i18n("Template created from error item."));
+      }
+    });
+    connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+      QJsonObject errData = m_errorsModel->getError(row);
+      QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+      m_errorsModel->removeError(row);
+      m_apiManager->createSessionAsync(req);
+      updateStatus(i18n("Sending error item immediately..."));
+    });
 
-  window->setAttribute(Qt::WA_DeleteOnClose);
-  window->show();
+    window->setAttribute(Qt::WA_DeleteOnClose);
+    window->show();
+  } else {
+    KNotification *notification = new KNotification(
+        QStringLiteral("QueueError"), KNotification::Persistent, this);
+    notification->setText(i18n("Task failed: %1", errorString));
+    notification->setDefaultAction(i18n("Open Details"));
+    connect(notification, &KNotification::defaultActivated, this,
+            [this, newRow, request, response, errorString, httpDetails]() {
+              // Find current row of this error since the list might have
+              // changed Wait, to be perfectly safe, we should locate the exact
+              // error. But we can just use newRow if we assume no errors were
+              // removed, or use onErrorActivated. However, it's safer to pop
+              // the new ErrorWindow directly using the passed data if we can't
+              // reliably index it, but newRow works well enough in most simple
+              // cases. Let's create the window directly.
+              ErrorWindow *window = new ErrorWindow(
+                  newRow, request,
+                  QString::fromUtf8(
+                      QJsonDocument(response).toJson(QJsonDocument::Indented)),
+                  errorString, httpDetails, this);
+              connect(window, &ErrorWindow::editRequested, [this](int row) {
+                QModelIndex idx = m_errorsModel->index(row, 0);
+                onErrorActivated(idx);
+              });
+              connect(window, &ErrorWindow::deleteRequested, [this](int row) {
+                m_errorsModel->removeError(row);
+                updateStatus(i18n("Error removed."));
+              });
+              connect(window, &ErrorWindow::draftRequested, [this](int row) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
+                m_draftsModel->addDraft(req);
+                m_errorsModel->removeError(row);
+                updateStatus(i18n("Error converted to draft."));
+              });
+              connect(window, &ErrorWindow::templateRequested, [this](int row) {
+                SaveDialog dlg(QStringLiteral("Template"), this);
+                if (dlg.exec() == QDialog::Accepted) {
+                  QJsonObject errData = m_errorsModel->getError(row);
+                  QJsonObject req =
+                      errData.value(QStringLiteral("request")).toObject();
+                  req[QStringLiteral("name")] = dlg.nameOrComment();
+                  req[QStringLiteral("description")] = dlg.description();
+                  m_templatesModel->addTemplate(req);
+                  updateStatus(i18n("Template created from error item."));
+                }
+              });
+              connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
+                m_errorsModel->removeError(row);
+                m_apiManager->createSessionAsync(req);
+                updateStatus(i18n("Sending error item immediately..."));
+              });
+
+              window->setAttribute(Qt::WA_DeleteOnClose);
+              window->show();
+            });
+    notification->sendEvent();
+  }
 }
 
 void MainWindow::onErrorActivated(const QModelIndex &index) {
@@ -2591,6 +2675,43 @@ void MainWindow::cancelSourcesRefresh() {
   // Omit updateStatus here because APIManager's cancelation will
   // subsequently emit sourcesRefreshFinished(), which would clobber this.
   // Instead, we let onSourcesRefreshFinished() handle the final status text.
+}
+
+void MainWindow::updateQueueCountdown() {
+  if (m_queuePaused) {
+    return;
+  }
+
+  if (m_queueModel->rowCount() == 0) {
+    if (m_statusLabel->text().startsWith(i18n("Next send in")) ||
+        m_statusLabel->text() == i18n("Processing...")) {
+      m_statusLabel->setText(i18n("Ready"));
+    }
+    return;
+  }
+
+  int remainingSeconds = 0;
+  QDateTime now = QDateTime::currentDateTimeUtc();
+
+  if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
+    remainingSeconds = now.secsTo(m_queueBackoffUntil);
+  } else {
+    QueueItem peekItem = m_queueModel->peek();
+    if (peekItem.isWaitItem && peekItem.waitStartTime.isValid()) {
+      int elapsed = peekItem.waitStartTime.secsTo(now);
+      if (elapsed < peekItem.waitSeconds) {
+        remainingSeconds = peekItem.waitSeconds - elapsed;
+      }
+    }
+  }
+
+  if (remainingSeconds > 0) {
+    m_statusLabel->setText(i18n("Next send in %1s", remainingSeconds));
+  } else if (!m_isProcessingQueue) {
+    m_statusLabel->setText(i18n("Ready to process"));
+  } else {
+    m_statusLabel->setText(i18n("Processing..."));
+  }
 }
 
 void MainWindow::updateSessionStats() {

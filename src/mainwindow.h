@@ -70,6 +70,7 @@ private Q_SLOTS:
   void cancelSourcesRefresh();
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
+  void updateQueueCountdown();
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -148,6 +149,7 @@ private:
   QDateTime m_lastSessionRefreshTime;
 
   QTimer *m_queueTimer;
+  QTimer *m_countdownTimer;
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
