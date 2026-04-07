@@ -643,6 +643,7 @@ void SessionsWindow::setupUi() {
 
   QString xml = QStringLiteral(
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      "<!DOCTYPE gui SYSTEM \"kpartgui.dtd\">\n"
       "<gui name=\"sessionswindow\" version=\"1\">\n"
       "  <MenuBar>\n"
       "    <Menu name=\"file\"><text>&amp;File</text>\n"
@@ -652,7 +653,7 @@ void SessionsWindow::setupUi() {
       "      <Separator/>\n"
       "      <Action name=\"file_close\"/>\n"
       "    </Menu>\n"
-      "    <Menu name=\"actions_menu\"><text>&amp;Actions</text>\n"
+      "    <Menu name=\"actions\"><text>&amp;Actions</text>\n"
       "      <Action name=\"watch_session\"/>\n"
       "      <Action name=\"archive_session\"/>\n"
       "      <Action name=\"delete_session\"/>\n"
@@ -666,7 +667,15 @@ void SessionsWindow::setupUi() {
       "    </Menu>\n"
       "    <Menu name=\"view\"><text>&amp;View</text>\n"
       "      <Menu name=\"columns_menu\"><text>Columns</text>\n"
-      "        <ActionList name=\"columns_list\"/>\n"
+      "        <Action name=\"col_title\"/>\n"
+      "        <Action name=\"col_state\"/>\n"
+      "        <Action name=\"col_changeset\"/>\n"
+      "        <Action name=\"col_pr\"/>\n"
+      "        <Action name=\"col_updatedat\"/>\n"
+      "        <Action name=\"col_createdat\"/>\n"
+      "        <Action name=\"col_owner\"/>\n"
+      "        <Action name=\"col_repo\"/>\n"
+      "        <Action name=\"col_id\"/>\n"
       "      </Menu>\n"
       "    </Menu>\n"
       "  </MenuBar>\n"
@@ -679,7 +688,6 @@ void SessionsWindow::setupUi() {
 
   setXML(xml, false);
   setupGUI();
-  plugActionList(QStringLiteral("columns_list"), columnActions);
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
