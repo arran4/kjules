@@ -1950,8 +1950,6 @@ void MainWindow::onSessionCreated(const QStringList &sources,
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
     }
-    req[QStringLiteral("submitTime")] =
-        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
     m_queueModel->enqueue(req);
   }
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.",
@@ -2285,126 +2283,74 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
                                          const QString &httpDetails) {
   m_errorsModel->addError(request, response, errorString, httpDetails);
   updateStatus(i18n("Error saved."));
-  int newRow = m_errorsModel->rowCount() - 1;
 
-  bool showErrorWindowDirectly = false;
-  if (request.contains(QStringLiteral("submitTime"))) {
-    QString submitTimeStr =
-        request.value(QStringLiteral("submitTime")).toString();
-    QDateTime submitTime = QDateTime::fromString(submitTimeStr, Qt::ISODate);
-    if (submitTime.isValid()) {
-      if (submitTime.secsTo(QDateTime::currentDateTimeUtc()) <= 120) {
-        showErrorWindowDirectly = true;
-      }
-    }
-  } else {
-    // If submitTime is absent, assume it's a direct action
-    showErrorWindowDirectly = true;
-  }
-
-  if (showErrorWindowDirectly) {
-    ErrorWindow *window =
-        new ErrorWindow(newRow, request,
-                        QString::fromUtf8(QJsonDocument(response).toJson(
-                            QJsonDocument::Indented)),
-                        errorString, httpDetails, this);
-    connect(window, &ErrorWindow::editRequested, [this](int row) {
-      QModelIndex idx = m_errorsModel->index(row, 0);
-      onErrorActivated(idx);
-    });
-    connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-      m_errorsModel->removeError(row);
-      updateStatus(i18n("Error removed."));
-    });
-    connect(window, &ErrorWindow::draftRequested, [this](int row) {
-      QJsonObject errData = m_errorsModel->getError(row);
-      QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-      m_draftsModel->addDraft(req);
-      m_errorsModel->removeError(row);
-      updateStatus(i18n("Error converted to draft."));
-    });
-    connect(window, &ErrorWindow::templateRequested, [this](int row) {
-      SaveDialog dlg(QStringLiteral("Template"), this);
-      if (dlg.exec() == QDialog::Accepted) {
-        QJsonObject errData = m_errorsModel->getError(row);
-        QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-        req[QStringLiteral("name")] = dlg.nameOrComment();
-        req[QStringLiteral("description")] = dlg.description();
-        m_templatesModel->addTemplate(req);
-        updateStatus(i18n("Template created from error item."));
-      }
-    });
-    connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-      QJsonObject errData = m_errorsModel->getError(row);
-      QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-      m_errorsModel->removeError(row);
-      m_apiManager->createSessionAsync(req);
-      updateStatus(i18n("Sending error item immediately..."));
-    });
-
-    window->setAttribute(Qt::WA_DeleteOnClose);
-    window->show();
-  } else {
-    KNotification *notification = new KNotification(
-        QStringLiteral("QueueError"), KNotification::Persistent, this);
-    notification->setText(i18n("Task failed: %1", errorString));
-    notification->setDefaultAction(i18n("Open Details"));
-    connect(notification, &KNotification::defaultActivated, this,
-            [this, newRow, request, response, errorString, httpDetails]() {
-              // Find current row of this error since the list might have
-              // changed Wait, to be perfectly safe, we should locate the exact
-              // error. But we can just use newRow if we assume no errors were
-              // removed, or use onErrorActivated. However, it's safer to pop
-              // the new ErrorWindow directly using the passed data if we can't
-              // reliably index it, but newRow works well enough in most simple
-              // cases. Let's create the window directly.
-              ErrorWindow *window = new ErrorWindow(
-                  newRow, request,
-                  QString::fromUtf8(
-                      QJsonDocument(response).toJson(QJsonDocument::Indented)),
-                  errorString, httpDetails, this);
-              connect(window, &ErrorWindow::editRequested, [this](int row) {
-                QModelIndex idx = m_errorsModel->index(row, 0);
-                onErrorActivated(idx);
-              });
-              connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-                m_errorsModel->removeError(row);
-                updateStatus(i18n("Error removed."));
-              });
-              connect(window, &ErrorWindow::draftRequested, [this](int row) {
-                QJsonObject errData = m_errorsModel->getError(row);
-                QJsonObject req =
-                    errData.value(QStringLiteral("request")).toObject();
-                m_draftsModel->addDraft(req);
-                m_errorsModel->removeError(row);
-                updateStatus(i18n("Error converted to draft."));
-              });
-              connect(window, &ErrorWindow::templateRequested, [this](int row) {
-                SaveDialog dlg(QStringLiteral("Template"), this);
-                if (dlg.exec() == QDialog::Accepted) {
-                  QJsonObject errData = m_errorsModel->getError(row);
-                  QJsonObject req =
-                      errData.value(QStringLiteral("request")).toObject();
-                  req[QStringLiteral("name")] = dlg.nameOrComment();
-                  req[QStringLiteral("description")] = dlg.description();
-                  m_templatesModel->addTemplate(req);
-                  updateStatus(i18n("Template created from error item."));
+  KNotification *notification = new KNotification(
+      QStringLiteral("QueueError"), KNotification::Persistent, this);
+  notification->setText(i18n("Task failed: %1", errorString));
+  notification->setDefaultAction(i18n("Open Details"));
+  connect(notification, &KNotification::defaultActivated, this,
+          [this, request, response, errorString, httpDetails]() {
+            // Find current row of this error since the list might have changed
+            int currentRow = -1;
+            for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+                QJsonObject errData = m_errorsModel->getError(i);
+                if (errData.value(QStringLiteral("request")).toObject() == request &&
+                    errData.value(QStringLiteral("errorString")).toString() == errorString) {
+                    currentRow = i;
+                    break;
                 }
-              });
-              connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+            }
+            if (currentRow == -1) {
+                updateStatus(i18n("Error item has already been removed."));
+                return;
+            }
+
+            ErrorWindow *window = new ErrorWindow(
+                currentRow, request,
+                QString::fromUtf8(
+                    QJsonDocument(response).toJson(QJsonDocument::Indented)),
+                errorString, httpDetails, this);
+            connect(window, &ErrorWindow::editRequested, [this](int row) {
+              QModelIndex idx = m_errorsModel->index(row, 0);
+              onErrorActivated(idx);
+            });
+            connect(window, &ErrorWindow::deleteRequested, [this](int row) {
+              m_errorsModel->removeError(row);
+              updateStatus(i18n("Error removed."));
+            });
+            connect(window, &ErrorWindow::draftRequested, [this](int row) {
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_draftsModel->addDraft(req);
+              m_errorsModel->removeError(row);
+              updateStatus(i18n("Error converted to draft."));
+            });
+            connect(window, &ErrorWindow::templateRequested, [this](int row) {
+              SaveDialog dlg(QStringLiteral("Template"), this);
+              if (dlg.exec() == QDialog::Accepted) {
                 QJsonObject errData = m_errorsModel->getError(row);
                 QJsonObject req =
                     errData.value(QStringLiteral("request")).toObject();
-                m_errorsModel->removeError(row);
-                m_apiManager->createSessionAsync(req);
-                updateStatus(i18n("Sending error item immediately..."));
-              });
-
-              window->setAttribute(Qt::WA_DeleteOnClose);
-              window->show();
+                req[QStringLiteral("name")] = dlg.nameOrComment();
+                req[QStringLiteral("description")] = dlg.description();
+                m_templatesModel->addTemplate(req);
+                updateStatus(i18n("Template created from error item."));
+              }
             });
-    notification->sendEvent();
-  }
+            connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_errorsModel->removeError(row);
+              m_apiManager->createSessionAsync(req);
+              updateStatus(i18n("Sending error item immediately..."));
+            });
+
+            window->setAttribute(Qt::WA_DeleteOnClose);
+            window->show();
+          });
+  notification->sendEvent();
 }
 
 void MainWindow::onErrorActivated(const QModelIndex &index) {
