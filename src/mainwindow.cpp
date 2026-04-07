@@ -268,6 +268,7 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
                   [this, sourceIndex]() {
@@ -404,6 +405,7 @@ void MainWindow::setupUi() {
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
               menu.addAction(i18n("Open Sessions for source"));
@@ -725,6 +727,7 @@ void MainWindow::setupUi() {
             m_archiveView->setCurrentIndex(index);
           }
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -1444,6 +1447,12 @@ void MainWindow::createActions() {
     ActivityLogWindow::instance()->raise();
     ActivityLogWindow::instance()->activateWindow();
   });
+
+  m_toggleFavouriteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                  i18n("Toggle Favourite"), this);
+  connect(m_toggleFavouriteAction, &QAction::triggered, this,
+          &MainWindow::toggleFavourite);
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -2502,6 +2511,52 @@ void MainWindow::onError(const QString &message) {
 }
 
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
+
+void MainWindow::toggleFavourite() {
+  if (m_tabWidget->currentWidget()->objectName() ==
+      QStringLiteral("sourcesTab")) {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+        m_sourceModel->toggleFavourite(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("followingTab")) {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_sessionModel->toggleFavourite(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("archiveTab")) {
+    QModelIndexList selectedRows =
+        m_archiveView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_archiveModel->toggleFavourite(id);
+      }
+    }
+  }
+}
 
 void MainWindow::toggleWindowVisibility() {
   if (isVisible()) {

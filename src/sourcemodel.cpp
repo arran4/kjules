@@ -56,6 +56,10 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return name;
 
       return id;
+    } else if (index.column() == ColFavourite) {
+      return source.value(QStringLiteral("local_favourite")).toBool()
+                 ? i18n("Yes")
+                 : i18n("No");
     } else if (index.column() == ColLastUsed) {
       QString valStr =
           source.value(QStringLiteral("local_lastUsed")).toString();
@@ -142,6 +146,10 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       if (source.value(QStringLiteral("isPrivate")).toBool()) {
         return QIcon::fromTheme(QStringLiteral("security-high"));
       }
+    } else if (index.column() == ColFavourite) {
+      if (source.value(QStringLiteral("local_favourite")).toBool()) {
+        return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
+      }
     }
     return QVariant();
   } else
@@ -152,6 +160,8 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       return id;
     case RawDataRole:
       return source;
+    case FavouriteRole:
+      return source.value(QStringLiteral("local_favourite")).toBool();
     default:
       return QVariant();
     }
@@ -164,6 +174,8 @@ QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
 
   if (section == ColName) {
     return QStringLiteral("Name");
+  } else if (section == ColFavourite) {
+    return i18n("Favourite");
   } else if (section == ColLastUsed) {
     return QStringLiteral("Last Used");
   } else if (section == ColManagedSessions) {
@@ -193,7 +205,29 @@ QHash<int, QByteArray> SourceModel::roleNames() const {
   roles[NameRole] = "name";
   roles[IdRole] = "id";
   roles[RawDataRole] = "rawData";
+  roles[FavouriteRole] = "favourite";
   return roles;
+}
+
+void SourceModel::toggleFavourite(const QString &id) {
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject source = m_sources[i].toObject();
+    QString currentId = source.value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId = source.value(QStringLiteral("name")).toString();
+    }
+
+    if (currentId == id) {
+      bool isFav = source.value(QStringLiteral("local_favourite")).toBool();
+      source[QStringLiteral("local_favourite")] = !isFav;
+      m_sources[i] = source;
+      QModelIndex index = createIndex(i, 0);
+      QModelIndex lastColIndex = createIndex(i, ColCount - 1);
+      Q_EMIT dataChanged(index, lastColIndex);
+      saveSources();
+      return;
+    }
+  }
 }
 
 void SourceModel::setSources(const QJsonArray &sources) {
@@ -231,6 +265,9 @@ void SourceModel::setSources(const QJsonArray &sources) {
         if (existing.contains(QStringLiteral("local_sessionTimestamps")))
           source[QStringLiteral("local_sessionTimestamps")] =
               existing[QStringLiteral("local_sessionTimestamps")];
+        if (existing.contains(QStringLiteral("local_favourite")))
+          source[QStringLiteral("local_favourite")] =
+              existing[QStringLiteral("local_favourite")];
         break;
       }
     }
@@ -284,6 +321,9 @@ int SourceModel::addSources(const QJsonArray &sources) {
         if (existing.contains(QStringLiteral("local_sessionTimestamps")))
           source[QStringLiteral("local_sessionTimestamps")] =
               existing[QStringLiteral("local_sessionTimestamps")];
+        if (existing.contains(QStringLiteral("local_favourite")))
+          source[QStringLiteral("local_favourite")] =
+              existing[QStringLiteral("local_favourite")];
         m_sources[j] = source;
         break;
       }
@@ -358,6 +398,9 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
       if (existing.contains(QStringLiteral("local_sessionTimestamps")))
         source[QStringLiteral("local_sessionTimestamps")] =
             existing[QStringLiteral("local_sessionTimestamps")];
+      if (existing.contains(QStringLiteral("local_favourite")))
+        source[QStringLiteral("local_favourite")] =
+            existing[QStringLiteral("local_favourite")];
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
       Q_EMIT dataChanged(index, index);
@@ -574,6 +617,11 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     source[QStringLiteral("local_sessionCount")] = count;
     source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
     source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
+    // We already keep local_favourite because we loaded it from existing, wait,
+    // recalculateStatsFromSessions modifies existing m_sources. We just
+    // construct a new source... No, we are modifying `m_sources[i].toObject()`,
+    // wait: QJsonObject source = m_sources[i].toObject(); This makes a copy, we
+    // modify it, then put it back. So local_favourite is preserved.
     if (!lastUsed.isEmpty()) {
       source[QStringLiteral("local_lastUsed")] = lastUsed;
     } else {

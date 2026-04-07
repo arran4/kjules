@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFont>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QStandardPaths>
 
@@ -46,6 +47,8 @@ SessionData parseSessionData(const QJsonObject &obj) {
       obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
   data.createTime = QDateTime::fromString(
       obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+
+  data.isFavourite = obj.value(QStringLiteral("local_favourite")).toBool();
 
   data.hasChangeSet = false;
   QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
@@ -108,6 +111,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     switch (index.column()) {
     case ColTitle:
       return session.title;
+    case ColFavourite:
+      return session.isFavourite ? i18n("Yes") : i18n("No");
     case ColState:
       return session.state;
     case ColChangeSet:
@@ -136,6 +141,10 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   } else if (role == Qt::ForegroundRole) {
     if (index.column() == ColPR && !session.prNumber.isEmpty()) {
       return QColor(Qt::blue);
+    }
+  } else if (role == Qt::DecorationRole) {
+    if (index.column() == ColFavourite && session.isFavourite) {
+      return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
     if (index.column() == ColPR && !session.prNumber.isEmpty()) {
@@ -168,6 +177,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.prStatus;
   case PrLabelsRole:
     return session.prLabels;
+  case FavouriteRole:
+    return session.isFavourite;
   default:
     return QVariant();
   }
@@ -179,6 +190,8 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
     switch (section) {
     case ColTitle:
       return i18n("Title");
+    case ColFavourite:
+      return i18n("Favourite");
     case ColState:
       return i18n("State");
     case ColChangeSet:
@@ -215,7 +228,19 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
   roles[PromptRole] = "prompt";
   roles[StateRole] = "state";
   roles[LastRefreshedRole] = "lastRefreshed";
+  roles[FavouriteRole] = "favourite";
   return roles;
+}
+
+void SessionModel::toggleFavourite(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    data.isFavourite = !data.isFavourite;
+    data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
 }
 
 void SessionModel::setSessions(const QJsonArray &sessions) {
@@ -244,7 +269,11 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
     QString id = obj.value(QStringLiteral("id")).toString();
     if (m_idToIndex.contains(id)) {
       int row = m_idToIndex.value(id);
+      // Preserve local_favourite
+      bool isFav = m_sessions[row].isFavourite;
       SessionData data = parseSessionData(obj);
+      data.isFavourite = isFav;
+      data.rawObject[QStringLiteral("local_favourite")] = isFav;
       data.id = id; // Ensure ID matches
       m_sessions[row] = data;
       Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
@@ -289,7 +318,11 @@ void SessionModel::updateSession(const QJsonObject &session) {
   QString id = sessionWithRefresh.value(QStringLiteral("id")).toString();
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
+    // Preserve local_favourite
+    bool isFav = m_sessions[i].isFavourite;
     SessionData data = parseSessionData(sessionWithRefresh);
+    data.isFavourite = isFav;
+    data.rawObject[QStringLiteral("local_favourite")] = isFav;
     data.id = id; // Ensure ID matches
     m_sessions[i] = data;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
