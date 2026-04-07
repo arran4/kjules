@@ -896,7 +896,8 @@ void MainWindow::setupUi() {
             QModelIndexList selectedRows =
                 m_draftsView->selectionModel()->selectedRows();
             const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_draftsView->model());
             for (const QModelIndex &idx : selectedRows) {
               QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
               QJsonObject draft = m_draftsModel->getDraft(sourceIndex.row());
@@ -910,8 +911,10 @@ void MainWindow::setupUi() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
               const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
-              QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_draftsView->model());
+              QModelIndex sourceIndex =
+                  proxy ? proxy->mapToSource(index) : index;
               QJsonObject draft = m_draftsModel->getDraft(sourceIndex.row());
               draft[QStringLiteral("name")] = dlg.nameOrComment();
               draft[QStringLiteral("description")] = dlg.description();
@@ -931,7 +934,8 @@ void MainWindow::setupUi() {
                           selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
               const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_draftsView->model());
               for (const QModelIndex &idx : selectedRows) {
                 QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
                 if (!rowsToDelete.contains(sourceIndex.row())) {
@@ -998,7 +1002,8 @@ void MainWindow::setupUi() {
           connect(editAction, &QAction::triggered, [this, index]() {
             TemplateEditDialog dlg(this);
             const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_templatesView->model());
             QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
             int row = sourceIndex.row();
 
@@ -1031,11 +1036,13 @@ void MainWindow::setupUi() {
               return;
 
             const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_templatesView->model());
             QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
             QJsonArray exportArray;
-            exportArray.append(m_templatesModel->getTemplate(sourceIndex.row()));
+            exportArray.append(
+                m_templatesModel->getTemplate(sourceIndex.row()));
             QJsonDocument doc(exportArray);
             QFile file(filePath);
             if (file.open(QIODevice::WriteOnly)) {
@@ -1060,7 +1067,8 @@ void MainWindow::setupUi() {
                           selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
               const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_templatesView->model());
               for (const QModelIndex &idx : selectedRows) {
                 QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
                 if (!rowsToDelete.contains(sourceIndex.row())) {
@@ -1141,8 +1149,10 @@ void MainWindow::setupUi() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
               const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
-              QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_errorsView->model());
+              QModelIndex sourceIndex =
+                  proxy ? proxy->mapToSource(index) : index;
               QJsonObject errData = m_errorsModel->getError(sourceIndex.row());
               QJsonObject req =
                   errData.value(QStringLiteral("request")).toObject();
@@ -1157,7 +1167,8 @@ void MainWindow::setupUi() {
             QModelIndexList selectedRows =
                 m_errorsView->selectionModel()->selectedRows();
             const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_errorsView->model());
             for (const QModelIndex &idx : selectedRows) {
               QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
               int row = sourceIndex.row();
@@ -1229,7 +1240,8 @@ void MainWindow::setupUi() {
                           selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
               const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_errorsView->model());
               for (const QModelIndex &idx : selectedRows) {
                 QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
                 if (!rowsToDelete.contains(sourceIndex.row())) {
