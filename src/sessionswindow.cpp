@@ -214,7 +214,8 @@ void SessionsWindow::setupUi() {
 
   auto unmanageSelectedSessions = [this]() {
     QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
-    if (selectedRows.isEmpty()) return;
+    if (selectedRows.isEmpty())
+      return;
 
     bool allManaged = true;
     for (const QModelIndex &idx : selectedRows) {

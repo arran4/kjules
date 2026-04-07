@@ -362,14 +362,16 @@ void SourceModel::loadSources() {
 
         int existingCount =
             existing.value(QStringLiteral("local_sessionCount")).toInt();
-        int newCount = source.value(QStringLiteral("local_sessionCount")).toInt();
+        int newCount =
+            source.value(QStringLiteral("local_sessionCount")).toInt();
         if (newCount > existingCount) {
           existing[QStringLiteral("local_sessionCount")] = newCount;
         }
 
         if (source.contains(QStringLiteral("github")) &&
             !existing.contains(QStringLiteral("github"))) {
-          existing[QStringLiteral("github")] = source.value(QStringLiteral("github"));
+          existing[QStringLiteral("github")] =
+              source.value(QStringLiteral("github"));
         }
 
         deduplicatedSources[existingIndex] = existing;
