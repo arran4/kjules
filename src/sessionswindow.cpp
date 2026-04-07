@@ -140,8 +140,6 @@ void SessionsWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
 
-  setupGUI();
-
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
   QHBoxLayout *filterLayout = new QHBoxLayout();
@@ -504,55 +502,36 @@ void SessionsWindow::setupUi() {
                                 m_loadRemainingAction);
   m_loadRemainingAction->setEnabled(false);
 
-  // Menu
-  QMenu *fileMenu = new QMenu(i18n("File"), this);
-  fileMenu->addAction(refreshAction);
-  fileMenu->addAction(m_resumeAction);
-  fileMenu->addAction(m_loadRemainingAction);
   QAction *quitAction =
       new QAction(QIcon::fromTheme(QStringLiteral("application-exit")),
                   i18n("Close"), this);
   quitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(quitAction, &QAction::triggered, this, &SessionsWindow::close);
-  fileMenu->addAction(quitAction);
-  menuBar()->addMenu(fileMenu);
+  actionCollection()->addAction(QStringLiteral("file_close"), quitAction);
 
-  QMenu *actionsMenu = new QMenu(i18n("Actions"), this);
-  QAction *watchMenuAction = actionsMenu->addAction(
-      QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"));
-  QAction *archiveMenuAction = actionsMenu->addAction(
-      QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"));
+  QAction *watchMenuAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
+                  i18n("Follow Session"), this);
+  actionCollection()->addAction(QStringLiteral("watch_session"),
+                                watchMenuAction);
+
+  QAction *archiveMenuAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("archive")),
+                  i18n("Archive Session"), this);
+  actionCollection()->addAction(QStringLiteral("archive_session"),
+                                archiveMenuAction);
+
   QAction *deleteMenuAction =
-      actionsMenu->addAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
-                             i18n("Unmanage Session"));
+      new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                  i18n("Unmanage Session"), this);
+  actionCollection()->addAction(QStringLiteral("delete_session"),
+                                deleteMenuAction);
 
-  connect(actionsMenu, &QMenu::aboutToShow,
-          [this, watchMenuAction, archiveMenuAction, deleteMenuAction]() {
-            QModelIndexList selectedRows =
-                m_listView->selectionModel()->selectedRows();
-            if (selectedRows.isEmpty()) {
-              watchMenuAction->setEnabled(false);
-              archiveMenuAction->setEnabled(false);
-              deleteMenuAction->setEnabled(false);
-              return;
-            }
+  connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
+          this, &SessionsWindow::updateActionStates);
 
-            bool allManaged = true;
-            bool allUnmanaged = true;
-            for (const QModelIndex &idx : selectedRows) {
-              QString id =
-                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
-              if (m_managedModel && m_managedModel->contains(id)) {
-                allUnmanaged = false;
-              } else {
-                allManaged = false;
-              }
-            }
-
-            watchMenuAction->setEnabled(allUnmanaged);
-            archiveMenuAction->setEnabled(allManaged);
-            deleteMenuAction->setEnabled(allManaged);
-          });
+  // Trigger initial state
+  updateActionStates();
 
   connect(watchMenuAction, &QAction::triggered, [this]() {
     QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
@@ -579,33 +558,27 @@ void SessionsWindow::setupUi() {
     }
   });
 
-  menuBar()->addMenu(actionsMenu);
-
-  QMenu *prefsMenu = new QMenu(i18n("Preferences"), this);
-  QMenu *autoLoadMenu = prefsMenu->addMenu(i18n("Auto Load Behavior"));
-
   m_autoLoadGroup = new QActionGroup(this);
   QAction *manualAction = new QAction(i18n("Manual"), this);
   manualAction->setCheckable(true);
   manualAction->setData(QStringLiteral("manual"));
+  actionCollection()->addAction(QStringLiteral("auto_load_manual"),
+                                manualAction);
   m_autoLoadGroup->addAction(manualAction);
 
   QAction *loadAllAction = new QAction(i18n("Load All On Refresh"), this);
   loadAllAction->setCheckable(true);
   loadAllAction->setData(QStringLiteral("load_all"));
+  actionCollection()->addAction(QStringLiteral("auto_load_all"), loadAllAction);
   m_autoLoadGroup->addAction(loadAllAction);
 
   QAction *autoBottomAction =
       new QAction(i18n("Auto-Load when at bottom"), this);
   autoBottomAction->setCheckable(true);
   autoBottomAction->setData(QStringLiteral("auto_bottom"));
+  actionCollection()->addAction(QStringLiteral("auto_load_bottom"),
+                                autoBottomAction);
   m_autoLoadGroup->addAction(autoBottomAction);
-
-  autoLoadMenu->addActions(m_autoLoadGroup->actions());
-  menuBar()->addMenu(prefsMenu);
-
-  QMenu *viewMenu = new QMenu(i18n("View"), this);
-  QMenu *columnsMenu = viewMenu->addMenu(i18n("Columns"));
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("SessionsWindow"));
@@ -627,8 +600,10 @@ void SessionsWindow::setupUi() {
     config.sync();
   });
 
-  auto addColumnToggle = [this, columnsMenu, &config](const QString &label,
-                                                      int colIndex) {
+  QList<QAction *> columnActions;
+  auto addColumnToggle = [this, &columnActions,
+                          &config](const QString &label, int colIndex,
+                                   const QString &actionName) {
     QAction *action = new QAction(label, this);
     action->setCheckable(true);
 
@@ -645,27 +620,66 @@ void SessionsWindow::setupUi() {
       config.sync();
     });
 
-    columnsMenu->addAction(action);
+    actionCollection()->addAction(actionName, action);
+    columnActions.append(action);
   };
 
-  addColumnToggle(i18n("Title"), SessionModel::ColTitle);
-  addColumnToggle(i18n("State"), SessionModel::ColState);
-  addColumnToggle(i18n("Change Set"), SessionModel::ColChangeSet);
-  addColumnToggle(i18n("PR"), SessionModel::ColPR);
-  addColumnToggle(i18n("Updated At"), SessionModel::ColUpdatedAt);
-  addColumnToggle(i18n("Created At"), SessionModel::ColCreatedAt);
-  addColumnToggle(i18n("Owner"), SessionModel::ColOwner);
-  addColumnToggle(i18n("Repo"), SessionModel::ColRepo);
-  addColumnToggle(i18n("ID"), SessionModel::ColId);
+  addColumnToggle(i18n("Title"), SessionModel::ColTitle,
+                  QStringLiteral("col_title"));
+  addColumnToggle(i18n("State"), SessionModel::ColState,
+                  QStringLiteral("col_state"));
+  addColumnToggle(i18n("Change Set"), SessionModel::ColChangeSet,
+                  QStringLiteral("col_changeset"));
+  addColumnToggle(i18n("PR"), SessionModel::ColPR, QStringLiteral("col_pr"));
+  addColumnToggle(i18n("Updated At"), SessionModel::ColUpdatedAt,
+                  QStringLiteral("col_updatedat"));
+  addColumnToggle(i18n("Created At"), SessionModel::ColCreatedAt,
+                  QStringLiteral("col_createdat"));
+  addColumnToggle(i18n("Owner"), SessionModel::ColOwner,
+                  QStringLiteral("col_owner"));
+  addColumnToggle(i18n("Repo"), SessionModel::ColRepo,
+                  QStringLiteral("col_repo"));
+  addColumnToggle(i18n("ID"), SessionModel::ColId, QStringLiteral("col_id"));
 
-  menuBar()->addMenu(viewMenu);
+  QString xml = QStringLiteral(
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      "<gui name=\"sessionswindow\" version=\"1\">\n"
+      "  <MenuBar>\n"
+      "    <Menu name=\"file\"><text>&amp;File</text>\n"
+      "      <Action name=\"refresh_sessions\"/>\n"
+      "      <Action name=\"resume_refresh\"/>\n"
+      "      <Action name=\"load_remaining\"/>\n"
+      "      <Separator/>\n"
+      "      <Action name=\"file_close\"/>\n"
+      "    </Menu>\n"
+      "    <Menu name=\"actions_menu\"><text>&amp;Actions</text>\n"
+      "      <Action name=\"watch_session\"/>\n"
+      "      <Action name=\"archive_session\"/>\n"
+      "      <Action name=\"delete_session\"/>\n"
+      "    </Menu>\n"
+      "    <Menu name=\"preferences_menu\"><text>&amp;Preferences</text>\n"
+      "      <Menu name=\"auto_load_menu\"><text>Auto Load Behavior</text>\n"
+      "        <Action name=\"auto_load_manual\"/>\n"
+      "        <Action name=\"auto_load_all\"/>\n"
+      "        <Action name=\"auto_load_bottom\"/>\n"
+      "      </Menu>\n"
+      "    </Menu>\n"
+      "    <Menu name=\"view\"><text>&amp;View</text>\n"
+      "      <Menu name=\"columns_menu\"><text>Columns</text>\n"
+      "        <ActionList name=\"columns_list\"/>\n"
+      "      </Menu>\n"
+      "    </Menu>\n"
+      "  </MenuBar>\n"
+      "  <ToolBar name=\"mainToolBar\"><text>Main Toolbar</text>\n"
+      "    <Action name=\"refresh_sessions\"/>\n"
+      "    <Action name=\"resume_refresh\"/>\n"
+      "    <Action name=\"load_remaining\"/>\n"
+      "  </ToolBar>\n"
+      "</gui>");
 
-  // Toolbar
-  QToolBar *toolBar = addToolBar(i18n("Main Toolbar"));
-  toolBar->setObjectName(QStringLiteral("mainToolBar"));
-  toolBar->addAction(refreshAction);
-  toolBar->addAction(m_resumeAction);
-  toolBar->addAction(m_loadRemainingAction);
+  setXML(xml, false);
+  setupGUI();
+  plugActionList(QStringLiteral("columns_list"), columnActions);
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
@@ -681,6 +695,41 @@ void SessionsWindow::setupUi() {
   connect(m_cancelBtn, &QPushButton::clicked, this,
           &SessionsWindow::cancelRefresh);
   statusBar()->addPermanentWidget(m_cancelBtn);
+}
+
+void SessionsWindow::updateActionStates() {
+  QAction *watchMenuAction =
+      actionCollection()->action(QStringLiteral("watch_session"));
+  QAction *archiveMenuAction =
+      actionCollection()->action(QStringLiteral("archive_session"));
+  QAction *deleteMenuAction =
+      actionCollection()->action(QStringLiteral("delete_session"));
+
+  if (!watchMenuAction || !archiveMenuAction || !deleteMenuAction)
+    return;
+
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty()) {
+    watchMenuAction->setEnabled(false);
+    archiveMenuAction->setEnabled(false);
+    deleteMenuAction->setEnabled(false);
+    return;
+  }
+
+  bool allManaged = true;
+  bool allUnmanaged = true;
+  for (const QModelIndex &idx : selectedRows) {
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+    if (m_managedModel && m_managedModel->contains(id)) {
+      allUnmanaged = false;
+    } else {
+      allManaged = false;
+    }
+  }
+
+  watchMenuAction->setEnabled(allUnmanaged);
+  archiveMenuAction->setEnabled(allManaged);
+  deleteMenuAction->setEnabled(allManaged);
 }
 
 void SessionsWindow::refreshSessions() {
