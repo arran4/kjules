@@ -60,6 +60,7 @@ set(kjules_SRCS
     src/queuedelegate.cpp
     src/queuemodel.cpp
     src/activitybrowser.cpp
+    src/activitylogwindow.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/errorwindow.cpp
