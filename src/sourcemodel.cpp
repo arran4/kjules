@@ -617,11 +617,6 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     source[QStringLiteral("local_sessionCount")] = count;
     source[QStringLiteral("local_sessionTimestamps")] = recentTimestamps;
     source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
-    // We already keep local_favourite because we loaded it from existing, wait,
-    // recalculateStatsFromSessions modifies existing m_sources. We just
-    // construct a new source... No, we are modifying `m_sources[i].toObject()`,
-    // wait: QJsonObject source = m_sources[i].toObject(); This makes a copy, we
-    // modify it, then put it back. So local_favourite is preserved.
     if (!lastUsed.isEmpty()) {
       source[QStringLiteral("local_lastUsed")] = lastUsed;
     } else {
