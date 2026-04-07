@@ -600,10 +600,8 @@ void SessionsWindow::setupUi() {
     config.sync();
   });
 
-  QList<QAction *> columnActions;
-  auto addColumnToggle = [this, &columnActions,
-                          &config](const QString &label, int colIndex,
-                                   const QString &actionName) {
+  auto addColumnToggle = [this, &config](const QString &label, int colIndex,
+                                         const QString &actionName) {
     QAction *action = new QAction(label, this);
     action->setCheckable(true);
 
@@ -621,7 +619,6 @@ void SessionsWindow::setupUi() {
     });
 
     actionCollection()->addAction(actionName, action);
-    columnActions.append(action);
   };
 
   addColumnToggle(i18n("Title"), SessionModel::ColTitle,
@@ -641,53 +638,7 @@ void SessionsWindow::setupUi() {
                   QStringLiteral("col_repo"));
   addColumnToggle(i18n("ID"), SessionModel::ColId, QStringLiteral("col_id"));
 
-  QString xml = QStringLiteral(
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-      "<!DOCTYPE gui SYSTEM \"kpartgui.dtd\">\n"
-      "<gui name=\"sessionswindow\" version=\"1\">\n"
-      "  <MenuBar>\n"
-      "    <Menu name=\"file\"><text>&amp;File</text>\n"
-      "      <Action name=\"refresh_sessions\"/>\n"
-      "      <Action name=\"resume_refresh\"/>\n"
-      "      <Action name=\"load_remaining\"/>\n"
-      "      <Separator/>\n"
-      "      <Action name=\"file_close\"/>\n"
-      "    </Menu>\n"
-      "    <Menu name=\"actions\"><text>&amp;Actions</text>\n"
-      "      <Action name=\"watch_session\"/>\n"
-      "      <Action name=\"archive_session\"/>\n"
-      "      <Action name=\"delete_session\"/>\n"
-      "    </Menu>\n"
-      "    <Menu name=\"preferences_menu\"><text>&amp;Preferences</text>\n"
-      "      <Menu name=\"auto_load_menu\"><text>Auto Load Behavior</text>\n"
-      "        <Action name=\"auto_load_manual\"/>\n"
-      "        <Action name=\"auto_load_all\"/>\n"
-      "        <Action name=\"auto_load_bottom\"/>\n"
-      "      </Menu>\n"
-      "    </Menu>\n"
-      "    <Menu name=\"view\"><text>&amp;View</text>\n"
-      "      <Menu name=\"columns_menu\"><text>Columns</text>\n"
-      "        <Action name=\"col_title\"/>\n"
-      "        <Action name=\"col_state\"/>\n"
-      "        <Action name=\"col_changeset\"/>\n"
-      "        <Action name=\"col_pr\"/>\n"
-      "        <Action name=\"col_updatedat\"/>\n"
-      "        <Action name=\"col_createdat\"/>\n"
-      "        <Action name=\"col_owner\"/>\n"
-      "        <Action name=\"col_repo\"/>\n"
-      "        <Action name=\"col_id\"/>\n"
-      "      </Menu>\n"
-      "    </Menu>\n"
-      "  </MenuBar>\n"
-      "  <ToolBar name=\"mainToolBar\"><text>Main Toolbar</text>\n"
-      "    <Action name=\"refresh_sessions\"/>\n"
-      "    <Action name=\"resume_refresh\"/>\n"
-      "    <Action name=\"load_remaining\"/>\n"
-      "  </ToolBar>\n"
-      "</gui>");
-
-  setXML(xml, false);
-  setupGUI();
+  setupGUI(Default, QStringLiteral("sessionswindowui.rc"));
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);

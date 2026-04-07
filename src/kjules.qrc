@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/kxmlgui5/kjules">
         <file>kjulesui.rc</file>
+        <file>sessionswindowui.rc</file>
     </qresource>
     <qresource prefix="/">
         <file alias="icons/kjules-tray.png">../icons/kjules-tray.png</file>
