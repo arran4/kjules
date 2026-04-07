@@ -25,6 +25,7 @@ Q_SIGNALS:
   void draftRequested(int row);
   void templateRequested(int row);
   void sendNowRequested(int row);
+  void readdToQueueRequested(int row);
 
 private Q_SLOTS:
   void onCopyError();

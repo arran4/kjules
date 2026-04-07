@@ -97,6 +97,13 @@ void ErrorWindow::setupUi() {
     accept();
   });
 
+  QPushButton *readdToQueueBtn = new QPushButton(
+      QIcon::fromTheme(QStringLiteral("list-add")), i18n("Re-add to Queue"), this);
+  connect(readdToQueueBtn, &QPushButton::clicked, [this]() {
+    Q_EMIT readdToQueueRequested(m_row);
+    accept();
+  });
+
   QPushButton *copyErrorBtn = new QPushButton(
       QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy Error"), this);
   connect(copyErrorBtn, &QPushButton::clicked, this, &ErrorWindow::onCopyError);
@@ -106,6 +113,7 @@ void ErrorWindow::setupUi() {
   actionsLayout->addWidget(draftBtn);
   actionsLayout->addWidget(templateBtn);
   actionsLayout->addWidget(sendNowBtn);
+  actionsLayout->addWidget(readdToQueueBtn);
   actionsLayout->addWidget(copyErrorBtn);
   actionsLayout->addStretch();
 
