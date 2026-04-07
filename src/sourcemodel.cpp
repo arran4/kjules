@@ -8,6 +8,13 @@
 #include <QStandardPaths>
 #include <cmath>
 
+static QString normalizeSourceId(const QString &id) {
+  if (id.startsWith(QStringLiteral("sources/"))) {
+    return id.mid(8);
+  }
+  return id;
+}
+
 SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) {
   loadSources();
 }
@@ -199,11 +206,19 @@ QHash<int, QByteArray> SourceModel::roleNames() const {
 void SourceModel::setSources(const QJsonArray &sources) {
   beginResetModel();
   QJsonArray newSources;
+  QHash<QString, bool> seenInNewSources;
+
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
     QString id = source.value(QStringLiteral("id")).toString();
     if (id.isEmpty())
       id = source.value(QStringLiteral("name")).toString();
+
+    QString normId = normalizeSourceId(id);
+    if (seenInNewSources.contains(normId)) {
+      continue;
+    }
+    seenInNewSources[normId] = true;
 
     for (int j = 0; j < m_sources.size(); ++j) {
       QString currentId =
@@ -211,7 +226,7 @@ void SourceModel::setSources(const QJsonArray &sources) {
       if (currentId.isEmpty())
         currentId =
             m_sources[j].toObject().value(QStringLiteral("name")).toString();
-      if (currentId == id) {
+      if (normalizeSourceId(currentId) == normId) {
         QJsonObject existing = m_sources[j].toObject();
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] =
@@ -251,11 +266,19 @@ void SourceModel::setSources(const QJsonArray &sources) {
 int SourceModel::addSources(const QJsonArray &sources) {
   int addedCount = 0;
   QJsonArray newSources;
+  QHash<QString, bool> seenInNewSources;
+
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
     QString id = source.value(QStringLiteral("id")).toString();
     if (id.isEmpty())
       id = source.value(QStringLiteral("name")).toString();
+
+    QString normId = normalizeSourceId(id);
+    if (seenInNewSources.contains(normId)) {
+      continue;
+    }
+
     bool exists = false;
     for (int j = 0; j < m_sources.size(); ++j) {
       QString currentId =
@@ -263,7 +286,7 @@ int SourceModel::addSources(const QJsonArray &sources) {
       if (currentId.isEmpty())
         currentId =
             m_sources[j].toObject().value(QStringLiteral("name")).toString();
-      if (currentId == id) {
+      if (normalizeSourceId(currentId) == normId) {
         exists = true;
         QJsonObject existing = m_sources[j].toObject();
         if (existing.contains(QStringLiteral("local_firstSeen")))
@@ -297,6 +320,7 @@ int SourceModel::addSources(const QJsonArray &sources) {
         source[QStringLiteral("local_lastChanged")] =
             QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       }
+      seenInNewSources[normId] = true;
       newSources.append(source);
       addedCount++;
     }
@@ -319,8 +343,49 @@ void SourceModel::loadSources() {
   QFile file(path + QStringLiteral("/sources.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    m_sources = doc.array();
+    QJsonArray rawSources = doc.array();
+    QJsonArray deduplicatedSources;
+    QHash<QString, int> normalizedIdToIndex;
+    bool modified = false;
+
+    for (int i = 0; i < rawSources.size(); ++i) {
+      QJsonObject source = rawSources[i].toObject();
+      QString id = source.value(QStringLiteral("id")).toString();
+      if (id.isEmpty()) {
+        id = source.value(QStringLiteral("name")).toString();
+      }
+      QString normId = normalizeSourceId(id);
+
+      if (normalizedIdToIndex.contains(normId)) {
+        int existingIndex = normalizedIdToIndex[normId];
+        QJsonObject existing = deduplicatedSources[existingIndex].toObject();
+
+        int existingCount =
+            existing.value(QStringLiteral("local_sessionCount")).toInt();
+        int newCount = source.value(QStringLiteral("local_sessionCount")).toInt();
+        if (newCount > existingCount) {
+          existing[QStringLiteral("local_sessionCount")] = newCount;
+        }
+
+        if (source.contains(QStringLiteral("github")) &&
+            !existing.contains(QStringLiteral("github"))) {
+          existing[QStringLiteral("github")] = source.value(QStringLiteral("github"));
+        }
+
+        deduplicatedSources[existingIndex] = existing;
+        modified = true;
+      } else {
+        normalizedIdToIndex[normId] = deduplicatedSources.size();
+        deduplicatedSources.append(source);
+      }
+    }
+
+    m_sources = deduplicatedSources;
     file.close();
+
+    if (modified) {
+      saveSources();
+    }
   }
 }
 
@@ -336,6 +401,8 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
     return;
   }
 
+  QString normId = normalizeSourceId(id);
+
   for (int i = 0; i < m_sources.size(); ++i) {
     QString currentId =
         m_sources[i].toObject().value(QStringLiteral("id")).toString();
@@ -344,7 +411,7 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
           m_sources[i].toObject().value(QStringLiteral("name")).toString();
     }
 
-    if (currentId == id) {
+    if (normalizeSourceId(currentId) == normId) {
       QJsonObject existing = m_sources[i].toObject();
       if (existing.contains(QStringLiteral("local_lastUsed")))
         source[QStringLiteral("local_lastUsed")] =
@@ -381,6 +448,7 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
   saveSources();
 }
 void SourceModel::recordSessionCreated(const QString &sourceId) {
+  QString normSourceId = normalizeSourceId(sourceId);
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
     QString currentId = source.value(QStringLiteral("id")).toString();
@@ -388,7 +456,7 @@ void SourceModel::recordSessionCreated(const QString &sourceId) {
       currentId = source.value(QStringLiteral("name")).toString();
     }
 
-    if (currentId == sourceId) {
+    if (normalizeSourceId(currentId) == normSourceId) {
       source[QStringLiteral("local_lastUsed")] =
           QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       source[QStringLiteral("local_lastChanged")] =
@@ -485,9 +553,8 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     if (sourceId.isEmpty())
       continue;
 
-    // Normalize source ID (e.g. sometimes it includes the 'sources/' prefix,
-    // sometimes it doesn't) Actually, recordSessionCreated expects the exact id
-    // or name string.
+    // Normalize source ID
+    QString normSourceId = normalizeSourceId(sourceId);
 
     QString updateTimeStr =
         session.value(QStringLiteral("updateTime")).toString();
@@ -503,20 +570,20 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
       }
     }
 
-    sessionCounts[sourceId]++;
+    sessionCounts[normSourceId]++;
     if (ts > 0) {
-      QJsonArray timestamps = sessionTimestamps[sourceId];
+      QJsonArray timestamps = sessionTimestamps[normSourceId];
       timestamps.append(ts);
-      sessionTimestamps[sourceId] = timestamps;
+      sessionTimestamps[normSourceId] = timestamps;
 
-      if (!lastUsedDates.contains(sourceId)) {
-        lastUsedDates[sourceId] = timeStr;
+      if (!lastUsedDates.contains(normSourceId)) {
+        lastUsedDates[normSourceId] = timeStr;
       } else {
         QDateTime currentLast =
-            QDateTime::fromString(lastUsedDates[sourceId], Qt::ISODate);
+            QDateTime::fromString(lastUsedDates[normSourceId], Qt::ISODate);
         QDateTime thisTime = QDateTime::fromString(timeStr, Qt::ISODate);
         if (thisTime > currentLast) {
-          lastUsedDates[sourceId] = timeStr;
+          lastUsedDates[normSourceId] = timeStr;
         }
       }
     }
@@ -534,19 +601,7 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     if (id.isEmpty())
       id = source.value(QStringLiteral("name")).toString();
 
-    // Check with direct id or with 'sources/' prepended or removed
-    QString keyToUse = id;
-    if (!sessionCounts.contains(id)) {
-      if (id.startsWith(QStringLiteral("sources/"))) {
-        QString sub = id.mid(8);
-        if (sessionCounts.contains(sub))
-          keyToUse = sub;
-      } else {
-        QString prepended = QStringLiteral("sources/") + id;
-        if (sessionCounts.contains(prepended))
-          keyToUse = prepended;
-      }
-    }
+    QString keyToUse = normalizeSourceId(id);
 
     int count = sessionCounts.value(keyToUse, 0);
     QJsonArray timestamps = sessionTimestamps.value(keyToUse, QJsonArray());
