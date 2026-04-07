@@ -895,8 +895,11 @@ void MainWindow::setupUi() {
           connect(duplicateAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_draftsView->selectionModel()->selectedRows();
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
             for (const QModelIndex &idx : selectedRows) {
-              QJsonObject draft = m_draftsModel->getDraft(idx.row());
+              QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
+              QJsonObject draft = m_draftsModel->getDraft(sourceIndex.row());
               m_draftsModel->addDraft(draft);
             }
             updateStatus(i18np("1 draft duplicated.", "%1 drafts duplicated.",
@@ -906,7 +909,10 @@ void MainWindow::setupUi() {
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
-              QJsonObject draft = m_draftsModel->getDraft(index.row());
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
+              QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+              QJsonObject draft = m_draftsModel->getDraft(sourceIndex.row());
               draft[QStringLiteral("name")] = dlg.nameOrComment();
               draft[QStringLiteral("description")] = dlg.description();
               m_templatesModel->addTemplate(draft);
@@ -924,9 +930,12 @@ void MainWindow::setupUi() {
                           "Are you sure you want to delete these drafts?",
                           selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
               for (const QModelIndex &idx : selectedRows) {
-                if (!rowsToDelete.contains(idx.row())) {
-                  rowsToDelete.append(idx.row());
+                QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
+                if (!rowsToDelete.contains(sourceIndex.row())) {
+                  rowsToDelete.append(sourceIndex.row());
                 }
               }
               std::sort(rowsToDelete.begin(), rowsToDelete.end(),
@@ -988,9 +997,14 @@ void MainWindow::setupUi() {
           QAction *editAction = menu.addAction(i18n("Edit Template"));
           connect(editAction, &QAction::triggered, [this, index]() {
             TemplateEditDialog dlg(this);
-            dlg.setInitialData(m_templatesModel->getTemplate(index.row()));
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+            QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+            int row = sourceIndex.row();
+
+            dlg.setInitialData(m_templatesModel->getTemplate(row));
             if (dlg.exec() == QDialog::Accepted) {
-              m_templatesModel->updateTemplate(index.row(), dlg.templateData());
+              m_templatesModel->updateTemplate(row, dlg.templateData());
               updateStatus(i18n("Template updated."));
             }
           });
@@ -1016,8 +1030,12 @@ void MainWindow::setupUi() {
             if (filePath.isEmpty())
               return;
 
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+            QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
             QJsonArray exportArray;
-            exportArray.append(m_templatesModel->getTemplate(index.row()));
+            exportArray.append(m_templatesModel->getTemplate(sourceIndex.row()));
             QJsonDocument doc(exportArray);
             QFile file(filePath);
             if (file.open(QIODevice::WriteOnly)) {
@@ -1041,9 +1059,12 @@ void MainWindow::setupUi() {
                           "Are you sure you want to delete these templates?",
                           selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
               for (const QModelIndex &idx : selectedRows) {
-                if (!rowsToDelete.contains(idx.row())) {
-                  rowsToDelete.append(idx.row());
+                QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
+                if (!rowsToDelete.contains(sourceIndex.row())) {
+                  rowsToDelete.append(sourceIndex.row());
                 }
               }
               std::sort(rowsToDelete.begin(), rowsToDelete.end(),
@@ -1119,7 +1140,10 @@ void MainWindow::setupUi() {
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
-              QJsonObject errData = m_errorsModel->getError(index.row());
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
+              QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+              QJsonObject errData = m_errorsModel->getError(sourceIndex.row());
               QJsonObject req =
                   errData.value(QStringLiteral("request")).toObject();
               req[QStringLiteral("name")] = dlg.nameOrComment();
@@ -1132,8 +1156,12 @@ void MainWindow::setupUi() {
           connect(rawTranscriptAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_errorsView->selectionModel()->selectedRows();
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
             for (const QModelIndex &idx : selectedRows) {
-              QJsonObject errorData = m_errorsModel->getError(idx.row());
+              QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
+              int row = sourceIndex.row();
+              QJsonObject errorData = m_errorsModel->getError(row);
               QJsonObject request =
                   errorData.value(QStringLiteral("request")).toObject();
               QJsonObject response =
@@ -1144,7 +1172,7 @@ void MainWindow::setupUi() {
                   errorData.value(QStringLiteral("httpDetails")).toString();
 
               ErrorWindow *window = new ErrorWindow(
-                  idx.row(), request,
+                  row, request,
                   QString::fromUtf8(
                       QJsonDocument(response).toJson(QJsonDocument::Indented)),
                   errorStr, httpDetails, this);
@@ -1200,9 +1228,12 @@ void MainWindow::setupUi() {
                           "Are you sure you want to delete these errors?",
                           selectedRows.size())) == QMessageBox::Yes) {
               QList<int> rowsToDelete;
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
               for (const QModelIndex &idx : selectedRows) {
-                if (!rowsToDelete.contains(idx.row())) {
-                  rowsToDelete.append(idx.row());
+                QModelIndex sourceIndex = proxy ? proxy->mapToSource(idx) : idx;
+                if (!rowsToDelete.contains(sourceIndex.row())) {
+                  rowsToDelete.append(sourceIndex.row());
                 }
               }
               std::sort(rowsToDelete.begin(), rowsToDelete.end(),
@@ -2104,7 +2135,11 @@ void MainWindow::onTemplateSaved(const QJsonObject &tmpl) {
 }
 
 void MainWindow::onTemplateActivated(const QModelIndex &index) {
-  QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
+  QJsonObject tmpl = m_templatesModel->getTemplate(sourceIndex.row());
 
   // Create template dialog
   QJsonObject templateData = tmpl;
@@ -2324,7 +2359,12 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
 }
 
 void MainWindow::onErrorActivated(const QModelIndex &index) {
-  QJsonObject errorData = m_errorsModel->getError(index.row());
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_errorsView->model());
+  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+  int row = sourceIndex.row();
+
+  QJsonObject errorData = m_errorsModel->getError(row);
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
@@ -2332,16 +2372,16 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   dialog.setInitialData(request);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+          [this, row](const QStringList &sources, const QString &p,
+                      const QString &a, bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
-            m_errorsModel->removeError(index.row());
+            m_errorsModel->removeError(row);
           });
 
   connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, index](const QJsonObject &d) {
+          [this, row](const QJsonObject &d) {
             m_draftsModel->addDraft(d);
-            m_errorsModel->removeError(index.row());
+            m_errorsModel->removeError(row);
             updateStatus(i18n("Draft saved and error removed."));
           });
 
@@ -2349,21 +2389,26 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 }
 
 void MainWindow::onDraftActivated(const QModelIndex &index) {
-  QJsonObject draft = m_draftsModel->getDraft(index.row());
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_draftsView->model());
+  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+  int row = sourceIndex.row();
+
+  QJsonObject draft = m_draftsModel->getDraft(row);
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   dialog.setInitialData(draft);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+          [this, row](const QStringList &sources, const QString &p,
+                      const QString &a, bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
-            m_draftsModel->removeDraft(index.row());
+            m_draftsModel->removeDraft(row);
           });
 
   connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, index](const QJsonObject &d) {
-            m_draftsModel->removeDraft(index.row());
+          [this, row](const QJsonObject &d) {
+            m_draftsModel->removeDraft(row);
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Draft updated."));
           });
@@ -2889,8 +2934,12 @@ void MainWindow::importTemplates() {
 void MainWindow::copyTemplateToClipboard(const QModelIndex &index) {
   if (!index.isValid())
     return;
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_templatesView->model());
+  QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
   QJsonArray exportArray;
-  exportArray.append(m_templatesModel->getTemplate(index.row()));
+  exportArray.append(m_templatesModel->getTemplate(sourceIndex.row()));
   QJsonDocument doc(exportArray);
   QGuiApplication::clipboard()->setText(
       QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
