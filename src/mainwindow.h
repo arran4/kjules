@@ -10,6 +10,7 @@
 class APIManager;
 class SessionModel;
 class SourceModel;
+class QTextBrowser;
 class SessionWindow;
 class DraftsModel;
 class TemplatesModel;
@@ -57,6 +58,7 @@ private Q_SLOTS:
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
   void connectSessionWindow(SessionWindow *window);
+  void connectSessionsWindow(SessionsWindow *window);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
@@ -87,6 +89,7 @@ private Q_SLOTS:
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
+  void checkAutoArchiveSessions();
 
 private:
   void setupUi();
@@ -110,7 +113,7 @@ private:
   QListView *m_queueView;
   QListView *m_errorsView;
   FilterEditor *m_sourcesFilterEditor;
-  FilterEditor *m_pastFilterEditor;
+  FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
   QLineEdit *m_draftsFilter;
   QLineEdit *m_templatesFilter;
@@ -127,10 +130,11 @@ private:
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
   QAction *m_viewSessionsAction;
-  QAction *m_showPastNewSessionsAction;
+  QAction *m_showFollowingNewSessionsAction;
   QAction *m_viewRawDataAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
+  QAction *m_showActivityLogAction;
   QAction *m_backupDataAction;
   QAction *m_restoreDataAction;
   QAction *m_importTemplatesAction;

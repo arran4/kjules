@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "activitylogwindow.h"
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
@@ -35,6 +36,7 @@
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
 #include <QGuiApplication>
@@ -97,21 +99,6 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onGithubInfoReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
           &MainWindow::onGithubPullRequestInfoReceived);
-  connect(m_apiManager, &APIManager::sessionsReceived, this,
-          [this](const QJsonArray &sessions) {
-            m_sessionModel->setSessions(sessions);
-            m_lastSessionRefreshTime = QDateTime::currentDateTime();
-            updateSessionStats();
-            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-              QString prUrl = m_sessionModel
-                                  ->data(m_sessionModel->index(i, 0),
-                                         SessionModel::PrUrlRole)
-                                  .toString();
-              if (!prUrl.isEmpty()) {
-                m_apiManager->fetchGithubPullRequest(prUrl);
-              }
-            }
-          });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           &MainWindow::onSessionCreationFailed);
   connect(m_apiManager, &APIManager::sessionCreated,
@@ -194,6 +181,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   // Initial refresh
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
+  QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 }
 
 MainWindow::~MainWindow() {}
@@ -307,17 +295,13 @@ void MainWindow::setupUi() {
                       .toString();
               SessionsWindow *window = new SessionsWindow(
                   currentId, m_apiManager, m_sessionModel, this);
-              connect(window, &SessionsWindow::watchRequested, this,
-                      [this](const QJsonObject &s) {
-                        m_sessionModel->addSession(s);
-                        m_sessionModel->saveSessions();
-                      });
+              connectSessionsWindow(window);
               window->show();
             }
           });
           menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
-          menu.addAction(m_showPastNewSessionsAction);
+          menu.addAction(m_showFollowingNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
@@ -382,13 +366,13 @@ void MainWindow::setupUi() {
   m_tabWidget->addTab(srcTab, i18n("Sources"));
 
   // Sessions View
-  QWidget *pastTab = new QWidget(this);
-  QVBoxLayout *pastLayout = new QVBoxLayout(pastTab);
-  m_pastFilterEditor = new FilterEditor(this);
-  pastLayout->addWidget(m_pastFilterEditor);
+  QWidget *followingTab = new QWidget(this);
+  QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
+  m_followingFilterEditor = new FilterEditor(this);
+  followingLayout->addWidget(m_followingFilterEditor);
 
   m_sessionView = new QTreeView(this);
-  pastLayout->addWidget(m_sessionView);
+  followingLayout->addWidget(m_sessionView);
 
   AdvancedFilterProxyModel *sessionProxyModel =
       new AdvancedFilterProxyModel(this);
@@ -443,6 +427,7 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
+          QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
@@ -475,6 +460,7 @@ void MainWindow::setupUi() {
                 processedSources.append(source);
                 SessionsWindow *window = new SessionsWindow(
                     source, m_apiManager, m_sessionModel, this);
+                connectSessionsWindow(window);
                 window->show();
               }
             }
@@ -600,7 +586,7 @@ void MainWindow::setupUi() {
             });
           }
 
-          connect(archiveAction, &QAction::triggered, [this]() {
+          auto archiveSelectedSessions = [this]() {
             QModelIndexList selectedRows =
                 m_sessionView->selectionModel()->selectedRows();
             QList<int> rowsToArchive;
@@ -624,7 +610,10 @@ void MainWindow::setupUi() {
             m_archiveModel->saveSessions();
             updateStatus(i18np("1 session archived.", "%1 sessions archived.",
                                rowsToArchive.size()));
-          });
+          };
+
+          connect(completeAction, &QAction::triggered, archiveSelectedSessions);
+          connect(archiveAction, &QAction::triggered, archiveSelectedSessions);
 
           connect(deleteAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
@@ -703,7 +692,7 @@ void MainWindow::setupUi() {
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
 
-  m_tabWidget->addTab(pastTab, i18n("Past"));
+  m_tabWidget->addTab(followingTab, i18n("Following"));
   // Archive View
   QWidget *archTab = new QWidget(this);
   QVBoxLayout *archLayout = new QVBoxLayout(archTab);
@@ -1280,6 +1269,64 @@ void MainWindow::setupUi() {
   updateTabTitles();
 }
 
+void MainWindow::checkAutoArchiveSessions() {
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
+  bool autoArchiveEnabled = sessionConfig.readEntry("AutoArchiveEnabled", true);
+  int autoArchiveDays = sessionConfig.readEntry("AutoArchiveDays", 30);
+  bool prMergeArchiveEnabled =
+      sessionConfig.readEntry("PrMergeArchiveEnabled", true);
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
+
+  QList<int> rowsToArchive;
+
+  for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+    QJsonObject session = m_sessionModel->getSession(i);
+    bool shouldArchive = false;
+
+    if (autoArchiveEnabled) {
+      QString createTimeStr =
+          session.value(QStringLiteral("createTime")).toString();
+      QDateTime createTime =
+          QDateTime::fromString(createTimeStr, Qt::ISODate).toUTC();
+      if (createTime.isValid() && createTime.daysTo(now) >= autoArchiveDays) {
+        shouldArchive = true;
+      }
+    }
+
+    if (!shouldArchive && prMergeArchiveEnabled) {
+      if (session.contains(QStringLiteral("githubPrInfo"))) {
+        QJsonObject prInfo =
+            session.value(QStringLiteral("githubPrInfo")).toObject();
+        if (prInfo.value(QStringLiteral("state")).toString() ==
+                QStringLiteral("merged") ||
+            prInfo.value(QStringLiteral("merged_at")).isString()) {
+          shouldArchive = true;
+        }
+      }
+    }
+
+    if (shouldArchive) {
+      rowsToArchive.append(i);
+    }
+  }
+
+  for (int row : rowsToArchive) {
+    QJsonObject session = m_sessionModel->getSession(row);
+    m_archiveModel->addSession(session);
+    m_sessionModel->removeSession(row);
+  }
+
+  if (!rowsToArchive.isEmpty()) {
+    m_archiveModel->saveSessions();
+    m_sessionModel->saveSessions();
+    ActivityLogWindow::instance()->logMessage(
+        i18np("Auto-archived 1 following session.",
+              "Auto-archived %1 following sessions.", rowsToArchive.size()));
+  }
+}
+
 void MainWindow::updateTabTitles() {
   if (!m_tabWidget)
     return;
@@ -1325,6 +1372,8 @@ void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
       m_archiveModel->updateSession(session);
     }
   }
+
+  checkAutoArchiveSessions();
 }
 
 void MainWindow::setupTrayIcon() {
@@ -1384,6 +1433,15 @@ void MainWindow::createActions() {
   actionCollection()->setDefaultShortcut(newSessionAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_N));
 
+  m_showActivityLogAction = new QAction(i18n("Show Activity Log"), this);
+  actionCollection()->addAction(QStringLiteral("show_activity_log"),
+                                m_showActivityLogAction);
+  connect(m_showActivityLogAction, &QAction::triggered, this, []() {
+    ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow();
+  });
+
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
   actionCollection()->addAction(QStringLiteral("show_full_session_list"),
@@ -1391,11 +1449,7 @@ void MainWindow::createActions() {
   connect(m_showFullSessionListAction, &QAction::triggered, this, [this]() {
     SessionsWindow *window =
         new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
-    connect(window, &SessionsWindow::watchRequested, this,
-            [this](const QJsonObject &s) {
-              m_sessionModel->addSession(s);
-              m_sessionModel->saveSessions();
-            });
+    connectSessionsWindow(window);
 
     window->show();
   });
@@ -1471,87 +1525,87 @@ void MainWindow::createActions() {
   connect(m_viewSessionsAction, &QAction::triggered, this, [this]() {
     SessionsWindow *window =
         new SessionsWindow(QString(), m_apiManager, m_sessionModel, this);
-    connect(window, &SessionsWindow::watchRequested, this,
-            [this](const QJsonObject &s) {
-              m_sessionModel->addSession(s);
-              m_sessionModel->saveSessions();
-            });
+    connectSessionsWindow(window);
 
     window->show();
   });
 
-  m_showPastNewSessionsAction =
-      new QAction(i18n("Show past new sessions"), this);
-  actionCollection()->addAction(QStringLiteral("show_past_new_sessions"),
-                                m_showPastNewSessionsAction);
-  connect(m_showPastNewSessionsAction, &QAction::triggered, this, [this]() {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    if (selectedRows.isEmpty())
-      return;
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+  m_showFollowingNewSessionsAction =
+      new QAction(i18n("Show following new sessions"), this);
+  actionCollection()->addAction(QStringLiteral("show_following_new_sessions"),
+                                m_showFollowingNewSessionsAction);
+  connect(
+      m_showFollowingNewSessionsAction, &QAction::triggered, this, [this]() {
+        QModelIndexList selectedRows =
+            m_sourceView->selectionModel()->selectedRows();
+        if (selectedRows.isEmpty())
+          return;
+        const QSortFilterProxyModel *proxy =
+            qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
 
-    for (const QModelIndex &idx : selectedRows) {
-      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-      QString id =
-          m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
+        for (const QModelIndex &idx : selectedRows) {
+          QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+          QString id =
+              m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
 
-      QString path =
-          QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-      QFile file(path + QStringLiteral("/cached_sessions.json"));
-      QJsonArray cachedSessions;
-      if (file.open(QIODevice::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        cachedSessions = doc.array();
-        file.close();
-      }
-      QJsonArray filteredSessions;
-      for (int i = 0; i < cachedSessions.size(); ++i) {
-        QJsonObject session = cachedSessions[i].toObject();
-        QString sessionSource = session.value(QStringLiteral("sourceContext"))
-                                    .toObject()
-                                    .value(QStringLiteral("source"))
-                                    .toString();
-        if (sessionSource == id) {
-          filteredSessions.append(session);
+          QString path =
+              QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+          QFile file(path + QStringLiteral("/cached_sessions.json"));
+          QJsonArray cachedSessions;
+          if (file.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+            cachedSessions = doc.array();
+            file.close();
+          }
+          QJsonArray filteredSessions;
+          for (int i = 0; i < cachedSessions.size(); ++i) {
+            QJsonObject session = cachedSessions[i].toObject();
+            QString sessionSource =
+                session.value(QStringLiteral("sourceContext"))
+                    .toObject()
+                    .value(QStringLiteral("source"))
+                    .toString();
+            if (sessionSource == id) {
+              filteredSessions.append(session);
+            }
+          }
+          KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+          sessionsWindow->setObjectName(
+              QStringLiteral("FollowingNewSessions_%1").arg(id));
+          SessionModel *localModel = new SessionModel(
+              QStringLiteral("cached_all_sessions.json"), sessionsWindow);
+          localModel->setSessions(filteredSessions);
+          sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
+          sessionsWindow->setWindowTitle(
+              i18n("Following New Sessions for %1", id));
+          QListView *listView = new QListView(sessionsWindow);
+          listView->setModel(localModel);
+          listView->setItemDelegate(new SessionDelegate(listView));
+          connect(listView, &QListView::doubleClicked, this,
+                  [this, localModel](const QModelIndex &filterIndex) {
+                    QString sessId =
+                        localModel->data(filterIndex, SessionModel::IdRole)
+                            .toString();
+                    m_apiManager->getSession(sessId);
+                    updateStatus(
+                        i18n("Fetching details for session %1...", sessId));
+                  });
+          QMenu *fileMenu = new QMenu(i18n("File"), sessionsWindow);
+          QAction *closeAction =
+              new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                          i18n("Close"), sessionsWindow);
+          closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+          connect(closeAction, &QAction::triggered, sessionsWindow,
+                  &KXmlGuiWindow::close);
+          fileMenu->addAction(closeAction);
+          sessionsWindow->menuBar()->addMenu(fileMenu);
+
+          sessionsWindow->setCentralWidget(listView);
+          sessionsWindow->setupGUI();
+          sessionsWindow->resize(600, 400);
+          sessionsWindow->show();
         }
-      }
-      KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
-      sessionsWindow->setObjectName(
-          QStringLiteral("PastNewSessions_%1").arg(id));
-      SessionModel *localModel = new SessionModel(
-          QStringLiteral("cached_all_sessions.json"), sessionsWindow);
-      localModel->setSessions(filteredSessions);
-      sessionsWindow->setAttribute(Qt::WA_DeleteOnClose);
-      sessionsWindow->setWindowTitle(i18n("Past New Sessions for %1", id));
-      QListView *listView = new QListView(sessionsWindow);
-      listView->setModel(localModel);
-      listView->setItemDelegate(new SessionDelegate(listView));
-      connect(
-          listView, &QListView::doubleClicked, this,
-          [this, localModel](const QModelIndex &filterIndex) {
-            QString sessId =
-                localModel->data(filterIndex, SessionModel::IdRole).toString();
-            m_apiManager->getSession(sessId);
-            updateStatus(i18n("Fetching details for session %1...", sessId));
-          });
-      QMenu *fileMenu = new QMenu(i18n("File"), sessionsWindow);
-      QAction *closeAction =
-          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
-                      i18n("Close"), sessionsWindow);
-      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, sessionsWindow,
-              &KXmlGuiWindow::close);
-      fileMenu->addAction(closeAction);
-      sessionsWindow->menuBar()->addMenu(fileMenu);
-
-      sessionsWindow->setCentralWidget(listView);
-      sessionsWindow->setupGUI();
-      sessionsWindow->resize(600, 400);
-      sessionsWindow->show();
-    }
-  });
+      });
   m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
   actionCollection()->addAction(QStringLiteral("view_raw_data"),
                                 m_viewRawDataAction);
@@ -1753,7 +1807,7 @@ void MainWindow::createActions() {
                          m_sourceView->model()))
               pm->setFilterFixedString(text);
           });
-  connect(m_pastFilterEditor, &FilterEditor::filterChanged, this,
+  connect(m_followingFilterEditor, &FilterEditor::filterChanged, this,
           [this](const QString &text) {
             if (auto *pm = qobject_cast<AdvancedFilterProxyModel *>(
                     m_sessionView->model()))
@@ -1968,6 +2022,8 @@ void MainWindow::onSessionCreatedResult(bool success,
     if (!sourceId.isEmpty())
       m_sourceModel->recordSessionCreated(sourceId);
     updateStatus(i18n("Session created from queue."));
+    ActivityLogWindow::instance()->logMessage(
+        i18n("Processed schedule run: Session created for %1.", sourceId));
     m_queueBackoffUntil = QDateTime(); // reset backoff
     // The next item will be processed by the configured timer (m_queueTimer)
   } else {
@@ -2339,6 +2395,40 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   dialog.exec();
 }
 
+void MainWindow::connectSessionsWindow(SessionsWindow *window) {
+  connect(window, &SessionsWindow::watchRequested, this,
+          [this](const QJsonObject &s) {
+            m_sessionModel->addSession(s);
+            m_sessionModel->saveSessions();
+          });
+  connect(window, &SessionsWindow::archiveRequested, this,
+          [this](const QString &id) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              QJsonObject session = m_sessionModel->getSession(i);
+              if (session.value(QStringLiteral("id")).toString() == id) {
+                m_archiveModel->addSession(session);
+                m_sessionModel->removeSession(i);
+                m_archiveModel->saveSessions();
+                m_sessionModel->saveSessions();
+                updateStatus(i18n("1 session archived."));
+                break;
+              }
+            }
+          });
+  connect(window, &SessionsWindow::deleteRequested, this,
+          [this](const QString &id) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              QJsonObject session = m_sessionModel->getSession(i);
+              if (session.value(QStringLiteral("id")).toString() == id) {
+                m_sessionModel->removeSession(i);
+                m_sessionModel->saveSessions();
+                updateStatus(i18n("1 session unmanaged."));
+                break;
+              }
+            }
+          });
+}
+
 void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
@@ -2496,6 +2586,12 @@ void MainWindow::onSourcesRefreshFinished() {
     updateStatus(
         i18n("Finished refreshing. Loaded %1 sources in total, %2 new.",
              m_sourcesLoadedCount, m_sourcesAddedCount));
+    if (m_sourcesAddedCount > 0) {
+      ActivityLogWindow::instance()->logMessage(
+          i18np("Source refresh completed: 1 new source found.",
+                "Source refresh completed: %1 new sources found.",
+                m_sourcesAddedCount));
+    }
   } else {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));
@@ -2754,7 +2850,7 @@ void MainWindow::updateCompletions() {
   completions[QStringLiteral("owner")] = repos; // just dummy for now
 
   m_sourcesFilterEditor->setCompletions(completions);
-  m_pastFilterEditor->setCompletions(completions);
+  m_followingFilterEditor->setCompletions(completions);
   m_archiveFilterEditor->setCompletions(completions);
 }
 
