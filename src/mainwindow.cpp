@@ -1131,8 +1131,15 @@ void MainWindow::setupUi() {
 
             for (int row : rowsToDelete) {
               QJsonObject errData = m_errorsModel->getError(row);
-              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-              m_queueModel->enqueue(req);
+              QueueItem item;
+              item.requestData =
+                  errData.value(QStringLiteral("request")).toObject();
+              item.lastResponse =
+                  errData.value(QStringLiteral("response")).toString();
+              item.lastError =
+                  errData.value(QStringLiteral("message")).toString();
+              item.errorCount = 1;
+              m_queueModel->enqueueItem(item);
               m_errorsModel->removeError(row);
             }
             updateStatus(i18np("Added 1 task back to queue.",
@@ -1208,14 +1215,21 @@ void MainWindow::setupUi() {
                 m_apiManager->createSessionAsync(req);
                 updateStatus(i18n("Sending error item immediately..."));
               });
-              connect(window, &ErrorWindow::readdToQueueRequested, [this](int row) {
-                QJsonObject errData = m_errorsModel->getError(row);
-                QJsonObject req =
-                    errData.value(QStringLiteral("request")).toObject();
-                m_errorsModel->removeError(row);
-                m_queueModel->enqueue(req);
-                updateStatus(i18n("Added task back to queue."));
-              });
+              connect(
+                  window, &ErrorWindow::readdToQueueRequested, [this](int row) {
+                    QJsonObject errData = m_errorsModel->getError(row);
+                    QueueItem item;
+                    item.requestData =
+                        errData.value(QStringLiteral("request")).toObject();
+                    item.lastResponse =
+                        errData.value(QStringLiteral("response")).toString();
+                    item.lastError =
+                        errData.value(QStringLiteral("message")).toString();
+                    item.errorCount = 1;
+                    m_errorsModel->removeError(row);
+                    m_queueModel->enqueueItem(item);
+                    updateStatus(i18n("Added task back to queue."));
+                  });
 
               window->setAttribute(Qt::WA_DeleteOnClose);
               window->show();
@@ -2267,7 +2281,7 @@ void MainWindow::showErrorDetails(int row) {
     if (item.requestData.isEmpty())
       return;
     m_queueModel->removeItem(r);
-    m_queueModel->enqueue(item.requestData);
+    m_queueModel->enqueueItem(item);
     updateStatus(i18n("Added task back to queue."));
   });
 
@@ -2360,9 +2374,13 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
   });
   connect(window, &ErrorWindow::readdToQueueRequested, [this](int row) {
     QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+    QueueItem item;
+    item.requestData = errData.value(QStringLiteral("request")).toObject();
+    item.lastResponse = errData.value(QStringLiteral("response")).toString();
+    item.lastError = errData.value(QStringLiteral("message")).toString();
+    item.errorCount = 1;
     m_errorsModel->removeError(row);
-    m_queueModel->enqueue(req);
+    m_queueModel->enqueueItem(item);
     updateStatus(i18n("Added task back to queue."));
   });
 

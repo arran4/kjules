@@ -135,9 +135,13 @@ QHash<int, QByteArray> QueueModel::roleNames() const {
 #include <KSharedConfig>
 
 void QueueModel::enqueue(const QJsonObject &requestData) {
-  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   QueueItem item;
   item.requestData = requestData;
+  enqueueItem(item);
+}
+
+void QueueModel::enqueueItem(const QueueItem &item) {
+  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   m_items.append(item);
   endInsertRows();
   m_jobsSinceLastWait++;

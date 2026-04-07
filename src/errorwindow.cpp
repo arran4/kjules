@@ -97,8 +97,9 @@ void ErrorWindow::setupUi() {
     accept();
   });
 
-  QPushButton *readdToQueueBtn = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("list-add")), i18n("Re-add to Queue"), this);
+  QPushButton *readdToQueueBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("list-add")),
+                      i18n("Re-add to Queue"), this);
   connect(readdToQueueBtn, &QPushButton::clicked, [this]() {
     Q_EMIT readdToQueueRequested(m_row);
     accept();
