@@ -110,7 +110,6 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
   }
 
   setupUi();
-  setupGUI();
 
   if (!m_nextPageToken.isEmpty() && m_resumeAction) {
     m_resumeAction->setEnabled(true);
@@ -140,6 +139,9 @@ void SessionsWindow::setupUi() {
 
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
+
+  setupGUI();
+
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
   QHBoxLayout *filterLayout = new QHBoxLayout();
