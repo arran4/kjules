@@ -223,7 +223,9 @@ void MainWindow::setupUi() {
                                                QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
-  m_sourceView->sortByColumn(SourceModel::ColLastUsed, Qt::DescendingOrder);
+
+  // Set default sorting to Favourites first
+  m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(false);
@@ -387,6 +389,10 @@ void MainWindow::setupUi() {
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sessionView->header()->setStretchLastSection(true);
+
+  // Set default sorting to Favourites first
+  m_sessionView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(
       m_sessionView, &QTreeView::customContextMenuRequested,
@@ -713,6 +719,9 @@ void MainWindow::setupUi() {
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_archiveView->header()->setStretchLastSection(true);
+
+  // Set default sorting to Favourites first
+  m_archiveView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
 
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(

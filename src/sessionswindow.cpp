@@ -213,7 +213,9 @@ void SessionsWindow::setupUi() {
   m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
   m_listView->header()->resizeSection(SessionModel::ColPR, 80);
   m_listView->header()->resizeSection(SessionModel::ColUpdatedAt, 150);
-  m_listView->sortByColumn(SessionModel::ColUpdatedAt, Qt::DescendingOrder);
+
+  // Set default sorting to Favourites first
+  m_listView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
 
   connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int value) {
