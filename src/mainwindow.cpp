@@ -2140,9 +2140,6 @@ void MainWindow::onSessionCreatedResult(bool success,
     }
 
     if (isPrecondition) {
-      updateStatus(
-          i18n("Too many concurrent tasks, waiting before retrying..."));
-
       // Requeue the item without incrementing the error count
       m_queueModel->requeueTransient(item);
 
@@ -2150,8 +2147,12 @@ void MainWindow::onSessionCreatedResult(bool success,
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
                                QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-      m_queueBackoffUntil =
-          QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      waitItem.waitSeconds = backoffMins * 60;
+      m_queueModel->prependWaitItem(waitItem);
+      m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else if (isResourceExhausted) {
       updateStatus(i18n("API Rate limit hit, adding a wait item..."));
 
