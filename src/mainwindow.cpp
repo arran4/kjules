@@ -99,21 +99,6 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onGithubInfoReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
           &MainWindow::onGithubPullRequestInfoReceived);
-  connect(m_apiManager, &APIManager::sessionsReceived, this,
-          [this](const QJsonArray &sessions) {
-            m_sessionModel->setSessions(sessions);
-            m_lastSessionRefreshTime = QDateTime::currentDateTime();
-            updateSessionStats();
-            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-              QString prUrl = m_sessionModel
-                                  ->data(m_sessionModel->index(i, 0),
-                                         SessionModel::PrUrlRole)
-                                  .toString();
-              if (!prUrl.isEmpty()) {
-                m_apiManager->fetchGithubPullRequest(prUrl);
-              }
-            }
-          });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           &MainWindow::onSessionCreationFailed);
   connect(m_apiManager, &APIManager::sessionCreated,
@@ -1416,10 +1401,6 @@ void MainWindow::setupTrayIcon() {
   m_trayMenu->addSeparator();
 
   m_trayMenu->addAction(m_viewSessionsAction);
-
-  if (m_showActivityLogAction) {
-    m_trayMenu->addAction(m_showActivityLogAction);
-  }
 
   m_trayMenu->addSeparator();
 

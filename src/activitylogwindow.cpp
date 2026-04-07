@@ -1,8 +1,12 @@
 #include "activitylogwindow.h"
 
 #include <KLocalizedString>
+#include <QAction>
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QIcon>
+#include <QMenu>
+#include <QMenuBar>
 #include <QTextBrowser>
 
 ActivityLogWindow *ActivityLogWindow::instance() {
@@ -20,7 +24,15 @@ ActivityLogWindow::ActivityLogWindow(QWidget *parent) : KXmlGuiWindow(parent) {
   m_logBrowser = new QTextBrowser(this);
   setCentralWidget(m_logBrowser);
 
-  setupGUI(Default, QString());
+  QMenu *fileMenu = new QMenu(i18n("File"), this);
+  QAction *closeAction = new QAction(
+      QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), this);
+  closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+  connect(closeAction, &QAction::triggered, this, &KXmlGuiWindow::close);
+  fileMenu->addAction(closeAction);
+
+  menuBar()->addMenu(fileMenu);
+
   resize(600, 400);
 }
 
