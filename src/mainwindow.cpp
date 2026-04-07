@@ -207,6 +207,7 @@ void MainWindow::setupUi() {
 
   // Sources View
   QWidget *srcTab = new QWidget(this);
+  srcTab->setObjectName(QStringLiteral("sourcesTab"));
   QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
@@ -223,6 +224,7 @@ void MainWindow::setupUi() {
                                                QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
+  m_sourceView->header()->resizeSection(SourceModel::ColFavourite, 80);
 
   // Set default sorting to Favourites first
   m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
@@ -374,6 +376,7 @@ void MainWindow::setupUi() {
 
   // Sessions View
   QWidget *followingTab = new QWidget(this);
+  followingTab->setObjectName(QStringLiteral("followingTab"));
   QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
   followingLayout->addWidget(m_followingFilterEditor);
@@ -706,6 +709,7 @@ void MainWindow::setupUi() {
   m_tabWidget->addTab(followingTab, i18n("Following"));
   // Archive View
   QWidget *archTab = new QWidget(this);
+  archTab->setObjectName(QStringLiteral("archiveTab"));
   QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
   archLayout->addWidget(m_archiveFilterEditor);
