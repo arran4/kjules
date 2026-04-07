@@ -29,6 +29,23 @@ public:
   void updateSelection() { invalidate(); }
 
 protected:
+  bool lessThan(const QModelIndex &source_left,
+                const QModelIndex &source_right) const override {
+    bool leftFav =
+        sourceModel()->data(source_left, SourceModel::FavouriteRole).toBool();
+    bool rightFav =
+        sourceModel()->data(source_right, SourceModel::FavouriteRole).toBool();
+
+    if (leftFav != rightFav) {
+      if (sortOrder() == Qt::AscendingOrder) {
+        return leftFav;
+      } else {
+        return !leftFav;
+      }
+    }
+    return QSortFilterProxyModel::lessThan(source_left, source_right);
+  }
+
   bool filterAcceptsRow(int source_row,
                         const QModelIndex &source_parent) const override {
     if (!QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent))
