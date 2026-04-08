@@ -87,6 +87,24 @@ bool SessionsProxyModel::filterAcceptsRow(
          QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
 }
 
+bool SessionsProxyModel::lessThan(const QModelIndex &source_left,
+                                  const QModelIndex &source_right) const {
+  QAbstractItemModel *m = sourceModel();
+  if (qobject_cast<SessionModel *>(m)) {
+    bool leftFav = m->data(source_left, SessionModel::FavouriteRole).toBool();
+    bool rightFav = m->data(source_right, SessionModel::FavouriteRole).toBool();
+
+    if (leftFav != rightFav) {
+      if (sortOrder() == Qt::AscendingOrder) {
+        return leftFav;
+      } else {
+        return !leftFav;
+      }
+    }
+  }
+  return QSortFilterProxyModel::lessThan(source_left, source_right);
+}
+
 SessionsWindow::SessionsWindow(const QString &filterSource,
                                APIManager *apiManager,
                                SessionModel *managedModel, QWidget *parent)
@@ -195,7 +213,9 @@ void SessionsWindow::setupUi() {
   m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
   m_listView->header()->resizeSection(SessionModel::ColPR, 80);
   m_listView->header()->resizeSection(SessionModel::ColUpdatedAt, 150);
-  m_listView->sortByColumn(SessionModel::ColUpdatedAt, Qt::DescendingOrder);
+
+  // Set default sorting to Favourites first
+  m_listView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
 
   connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int value) {
@@ -252,6 +272,12 @@ void SessionsWindow::setupUi() {
           }
 
           QMenu menu;
+          QAction *toggleFavAction = menu.addAction(
+              QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+              i18n("Toggle Favourite"));
+          connect(toggleFavAction, &QAction::triggered, this,
+                  &SessionsWindow::toggleFavourite);
+
           QAction *openSessionUrlAction =
               menu.addAction(i18n("Open Session URL"));
           QAction *copySessionUrlAction =
@@ -676,6 +702,15 @@ void SessionsWindow::setupUi() {
   connect(m_cancelBtn, &QPushButton::clicked, this,
           &SessionsWindow::cancelRefresh);
   statusBar()->addPermanentWidget(m_cancelBtn);
+}
+
+void SessionsWindow::toggleFavourite() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    m_model->toggleFavourite(id);
+  }
 }
 
 void SessionsWindow::updateActionStates() {

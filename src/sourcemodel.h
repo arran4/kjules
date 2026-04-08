@@ -9,9 +9,15 @@ class SourceModel : public QAbstractTableModel {
   Q_OBJECT
 
 public:
-  enum SourceRoles { NameRole = Qt::UserRole + 1, IdRole, RawDataRole };
+  enum SourceRoles {
+    NameRole = Qt::UserRole + 1,
+    IdRole,
+    RawDataRole,
+    FavouriteRole
+  };
   enum Columns {
     ColName = 0,
+    ColFavourite,
     ColLastUsed,
     ColManagedSessions,
     ColHeat,
@@ -40,6 +46,7 @@ public:
   void loadSources();
   void saveSources();
   void updateSource(const QJsonObject &sourceConst);
+  void toggleFavourite(const QString &id);
   void clear();
   void recordSessionCreated(const QString &sourceId);
   void recalculateStatsFromSessions(const QJsonArray &allSessions);

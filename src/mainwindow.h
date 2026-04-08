@@ -70,6 +70,7 @@ private Q_SLOTS:
   void cancelSourcesRefresh();
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
+  void toggleFavourite();
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -129,6 +130,7 @@ private:
   QAction *m_refreshSourceAction;
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
+  QAction *m_toggleFavouriteAction;
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
   QAction *m_viewRawDataAction;

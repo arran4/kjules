@@ -207,6 +207,7 @@ void MainWindow::setupUi() {
 
   // Sources View
   QWidget *srcTab = new QWidget(this);
+  srcTab->setObjectName(QStringLiteral("sourcesTab"));
   QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
@@ -223,7 +224,10 @@ void MainWindow::setupUi() {
                                                QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
-  m_sourceView->sortByColumn(SourceModel::ColLastUsed, Qt::DescendingOrder);
+  m_sourceView->header()->resizeSection(SourceModel::ColFavourite, 80);
+
+  // Set default sorting to Favourites first
+  m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(false);
@@ -268,6 +272,7 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
                   [this, sourceIndex]() {
@@ -371,6 +376,7 @@ void MainWindow::setupUi() {
 
   // Sessions View
   QWidget *followingTab = new QWidget(this);
+  followingTab->setObjectName(QStringLiteral("followingTab"));
   QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
   followingLayout->addWidget(m_followingFilterEditor);
@@ -386,6 +392,10 @@ void MainWindow::setupUi() {
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sessionView->header()->setStretchLastSection(true);
+
+  // Set default sorting to Favourites first
+  m_sessionView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
 
   auto deleteFollowingSessions = [this]() {
@@ -434,6 +444,7 @@ void MainWindow::setupUi() {
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
               menu.addAction(i18n("Open Sessions for source"));
@@ -707,6 +718,7 @@ void MainWindow::setupUi() {
   m_tabWidget->addTab(followingTab, i18n("Following"));
   // Archive View
   QWidget *archTab = new QWidget(this);
+  archTab->setObjectName(QStringLiteral("archiveTab"));
   QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
   archLayout->addWidget(m_archiveFilterEditor);
@@ -720,6 +732,9 @@ void MainWindow::setupUi() {
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_archiveView->header()->setStretchLastSection(true);
+
+  // Set default sorting to Favourites first
+  m_archiveView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
 
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -765,6 +780,7 @@ void MainWindow::setupUi() {
             m_archiveView->setCurrentIndex(index);
           }
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -1521,6 +1537,12 @@ void MainWindow::createActions() {
     ActivityLogWindow::instance()->raise();
     ActivityLogWindow::instance()->activateWindow();
   });
+
+  m_toggleFavouriteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                  i18n("Toggle Favourite"), this);
+  connect(m_toggleFavouriteAction, &QAction::triggered, this,
+          &MainWindow::toggleFavourite);
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -2598,6 +2620,52 @@ void MainWindow::onError(const QString &message) {
 }
 
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
+
+void MainWindow::toggleFavourite() {
+  if (m_tabWidget->currentWidget()->objectName() ==
+      QStringLiteral("sourcesTab")) {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+        m_sourceModel->toggleFavourite(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("followingTab")) {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_sessionModel->toggleFavourite(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("archiveTab")) {
+    QModelIndexList selectedRows =
+        m_archiveView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_archiveModel->toggleFavourite(id);
+      }
+    }
+  }
+}
 
 void MainWindow::toggleWindowVisibility() {
   if (isVisible()) {
