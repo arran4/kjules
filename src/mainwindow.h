@@ -71,6 +71,7 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void updateQueueCountdown();
+  void toggleFavourite();
   void processQueue();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -112,6 +113,7 @@ private:
   QListView *m_templatesView;
   QListView *m_queueView;
   QListView *m_errorsView;
+  std::function<void()> m_deleteQueueItemsLambda;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
@@ -129,6 +131,7 @@ private:
   QAction *m_refreshSourceAction;
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
+  QAction *m_toggleFavouriteAction;
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
   QAction *m_viewRawDataAction;

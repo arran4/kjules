@@ -215,6 +215,7 @@ void MainWindow::setupUi() {
 
   // Sources View
   QWidget *srcTab = new QWidget(this);
+  srcTab->setObjectName(QStringLiteral("sourcesTab"));
   QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
@@ -231,7 +232,10 @@ void MainWindow::setupUi() {
                                                QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
-  m_sourceView->sortByColumn(SourceModel::ColLastUsed, Qt::DescendingOrder);
+  m_sourceView->header()->resizeSection(SourceModel::ColFavourite, 80);
+
+  // Set default sorting to Favourites first
+  m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(false);
@@ -276,6 +280,7 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
                   [this, sourceIndex]() {
@@ -379,6 +384,7 @@ void MainWindow::setupUi() {
 
   // Sessions View
   QWidget *followingTab = new QWidget(this);
+  followingTab->setObjectName(QStringLiteral("followingTab"));
   QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
   followingLayout->addWidget(m_followingFilterEditor);
@@ -394,10 +400,44 @@ void MainWindow::setupUi() {
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sessionView->header()->setStretchLastSection(true);
+
+  // Set default sorting to Favourites first
+  m_sessionView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
+
+  auto deleteFollowingSessions = [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    QList<int> rowsToDelete;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      if (!rowsToDelete.contains(mappedIdx.row())) {
+        rowsToDelete.append(mappedIdx.row());
+      }
+    }
+    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+    for (int row : rowsToDelete) {
+      m_sessionModel->removeSession(row);
+    }
+    updateStatus(i18np("1 session deleted.", "%1 sessions deleted.",
+                       rowsToDelete.size()));
+  };
+
+  QAction *sessionDeleteAction = new QAction(i18n("Delete"), m_sessionView);
+  sessionDeleteAction->setShortcut(QKeySequence::Delete);
+  sessionDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(sessionDeleteAction, &QAction::triggered, deleteFollowingSessions);
+  m_sessionView->addAction(sessionDeleteAction);
+
   connect(
       m_sessionView, &QTreeView::customContextMenuRequested,
-      [this](const QPoint &pos) {
+      [this, deleteFollowingSessions](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
         if (index.isValid()) {
           if (!m_sessionView->selectionModel()->isSelected(index)) {
@@ -412,6 +452,7 @@ void MainWindow::setupUi() {
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
               menu.addAction(i18n("Open Sessions for source"));
@@ -626,28 +667,7 @@ void MainWindow::setupUi() {
           connect(completeAction, &QAction::triggered, archiveSelectedSessions);
           connect(archiveAction, &QAction::triggered, archiveSelectedSessions);
 
-          connect(deleteAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_sessionView->selectionModel()->selectedRows();
-            QList<int> rowsToDelete;
-            const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(
-                    m_sessionView->model());
-            for (const QModelIndex &idx : selectedRows) {
-              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-              if (!rowsToDelete.contains(mappedIdx.row())) {
-                rowsToDelete.append(mappedIdx.row());
-              }
-            }
-            std::sort(rowsToDelete.begin(), rowsToDelete.end(),
-                      std::greater<int>());
-
-            for (int row : rowsToDelete) {
-              m_sessionModel->removeSession(row);
-            }
-            updateStatus(i18np("1 session deleted.", "%1 sessions deleted.",
-                               rowsToDelete.size()));
-          });
+          connect(deleteAction, &QAction::triggered, deleteFollowingSessions);
 
           connect(newSessionFromSessionAction, &QAction::triggered,
                   [this, sourceIndex]() {
@@ -706,6 +726,7 @@ void MainWindow::setupUi() {
   m_tabWidget->addTab(followingTab, i18n("Following"));
   // Archive View
   QWidget *archTab = new QWidget(this);
+  archTab->setObjectName(QStringLiteral("archiveTab"));
   QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
   archLayout->addWidget(m_archiveFilterEditor);
@@ -720,10 +741,44 @@ void MainWindow::setupUi() {
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_archiveView->header()->setStretchLastSection(true);
 
+  // Set default sorting to Favourites first
+  m_archiveView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
+
+  auto deleteArchiveSessions = [this]() {
+    QModelIndexList selectedRows =
+        m_archiveView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    QList<int> rowsToDelete;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      if (!rowsToDelete.contains(mappedIdx.row())) {
+        rowsToDelete.append(mappedIdx.row());
+      }
+    }
+    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+    for (int row : rowsToDelete) {
+      m_archiveModel->removeSession(row);
+    }
+    updateStatus(i18np("1 session deleted from archive.",
+                       "%1 sessions deleted from archive.",
+                       rowsToDelete.size()));
+  };
+
+  QAction *archiveDeleteAction = new QAction(i18n("Delete"), m_archiveView);
+  archiveDeleteAction->setShortcut(QKeySequence::Delete);
+  archiveDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(archiveDeleteAction, &QAction::triggered, deleteArchiveSessions);
+  m_archiveView->addAction(archiveDeleteAction);
+
   connect(
       m_archiveView, &QTreeView::customContextMenuRequested,
-      [this](const QPoint &pos) {
+      [this, deleteArchiveSessions](const QPoint &pos) {
         QModelIndex index = m_archiveView->indexAt(pos);
         if (index.isValid()) {
           if (!m_archiveView->selectionModel()->isSelected(index)) {
@@ -733,6 +788,7 @@ void MainWindow::setupUi() {
             m_archiveView->setCurrentIndex(index);
           }
           QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -792,29 +848,7 @@ void MainWindow::setupUi() {
                                rowsToUnarchive.size()));
           });
 
-          connect(deleteAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_archiveView->selectionModel()->selectedRows();
-            QList<int> rowsToDelete;
-            const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(
-                    m_archiveView->model());
-            for (const QModelIndex &idx : selectedRows) {
-              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-              if (!rowsToDelete.contains(mappedIdx.row())) {
-                rowsToDelete.append(mappedIdx.row());
-              }
-            }
-            std::sort(rowsToDelete.begin(), rowsToDelete.end(),
-                      std::greater<int>());
-
-            for (int row : rowsToDelete) {
-              m_archiveModel->removeSession(row);
-            }
-            updateStatus(i18np("1 session deleted from archive.",
-                               "%1 sessions deleted from archive.",
-                               rowsToDelete.size()));
-          });
+          connect(deleteAction, &QAction::triggered, deleteArchiveSessions);
 
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
             SaveDialog dlg(QStringLiteral("Template"), this);
@@ -874,81 +908,90 @@ void MainWindow::setupUi() {
   m_draftsView->setModel(draftsProxy);
   m_draftsView->setItemDelegate(new DraftDelegate(this));
   m_draftsView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(
-      m_draftsView, &QListView::customContextMenuRequested,
-      [this](const QPoint &pos) {
-        QModelIndex index = m_draftsView->indexAt(pos);
-        if (index.isValid()) {
-          if (!m_draftsView->selectionModel()->isSelected(index)) {
-            m_draftsView->selectionModel()->select(
-                index, QItemSelectionModel::ClearAndSelect |
-                           QItemSelectionModel::Rows);
-            m_draftsView->setCurrentIndex(index);
-          }
-          QMenu menu;
-          QAction *submitAction = menu.addAction(i18n("Submit Now"));
-          QAction *duplicateAction = menu.addAction(i18n("Duplicate"));
-          QAction *copyTemplateAction =
-              menu.addAction(i18n("Copy as Template"));
-          QAction *deleteAction = menu.addAction(i18n("Delete"));
 
-          connect(submitAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_draftsView->selectionModel()->selectedRows();
-            for (const QModelIndex &idx : selectedRows) {
-              onDraftActivated(idx);
-            }
-          });
-
-          connect(duplicateAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_draftsView->selectionModel()->selectedRows();
-            for (const QModelIndex &idx : selectedRows) {
-              QJsonObject draft = m_draftsModel->getDraft(idx.row());
-              m_draftsModel->addDraft(draft);
-            }
-            updateStatus(i18np("1 draft duplicated.", "%1 drafts duplicated.",
-                               selectedRows.size()));
-          });
-
-          connect(copyTemplateAction, &QAction::triggered, [this, index]() {
-            SaveDialog dlg(QStringLiteral("Template"), this);
-            if (dlg.exec() == QDialog::Accepted) {
-              QJsonObject draft = m_draftsModel->getDraft(index.row());
-              draft[QStringLiteral("name")] = dlg.nameOrComment();
-              draft[QStringLiteral("description")] = dlg.description();
-              m_templatesModel->addTemplate(draft);
-              updateStatus(i18n("Template created from draft."));
-            }
-          });
-
-          connect(deleteAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_draftsView->selectionModel()->selectedRows();
-            if (QMessageBox::question(
-                    this,
-                    i18np("Delete Draft", "Delete Drafts", selectedRows.size()),
-                    i18np("Are you sure?",
-                          "Are you sure you want to delete these drafts?",
-                          selectedRows.size())) == QMessageBox::Yes) {
-              QList<int> rowsToDelete;
-              for (const QModelIndex &idx : selectedRows) {
-                if (!rowsToDelete.contains(idx.row())) {
-                  rowsToDelete.append(idx.row());
-                }
-              }
-              std::sort(rowsToDelete.begin(), rowsToDelete.end(),
-                        std::greater<int>());
-
-              for (int row : rowsToDelete) {
-                m_draftsModel->removeDraft(row);
-              }
-            }
-          });
-
-          menu.exec(m_draftsView->mapToGlobal(pos));
+  auto deleteDrafts = [this]() {
+    QModelIndexList selectedRows =
+        m_draftsView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    if (QMessageBox::question(
+            this, i18np("Delete Draft", "Delete Drafts", selectedRows.size()),
+            i18np("Are you sure?",
+                  "Are you sure you want to delete these drafts?",
+                  selectedRows.size())) == QMessageBox::Yes) {
+      QList<int> rowsToDelete;
+      for (const QModelIndex &idx : selectedRows) {
+        if (!rowsToDelete.contains(idx.row())) {
+          rowsToDelete.append(idx.row());
         }
-      });
+      }
+      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+      for (int row : rowsToDelete) {
+        m_draftsModel->removeDraft(row);
+      }
+    }
+  };
+
+  QAction *draftsDeleteAction = new QAction(i18n("Delete"), m_draftsView);
+  draftsDeleteAction->setShortcut(QKeySequence::Delete);
+  draftsDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(draftsDeleteAction, &QAction::triggered, deleteDrafts);
+  m_draftsView->addAction(draftsDeleteAction);
+
+  connect(m_draftsView, &QListView::customContextMenuRequested,
+          [this, deleteDrafts](const QPoint &pos) {
+            QModelIndex index = m_draftsView->indexAt(pos);
+            if (index.isValid()) {
+              if (!m_draftsView->selectionModel()->isSelected(index)) {
+                m_draftsView->selectionModel()->select(
+                    index, QItemSelectionModel::ClearAndSelect |
+                               QItemSelectionModel::Rows);
+                m_draftsView->setCurrentIndex(index);
+              }
+              QMenu menu;
+              QAction *submitAction = menu.addAction(i18n("Submit Now"));
+              QAction *duplicateAction = menu.addAction(i18n("Duplicate"));
+              QAction *copyTemplateAction =
+                  menu.addAction(i18n("Copy as Template"));
+              QAction *deleteAction = menu.addAction(i18n("Delete"));
+
+              connect(submitAction, &QAction::triggered, [this]() {
+                QModelIndexList selectedRows =
+                    m_draftsView->selectionModel()->selectedRows();
+                for (const QModelIndex &idx : selectedRows) {
+                  onDraftActivated(idx);
+                }
+              });
+
+              connect(duplicateAction, &QAction::triggered, [this]() {
+                QModelIndexList selectedRows =
+                    m_draftsView->selectionModel()->selectedRows();
+                for (const QModelIndex &idx : selectedRows) {
+                  QJsonObject draft = m_draftsModel->getDraft(idx.row());
+                  m_draftsModel->addDraft(draft);
+                }
+                updateStatus(i18np("1 draft duplicated.",
+                                   "%1 drafts duplicated.",
+                                   selectedRows.size()));
+              });
+
+              connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+                SaveDialog dlg(QStringLiteral("Template"), this);
+                if (dlg.exec() == QDialog::Accepted) {
+                  QJsonObject draft = m_draftsModel->getDraft(index.row());
+                  draft[QStringLiteral("name")] = dlg.nameOrComment();
+                  draft[QStringLiteral("description")] = dlg.description();
+                  m_templatesModel->addTemplate(draft);
+                  updateStatus(i18n("Template created from draft."));
+                }
+              });
+
+              connect(deleteAction, &QAction::triggered, deleteDrafts);
+
+              menu.exec(m_draftsView->mapToGlobal(pos));
+            }
+          });
   connect(m_draftsView, &QListView::doubleClicked, this,
           &MainWindow::onDraftActivated);
 
@@ -972,9 +1015,43 @@ void MainWindow::setupUi() {
   m_templatesView->setAcceptDrops(true);
   m_templatesView->setDropIndicatorShown(true);
   m_templatesView->setDragDropMode(QAbstractItemView::DragDrop);
+
+  auto deleteTemplates = [this]() {
+    QModelIndexList selectedRows =
+        m_templatesView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    if (QMessageBox::question(
+            this,
+            i18np("Delete Template", "Delete Templates", selectedRows.size()),
+            i18np("Are you sure you want to delete this template?",
+                  "Are you sure you want to delete these templates?",
+                  selectedRows.size())) == QMessageBox::Yes) {
+      QList<int> rowsToDelete;
+      for (const QModelIndex &idx : selectedRows) {
+        if (!rowsToDelete.contains(idx.row())) {
+          rowsToDelete.append(idx.row());
+        }
+      }
+      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+      for (int row : rowsToDelete) {
+        m_templatesModel->removeTemplate(row);
+      }
+      updateStatus(i18np("1 template deleted.", "%1 templates deleted.",
+                         selectedRows.size()));
+    }
+  };
+
+  QAction *templatesDeleteAction = new QAction(i18n("Delete"), m_templatesView);
+  templatesDeleteAction->setShortcut(QKeySequence::Delete);
+  templatesDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(templatesDeleteAction, &QAction::triggered, deleteTemplates);
+  m_templatesView->addAction(templatesDeleteAction);
+
   connect(
       m_templatesView, &QListView::customContextMenuRequested,
-      [this](const QPoint &pos) {
+      [this, deleteTemplates](const QPoint &pos) {
         QModelIndex index = m_templatesView->indexAt(pos);
         QMenu menu;
         if (index.isValid()) {
@@ -1038,32 +1115,7 @@ void MainWindow::setupUi() {
           });
 
           QAction *deleteAction = menu.addAction(i18n("Delete Template"));
-          connect(deleteAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_templatesView->selectionModel()->selectedRows();
-            if (QMessageBox::question(
-                    this,
-                    i18np("Delete Template", "Delete Templates",
-                          selectedRows.size()),
-                    i18np("Are you sure you want to delete this template?",
-                          "Are you sure you want to delete these templates?",
-                          selectedRows.size())) == QMessageBox::Yes) {
-              QList<int> rowsToDelete;
-              for (const QModelIndex &idx : selectedRows) {
-                if (!rowsToDelete.contains(idx.row())) {
-                  rowsToDelete.append(idx.row());
-                }
-              }
-              std::sort(rowsToDelete.begin(), rowsToDelete.end(),
-                        std::greater<int>());
-
-              for (int row : rowsToDelete) {
-                m_templatesModel->removeTemplate(row);
-              }
-              updateStatus(i18np("1 template deleted.", "%1 templates deleted.",
-                                 selectedRows.size()));
-            }
-          });
+          connect(deleteAction, &QAction::triggered, deleteTemplates);
         }
         menu.exec(m_templatesView->mapToGlobal(pos));
       });
@@ -1081,6 +1133,38 @@ void MainWindow::setupUi() {
           &MainWindow::onQueueActivated);
   connect(m_queueView, &QListView::customContextMenuRequested, this,
           &MainWindow::onQueueContextMenu);
+
+  m_deleteQueueItemsLambda = [this]() {
+    QModelIndexList selectedRows =
+        m_queueView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    if (QMessageBox::question(this, i18n("Remove Task"),
+                              i18np("Remove this task from the queue?",
+                                    "Remove these tasks from the queue?",
+                                    selectedRows.size())) == QMessageBox::Yes) {
+      QList<int> rowsToDelete;
+      for (const QModelIndex &idx : selectedRows) {
+        if (!rowsToDelete.contains(idx.row())) {
+          rowsToDelete.append(idx.row());
+        }
+      }
+      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+      for (int row : rowsToDelete) {
+        m_queueModel->removeItem(row);
+      }
+      updateStatus(i18np("Task removed from queue.",
+                         "%1 tasks removed from queue.", rowsToDelete.size()));
+    }
+  };
+
+  QAction *queueDeleteAction = new QAction(i18n("Delete"), m_queueView);
+  queueDeleteAction->setShortcut(QKeySequence::Delete);
+  queueDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(queueDeleteAction, &QAction::triggered, m_deleteQueueItemsLambda);
+  m_queueView->addAction(queueDeleteAction);
+
   m_tabWidget->addTab(m_queueView, i18n("Queue"));
 
   // Errors View
@@ -1098,9 +1182,40 @@ void MainWindow::setupUi() {
   m_errorsView->setItemDelegate(new DraftDelegate(
       this)); // Reusing DraftDelegate for simple display or create custom
   m_errorsView->setContextMenuPolicy(Qt::CustomContextMenu);
+
+  auto deleteErrors = [this]() {
+    QModelIndexList selectedRows =
+        m_errorsView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    if (QMessageBox::question(
+            this, i18np("Delete Error", "Delete Errors", selectedRows.size()),
+            i18np("Are you sure?",
+                  "Are you sure you want to delete these errors?",
+                  selectedRows.size())) == QMessageBox::Yes) {
+      QList<int> rowsToDelete;
+      for (const QModelIndex &idx : selectedRows) {
+        if (!rowsToDelete.contains(idx.row())) {
+          rowsToDelete.append(idx.row());
+        }
+      }
+      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+      for (int row : rowsToDelete) {
+        m_errorsModel->removeError(row);
+      }
+    }
+  };
+
+  QAction *errorsDeleteAction = new QAction(i18n("Delete"), m_errorsView);
+  errorsDeleteAction->setShortcut(QKeySequence::Delete);
+  errorsDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(errorsDeleteAction, &QAction::triggered, deleteErrors);
+  m_errorsView->addAction(errorsDeleteAction);
+
   connect(
       m_errorsView, &QListView::customContextMenuRequested,
-      [this](const QPoint &pos) {
+      [this, deleteErrors](const QPoint &pos) {
         QModelIndex index = m_errorsView->indexAt(pos);
         if (index.isValid()) {
           if (!m_errorsView->selectionModel()->isSelected(index)) {
@@ -1198,29 +1313,7 @@ void MainWindow::setupUi() {
             }
           });
 
-          connect(deleteAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_errorsView->selectionModel()->selectedRows();
-            if (QMessageBox::question(
-                    this,
-                    i18np("Delete Error", "Delete Errors", selectedRows.size()),
-                    i18np("Are you sure?",
-                          "Are you sure you want to delete these errors?",
-                          selectedRows.size())) == QMessageBox::Yes) {
-              QList<int> rowsToDelete;
-              for (const QModelIndex &idx : selectedRows) {
-                if (!rowsToDelete.contains(idx.row())) {
-                  rowsToDelete.append(idx.row());
-                }
-              }
-              std::sort(rowsToDelete.begin(), rowsToDelete.end(),
-                        std::greater<int>());
-
-              for (int row : rowsToDelete) {
-                m_errorsModel->removeError(row);
-              }
-            }
-          });
+          connect(deleteAction, &QAction::triggered, deleteErrors);
 
           menu.exec(m_errorsView->mapToGlobal(pos));
         }
@@ -1452,6 +1545,12 @@ void MainWindow::createActions() {
     ActivityLogWindow::instance()->raise();
     ActivityLogWindow::instance()->activateWindow();
   });
+
+  m_toggleFavouriteAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                  i18n("Toggle Favourite"), this);
+  connect(m_toggleFavouriteAction, &QAction::triggered, this,
+          &MainWindow::toggleFavourite);
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -2073,8 +2172,12 @@ void MainWindow::onSessionCreatedResult(bool success,
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
                                QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-      m_queueBackoffUntil =
-          QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      waitItem.waitSeconds = backoffMins * 60;
+      m_queueModel->prependWaitItem(waitItem);
+      m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else if (isResourceExhausted) {
       updateStatus(i18n("API Rate limit hit, adding a wait item..."));
 
@@ -2178,11 +2281,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   } else if (selected == editAction) {
     editQueueItem(row);
   } else if (selected == deleteAction) {
-    if (QMessageBox::question(this, i18n("Remove Task"),
-                              i18n("Remove this task from the queue?")) ==
-        QMessageBox::Yes) {
-      m_queueModel->removeItem(row);
-      updateStatus(i18n("Task removed from queue."));
+    if (m_deleteQueueItemsLambda) {
+      m_deleteQueueItemsLambda();
     }
   } else if (selected == draftAction) {
     convertQueueItemToDraft(row);
@@ -2284,6 +2384,17 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
                                          const QJsonObject &response,
                                          const QString &errorString,
                                          const QString &httpDetails) {
+  bool isRateLimit = false;
+  if (m_isProcessingQueue) {
+    QJsonObject errObj = response.value(QStringLiteral("error")).toObject();
+    QString status = errObj.value(QStringLiteral("status")).toString();
+    int code = errObj.value(QStringLiteral("code")).toInt();
+    if (status == QStringLiteral("FAILED_PRECONDITION") ||
+        status == QStringLiteral("RESOURCE_EXHAUSTED") || code == 429) {
+      isRateLimit = true;
+    }
+  }
+
   m_errorsModel->addError(request, response, errorString, httpDetails);
   updateStatus(i18n("Error saved."));
 
@@ -2316,6 +2427,14 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
           updateStatus(i18n("Error item has already been removed."));
           return;
         }
+
+  if (isRateLimit) {
+    // These are rate-limiting/concurrency errors handled by the queue's wait
+    // mechanism. Do not pop up an error modal for them.
+    return;
+  }
+
+  int newRow = m_errorsModel->rowCount() - 1;
 
         ErrorWindow *window =
             new ErrorWindow(currentRow, request,
@@ -2542,6 +2661,52 @@ void MainWindow::onError(const QString &message) {
 }
 
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
+
+void MainWindow::toggleFavourite() {
+  if (m_tabWidget->currentWidget()->objectName() ==
+      QStringLiteral("sourcesTab")) {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+        m_sourceModel->toggleFavourite(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("followingTab")) {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_sessionModel->toggleFavourite(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("archiveTab")) {
+    QModelIndexList selectedRows =
+        m_archiveView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_archiveModel->toggleFavourite(id);
+      }
+    }
+  }
+}
 
 void MainWindow::toggleWindowVisibility() {
   if (isVisible()) {

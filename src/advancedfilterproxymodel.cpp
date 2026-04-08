@@ -1,4 +1,6 @@
 #include "advancedfilterproxymodel.h"
+#include "sessionmodel.h"
+#include "sourcemodel.h"
 #include <QStringList>
 
 class ModelDataAccessor : public FilterDataAccessor {
@@ -96,4 +98,34 @@ bool AdvancedFilterProxyModel::filterAcceptsRow(
     }
   }
   return false;
+}
+
+bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left,
+                                        const QModelIndex &source_right) const {
+  QAbstractItemModel *m = sourceModel();
+
+  // Try to cast to SourceModel or SessionModel to see if it supports
+  // FavouriteRole
+  bool leftFav = false;
+  bool rightFav = false;
+
+  if (qobject_cast<SourceModel *>(m)) {
+    leftFav = m->data(source_left, SourceModel::FavouriteRole).toBool();
+    rightFav = m->data(source_right, SourceModel::FavouriteRole).toBool();
+  } else if (qobject_cast<SessionModel *>(m)) {
+    leftFav = m->data(source_left, SessionModel::FavouriteRole).toBool();
+    rightFav = m->data(source_right, SessionModel::FavouriteRole).toBool();
+  }
+
+  if (leftFav != rightFav) {
+    if (sortOrder() == Qt::AscendingOrder) {
+      return leftFav; // if ascending, we want Fav (true) at the top -> true is
+                      // 'less' -> return true
+    } else {
+      return !leftFav; // if descending, we want Fav (true) at the top -> true
+                       // is 'greater' -> return false
+    }
+  }
+
+  return QSortFilterProxyModel::lessThan(source_left, source_right);
 }

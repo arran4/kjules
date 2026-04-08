@@ -26,6 +26,8 @@ public:
 protected:
   bool filterAcceptsRow(int source_row,
                         const QModelIndex &source_parent) const override;
+  bool lessThan(const QModelIndex &source_left,
+                const QModelIndex &source_right) const override;
 
 private:
   QString m_textFilter;
@@ -57,6 +59,8 @@ private Q_SLOTS:
                           const QString &nextPageToken);
   void onSessionsRefreshFinished();
   void updateRepoFilterList();
+  void toggleFavourite();
+  void updateActionStates();
 
 private:
   void setupUi();

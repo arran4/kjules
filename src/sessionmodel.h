@@ -11,6 +11,7 @@
 struct SessionData {
   QString id;
   QString name;
+  bool isFavourite;
   QString title;
   QString source;
   QString prompt;
@@ -45,11 +46,13 @@ public:
     ProviderRole,
     LastRefreshedRole,
     PrStatusRole,
-    PrLabelsRole
+    PrLabelsRole,
+    FavouriteRole
   };
 
   enum Columns {
     ColTitle = 0,
+    ColFavourite,
     ColState,
     ColChangeSet,
     ColPR,
@@ -80,6 +83,7 @@ public:
   int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
+  void toggleFavourite(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QJsonArray getAllSessions() const;
