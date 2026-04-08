@@ -60,6 +60,7 @@ private Q_SLOTS:
   void onSessionsRefreshFinished();
   void updateRepoFilterList();
   void toggleFavourite();
+  void updateActionStates();
 
 private:
   void setupUi();

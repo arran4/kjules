@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE gui SYSTEM "kpartgui.dtd">
+<gui name="sessionswindow" version="1">
+  <MenuBar>
+    <Menu name="file"><text>&amp;File</text>
+      <Action name="refresh_sessions"/>
+      <Action name="resume_refresh"/>
+      <Action name="load_remaining"/>
+      <Separator/>
+      <Action name="file_close"/>
+    </Menu>
+    <Menu name="actions"><text>&amp;Actions</text>
+      <Action name="watch_session"/>
+      <Action name="archive_session"/>
+      <Action name="delete_session"/>
+    </Menu>
+    <Menu name="preferences_menu"><text>&amp;Preferences</text>
+      <Menu name="auto_load_menu"><text>Auto Load Behavior</text>
+        <Action name="auto_load_manual"/>
+        <Action name="auto_load_all"/>
+        <Action name="auto_load_bottom"/>
+      </Menu>
+    </Menu>
+    <Menu name="view"><text>&amp;View</text>
+      <Menu name="columns_menu"><text>Columns</text>
+        <Action name="col_title"/>
+        <Action name="col_state"/>
+        <Action name="col_changeset"/>
+        <Action name="col_pr"/>
+        <Action name="col_updatedat"/>
+        <Action name="col_createdat"/>
+        <Action name="col_owner"/>
+        <Action name="col_repo"/>
+        <Action name="col_id"/>
+      </Menu>
+    </Menu>
+  </MenuBar>
+  <ToolBar name="mainToolBar"><text>Main Toolbar</text>
+    <Action name="refresh_sessions"/>
+    <Action name="resume_refresh"/>
+    <Action name="load_remaining"/>
+  </ToolBar>
+</gui>
