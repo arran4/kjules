@@ -146,12 +146,11 @@ void SessionWindow::setupActions() {
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
                   i18n("Follow Session"), this);
-  connect(watchAction, &QAction::triggered, this,
-          [this, watchAction, sessionMenu]() {
-            Q_EMIT watchRequested(m_sessionData);
-            m_isManaged = true;
-            watchAction->setEnabled(false);
-          });
+  connect(watchAction, &QAction::triggered, this, [this, watchAction]() {
+    Q_EMIT watchRequested(m_sessionData);
+    m_isManaged = true;
+    watchAction->setEnabled(false);
+  });
   if (!m_isManaged) {
     sessionMenu->addAction(watchAction);
   }

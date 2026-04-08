@@ -25,7 +25,9 @@
 #include <KGlobalAccel>
 #include <KLocalizedString>
 #include <KNotification>
+#if QT_VERSION_MAJOR == 6
 #include <KNotificationAction>
+#endif
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
@@ -2288,10 +2290,17 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
   KNotification *notification = new KNotification(
       QStringLiteral("QueueError"), KNotification::Persistent, this);
   notification->setText(i18n("Task failed: %1", errorString));
+#if QT_VERSION_MAJOR == 6
   auto action = notification->addDefaultAction(i18n("Open Details"));
   connect(
       action, &KNotificationAction::activated, this,
       [this, request, response, errorString, httpDetails]() {
+#else
+  notification->setDefaultAction(i18n("Open Details"));
+  connect(
+      notification, &KNotification::defaultActivated, this,
+      [this, request, response, errorString, httpDetails]() {
+#endif
         // Find current row of this error since the list might have changed
         int currentRow = -1;
         for (int i = 0; i < m_errorsModel->rowCount(); ++i) {

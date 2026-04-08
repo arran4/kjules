@@ -469,7 +469,7 @@ void SessionsWindow::setupUi() {
             QJsonObject rawData = m_model->getSession(sourceIndex.row());
 
             SessionWindow *window =
-                new SessionWindow(rawData, m_apiManager, this);
+                new SessionWindow(rawData, m_apiManager, false, this);
             window->show();
           });
 
@@ -618,7 +618,7 @@ void SessionsWindow::setupUi() {
     manualAction->setChecked(true);
   }
 
-  connect(m_autoLoadGroup, &QActionGroup::triggered, [this](QAction *action) {
+  connect(m_autoLoadGroup, &QActionGroup::triggered, [](QAction *action) {
     KConfigGroup config(KSharedConfig::openConfig(),
                         QStringLiteral("SessionsWindow"));
     config.writeEntry("AutoLoadMode", action->data().toString());
