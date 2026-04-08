@@ -57,6 +57,7 @@ private Q_SLOTS:
                           const QString &nextPageToken);
   void onSessionsRefreshFinished();
   void updateRepoFilterList();
+  void updateActionStates();
 
 private:
   void setupUi();
