@@ -1570,6 +1570,28 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
 
+  m_refreshFollowingAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                  i18n("Refresh Following"), this);
+  connect(m_refreshFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QModelIndex index = m_sessionModel->index(i, 0);
+      QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
+      if (!currentId.isEmpty()) {
+        m_apiManager->reloadSession(currentId);
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(i18np("Refreshing 1 following session...", "Refreshing %1 following sessions...", count));
+    } else {
+      updateStatus(i18n("No following sessions to refresh."));
+    }
+  });
+  actionCollection()->addAction(QStringLiteral("refresh_following"),
+                                m_refreshFollowingAction);
+
   m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
