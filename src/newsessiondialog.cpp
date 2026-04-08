@@ -93,6 +93,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_unselectedProxy->setSourceModel(m_sourceModel);
   m_unselectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_unselectedProxy->setFilterRole(SourceModel::NameRole);
+  m_unselectedProxy->sort(0, Qt::DescendingOrder);
   m_unselectedView->setModel(m_unselectedProxy);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_unselectedView->setFixedHeight(200);
@@ -138,6 +139,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_selectedProxy->setSourceModel(m_sourceModel);
   m_selectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_selectedProxy->setFilterRole(SourceModel::NameRole);
+  m_selectedProxy->sort(0, Qt::DescendingOrder);
   m_selectedView->setModel(m_selectedProxy);
   m_selectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_selectedView->setFixedHeight(200);
