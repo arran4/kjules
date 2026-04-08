@@ -2354,20 +2354,26 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
                                          const QJsonObject &response,
                                          const QString &errorString,
                                          const QString &httpDetails) {
+  bool isRateLimit = false;
   if (m_isProcessingQueue) {
     QJsonObject errObj = response.value(QStringLiteral("error")).toObject();
     QString status = errObj.value(QStringLiteral("status")).toString();
     int code = errObj.value(QStringLiteral("code")).toInt();
     if (status == QStringLiteral("FAILED_PRECONDITION") ||
         status == QStringLiteral("RESOURCE_EXHAUSTED") || code == 429) {
-      // These are rate-limiting/concurrency errors handled by the queue's wait
-      // mechanism. Do not pop up an error modal for them.
-      return;
+      isRateLimit = true;
     }
   }
 
   m_errorsModel->addError(request, response, errorString, httpDetails);
   updateStatus(i18n("Error saved."));
+
+  if (isRateLimit) {
+    // These are rate-limiting/concurrency errors handled by the queue's wait
+    // mechanism. Do not pop up an error modal for them.
+    return;
+  }
+
   int newRow = m_errorsModel->rowCount() - 1;
 
   ErrorWindow *window =
