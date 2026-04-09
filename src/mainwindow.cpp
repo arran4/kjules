@@ -512,10 +512,6 @@ void MainWindow::setupUi() {
           });
 
           connect(refreshSessionAction, &QAction::triggered, [this]() {
-            if (!m_apiManager->canConnect()) {
-              updateStatus(i18n("Cannot refresh: No token or previous failure."));
-              return;
-            }
             QModelIndexList selectedRows =
                 m_sessionView->selectionModel()->selectedRows();
             const QSortFilterProxyModel *proxy =
@@ -1583,10 +1579,6 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Following"), this);
   connect(m_refreshFollowingAction, &QAction::triggered, this, [this]() {
-    if (!m_apiManager->canConnect()) {
-      updateStatus(i18n("Cannot refresh: No token or previous failure."));
-      return;
-    }
     QStringList idsToRefresh;
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
