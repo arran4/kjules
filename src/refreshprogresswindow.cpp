@@ -36,7 +36,8 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
           &RefreshProgressWindow::onErrorOccurred);
 
   // Start processing asynchronously so the UI can show up
-  QMetaObject::invokeMethod(this, "processNext", Qt::QueuedConnection);
+  QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
+                            Qt::QueuedConnection);
 }
 
 RefreshProgressWindow::~RefreshProgressWindow() {}
