@@ -77,7 +77,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_isRefreshingSources(false), m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_isProcessingQueue(false), m_queuePaused(false) {
+      m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
+      m_queuePaused(false) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
@@ -86,6 +87,10 @@ MainWindow::MainWindow(QWidget *parent)
   m_sessionRefreshTimer->start(60000); // 1 minute
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
+
+  connect(m_countdownTimer, &QTimer::timeout, this,
+          &MainWindow::updateCountdownStatus);
+  m_countdownTimer->start(1000); // 1 second
   loadQueueSettings();
   createActions();
   setupTrayIcon();
@@ -2006,6 +2011,47 @@ void MainWindow::loadQueueSettings() {
 
   if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
     m_queueTimer->start();
+  }
+}
+
+void MainWindow::updateCountdownStatus() {
+  if (m_queuePaused || m_queueModel->isEmpty()) {
+    return;
+  }
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
+  qint64 secondsLeft = 0;
+
+  if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
+    secondsLeft = now.secsTo(m_queueBackoffUntil);
+  } else {
+    QueueItem peekItem = m_queueModel->peek();
+    if (peekItem.isWaitItem && peekItem.waitStartTime.isValid()) {
+      qint64 elapsed = peekItem.waitStartTime.secsTo(now);
+      if (elapsed < peekItem.waitSeconds) {
+        secondsLeft = peekItem.waitSeconds - elapsed;
+      }
+    } else if (!m_isProcessingQueue) {
+      if (m_queueTimer->isActive()) {
+        secondsLeft = m_queueTimer->remainingTime() / 1000;
+      }
+    }
+  }
+
+  if (secondsLeft > 0) {
+    QString timeStr;
+    if (secondsLeft > 3600) {
+      qint64 hours = secondsLeft / 3600;
+      qint64 mins = (secondsLeft % 3600) / 60;
+      timeStr = i18n("%1h %2m", hours, mins);
+    } else if (secondsLeft > 60) {
+      qint64 mins = secondsLeft / 60;
+      qint64 secs = secondsLeft % 60;
+      timeStr = i18n("%1m %2s", mins, secs);
+    } else {
+      timeStr = i18np("1 second", "%1 seconds", secondsLeft);
+    }
+    updateStatus(i18n("Next attempt in %1...", timeStr));
   }
 }
 

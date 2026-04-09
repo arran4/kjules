@@ -90,6 +90,7 @@ private Q_SLOTS:
   void loadQueueSettings();
   void updateTabTitles();
   void checkAutoArchiveSessions();
+  void updateCountdownStatus();
 
 private:
   void setupUi();
@@ -151,6 +152,7 @@ private:
   QDateTime m_lastSessionRefreshTime;
 
   QTimer *m_queueTimer;
+  QTimer *m_countdownTimer;
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
