@@ -3,7 +3,6 @@
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
-#include "refreshprogresswindow.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
@@ -12,6 +11,7 @@
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
+#include "refreshprogresswindow.h"
 #include "restoredialog.h"
 #include "savedialog.h"
 #include "sessiondelegate.h"
@@ -533,11 +533,12 @@ void MainWindow::setupUi() {
               }
             }
             if (!idsToRefresh.isEmpty()) {
-                RefreshProgressWindow *progressWindow = new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-                progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-                progressWindow->show();
+              RefreshProgressWindow *progressWindow =
+                  new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+              progressWindow->setAttribute(Qt::WA_DeleteOnClose);
+              progressWindow->show();
             } else {
-                updateStatus(i18n("No following sessions to refresh."));
+              updateStatus(i18n("No following sessions to refresh."));
             }
           });
 
@@ -1594,9 +1595,10 @@ void MainWindow::createActions() {
       }
     }
     if (!idsToRefresh.isEmpty()) {
-        RefreshProgressWindow *progressWindow = new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-        progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-        progressWindow->show();
+      RefreshProgressWindow *progressWindow =
+          new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+      progressWindow->setAttribute(Qt::WA_DeleteOnClose);
+      progressWindow->show();
     } else {
       updateStatus(i18n("No following sessions to refresh."));
     }
