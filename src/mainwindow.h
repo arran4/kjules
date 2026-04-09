@@ -128,6 +128,7 @@ private:
   QProgressBar *m_sourceProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
+  QAction *m_refreshFollowingAction;
   QAction *m_refreshSourceAction;
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
