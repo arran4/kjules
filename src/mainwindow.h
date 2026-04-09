@@ -72,6 +72,7 @@ private Q_SLOTS:
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
   void processQueue();
+  void processErrorRetries();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
@@ -105,6 +106,7 @@ private:
   TemplatesModel *m_templatesModel;
   QueueModel *m_queueModel;
   ErrorsModel *m_errorsModel;
+  QTimer *m_errorRetryTimer;
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;

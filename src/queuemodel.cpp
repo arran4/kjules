@@ -18,6 +18,9 @@ QJsonObject QueueItem::toJson() const {
   if (lastTry.isValid()) {
     obj[QStringLiteral("lastTry")] = lastTry.toString(Qt::ISODate);
   }
+  if (!pastErrors.isEmpty()) {
+    obj[QStringLiteral("pastErrors")] = pastErrors;
+  }
   obj[QStringLiteral("isWaitItem")] = isWaitItem;
   obj[QStringLiteral("isDailyLimitWait")] = isDailyLimitWait;
   obj[QStringLiteral("waitSeconds")] = waitSeconds;
@@ -36,6 +39,9 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   if (obj.contains(QStringLiteral("lastTry"))) {
     item.lastTry = QDateTime::fromString(
         obj.value(QStringLiteral("lastTry")).toString(), Qt::ISODate);
+  }
+  if (obj.contains(QStringLiteral("pastErrors"))) {
+    item.pastErrors = obj.value(QStringLiteral("pastErrors")).toArray();
   }
   item.isWaitItem = obj.value(QStringLiteral("isWaitItem")).toBool();
   item.isDailyLimitWait =
@@ -135,9 +141,13 @@ QHash<int, QByteArray> QueueModel::roleNames() const {
 #include <KSharedConfig>
 
 void QueueModel::enqueue(const QJsonObject &requestData) {
-  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   QueueItem item;
   item.requestData = requestData;
+  enqueueItem(item);
+}
+
+void QueueModel::enqueueItem(const QueueItem &item) {
+  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   m_items.append(item);
   endInsertRows();
   m_jobsSinceLastWait++;

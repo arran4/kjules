@@ -24,6 +24,7 @@
 #include <KConfigGroup>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KNotification>
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
@@ -74,8 +75,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)),
       m_queueModel(new QueueModel(this)), m_errorsModel(new ErrorsModel(this)),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
-      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_errorRetryTimer(new QTimer(this)), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
       m_queuePaused(false) {
@@ -91,6 +92,11 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_countdownTimer, &QTimer::timeout, this,
           &MainWindow::updateCountdownStatus);
   m_countdownTimer->start(1000); // 1 second
+
+  connect(m_errorRetryTimer, &QTimer::timeout, this,
+          &MainWindow::processErrorRetries);
+  m_errorRetryTimer->start(60000); // 1 minute
+
   loadQueueSettings();
   createActions();
   setupTrayIcon();
@@ -1366,6 +1372,20 @@ void MainWindow::setupUi() {
   connect(m_errorsModel, &QAbstractListModel::modelReset, this,
           &MainWindow::updateTabTitles);
 
+  connect(m_queueModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateTabTitles);
+  connect(m_queueModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateTabTitles);
+  connect(m_queueModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateTabTitles);
+
+  connect(m_sessionModel, &QAbstractItemModel::rowsInserted, this,
+          &MainWindow::updateTabTitles);
+  connect(m_sessionModel, &QAbstractItemModel::rowsRemoved, this,
+          &MainWindow::updateTabTitles);
+  connect(m_sessionModel, &QAbstractItemModel::modelReset, this,
+          &MainWindow::updateTabTitles);
+
   // Initial title update
   updateTabTitles();
 }
@@ -1434,18 +1454,26 @@ void MainWindow::updateTabTitles() {
 
   for (int i = 0; i < m_tabWidget->count(); ++i) {
     QWidget *page = m_tabWidget->widget(i);
-    if (page == m_draftsView) {
+    if (page == m_draftsView->parentWidget()) {
       int count = m_draftsModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Drafts (%1)", count)
                                            : i18n("Drafts"));
-    } else if (page == m_templatesView) {
+    } else if (page == m_templatesView->parentWidget()) {
       int count = m_templatesModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Templates (%1)", count)
                                            : i18n("Templates"));
-    } else if (page == m_errorsView) {
+    } else if (page == m_errorsView->parentWidget()) {
       int count = m_errorsModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Errors (%1)", count)
                                            : i18n("Errors"));
+    } else if (page == m_queueView || page == m_queueView->parentWidget()) {
+      int count = m_queueModel->rowCount();
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Queue (%1)", count)
+                                           : i18n("Queue"));
+    } else if (page == m_sessionView->parentWidget()) {
+      int count = m_sessionModel->rowCount();
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Following (%1)", count)
+                                           : i18n("Following"));
     }
   }
 }
@@ -2104,6 +2132,52 @@ void MainWindow::onSessionCreated(const QStringList &sources,
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
+void MainWindow::processErrorRetries() {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
+  QList<int> rowsToRetry;
+
+  for (int i = m_errorsModel->rowCount() - 1; i >= 0; --i) {
+    QJsonObject error = m_errorsModel->getError(i);
+    QString timestampStr = error.value(QStringLiteral("timestamp")).toString();
+    if (!timestampStr.isEmpty()) {
+      QDateTime timestamp = QDateTime::fromString(timestampStr, Qt::ISODate);
+      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffMins * 60) {
+        rowsToRetry.append(i);
+      }
+    }
+  }
+
+  for (int row : rowsToRetry) {
+    QJsonObject error = m_errorsModel->getError(row);
+    QJsonObject request = error.value(QStringLiteral("request")).toObject();
+
+    // Create a QueueItem and embed the entire error object as context
+    // This maintains the error history which was previously tracked implicitly
+    // or manually.
+    QueueItem item;
+    item.requestData = request;
+    // Track error history natively through the requestData wrapper if
+    // supported, or just re-add to queue and letting API retry.
+    if (error.contains(QStringLiteral("pastErrors"))) {
+      item.pastErrors = error.value(QStringLiteral("pastErrors")).toArray();
+    }
+    QJsonObject strippedError = error;
+    strippedError.remove(QStringLiteral("pastErrors"));
+    item.pastErrors.append(strippedError); // append current error
+
+    m_queueModel->enqueueItem(item);
+    m_errorsModel->removeError(row);
+  }
+
+  if (!rowsToRetry.isEmpty() && !m_queueTimer->isActive() && !m_queuePaused) {
+    m_queueTimer->start(1000);
+  }
+}
+
 void MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused)
     return;
@@ -2162,7 +2236,7 @@ void MainWindow::onSessionCreatedResult(bool success,
     return;
   }
 
-  QueueItem item = m_queueModel->dequeue(); // Pop the item we were processing
+  QueueItem item = m_queueModel->peek(); // Peek the item we were processing
   m_queueModel
       ->recordRun(); // Record that we completed a run successfully or not
   m_queueModel
@@ -2170,6 +2244,7 @@ void MainWindow::onSessionCreatedResult(bool success,
   m_isProcessingQueue = false;
 
   if (success) {
+    m_queueModel->dequeue(); // Pop the item only on successful state transition
     m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext"))
                            .toObject()
@@ -2203,8 +2278,7 @@ void MainWindow::onSessionCreatedResult(bool success,
       updateStatus(
           i18n("Too many concurrent tasks, waiting before retrying..."));
 
-      // Requeue the item without incrementing the error count
-      m_queueModel->requeueTransient(item);
+      // The item remains at the front of the queue.
 
       // Apply a short backoff (e.g. 5 minutes)
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
@@ -2219,8 +2293,7 @@ void MainWindow::onSessionCreatedResult(bool success,
     } else if (isResourceExhausted) {
       updateStatus(i18n("API Rate limit hit, adding a wait item..."));
 
-      // Requeue the item without incrementing the error count
-      m_queueModel->requeueTransient(item);
+      // The item remains at the front of the queue.
 
       // Prepend a wait item
       QueueItem waitItem;
@@ -2231,13 +2304,10 @@ void MainWindow::onSessionCreatedResult(bool success,
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {
       updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-      m_queueModel->requeueFailed(item, errorMsg, rawResponse);
-
-      KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                               QStringLiteral("Queue"));
-      int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
-      m_queueBackoffUntil =
-          QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+      m_queueModel->dequeue(); // Pop the item out of the queue because it is in
+                               // Error state
+      // The error is recorded to the error model through the APIManager error
+      // signal handlers and onSessionCreationFailed.
     }
   }
 }
@@ -2433,58 +2503,79 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
     }
   }
 
-  m_errorsModel->addError(request, response, errorString, httpDetails);
-  updateStatus(i18n("Error saved."));
+  if (!isRateLimit) {
+    QJsonObject errorObj;
+    errorObj[QStringLiteral("request")] = request;
+    errorObj[QStringLiteral("response")] = response;
+    errorObj[QStringLiteral("message")] = errorString;
+    if (!httpDetails.isEmpty()) {
+      errorObj[QStringLiteral("httpDetails")] = httpDetails;
+    }
+    errorObj[QStringLiteral("timestamp")] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+    // If it was a queued item, copy over past errors if they exist.
+    // However, onSessionCreationFailed only takes request, not the QueueItem
+    // directly. As a simplification, we can look up the peeked queue item to
+    // extract its pastErrors.
+    if (m_isProcessingQueue && m_queueModel->size() > 0) {
+      QueueItem item = m_queueModel->peek();
+      if (item.requestData == request && !item.pastErrors.isEmpty()) {
+        errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
+      }
+    }
+
+    m_errorsModel->addErrorObj(errorObj);
+    updateStatus(i18n("Error saved."));
+
+    // We capture request object to uniquely identify the error instead of
+    // relying on shifting index
+    QJsonObject requestCopy = request;
+
+    KNotification *notification = new KNotification(
+        QStringLiteral("queueError"), KNotification::CloseOnTimeout, this);
+    notification->setTitle(i18n("Queue Error"));
+    notification->setText(i18n("A task encountered an error: %1", errorString));
+
+    notification->setDefaultAction(i18n("View"));
+    connect(notification, &KNotification::defaultActivated, this,
+            [this, requestCopy]() {
+              if (m_tabWidget) {
+                for (int i = 0; i < m_tabWidget->count(); ++i) {
+                  if (m_tabWidget->widget(i) == m_errorsView->parentWidget()) {
+                    m_tabWidget->setCurrentIndex(i);
+                    break;
+                  }
+                }
+              }
+
+              // Find the index by request data as rows can shift
+              int targetRow = -1;
+              for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+                QJsonObject err = m_errorsModel->getError(i);
+                if (err.value(QStringLiteral("request")).toObject() ==
+                    requestCopy) {
+                  targetRow = i;
+                  break;
+                }
+              }
+
+              if (targetRow != -1) {
+                QModelIndex idx = m_errorsModel->index(targetRow, 0);
+                if (idx.isValid()) {
+                  onErrorActivated(idx);
+                }
+              }
+            });
+
+    notification->sendEvent();
+  }
 
   if (isRateLimit) {
     // These are rate-limiting/concurrency errors handled by the queue's wait
     // mechanism. Do not pop up an error modal for them.
     return;
   }
-
-  int newRow = m_errorsModel->rowCount() - 1;
-
-  ErrorWindow *window =
-      new ErrorWindow(newRow, request,
-                      QString::fromUtf8(QJsonDocument(response).toJson(
-                          QJsonDocument::Indented)),
-                      errorString, httpDetails, this);
-  connect(window, &ErrorWindow::editRequested, [this](int row) {
-    QModelIndex idx = m_errorsModel->index(row, 0);
-    onErrorActivated(idx);
-  });
-  connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-    m_errorsModel->removeError(row);
-    updateStatus(i18n("Error removed."));
-  });
-  connect(window, &ErrorWindow::draftRequested, [this](int row) {
-    QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-    m_draftsModel->addDraft(req);
-    m_errorsModel->removeError(row);
-    updateStatus(i18n("Error converted to draft."));
-  });
-  connect(window, &ErrorWindow::templateRequested, [this](int row) {
-    SaveDialog dlg(QStringLiteral("Template"), this);
-    if (dlg.exec() == QDialog::Accepted) {
-      QJsonObject errData = m_errorsModel->getError(row);
-      QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-      req[QStringLiteral("name")] = dlg.nameOrComment();
-      req[QStringLiteral("description")] = dlg.description();
-      m_templatesModel->addTemplate(req);
-      updateStatus(i18n("Template created from error item."));
-    }
-  });
-  connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-    QJsonObject errData = m_errorsModel->getError(row);
-    QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-    m_errorsModel->removeError(row);
-    m_apiManager->createSessionAsync(req);
-    updateStatus(i18n("Sending error item immediately..."));
-  });
-
-  window->setAttribute(Qt::WA_DeleteOnClose);
-  window->show();
 }
 
 void MainWindow::onErrorActivated(const QModelIndex &index) {

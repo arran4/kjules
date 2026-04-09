@@ -3,6 +3,7 @@
 
 #include <QAbstractListModel>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QVector>
 
@@ -12,6 +13,7 @@ struct QueueItem {
   QString lastError;
   QString lastResponse;
   QDateTime lastTry;
+  QJsonArray pastErrors; // stores history of errors
 
   bool isWaitItem = false;
   bool isDailyLimitWait = false;
@@ -43,6 +45,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void enqueue(const QJsonObject &requestData);
+  void enqueueItem(const QueueItem &item);
   void updateItem(int index, const QueueItem &item);
   QueueItem dequeue();
   QueueItem peek() const;
