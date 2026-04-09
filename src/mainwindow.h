@@ -90,6 +90,7 @@ private Q_SLOTS:
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
+  void connectModelForTabUpdates(QAbstractItemModel *model);
   void checkAutoArchiveSessions();
   void updateCountdownStatus();
 

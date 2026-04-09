@@ -1351,43 +1351,23 @@ void MainWindow::setupUi() {
   statusBar()->addPermanentWidget(m_cancelRefreshBtn);
 
   // Connect model signals to update tab titles with counts
-  connect(m_draftsModel, &QAbstractListModel::rowsInserted, this,
-          &MainWindow::updateTabTitles);
-  connect(m_draftsModel, &QAbstractListModel::rowsRemoved, this,
-          &MainWindow::updateTabTitles);
-  connect(m_draftsModel, &QAbstractListModel::modelReset, this,
-          &MainWindow::updateTabTitles);
-
-  connect(m_templatesModel, &QAbstractListModel::rowsInserted, this,
-          &MainWindow::updateTabTitles);
-  connect(m_templatesModel, &QAbstractListModel::rowsRemoved, this,
-          &MainWindow::updateTabTitles);
-  connect(m_templatesModel, &QAbstractListModel::modelReset, this,
-          &MainWindow::updateTabTitles);
-
-  connect(m_errorsModel, &QAbstractListModel::rowsInserted, this,
-          &MainWindow::updateTabTitles);
-  connect(m_errorsModel, &QAbstractListModel::rowsRemoved, this,
-          &MainWindow::updateTabTitles);
-  connect(m_errorsModel, &QAbstractListModel::modelReset, this,
-          &MainWindow::updateTabTitles);
-
-  connect(m_queueModel, &QAbstractListModel::rowsInserted, this,
-          &MainWindow::updateTabTitles);
-  connect(m_queueModel, &QAbstractListModel::rowsRemoved, this,
-          &MainWindow::updateTabTitles);
-  connect(m_queueModel, &QAbstractListModel::modelReset, this,
-          &MainWindow::updateTabTitles);
-
-  connect(m_sessionModel, &QAbstractItemModel::rowsInserted, this,
-          &MainWindow::updateTabTitles);
-  connect(m_sessionModel, &QAbstractItemModel::rowsRemoved, this,
-          &MainWindow::updateTabTitles);
-  connect(m_sessionModel, &QAbstractItemModel::modelReset, this,
-          &MainWindow::updateTabTitles);
+  connectModelForTabUpdates(m_draftsModel);
+  connectModelForTabUpdates(m_templatesModel);
+  connectModelForTabUpdates(m_errorsModel);
+  connectModelForTabUpdates(m_queueModel);
+  connectModelForTabUpdates(m_sessionModel);
 
   // Initial title update
   updateTabTitles();
+}
+
+void MainWindow::connectModelForTabUpdates(QAbstractItemModel *model) {
+  connect(model, &QAbstractItemModel::rowsInserted, this,
+          &MainWindow::updateTabTitles);
+  connect(model, &QAbstractItemModel::rowsRemoved, this,
+          &MainWindow::updateTabTitles);
+  connect(model, &QAbstractItemModel::modelReset, this,
+          &MainWindow::updateTabTitles);
 }
 
 void MainWindow::checkAutoArchiveSessions() {
@@ -1466,7 +1446,7 @@ void MainWindow::updateTabTitles() {
       int count = m_errorsModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Errors (%1)", count)
                                            : i18n("Errors"));
-    } else if (page == m_queueView || page == m_queueView->parentWidget()) {
+    } else if (page == m_queueView) {
       int count = m_queueModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Queue (%1)", count)
                                            : i18n("Queue"));
@@ -2536,6 +2516,8 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
         QStringLiteral("queueError"), KNotification::CloseOnTimeout, this);
     notification->setTitle(i18n("Queue Error"));
     notification->setText(i18n("A task encountered an error: %1", errorString));
+
+    connect(notification, &KNotification::closed, notification, &QObject::deleteLater);
 
     notification->setDefaultAction(i18n("View"));
     connect(notification, &KNotification::defaultActivated, this,
