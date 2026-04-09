@@ -31,6 +31,7 @@ public:
   void loadGithubTokenFromWallet();
   void saveGithubTokenToWallet(const QString &token);
 
+  bool canConnect() const;
   void testConnection(const QString &apiKey = QString());
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
@@ -86,7 +87,6 @@ private:
 
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());
-  bool canConnect() const;
 };
 
 #endif // APIMANAGER_H

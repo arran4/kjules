@@ -3,6 +3,7 @@
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
+#include "refreshprogresswindow.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
@@ -511,24 +512,32 @@ void MainWindow::setupUi() {
           });
 
           connect(refreshSessionAction, &QAction::triggered, [this]() {
+            if (!m_apiManager->canConnect()) {
+              updateStatus(i18n("Cannot refresh: No token or previous failure."));
+              return;
+            }
             QModelIndexList selectedRows =
                 m_sessionView->selectionModel()->selectedRows();
             const QSortFilterProxyModel *proxy =
                 qobject_cast<const QSortFilterProxyModel *>(
                     m_sessionView->model());
-            int count = 0;
+            QStringList idsToRefresh;
             for (const QModelIndex &idx : selectedRows) {
               QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
               QString currentId =
                   m_sessionModel->data(mappedIdx, SessionModel::IdRole)
                       .toString();
               if (!currentId.isEmpty()) {
-                m_apiManager->reloadSession(currentId);
-                count++;
+                idsToRefresh.append(currentId);
               }
             }
-            updateStatus(i18np("Refreshing 1 session...",
-                               "Refreshing %1 sessions...", count));
+            if (!idsToRefresh.isEmpty()) {
+                RefreshProgressWindow *progressWindow = new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                progressWindow->setAttribute(Qt::WA_DeleteOnClose);
+                progressWindow->show();
+            } else {
+                updateStatus(i18n("No following sessions to refresh."));
+            }
           });
 
           if (openJulesUrlAction && copyJulesUrlAction) {
@@ -1574,19 +1583,23 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Following"), this);
   connect(m_refreshFollowingAction, &QAction::triggered, this, [this]() {
-    int count = 0;
+    if (!m_apiManager->canConnect()) {
+      updateStatus(i18n("Cannot refresh: No token or previous failure."));
+      return;
+    }
+    QStringList idsToRefresh;
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
       QString currentId =
           m_sessionModel->data(index, SessionModel::IdRole).toString();
       if (!currentId.isEmpty()) {
-        m_apiManager->reloadSession(currentId);
-        count++;
+        idsToRefresh.append(currentId);
       }
     }
-    if (count > 0) {
-      updateStatus(i18np("Refreshing 1 following session...",
-                         "Refreshing %1 following sessions...", count));
+    if (!idsToRefresh.isEmpty()) {
+        RefreshProgressWindow *progressWindow = new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+        progressWindow->setAttribute(Qt::WA_DeleteOnClose);
+        progressWindow->show();
     } else {
       updateStatus(i18n("No following sessions to refresh."));
     }
