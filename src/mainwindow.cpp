@@ -2517,7 +2517,8 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
     notification->setTitle(i18n("Queue Error"));
     notification->setText(i18n("A task encountered an error: %1", errorString));
 
-    connect(notification, &KNotification::closed, notification, &QObject::deleteLater);
+    connect(notification, &KNotification::closed, notification,
+            &QObject::deleteLater);
 
     notification->setDefaultAction(i18n("View"));
     connect(notification, &KNotification::defaultActivated, this,
