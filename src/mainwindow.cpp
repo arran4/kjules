@@ -1577,14 +1577,16 @@ void MainWindow::createActions() {
     int count = 0;
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
-      QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
+      QString currentId =
+          m_sessionModel->data(index, SessionModel::IdRole).toString();
       if (!currentId.isEmpty()) {
         m_apiManager->reloadSession(currentId);
         count++;
       }
     }
     if (count > 0) {
-      updateStatus(i18np("Refreshing 1 following session...", "Refreshing %1 following sessions...", count));
+      updateStatus(i18np("Refreshing 1 following session...",
+                         "Refreshing %1 following sessions...", count));
     } else {
       updateStatus(i18n("No following sessions to refresh."));
     }
