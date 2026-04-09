@@ -5,7 +5,7 @@
 #include <QProgressBar>
 #include <QTextBrowser>
 #include <QPushButton>
-#include <KI18n/KLocalizedString>
+#include <KLocalizedString>
 
 RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds, APIManager *apiManager, QWidget *parent)
     : QDialog(parent),
