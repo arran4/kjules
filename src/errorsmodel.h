@@ -26,6 +26,7 @@ public:
 
   void addError(const QJsonObject &request, const QJsonObject &response,
                 const QString &message, const QString &httpDetails = QString());
+  void addErrorObj(const QJsonObject &errorObj);
   void removeError(int row);
   QJsonObject getError(int row) const;
   void loadErrors();

@@ -71,6 +71,10 @@ void ErrorsModel::addError(const QJsonObject &request,
   errorObj[QStringLiteral("timestamp")] =
       QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
+  addErrorObj(errorObj);
+}
+
+void ErrorsModel::addErrorObj(const QJsonObject &errorObj) {
   beginInsertRows(QModelIndex(), 0, 0);
   m_errors.insert(0, errorObj);
   endInsertRows();
