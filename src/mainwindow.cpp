@@ -2520,9 +2520,15 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request,
     connect(notification, &KNotification::closed, notification,
             &QObject::deleteLater);
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     notification->setDefaultAction(i18n("View"));
     connect(notification, &KNotification::defaultActivated, this,
             [this, requestCopy]() {
+#else
+    auto action = notification->addDefaultAction(i18n("View"));
+    connect(action, &KNotificationAction::activated, this,
+            [this, requestCopy]() {
+#endif
               if (m_tabWidget) {
                 for (int i = 0; i < m_tabWidget->count(); ++i) {
                   if (m_tabWidget->widget(i) == m_errorsView->parentWidget()) {
