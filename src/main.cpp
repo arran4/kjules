@@ -32,7 +32,9 @@ int main(int argc, char *argv[]) {
 
   bool useMockApi = parser.isSet(mockApiOption);
 #ifdef USE_MOCK_API
-  useMockApi = true;
+  if (!parser.isSet(mockApiOption)) {
+    useMockApi = true;
+  }
 #endif
 
   MainWindow *window = new MainWindow();

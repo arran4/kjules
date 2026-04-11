@@ -157,7 +157,12 @@ func main() {
 		pageSize := 10
 		startIdx := 0
 		if pageToken != "" {
-			startIdx, _ = strconv.Atoi(pageToken)
+			var err error
+			startIdx, err = strconv.Atoi(pageToken)
+			if err != nil {
+				http.Error(w, "Invalid pageToken", http.StatusBadRequest)
+				return
+			}
 		}
 
 		if startIdx > len(sources) {
@@ -233,7 +238,12 @@ func main() {
 		pageSize := 15
 		startIdx := 0
 		if pageToken != "" {
-			startIdx, _ = strconv.Atoi(pageToken)
+			var err error
+			startIdx, err = strconv.Atoi(pageToken)
+			if err != nil {
+				http.Error(w, "Invalid pageToken", http.StatusBadRequest)
+				return
+			}
 		}
 
 		if startIdx > len(sessions) {
