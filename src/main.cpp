@@ -22,10 +22,21 @@ int main(int argc, char *argv[]) {
 
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
+
+  QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"),
+                                   i18n("Use mock API at localhost:8080"));
+  parser.addOption(mockApiOption);
+
   parser.process(app);
   aboutData.processCommandLine(&parser);
 
+  bool useMockApi = parser.isSet(mockApiOption);
+#ifdef USE_MOCK_API
+  useMockApi = true;
+#endif
+
   MainWindow *window = new MainWindow();
+  window->setMockApi(useMockApi);
   window->show();
 
   return app.exec();

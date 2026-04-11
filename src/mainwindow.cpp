@@ -196,6 +196,12 @@ MainWindow::MainWindow(QWidget *parent)
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 }
 
+void MainWindow::setMockApi(bool useMock) {
+  if (useMock) {
+    m_apiManager->setBaseUrl(QStringLiteral("http://localhost:8080/v1alpha"));
+  }
+}
+
 MainWindow::~MainWindow() {}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
