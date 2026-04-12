@@ -56,6 +56,8 @@ private:
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
   QCheckBox *m_requirePlanApprovalCheckBox;
+  QCheckBox *m_keepOpenCheckBox;
+  QCheckBox *m_keepSourceCheckBox;
   QPushButton *m_createButton;
   QPushButton *m_createPRButton;
   QPushButton *m_loadTemplateButton;
