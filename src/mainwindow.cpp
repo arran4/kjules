@@ -249,6 +249,12 @@ MainWindow::MainWindow(QWidget *parent)
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 }
 
+void MainWindow::setMockApi(bool useMock) {
+  if (useMock) {
+    m_apiManager->setBaseUrl(QStringLiteral("http://localhost:8080/v1alpha"));
+  }
+}
+
 MainWindow::~MainWindow() {}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -1635,12 +1641,28 @@ void MainWindow::createActions() {
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
-  actionCollection()->setDefaultShortcut(m_refreshSourcesAction,
-                                         QKeySequence(Qt::Key_F5));
   connect(m_refreshSourcesAction, &QAction::triggered, this,
           &MainWindow::refreshSources);
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
+
+  QAction *refreshCurrentTabAction =
+      new QAction(i18n("Refresh Current Tab"), this);
+  actionCollection()->setDefaultShortcut(refreshCurrentTabAction,
+                                         QKeySequence(Qt::Key_F5));
+  connect(refreshCurrentTabAction, &QAction::triggered, this, [this]() {
+    if (m_tabWidget && m_tabWidget->currentWidget()) {
+      if (m_tabWidget->currentWidget()->objectName() ==
+          QStringLiteral("sourcesTab")) {
+        m_refreshSourcesAction->trigger();
+      } else if (m_tabWidget->currentWidget()->objectName() ==
+                 QStringLiteral("followingTab")) {
+        m_refreshFollowingAction->trigger();
+      }
+    }
+  });
+  actionCollection()->addAction(QStringLiteral("refresh_current_tab"),
+                                refreshCurrentTabAction);
 
   m_refreshFollowingAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),

@@ -1,7 +1,11 @@
 #include <KAboutData>
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QApplication>
+#include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QTemporaryDir>
 
 #include "mainwindow.h"
 
@@ -22,11 +26,43 @@ int main(int argc, char *argv[]) {
 
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
+
+  QCommandLineOption autostartedOption(QStringList()
+                                           << QStringLiteral("autostarted"),
+                                       i18n("Launched via autostart"));
+  parser.addOption(autostartedOption);
+
+  QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"),
+                                   i18n("Use mock API at localhost:8080"));
+  parser.addOption(mockApiOption);
+
   parser.process(app);
   aboutData.processCommandLine(&parser);
 
+  bool useMockApi = parser.isSet(mockApiOption);
+#ifdef USE_MOCK_API
+  if (!parser.isSet(mockApiOption)) {
+    useMockApi = true;
+  }
+#endif
+
+  if (useMockApi) {
+    QTemporaryDir *tempDir = new QTemporaryDir();
+    if (tempDir->isValid()) {
+      qputenv("XDG_DATA_HOME", tempDir->path().toUtf8());
+    }
+  }
+
   MainWindow *window = new MainWindow();
-  window->show();
+
+  bool isAutostarted = parser.isSet(autostartedOption);
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  bool autostartTray = config.readEntry("AutostartTray", false);
+  window->setMockApi(useMockApi);
+
+  if (!(isAutostarted && autostartTray)) {
+    window->show();
+  }
 
   return app.exec();
 }

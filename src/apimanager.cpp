@@ -6,12 +6,13 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 
-const QString BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
+const QString DEFAULT_BASE_URL =
+    QStringLiteral("https://jules.googleapis.com/v1alpha");
 
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
-      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr),
-      m_listSessionsReply(nullptr) {
+      m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr), m_tokenFailed(false),
+      m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -38,6 +39,10 @@ void APIManager::setApiKey(const QString &key) {
 }
 
 QString APIManager::apiKey() const { return m_apiKey; }
+
+void APIManager::setBaseUrl(const QString &url) { m_baseUrl = url; }
+
+QString APIManager::baseUrl() const { return m_baseUrl; }
 
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
@@ -101,7 +106,7 @@ void APIManager::onWalletOpened(bool success) {
 
 QNetworkRequest APIManager::createRequest(const QString &endpoint,
                                           const QString &overrideApiKey) {
-  QNetworkRequest request(QUrl(BASE_URL + endpoint));
+  QNetworkRequest request(QUrl(m_baseUrl + endpoint));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
   QString key = overrideApiKey.isEmpty() ? m_apiKey : overrideApiKey;
