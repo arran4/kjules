@@ -121,6 +121,7 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_lineEdit = new QLineEdit(this);
   m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula "
                                     "(e.g. =\"Update all\" state:PAUSED)"));
+  m_lineEdit->setClearButtonEnabled(true);
   layout->addWidget(m_lineEdit);
 
   m_treeView = new QTreeView(this);
