@@ -2,6 +2,7 @@
 #include <KLocalizedString>
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QTemporaryDir>
 
 #include "mainwindow.h"
 
@@ -36,6 +37,13 @@ int main(int argc, char *argv[]) {
     useMockApi = true;
   }
 #endif
+
+  if (useMockApi) {
+    QTemporaryDir *tempDir = new QTemporaryDir();
+    if (tempDir->isValid()) {
+      qputenv("XDG_DATA_HOME", tempDir->path().toUtf8());
+    }
+  }
 
   MainWindow *window = new MainWindow();
   window->setMockApi(useMockApi);
