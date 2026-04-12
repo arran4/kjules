@@ -1,4 +1,5 @@
 app-id: org.kde.kjules
+rename-icon: sc-apps-kjules
 runtime: org.kde.Platform
 runtime-version: '6.6'
 sdk: org.kde.Sdk
@@ -9,9 +10,13 @@ finish-args:
   - --socket=wayland
   - --device=dri
   - --share=network
+  - --talk-name=org.freedesktop.secrets
 modules:
   - name: kjules
     buildsystem: cmake-ninja
+    cleanup:
+      - /include
+      - /lib/cmake
     config-opts:
       - "-DQT_MAJOR_VERSION=6"
     sources:
