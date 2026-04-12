@@ -1,6 +1,9 @@
 #include <KAboutData>
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QApplication>
+#include <QCommandLineOption>
 #include <QCommandLineParser>
 
 #include "mainwindow.h"
@@ -22,11 +25,24 @@ int main(int argc, char *argv[]) {
 
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
+
+  QCommandLineOption autostartedOption(QStringList()
+                                           << QStringLiteral("autostarted"),
+                                       i18n("Launched via autostart"));
+  parser.addOption(autostartedOption);
+
   parser.process(app);
   aboutData.processCommandLine(&parser);
 
   MainWindow *window = new MainWindow();
-  window->show();
+
+  bool isAutostarted = parser.isSet(autostartedOption);
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  bool autostartTray = config.readEntry("AutostartTray", false);
+
+  if (!(isAutostarted && autostartTray)) {
+    window->show();
+  }
 
   return app.exec();
 }
