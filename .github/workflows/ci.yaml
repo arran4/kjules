@@ -190,10 +190,14 @@ jobs:
         run: |
           find src -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
           cppcheck --enable=warning,style,performance,portability --error-exitcode=1 . || true
-      - run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=5 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-      - run: run-clang-tidy -p build src || true
-      - run: cmake --build build --parallel
-      - run: cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+      - name: Configure CMake
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=5 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Clang-Tidy
+        run: run-clang-tidy -p build src || true
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
       - name: Archive build
         if: ${{ needs.route.outputs.run_release == 'true' }}
         run: |
