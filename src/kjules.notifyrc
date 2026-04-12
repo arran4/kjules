@@ -1,0 +1,13 @@
+[Global]
+IconName=kjules
+Comment=Google Jules API Frontend
+
+[Event/followingSessionCompleted]
+Name=Following Session Completed
+Comment=A followed session has completed.
+Action=Popup
+
+[Event/followingSessionFailed]
+Name=Following Session Failed
+Comment=A followed session has encountered an error.
+Action=Popup
