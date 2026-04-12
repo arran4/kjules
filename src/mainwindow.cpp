@@ -119,117 +119,79 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
-  connect(
-      m_apiManager, &APIManager::sessionReloaded, this,
-      [this](const QJsonObject &session) {
-        QString id = session.value(QStringLiteral("id")).toString();
-        QString newState = session.value(QStringLiteral("state")).toString();
-        QString prevState = m_previousSessionStates.value(id);
+  connect(m_apiManager, &APIManager::sessionReloaded, this,
+          [this](const QJsonObject &session) {
+            const QString id = session.value(QStringLiteral("id")).toString();
+            const QString newState =
+                session.value(QStringLiteral("state")).toString();
+            const QString prevState = m_previousSessionStates.value(id);
 
-        // Notification logic
-        if (!prevState.isEmpty() && prevState != newState) {
-          if (newState == QStringLiteral("DONE")) {
-            KNotification *notification =
-                new KNotification(QStringLiteral("followingSessionCompleted"),
-                                  KNotification::CloseOnTimeout, this);
-            notification->setTitle(i18n("Following Session Completed"));
-            notification->setText(i18n("Session %1 has completed.", id));
-            connect(notification, &KNotification::closed, notification,
-                    &QObject::deleteLater);
+            if (!prevState.isEmpty() && prevState != newState) {
+              QString eventId;
+              QString title;
+              QString text;
 
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-            notification->setDefaultAction(i18n("View"));
-            connect(notification, &KNotification::defaultActivated, this,
-                    [this, id]() {
-                      // Find and switch to Following Tab
-                      if (m_tabWidget) {
-                        for (int i = 0; i < m_tabWidget->count(); ++i) {
-                          if (m_tabWidget->widget(i)->objectName() ==
-                              QStringLiteral("followingTab")) {
-                            m_tabWidget->setCurrentIndex(i);
-                            break;
-                          }
-                        }
+              if (newState == QStringLiteral("DONE")) {
+                eventId = QStringLiteral("followingSessionCompleted");
+                title = i18n("Following Session Completed");
+                text = i18n("Session %1 has completed.", id);
+              } else if (newState == QStringLiteral("ERROR")) {
+                eventId = QStringLiteral("followingSessionFailed");
+                title = i18n("Following Session Failed");
+                text = i18n("Session %1 has encountered an error.", id);
+              }
+
+              if (!eventId.isEmpty()) {
+                KNotification *notification = new KNotification(
+                    eventId, KNotification::CloseOnTimeout, this);
+                notification->setTitle(title);
+                notification->setText(text);
+                connect(notification, &KNotification::closed, notification,
+                        &QObject::deleteLater);
+
+                auto actionHandler = [this]() {
+                  if (m_tabWidget) {
+                    for (int i = 0; i < m_tabWidget->count(); ++i) {
+                      if (m_tabWidget->widget(i)->objectName() ==
+                          QStringLiteral("followingTab")) {
+                        m_tabWidget->setCurrentIndex(i);
+                        break;
                       }
-                    });
-#else
-            auto action = notification->addDefaultAction(i18n("View"));
-            connect(action, &KNotificationAction::activated, this,
-                    [this, id]() {
-                      if (m_tabWidget) {
-                        for (int i = 0; i < m_tabWidget->count(); ++i) {
-                          if (m_tabWidget->widget(i)->objectName() ==
-                              QStringLiteral("followingTab")) {
-                            m_tabWidget->setCurrentIndex(i);
-                            break;
-                          }
-                        }
-                      }
-                    });
-#endif
-            notification->sendEvent();
-          } else if (newState == QStringLiteral("ERROR")) {
-            KNotification *notification =
-                new KNotification(QStringLiteral("followingSessionFailed"),
-                                  KNotification::CloseOnTimeout, this);
-            notification->setTitle(i18n("Following Session Failed"));
-            notification->setText(
-                i18n("Session %1 has encountered an error.", id));
-            connect(notification, &KNotification::closed, notification,
-                    &QObject::deleteLater);
+                    }
+                  }
+                };
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-            notification->setDefaultAction(i18n("View"));
-            connect(notification, &KNotification::defaultActivated, this,
-                    [this, id]() {
-                      if (m_tabWidget) {
-                        for (int i = 0; i < m_tabWidget->count(); ++i) {
-                          if (m_tabWidget->widget(i)->objectName() ==
-                              QStringLiteral("followingTab")) {
-                            m_tabWidget->setCurrentIndex(i);
-                            break;
-                          }
-                        }
-                      }
-                    });
+                notification->setDefaultAction(i18n("View"));
+                connect(notification, &KNotification::defaultActivated, this,
+                        actionHandler);
 #else
             auto action = notification->addDefaultAction(i18n("View"));
-            connect(action, &KNotificationAction::activated, this,
-                    [this, id]() {
-                      if (m_tabWidget) {
-                        for (int i = 0; i < m_tabWidget->count(); ++i) {
-                          if (m_tabWidget->widget(i)->objectName() ==
-                              QStringLiteral("followingTab")) {
-                            m_tabWidget->setCurrentIndex(i);
-                            break;
-                          }
-                        }
-                      }
-                    });
+            connect(action, &KNotificationAction::activated, this, actionHandler);
 #endif
-            notification->sendEvent();
-          }
-        }
-        m_previousSessionStates[id] = newState;
-
-        m_sessionModel->updateSession(session);
-        // We need to fetch github PR info if we have one
-        for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-          if (m_sessionModel
-                  ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
-                  .toString() ==
-              session.value(QStringLiteral("id")).toString()) {
-            QString prUrl =
-                m_sessionModel
-                    ->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole)
-                    .toString();
-            if (!prUrl.isEmpty()) {
-              m_apiManager->fetchGithubPullRequest(prUrl);
+                notification->sendEvent();
+              }
             }
-            break;
-          }
-        }
-      });
+            m_previousSessionStates[id] = newState;
+
+            m_sessionModel->updateSession(session);
+            // We need to fetch github PR info if we have one
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel
+                      ->data(m_sessionModel->index(i, 0), SessionModel::IdRole)
+                      .toString() ==
+                  session.value(QStringLiteral("id")).toString()) {
+                QString prUrl = m_sessionModel
+                                    ->data(m_sessionModel->index(i, 0),
+                                           SessionModel::PrUrlRole)
+                                    .toString();
+                if (!prUrl.isEmpty()) {
+                  m_apiManager->fetchGithubPullRequest(prUrl);
+                }
+                break;
+              }
+            }
+          });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
           &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this,
