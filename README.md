@@ -46,7 +46,7 @@ When you click on a notification or open the application, it presents you with a
 ### Prerequisites
 
 *   C++ Compiler (C++17 support required)
-*   CMake (version 3.10 or higher)
+*   CMake (version 3.16 or higher)
 *   Qt 5 or Qt 6 & KDE Frameworks libraries
 
 On Ubuntu/Debian, install the required dependencies:
