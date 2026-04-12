@@ -32,7 +32,6 @@ int main(int argc, char *argv[]) {
                                        i18n("Launched via autostart"));
   parser.addOption(autostartedOption);
 
-
   QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"),
                                    i18n("Use mock API at localhost:8080"));
   parser.addOption(mockApiOption);
