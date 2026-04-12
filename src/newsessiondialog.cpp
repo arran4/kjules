@@ -470,3 +470,12 @@ void NewSessionDialog::onSaveTemplate() {
   // We do not close the dialog when saving a template, it can be used multiple
   // times
 }
+
+void NewSessionDialog::showEvent(QShowEvent *event) {
+  QDialog::showEvent(event);
+  if (!m_selectedSources.isEmpty()) {
+    m_promptEdit->setFocus();
+  } else {
+    m_filterEdit->setFocus();
+  }
+}

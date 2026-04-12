@@ -46,6 +46,9 @@ private Q_SLOTS:
   void updateModels();
   void applyFilter();
 
+protected:
+  void showEvent(QShowEvent *event) override;
+
 private:
   SourceModel *m_sourceModel;
   TemplatesModel *m_templatesModel;
