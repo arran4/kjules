@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=kJules
-Comment=Google Jules API Frontend
+Comment=A powerful KDE native desktop client for tracking and managing GitHub tasks
 Exec=kjules
 Icon=sc-apps-kjules
 Type=Application
