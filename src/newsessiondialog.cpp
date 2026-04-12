@@ -205,11 +205,24 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   formLayout->addRow(tr("Prompt:"), promptLayout);
 
-  // Require Plan Approval
-  m_requirePlanApprovalCheckBox = new QCheckBox(this);
+  // Options
+  QHBoxLayout *optionsLayout = new QHBoxLayout();
+
+  m_requirePlanApprovalCheckBox =
+      new QCheckBox(tr("Require Plan Approval"), this);
   m_requirePlanApprovalCheckBox->setChecked(false);
-  formLayout->addRow(tr("Require Plan Approval:"),
-                     m_requirePlanApprovalCheckBox);
+  optionsLayout->addWidget(m_requirePlanApprovalCheckBox);
+
+  m_keepOpenCheckBox = new QCheckBox(tr("Keep create new session open"), this);
+  m_keepOpenCheckBox->setChecked(false);
+  optionsLayout->addWidget(m_keepOpenCheckBox);
+
+  m_keepSourceCheckBox = new QCheckBox(tr("Keep selected source"), this);
+  m_keepSourceCheckBox->setChecked(false);
+  optionsLayout->addWidget(m_keepSourceCheckBox);
+
+  optionsLayout->addStretch();
+  formLayout->addRow(tr("Options:"), optionsLayout);
 
   mainLayout->addLayout(formLayout);
 
@@ -257,6 +270,22 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
   connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton,
           &QPushButton::click);
+
+  auto onCtrlShiftEnter = [this]() {
+    m_keepOpenCheckBox->setChecked(true);
+    m_keepSourceCheckBox->setChecked(true);
+    m_createPRButton->click();
+  };
+
+  QShortcut *ctrlShiftEnterShortcut =
+      new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter), this);
+  connect(ctrlShiftEnterShortcut, &QShortcut::activated, this,
+          onCtrlShiftEnter);
+
+  QShortcut *ctrlShiftReturnShortcut =
+      new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return), this);
+  connect(ctrlShiftReturnShortcut, &QShortcut::activated, this,
+          onCtrlShiftEnter);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -407,7 +436,16 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 
   Q_EMIT createSessionRequested(sources, prompt, automationMode,
                                 requirePlanApproval);
-  accept();
+
+  if (m_keepOpenCheckBox->isChecked()) {
+    m_promptEdit->clear();
+    if (!m_keepSourceCheckBox->isChecked()) {
+      m_selectedSources.clear();
+      updateModels();
+    }
+  } else {
+    accept();
+  }
 }
 
 void NewSessionDialog::onSaveDraft() {
@@ -469,4 +507,13 @@ void NewSessionDialog::onSaveTemplate() {
   Q_EMIT saveTemplateRequested(tmpl);
   // We do not close the dialog when saving a template, it can be used multiple
   // times
+}
+
+void NewSessionDialog::showEvent(QShowEvent *event) {
+  QDialog::showEvent(event);
+  if (!m_selectedSources.isEmpty()) {
+    m_promptEdit->setFocus();
+  } else {
+    m_filterEdit->setFocus();
+  }
 }

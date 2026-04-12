@@ -1,6 +1,9 @@
 #include <KAboutData>
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QApplication>
+#include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QTemporaryDir>
 
@@ -24,6 +27,11 @@ int main(int argc, char *argv[]) {
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
 
+  QCommandLineOption autostartedOption(QStringList()
+                                           << QStringLiteral("autostarted"),
+                                       i18n("Launched via autostart"));
+  parser.addOption(autostartedOption);
+
   QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"),
                                    i18n("Use mock API at localhost:8080"));
   parser.addOption(mockApiOption);
@@ -46,8 +54,15 @@ int main(int argc, char *argv[]) {
   }
 
   MainWindow *window = new MainWindow();
+
+  bool isAutostarted = parser.isSet(autostartedOption);
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  bool autostartTray = config.readEntry("AutostartTray", false);
   window->setMockApi(useMockApi);
-  window->show();
+
+  if (!(isAutostarted && autostartTray)) {
+    window->show();
+  }
 
   return app.exec();
 }
