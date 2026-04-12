@@ -46,6 +46,9 @@ private Q_SLOTS:
   void updateModels();
   void applyFilter();
 
+protected:
+  void showEvent(QShowEvent *event) override;
+
 private:
   SourceModel *m_sourceModel;
   TemplatesModel *m_templatesModel;
@@ -56,6 +59,8 @@ private:
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
   QCheckBox *m_requirePlanApprovalCheckBox;
+  QCheckBox *m_keepOpenCheckBox;
+  QCheckBox *m_keepSourceCheckBox;
   QPushButton *m_createButton;
   QPushButton *m_createPRButton;
   QPushButton *m_loadTemplateButton;

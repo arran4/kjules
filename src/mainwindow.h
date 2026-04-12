@@ -32,6 +32,8 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
 
+  void setMockApi(bool useMock);
+
 protected:
   void closeEvent(QCloseEvent *event) override;
 
