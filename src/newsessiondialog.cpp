@@ -196,7 +196,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     if (m_unselectedProxy->rowCount() == 1) {
       QModelIndex idx = m_unselectedProxy->index(0, 0);
       QString name = idx.data(SourceModel::NameRole).toString();
-      m_selectedSources.insert(name, getDefaultBranch(name));
+      QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+      m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
       updateModels();
       m_filterEdit->clear();
     } else if (m_unselectedProxy->rowCount() > 1) {
@@ -208,7 +209,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(m_unselectedView, &QListView::activated, this,
           [this](const QModelIndex &idx) {
             QString name = idx.data(SourceModel::NameRole).toString();
-            m_selectedSources.insert(name, getDefaultBranch(name));
+            QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+            m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
             updateModels();
             m_unselectedView->clearSelection();
           });
@@ -374,14 +376,28 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
         m_selectedSources.insert(name, branch);
       } else {
         QString name = val.toString();
-        m_selectedSources.insert(name, getDefaultBranch(name));
+        QModelIndexList matches = m_sourceModel->match(
+            m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1,
+            Qt::MatchExactly);
+        if (!matches.isEmpty()) {
+          m_selectedSources.insert(name, getDefaultBranch(matches.first()));
+        } else {
+          m_selectedSources.insert(name, QStringLiteral("main"));
+        }
       }
     }
   } else if (data.contains(QStringLiteral("source"))) {
     QString name = data.value(QStringLiteral("source")).toString();
     QString branch = data.value(QStringLiteral("startingBranch")).toString();
     if (branch.isEmpty()) {
-      branch = getDefaultBranch(name);
+      QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0),
+                                                     SourceModel::NameRole,
+                                                     name, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        branch = getDefaultBranch(matches.first());
+      } else {
+        branch = QStringLiteral("main");
+      }
     }
     m_selectedSources.insert(name, branch);
   } else if (data.contains(QStringLiteral("sourceContext"))) {
@@ -440,7 +456,8 @@ void NewSessionDialog::onAddSelected() {
       m_unselectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &idx : selection) {
     QString name = idx.data(SourceModel::NameRole).toString();
-    m_selectedSources.insert(name, getDefaultBranch(name));
+    QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+    m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
   }
   updateModels();
   m_unselectedView->clearSelection();
@@ -460,7 +477,8 @@ void NewSessionDialog::onSelectAll() {
   for (int i = 0; i < m_unselectedProxy->rowCount(); ++i) {
     QModelIndex idx = m_unselectedProxy->index(i, 0);
     QString name = idx.data(SourceModel::NameRole).toString();
-    m_selectedSources.insert(name, getDefaultBranch(name));
+    QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+    m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
   }
   updateModels();
 }
@@ -580,22 +598,15 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   }
 }
 
-QString NewSessionDialog::getDefaultBranch(const QString &sourceName) {
-  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
-    QModelIndex idx = m_sourceModel->index(i, 0);
-    QString name = m_sourceModel->data(idx, SourceModel::NameRole).toString();
-    if (name == sourceName) {
-      QJsonObject rawData =
-          m_sourceModel->data(idx, SourceModel::RawDataRole).toJsonObject();
-      if (rawData.contains(QStringLiteral("defaultBranch"))) {
-        return rawData.value(QStringLiteral("defaultBranch")).toString();
-      }
-      QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
-      if (github.contains(QStringLiteral("default_branch"))) {
-        return github.value(QStringLiteral("default_branch")).toString();
-      }
-      return QStringLiteral("main");
-    }
+QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
+  QJsonObject rawData =
+      m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+  if (rawData.contains(QStringLiteral("defaultBranch"))) {
+    return rawData.value(QStringLiteral("defaultBranch")).toString();
+  }
+  QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+  if (github.contains(QStringLiteral("default_branch"))) {
+    return github.value(QStringLiteral("default_branch")).toString();
   }
   return QStringLiteral("main");
 }

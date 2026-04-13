@@ -45,7 +45,7 @@ private Q_SLOTS:
   void onAddSelected();
   void onRemoveSelected();
   void updateModels();
-  QString getDefaultBranch(const QString &sourceName);
+  QString getDefaultBranch(const QModelIndex &sourceIdx);
   void applyFilter();
 
 protected:
