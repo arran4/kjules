@@ -481,8 +481,13 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
     QJsonObject githubRepoContext;
-    githubRepoContext[QStringLiteral("startingBranch")] =
-        QStringLiteral("main");
+    if (requestData.contains(QStringLiteral("startingBranch"))) {
+      githubRepoContext[QStringLiteral("startingBranch")] =
+          requestData.value(QStringLiteral("startingBranch")).toString();
+    } else {
+      githubRepoContext[QStringLiteral("startingBranch")] =
+          QStringLiteral("main");
+    }
     sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
   }
 

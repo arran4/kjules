@@ -28,7 +28,8 @@ public:
   void setEditMode(bool isEdit);
 
 Q_SIGNALS:
-  void createSessionRequested(const QStringList &sources, const QString &prompt,
+  void createSessionRequested(const QMap<QString, QString> &sources,
+                              const QString &prompt,
                               const QString &automationMode,
                               bool requirePlanApproval);
   void saveDraftRequested(const QJsonObject &draft);
@@ -44,6 +45,7 @@ private Q_SLOTS:
   void onAddSelected();
   void onRemoveSelected();
   void updateModels();
+  QString getDefaultBranch(const QModelIndex &sourceIdx);
   void applyFilter();
 
 protected:
@@ -65,7 +67,7 @@ private:
   QPushButton *m_createPRButton;
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;
-  QSet<QString> m_selectedSources;
+  QMap<QString, QString> m_selectedSources;
   QString m_draftComment;
 };
 
