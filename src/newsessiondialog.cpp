@@ -120,21 +120,25 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   middleButtonsLayout->addStretch();
 
   QPushButton *addBtn = new QPushButton(tr(">"), this);
+  addBtn->setAutoDefault(false);
   addBtn->setToolTip(tr("Add selected"));
   connect(addBtn, &QPushButton::clicked, this,
           &NewSessionDialog::onAddSelected);
 
   QPushButton *addAllBtn = new QPushButton(tr(">>"), this);
+  addAllBtn->setAutoDefault(false);
   addAllBtn->setToolTip(tr("Add all"));
   connect(addAllBtn, &QPushButton::clicked, this,
           &NewSessionDialog::onSelectAll);
 
   QPushButton *removeBtn = new QPushButton(tr("<"), this);
+  removeBtn->setAutoDefault(false);
   removeBtn->setToolTip(tr("Remove selected"));
   connect(removeBtn, &QPushButton::clicked, this,
           &NewSessionDialog::onRemoveSelected);
 
   QPushButton *removeAllBtn = new QPushButton(tr("<<"), this);
+  removeAllBtn->setAutoDefault(false);
   removeAllBtn->setToolTip(tr("Remove all"));
   connect(removeAllBtn, &QPushButton::clicked, this,
           &NewSessionDialog::onUnselectAll);
@@ -193,14 +197,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           &NewSessionDialog::applyFilter);
 
   connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
-    if (m_unselectedProxy->rowCount() == 1) {
-      QModelIndex idx = m_unselectedProxy->index(0, 0);
-      QString name = idx.data(SourceModel::NameRole).toString();
-      QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
-      m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
-      updateModels();
-      m_filterEdit->clear();
-    } else if (m_unselectedProxy->rowCount() > 1) {
+    if (m_unselectedProxy->rowCount() > 0) {
       m_unselectedView->setFocus();
       m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
     }
@@ -228,6 +225,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   // Prompt
   m_promptEdit = new QTextEdit(this);
   m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
+  m_loadTemplateButton->setAutoDefault(false);
   connect(m_loadTemplateButton, &QPushButton::clicked, this, [this]() {
     TemplateSelectionDialog dlg(m_templatesModel, this);
     if (dlg.exec() == QDialog::Accepted) {
@@ -271,17 +269,21 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
   QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
+  cancelButton->setAutoDefault(false);
   connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
   QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
+  draftButton->setAutoDefault(false);
   connect(draftButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveDraft);
 
   m_saveTemplateButton = new QPushButton(tr("Save as Template"), this);
+  m_saveTemplateButton->setAutoDefault(false);
   connect(m_saveTemplateButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveTemplate);
 
   m_createButton = new QPushButton(tr("Create Session"), this);
+  m_createButton->setAutoDefault(false);
 
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
@@ -292,7 +294,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           [this]() { onSubmit(QStringLiteral("")); });
 
   m_createPRButton = new QPushButton(tr("Create PR Session"), this);
-  m_createPRButton->setDefault(true);
+  m_createPRButton->setAutoDefault(false);
 
   if (!hasApiKey) {
     m_createPRButton->setEnabled(false);
