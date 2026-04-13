@@ -443,6 +443,26 @@ jobs:
           retention-days: 1
           path: kjules.flatpak
 
+  flatpak-build:
+    name: Flatpak build
+    needs: [route, discover]
+    if: ${{ needs.discover.outputs.has_qt_cpp == 'true' && needs.route.outputs.run_release == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: kjules.flatpak
+          manifest-path: org.kde.kjules.yaml
+          cache-key: flatpak-builder-${{ github.sha }}
+      - name: Archive Flatpak build
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-archive
+          retention-days: 1
+          path: kjules.flatpak
+
   publish-draft:
     name: Publish draft release assets
     needs:

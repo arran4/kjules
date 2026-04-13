@@ -102,6 +102,8 @@ private:
   void createActions();
 
   APIManager *m_apiManager;
+  QHash<QString, QString> m_previousSessionStates;
+  QHash<QString, QString> m_previousSessionPrStates;
   SessionModel *m_sessionModel;
   SessionModel *m_archiveModel;
   SourceModel *m_sourceModel;

@@ -121,6 +121,70 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
+            const QString id = session.value(QStringLiteral("id")).toString();
+            const QString newState =
+                session.value(QStringLiteral("state")).toString();
+            const QString prevState = m_previousSessionStates.value(id);
+
+            if (!prevState.isEmpty() && prevState != newState) {
+              QString eventId;
+              QString title;
+              QString text;
+
+              if (newState == QStringLiteral("DONE") &&
+                  (prevState == QStringLiteral("RUNNING") ||
+                   prevState == QStringLiteral("QUEUED"))) {
+                eventId = QStringLiteral("followingSessionCompleted");
+                title = i18n("Following Session Completed");
+                text = i18n("Session %1 has completed.", id);
+              } else if (newState == QStringLiteral("RUNNING") &&
+                         prevState == QStringLiteral("QUEUED")) {
+                // Following session requires attention (this represents
+                // transitioning to in-progress) We'll use the
+                // 'followingSessionRequiresAttention' event since moving to
+                // progress often means we need to look at it
+                eventId = QStringLiteral("followingSessionRequiresAttention");
+                title = i18n("Following Session Requires Attention");
+                text = i18n("Session %1 is now running.", id);
+              } else if (newState == QStringLiteral("ERROR")) {
+                eventId = QStringLiteral("followingSessionFailed");
+                title = i18n("Following Session Failed");
+                text = i18n("Session %1 has encountered an error.", id);
+              }
+
+              if (!eventId.isEmpty()) {
+                KNotification *notification = new KNotification(
+                    eventId, KNotification::CloseOnTimeout, this);
+                notification->setTitle(title);
+                notification->setText(text);
+                connect(notification, &KNotification::closed, notification,
+                        &QObject::deleteLater);
+
+                auto actionHandler = [this]() {
+                  if (m_tabWidget) {
+                    for (int i = 0; i < m_tabWidget->count(); ++i) {
+                      if (m_tabWidget->widget(i)->objectName() ==
+                          QStringLiteral("followingTab")) {
+                        m_tabWidget->setCurrentIndex(i);
+                        break;
+                      }
+                    }
+                  }
+                };
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+                notification->setDefaultAction(i18n("View"));
+                connect(notification, &KNotification::defaultActivated, this,
+                        actionHandler);
+#else
+            auto action = notification->addDefaultAction(i18n("View"));
+            connect(action, &KNotificationAction::activated, this, actionHandler);
+#endif
+                notification->sendEvent();
+              }
+            }
+            m_previousSessionStates[id] = newState;
+
             m_sessionModel->updateSession(session);
             // We need to fetch github PR info if we have one
             for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
@@ -1472,11 +1536,51 @@ void MainWindow::updateTabTitles() {
 
 void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
                                                  const QJsonObject &info) {
+  QString newPrState = info.value(QStringLiteral("state")).toString();
+
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex index = m_sessionModel->index(i, 0);
     if (m_sessionModel->data(index, SessionModel::PrUrlRole).toString() ==
         prUrl) {
       QJsonObject session = m_sessionModel->getSession(i);
+      QString id = session.value(QStringLiteral("id")).toString();
+
+      QString prevPrState = m_previousSessionPrStates.value(id);
+      if (!prevPrState.isEmpty() && prevPrState != newPrState) {
+        if (newPrState == QStringLiteral("open")) {
+          KNotification *notification =
+              new KNotification(QStringLiteral("followingSessionNewPROpened"),
+                                KNotification::CloseOnTimeout, this);
+          notification->setTitle(i18n("Following Session New PR Opened"));
+          notification->setText(i18n("Session %1 has a new PR opened.", id));
+          connect(notification, &KNotification::closed, notification,
+                  &QObject::deleteLater);
+
+          auto actionHandler = [this]() {
+            if (m_tabWidget) {
+              for (int i = 0; i < m_tabWidget->count(); ++i) {
+                if (m_tabWidget->widget(i)->objectName() ==
+                    QStringLiteral("followingTab")) {
+                  m_tabWidget->setCurrentIndex(i);
+                  break;
+                }
+              }
+            }
+          };
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+          notification->setDefaultAction(i18n("View"));
+          connect(notification, &KNotification::defaultActivated, this,
+                  actionHandler);
+#else
+          auto action = notification->addDefaultAction(i18n("View"));
+          connect(action, &KNotificationAction::activated, this, actionHandler);
+#endif
+          notification->sendEvent();
+        }
+      }
+      m_previousSessionPrStates[id] = newPrState;
+
       session[QStringLiteral("githubPrInfo")] = info;
       m_sessionModel->updateSession(session);
       // Let's also update archive model and watch model if needed.
@@ -2215,7 +2319,16 @@ void MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused)
     return;
   if (m_queueModel->isEmpty()) {
-    m_queueTimer->stop();
+    if (m_queueTimer->isActive()) {
+      KNotification *notification = new KNotification(
+          QStringLiteral("queueEmpty"), KNotification::CloseOnTimeout, this);
+      notification->setTitle(i18n("Queue Empty"));
+      notification->setText(i18n("The processing queue is now empty."));
+      connect(notification, &KNotification::closed, notification,
+              &QObject::deleteLater);
+      notification->sendEvent();
+      m_queueTimer->stop();
+    }
     return;
   }
 
