@@ -2137,13 +2137,14 @@ void MainWindow::toggleQueueState() {
   }
 }
 
-void MainWindow::onSessionCreated(const QStringList &sources,
+void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
                                   bool requirePlanApproval) {
-  for (const QString &source : sources) {
+  for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
-    req[QStringLiteral("source")] = source;
+    req[QStringLiteral("source")] = it.key();
+    req[QStringLiteral("startingBranch")] = it.value();
     req[QStringLiteral("prompt")] = prompt;
     if (requirePlanApproval) {
       req[QStringLiteral("requirePlanApproval")] = true;
@@ -2495,7 +2496,7 @@ void MainWindow::editQueueItem(int row) {
   dialog.setInitialData(item.requestData);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, row](const QStringList &sources, const QString &p,
+          [this, row](const QMap<QString, QString> &sources, const QString &p,
                       const QString &a, bool requirePlanApproval) {
             m_queueModel->removeItem(row);
             onSessionCreated(sources, p, a, requirePlanApproval);
@@ -2629,7 +2630,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   dialog.setInitialData(request);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
+          [this, index](const QMap<QString, QString> &sources, const QString &p,
                         const QString &a, bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
             m_errorsModel->removeError(index.row());
@@ -2652,7 +2653,7 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
   dialog.setInitialData(draft);
 
   connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
+          [this, index](const QMap<QString, QString> &sources, const QString &p,
                         const QString &a, bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
             m_draftsModel->removeDraft(index.row());

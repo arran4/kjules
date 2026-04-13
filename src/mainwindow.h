@@ -42,8 +42,8 @@ private Q_SLOTS:
   void refreshSources();
   void showNewSessionDialog();
   void showSettingsDialog();
-  void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode,
+  void onSessionCreated(const QMap<QString, QString> &sources,
+                        const QString &prompt, const QString &automationMode,
                         bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
