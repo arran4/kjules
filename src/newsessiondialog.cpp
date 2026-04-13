@@ -81,12 +81,13 @@ private:
 NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                                    TemplatesModel *templatesModel,
                                    bool hasApiKey, QWidget *parent)
-    : QDialog(parent), m_sourceModel(sourceModel),
+    : KXmlGuiWindow(parent), m_sourceModel(sourceModel),
       m_templatesModel(templatesModel) {
+  setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
 
-  QVBoxLayout *mainLayout = new QVBoxLayout(this);
+  QVBoxLayout *mainLayout = new QVBoxLayout();
 
   QFormLayout *formLayout = new QFormLayout();
 
@@ -271,7 +272,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
   QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
-  connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+  connect(cancelButton, &QPushButton::clicked, this, &QWidget::close);
 
   QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
   connect(draftButton, &QPushButton::clicked, this,
@@ -336,6 +337,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   buttonLayout->addWidget(m_createPRButton);
 
   mainLayout->addLayout(buttonLayout);
+
+  QWidget *centralWidget = new QWidget(this);
+  centralWidget->setLayout(mainLayout);
+  setCentralWidget(centralWidget);
 }
 
 void NewSessionDialog::setEditMode(bool isEdit) {
@@ -520,7 +525,7 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
       updateModels();
     }
   } else {
-    accept();
+    close();
   }
 }
 
@@ -552,7 +557,7 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveDraftRequested(draft);
-  accept();
+  close();
 }
 
 void NewSessionDialog::onSaveTemplate() {
@@ -590,7 +595,7 @@ void NewSessionDialog::onSaveTemplate() {
 }
 
 void NewSessionDialog::showEvent(QShowEvent *event) {
-  QDialog::showEvent(event);
+  KXmlGuiWindow::showEvent(event);
   if (!m_selectedSources.isEmpty()) {
     m_promptEdit->setFocus();
   } else {
