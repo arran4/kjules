@@ -138,6 +138,7 @@ private:
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
   QAction *m_toggleFavouriteAction;
+  QAction *m_setDefaultBranchAction;
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
   QAction *m_viewRawDataAction;
