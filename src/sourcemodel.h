@@ -51,6 +51,9 @@ public:
   void recordSessionCreated(const QString &sourceId);
   void recalculateStatsFromSessions(const QJsonArray &allSessions);
 
+  QString getDefaultBranch(const QString &sourceId) const;
+  void setDefaultBranch(const QString &sourceId, const QString &branch);
+
 private:
   QJsonArray m_sources;
 };

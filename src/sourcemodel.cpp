@@ -698,3 +698,79 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     saveSources();
   }
 }
+
+QString SourceModel::getDefaultBranch(const QString &sourceId) const {
+  QString normId = normalizeSourceId(sourceId);
+
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject source = m_sources[i].toObject();
+    QString currentId = source.value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId = source.value(QStringLiteral("name")).toString();
+    }
+
+    if (normalizeSourceId(currentId) == normId) {
+      // 1. User override
+      if (source.contains(QStringLiteral("local_defaultBranch"))) {
+        QString localBranch =
+            source.value(QStringLiteral("local_defaultBranch")).toString();
+        if (!localBranch.isEmpty()) {
+          return localBranch;
+        }
+      }
+
+      // 2. GitHub API
+      if (source.contains(QStringLiteral("github"))) {
+        QJsonObject github = source.value(QStringLiteral("github")).toObject();
+        if (github.contains(QStringLiteral("default_branch"))) {
+          QString ghBranch =
+              github.value(QStringLiteral("default_branch")).toString();
+          if (!ghBranch.isEmpty()) {
+            return ghBranch;
+          }
+        }
+      }
+
+      // 3. Jules API fallback
+      if (source.contains(QStringLiteral("defaultBranch"))) {
+        QString julesBranch =
+            source.value(QStringLiteral("defaultBranch")).toString();
+        if (!julesBranch.isEmpty()) {
+          return julesBranch;
+        }
+      }
+
+      break;
+    }
+  }
+
+  // 4. Default fallback
+  return QStringLiteral("main");
+}
+
+void SourceModel::setDefaultBranch(const QString &sourceId,
+                                   const QString &branch) {
+  QString normId = normalizeSourceId(sourceId);
+
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject source = m_sources[i].toObject();
+    QString currentId = source.value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId = source.value(QStringLiteral("name")).toString();
+    }
+
+    if (normalizeSourceId(currentId) == normId) {
+      if (branch.isEmpty()) {
+        source.remove(QStringLiteral("local_defaultBranch"));
+      } else {
+        source[QStringLiteral("local_defaultBranch")] = branch;
+      }
+      m_sources[i] = source;
+      QModelIndex index = createIndex(i, 0);
+      QModelIndex lastColIndex = createIndex(i, ColCount - 1);
+      Q_EMIT dataChanged(index, lastColIndex);
+      saveSources();
+      return;
+    }
+  }
+}

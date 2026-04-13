@@ -45,6 +45,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
+#include <QInputDialog>
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
@@ -329,6 +330,12 @@ void MainWindow::setupUi() {
           menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showFollowingNewSessionsAction);
+
+          QModelIndexList selectedRowsForMenu =
+              m_sourceView->selectionModel()->selectedRows();
+          if (selectedRowsForMenu.size() == 1) {
+            menu.addAction(m_setDefaultBranchAction);
+          }
           menu.addAction(m_viewRawDataAction);
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
@@ -1640,6 +1647,35 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
 
+  m_setDefaultBranchAction = new QAction(i18n("Set Default Branch..."), this);
+  actionCollection()->addAction(QStringLiteral("set_default_branch"),
+                                m_setDefaultBranchAction);
+  connect(m_setDefaultBranchAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    if (selectedRows.size() != 1)
+      return;
+
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    QModelIndex mappedIdx =
+        proxy ? proxy->mapToSource(selectedRows.first()) : selectedRows.first();
+    QString id = m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
+    QString currentBranch = m_sourceModel->getDefaultBranch(id);
+
+    bool ok;
+    QString newBranch =
+        QInputDialog::getText(this, i18n("Set Default Branch"),
+                              i18n("Enter the default branch for this source "
+                                   "(leave empty to clear override):"),
+                              QLineEdit::Normal, currentBranch, &ok);
+
+    if (ok) {
+      m_sourceModel->setDefaultBranch(id, newBranch);
+      updateStatus(i18n("Default branch updated."));
+    }
+  });
+
   m_recalculateStatsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")),
                   i18n("Recalculate Session Stats"), this);
@@ -2145,6 +2181,8 @@ void MainWindow::onSessionCreated(const QStringList &sources,
     QJsonObject req;
     req[QStringLiteral("source")] = source;
     req[QStringLiteral("prompt")] = prompt;
+    req[QStringLiteral("startingBranch")] =
+        m_sourceModel->getDefaultBranch(source);
     if (requirePlanApproval) {
       req[QStringLiteral("requirePlanApproval")] = true;
     }
