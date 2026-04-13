@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE gui SYSTEM "kpartgui.dtd">
+<gui name="sessionwindow" version="1">
+  <MenuBar>
+    <Menu name="file"><text>&amp;File</text>
+      <Action name="close_window"/>
+    </Menu>
+    <Menu name="session"><text>&amp;Session</text>
+      <Action name="refresh_session"/>
+      <Action name="duplicate_session"/>
+      <Action name="save_template"/>
+      <Separator/>
+      <Action name="watch_session"/>
+      <Action name="archive_session"/>
+      <Action name="delete_session"/>
+    </Menu>
+    <Menu name="links"><text>&amp;Links</text>
+      <Action name="open_jules"/>
+      <Action name="copy_jules"/>
+      <Separator/>
+      <Action name="open_pr"/>
+      <Action name="copy_pr"/>
+      <Action name="open_branch"/>
+      <Action name="copy_branch"/>
+    </Menu>
+  </MenuBar>
+  <ToolBar name="mainToolBar"><text>Main Toolbar</text>
+    <Action name="refresh_session"/>
+    <Action name="duplicate_session"/>
+    <Separator/>
+    <Action name="auto_refresh_combo"/>
+  </ToolBar>
+</gui>
