@@ -62,11 +62,15 @@ QString FollowSessionDialog::extractSessionId(const QString &input) const {
     return QString();
   }
 
+  while (text.endsWith(QLatin1Char('/'))) {
+    text.chop(1);
+  }
+
   QUrl url(text);
   if (url.isValid() && !url.scheme().isEmpty()) {
     QString path = url.path();
-    if (path.startsWith(QStringLiteral("/session/"))) {
-      return path.mid(9);
+    if (path.startsWith(QStringLiteral("/sessions/"))) {
+      return path.mid(10);
     }
   }
 
@@ -108,6 +112,7 @@ void FollowSessionDialog::onSessionReceived(const QJsonObject &session) {
     return; // Received for another session
   }
 
+  m_sessionData = session;
   m_previewBtn->setEnabled(true);
   QString title = session.value(QStringLiteral("title")).toString();
   if (title.isEmpty()) {
@@ -118,6 +123,8 @@ void FollowSessionDialog::onSessionReceived(const QJsonObject &session) {
   m_previewLabel->setStyleSheet(QStringLiteral("color: green;"));
   m_followBtn->setEnabled(true);
 }
+
+QJsonObject FollowSessionDialog::sessionData() const { return m_sessionData; }
 
 void FollowSessionDialog::onErrorOccurred(const QString &error) {
   if (!isVisible())

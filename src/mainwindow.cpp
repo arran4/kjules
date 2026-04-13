@@ -1699,20 +1699,38 @@ void MainWindow::createActions() {
     if (dialog.exec() == QDialog::Accepted) {
       QString id = dialog.sessionId();
       if (!id.isEmpty()) {
-        QMetaObject::Connection *connection = new QMetaObject::Connection;
-        *connection = connect(
-            m_apiManager, &APIManager::sessionDetailsReceived, this,
-            [this, id, connection](const QJsonObject &session) {
-              if (session.value(QStringLiteral("id")).toString() == id) {
-                m_sessionModel->addSession(session);
-                m_sessionModel->saveSessions();
-                updateStatus(i18n("Started following session %1", id));
-                disconnect(*connection);
-                delete connection;
-              }
-            });
+        QJsonObject session = dialog.sessionData();
+        if (!session.isEmpty()) {
+          m_sessionModel->addSession(session);
+          m_sessionModel->saveSessions();
+          updateStatus(i18n("Started following session %1", id));
+        } else {
+          QMetaObject::Connection *connection = new QMetaObject::Connection;
+          *connection = connect(
+              m_apiManager, &APIManager::sessionDetailsReceived, this,
+              [this, id, connection](const QJsonObject &session) {
+                if (session.value(QStringLiteral("id")).toString() == id) {
+                  m_sessionModel->addSession(session);
+                  m_sessionModel->saveSessions();
+                  updateStatus(i18n("Started following session %1", id));
+                  disconnect(*connection);
+                  delete connection;
+                }
+              });
 
-        m_apiManager->getSession(id);
+          // Also clean up on error to prevent memory leaks
+          QMetaObject::Connection *errorConnection =
+              new QMetaObject::Connection;
+          *errorConnection = connect(m_apiManager, &APIManager::errorOccurred,
+                                     this, [connection, errorConnection]() {
+                                       disconnect(*connection);
+                                       delete connection;
+                                       disconnect(*errorConnection);
+                                       delete errorConnection;
+                                     });
+
+          m_apiManager->getSession(id);
+        }
       }
     }
   });

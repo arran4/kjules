@@ -15,6 +15,7 @@ public:
   explicit FollowSessionDialog(APIManager *apiManager,
                                QWidget *parent = nullptr);
   QString sessionId() const;
+  QJsonObject sessionData() const;
 
 private Q_SLOTS:
   void onPreviewClicked();
@@ -30,6 +31,7 @@ private:
   QLabel *m_previewLabel;
   QPushButton *m_previewBtn;
   QPushButton *m_followBtn;
+  QJsonObject m_sessionData;
 };
 
 #endif // FOLLOWSESSIONDIALOG_H
