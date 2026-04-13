@@ -1,3 +1,4 @@
+#include "followsessiondialog.h"
 #include "mainwindow.h"
 #include "activitylogwindow.h"
 #include "advancedfilterproxymodel.h"
@@ -1714,6 +1715,16 @@ void MainWindow::createActions() {
   });
   actionCollection()->addAction(QStringLiteral("refresh_current_tab"),
                                 refreshCurrentTabAction);
+
+  m_followSessionFromIdAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("list-add")),
+                  i18n("Follow from Jules Session ID"), this);
+  connect(m_followSessionFromIdAction, &QAction::triggered, this, [this]() {
+    FollowSessionDialog dialog(m_apiManager, m_sessionModel, this);
+    dialog.exec();
+  });
+  actionCollection()->addAction(QStringLiteral("follow_session_from_id"),
+                                m_followSessionFromIdAction);
 
   m_refreshFollowingAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),

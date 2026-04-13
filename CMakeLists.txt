@@ -76,6 +76,7 @@ set(kjules_SRCS
     src/filtereditor.cpp
     src/advancedfilterproxymodel.cpp
     src/refreshprogresswindow.cpp
+    src/followsessiondialog.cpp
 )
 
 add_executable(kjules ${kjules_SRCS})
