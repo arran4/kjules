@@ -10,25 +10,26 @@ class QPushButton;
 class APIManager;
 
 class FollowSessionDialog : public QDialog {
-    Q_OBJECT
+  Q_OBJECT
 public:
-    explicit FollowSessionDialog(APIManager *apiManager, QWidget *parent = nullptr);
-    QString sessionId() const;
+  explicit FollowSessionDialog(APIManager *apiManager,
+                               QWidget *parent = nullptr);
+  QString sessionId() const;
 
 private Q_SLOTS:
-    void onPreviewClicked();
-    void onSessionReceived(const QJsonObject &session);
-    void onErrorOccurred(const QString &error);
-    void updateButtons();
+  void onPreviewClicked();
+  void onSessionReceived(const QJsonObject &session);
+  void onErrorOccurred(const QString &error);
+  void updateButtons();
 
 private:
-    QString extractSessionId(const QString &input) const;
+  QString extractSessionId(const QString &input) const;
 
-    APIManager *m_apiManager;
-    QLineEdit *m_inputEdit;
-    QLabel *m_previewLabel;
-    QPushButton *m_previewBtn;
-    QPushButton *m_followBtn;
+  APIManager *m_apiManager;
+  QLineEdit *m_inputEdit;
+  QLabel *m_previewLabel;
+  QPushButton *m_previewBtn;
+  QPushButton *m_followBtn;
 };
 
 #endif // FOLLOWSESSIONDIALOG_H

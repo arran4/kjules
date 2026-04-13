@@ -1,6 +1,5 @@
 #include "mainwindow.h"
 #include "activitylogwindow.h"
-#include "followsessiondialog.h"
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
@@ -9,6 +8,7 @@
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -1700,15 +1700,16 @@ void MainWindow::createActions() {
       QString id = dialog.sessionId();
       if (!id.isEmpty()) {
         QMetaObject::Connection *connection = new QMetaObject::Connection;
-        *connection = connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+        *connection = connect(
+            m_apiManager, &APIManager::sessionDetailsReceived, this,
             [this, id, connection](const QJsonObject &session) {
-                if (session.value(QStringLiteral("id")).toString() == id) {
-                    m_sessionModel->addSession(session);
-                    m_sessionModel->saveSessions();
-                    updateStatus(i18n("Started following session %1", id));
-                    disconnect(*connection);
-                    delete connection;
-                }
+              if (session.value(QStringLiteral("id")).toString() == id) {
+                m_sessionModel->addSession(session);
+                m_sessionModel->saveSessions();
+                updateStatus(i18n("Started following session %1", id));
+                disconnect(*connection);
+                delete connection;
+              }
             });
 
         m_apiManager->getSession(id);
