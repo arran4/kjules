@@ -768,13 +768,13 @@ void MainWindow::setupUi() {
                       initData[QStringLiteral("sources")] = sourcesArr;
                     }
                     bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-                    auto window = new NewSessionDialog(m_sourceModel, m_templatesModel,
-                                            hasApiKey, this);
+                    auto window = new NewSessionDialog(
+                        m_sourceModel, m_templatesModel, hasApiKey, this);
                     window->setInitialData(initData);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
-                    connect(window, &NewSessionDialog::saveDraftRequested,
-                            this, &MainWindow::onDraftSaved);
+                    connect(window, &NewSessionDialog::saveDraftRequested, this,
+                            &MainWindow::onDraftSaved);
                     window->show();
                   });
 
@@ -2197,7 +2197,8 @@ void MainWindow::refreshSources() {
 
 void MainWindow::showNewSessionDialog() {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2522,7 +2523,8 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
   QJsonObject templateData = tmpl;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(templateData);
 
   connect(window, &NewSessionDialog::createSessionRequested, this,
@@ -2650,15 +2652,17 @@ void MainWindow::editQueueItem(int row) {
     return;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setEditMode(true);
   window->setInitialData(item.requestData);
 
   QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
 
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources, const QString &p,
-                      const QString &a, bool requirePlanApproval) {
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             if (persistentIndex.isValid()) {
               m_queueModel->removeItem(persistentIndex.row());
             }
@@ -2791,14 +2795,16 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(request);
 
   QPersistentModelIndex persistentIndex(index);
 
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
             if (persistentIndex.isValid()) {
               m_errorsModel->removeError(persistentIndex.row());
@@ -2820,14 +2826,16 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(draft);
 
   QPersistentModelIndex persistentIndex(index);
 
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
             if (persistentIndex.isValid()) {
               m_draftsModel->removeDraft(persistentIndex.row());
@@ -2871,7 +2879,8 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(initData);
 
   connect(window, &NewSessionDialog::createSessionRequested, this,
