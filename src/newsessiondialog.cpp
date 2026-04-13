@@ -193,14 +193,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           &NewSessionDialog::applyFilter);
 
   connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
-    if (m_unselectedProxy->rowCount() == 1) {
-      QModelIndex idx = m_unselectedProxy->index(0, 0);
-      QString name = idx.data(SourceModel::NameRole).toString();
-      QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
-      m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
-      updateModels();
-      m_filterEdit->clear();
-    } else if (m_unselectedProxy->rowCount() > 1) {
+    if (m_unselectedProxy->rowCount() > 0) {
       m_unselectedView->setFocus();
       m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
     }
@@ -271,17 +264,21 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
   QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
+  cancelButton->setAutoDefault(false);
   connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
   QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
+  draftButton->setAutoDefault(false);
   connect(draftButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveDraft);
 
   m_saveTemplateButton = new QPushButton(tr("Save as Template"), this);
+  m_saveTemplateButton->setAutoDefault(false);
   connect(m_saveTemplateButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSaveTemplate);
 
   m_createButton = new QPushButton(tr("Create Session"), this);
+  m_createButton->setAutoDefault(false);
 
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
@@ -292,7 +289,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           [this]() { onSubmit(QStringLiteral("")); });
 
   m_createPRButton = new QPushButton(tr("Create PR Session"), this);
-  m_createPRButton->setDefault(true);
+  m_createPRButton->setAutoDefault(false);
 
   if (!hasApiKey) {
     m_createPRButton->setEnabled(false);
@@ -304,12 +301,12 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   QShortcut *ctrlEnterShortcut =
       new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), this);
-  connect(ctrlEnterShortcut, &QShortcut::activated, m_createPRButton,
+  connect(ctrlEnterShortcut, &QShortcut::activated, m_createButton,
           &QPushButton::click);
 
   QShortcut *ctrlReturnShortcut =
       new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
-  connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton,
+  connect(ctrlReturnShortcut, &QShortcut::activated, m_createButton,
           &QPushButton::click);
 
   auto onCtrlShiftEnter = [this]() {
