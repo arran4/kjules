@@ -2,12 +2,27 @@
 IconName=kjules
 Comment=Google Jules API Frontend
 
-[Event/followingSessionCompleted]
-Name=Following Session Completed
-Comment=A followed session has completed.
+[Event/followingSessionRequiresAttention]
+Name=Following Session Requires Attention
+Comment=A followed session requires your attention.
 Action=Popup
 
 [Event/followingSessionFailed]
 Name=Following Session Failed
 Comment=A followed session has encountered an error.
+Action=Popup
+
+[Event/queueEmpty]
+Name=Queue Empty
+Comment=The processing queue is now empty.
+Action=Popup
+
+[Event/followingSessionNewPROpened]
+Name=Following Session New PR Opened
+Comment=A followed session has a new PR opened.
+Action=Popup
+
+[Event/followingSessionCompleted]
+Name=Following Session Completed
+Comment=A followed session has completed.
 Action=Popup
