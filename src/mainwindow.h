@@ -139,6 +139,7 @@ private:
   QAction *m_refreshSourceAction;
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
+  QAction *m_followFromIdAction;
   QAction *m_toggleFavouriteAction;
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
