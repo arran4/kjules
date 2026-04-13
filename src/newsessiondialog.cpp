@@ -516,7 +516,8 @@ void NewSessionDialog::onSaveDraft() {
   }
 
   QJsonArray sourcesArr;
-  for (auto it = m_selectedSources.constBegin(); it != m_selectedSources.constEnd(); ++it) {
+  for (auto it = m_selectedSources.constBegin();
+       it != m_selectedSources.constEnd(); ++it) {
     QJsonObject sObj;
     sObj[QStringLiteral("name")] = it.key();
     sObj[QStringLiteral("branch")] = it.value();
@@ -543,7 +544,8 @@ void NewSessionDialog::onSaveTemplate() {
   }
 
   QJsonArray sourcesArr;
-  for (auto it = m_selectedSources.constBegin(); it != m_selectedSources.constEnd(); ++it) {
+  for (auto it = m_selectedSources.constBegin();
+       it != m_selectedSources.constEnd(); ++it) {
     QJsonObject sObj;
     sObj[QStringLiteral("name")] = it.key();
     sObj[QStringLiteral("branch")] = it.value();
