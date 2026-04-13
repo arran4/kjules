@@ -8,6 +8,7 @@
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -1687,6 +1688,51 @@ void MainWindow::createActions() {
             });
 
     window->show();
+  });
+
+  m_followFromIdAction =
+      new QAction(i18n("Follow from Jules Session ID"), this);
+  actionCollection()->addAction(QStringLiteral("follow_from_id"),
+                                m_followFromIdAction);
+  connect(m_followFromIdAction, &QAction::triggered, this, [this]() {
+    FollowSessionDialog dialog(m_apiManager, this);
+    if (dialog.exec() == QDialog::Accepted) {
+      QString id = dialog.sessionId();
+      if (!id.isEmpty()) {
+        QJsonObject session = dialog.sessionData();
+        if (!session.isEmpty()) {
+          m_sessionModel->addSession(session);
+          m_sessionModel->saveSessions();
+          updateStatus(i18n("Started following session %1", id));
+        } else {
+          QMetaObject::Connection *connection = new QMetaObject::Connection;
+          *connection = connect(
+              m_apiManager, &APIManager::sessionDetailsReceived, this,
+              [this, id, connection](const QJsonObject &session) {
+                if (session.value(QStringLiteral("id")).toString() == id) {
+                  m_sessionModel->addSession(session);
+                  m_sessionModel->saveSessions();
+                  updateStatus(i18n("Started following session %1", id));
+                  disconnect(*connection);
+                  delete connection;
+                }
+              });
+
+          // Also clean up on error to prevent memory leaks
+          QMetaObject::Connection *errorConnection =
+              new QMetaObject::Connection;
+          *errorConnection = connect(m_apiManager, &APIManager::errorOccurred,
+                                     this, [connection, errorConnection]() {
+                                       disconnect(*connection);
+                                       delete connection;
+                                       disconnect(*errorConnection);
+                                       delete errorConnection;
+                                     });
+
+          m_apiManager->getSession(id);
+        }
+      }
+    }
   });
 
   m_refreshSourcesAction =
