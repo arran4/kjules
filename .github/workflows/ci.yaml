@@ -190,10 +190,14 @@ jobs:
         run: |
           find src -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
           cppcheck --enable=warning,style,performance,portability --error-exitcode=1 . || true
-      - run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=5 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-      - run: run-clang-tidy -p build src || true
-      - run: cmake --build build --parallel
-      - run: cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+      - name: Configure CMake
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=5 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Clang-Tidy
+        run: run-clang-tidy -p build src || true
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
       - name: Archive build
         if: ${{ needs.route.outputs.run_release == 'true' }}
         run: |
@@ -383,7 +387,7 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG" || { sleep 2; git push origin "$TAG"; } || true
 
-      - name: Create release with generated notes + discussion
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.prepare-release-tag.outputs.release_tag }}
@@ -394,14 +398,30 @@ jobs:
             release-test|release-rc|release-alpha) prerelease="--prerelease" ;;
           esac
 
-          discussion_arg="--discussion-category Announcements"
+          gh release create "$TAG" --draft --generate-notes $prerelease || true
 
-          if [[ -n "$prerelease" ]]; then
-            gh release create "$TAG" --generate-notes $prerelease || true
-          else
-            gh release create "$TAG" --generate-notes $discussion_arg || \
-              gh release create "$TAG" --generate-notes || true
-          fi
+  flatpak-build:
+    name: Flatpak build
+    needs: [route, discover]
+    if: ${{ needs.discover.outputs.has_qt_cpp == 'true' && needs.route.outputs.run_release == 'true' }}
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.6
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: kjules.flatpak
+          manifest-path: org.kde.kjules.yaml
+          cache-key: flatpak-builder-${{ github.sha }}
+      - name: Archive Flatpak build
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-archive
+          retention-days: 1
+          path: kjules.flatpak
 
   flatpak-build:
     name: Flatpak build
@@ -429,7 +449,13 @@ jobs:
       - cpp-qt-build-test
       - flatpak-build
       - route
-    if: ${{ needs.route.outputs.run_release == 'true' }}
+      - prepare-release-tag
+    if: |
+      always() &&
+      needs.route.outputs.run_release == 'true' &&
+      (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
+      (needs.cpp-qt-build-test.result == 'success' || needs.cpp-qt-build-test.result == 'skipped') &&
+      (needs.flatpak-build.result == 'success' || needs.flatpak-build.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - name: Collect artifacts
@@ -444,6 +470,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
+          tag_name: ${{ needs.prepare-release-tag.outputs.release_tag || github.ref_name }}
           files: |
             release.tar.gz
             kjules.flatpak
@@ -452,9 +479,35 @@ jobs:
 
   promote-release:
     name: Promote draft to published
-    needs: [publish-draft]
-    if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-')) }}
+    needs: [publish-draft, prepare-release-tag, route]
+    if: |
+      always() &&
+      needs.route.outputs.run_release == 'true' &&
+      needs.publish-draft.result == 'success' &&
+      (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-')))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      discussions: write
     steps:
-      - name: Release promoted via upstream process
-        run: echo "Promotion step placeholder (gh api patch release draft=false)"
+      - uses: actions/checkout@v4
+      - name: Promote release to final
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare-release-tag.outputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          prerelease=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ inputs.mode }}" in
+              release-test|release-rc|release-alpha) prerelease="--prerelease" ;;
+            esac
+          fi
+
+          if [[ -n "$prerelease" ]]; then
+            gh release edit "$TAG" --draft=false $prerelease || true
+          else
+            gh release edit "$TAG" --draft=false --discussion-category Announcements || \
+              gh release edit "$TAG" --draft=false || true
+          fi
