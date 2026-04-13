@@ -51,7 +51,7 @@ When you click on a notification or open the application, it presents you with a
 
 On Ubuntu/Debian, install the required dependencies:
 ```bash
-sudo apt-get update && sudo apt-get install -y extra-cmake-modules libkf6xmlgui-dev libkf6config-dev libkf6i18n-dev libkf6coreaddons-dev qt6-base-dev libkf6crash-dev libkf6notifications-dev libkf6kio-dev libkf6dbusaddons-dev libkf6itemmodels-dev qt6-tools-dev libkf6wallet-dev libkf6archive-dev libkf6globalaccel-dev qt6-declarative-dev
+sudo apt-get update && sudo apt-get install -y extra-cmake-modules qt6-base-dev qt6-tools-dev libkf6coreaddons-dev libkf6i18n-dev libkf6wallet-dev libkf6notifications-dev libkf6xmlgui-dev libkf6config-dev libkf6widgetsaddons-dev libkf6globalaccel-dev libkf6archive-dev
 ```
 
 ### Building
