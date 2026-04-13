@@ -1,4 +1,3 @@
-#include "followsessiondialog.h"
 #include "mainwindow.h"
 #include "activitylogwindow.h"
 #include "advancedfilterproxymodel.h"
@@ -9,6 +8,7 @@
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"

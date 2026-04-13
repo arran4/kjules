@@ -2,18 +2,20 @@
 #include "apimanager.h"
 #include "sessionmodel.h"
 
-#include <QVBoxLayout>
+#include <KLocalizedString>
+#include <QDialogButtonBox>
+#include <QEventLoop>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPushButton>
-#include <QDialogButtonBox>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QRegularExpression>
-#include <KLocalizedString>
-#include <QEventLoop>
+#include <QVBoxLayout>
 
-FollowSessionDialog::FollowSessionDialog(APIManager *apiManager, SessionModel *sessionModel, QWidget *parent)
+FollowSessionDialog::FollowSessionDialog(APIManager *apiManager,
+                                         SessionModel *sessionModel,
+                                         QWidget *parent)
     : QDialog(parent), m_apiManager(apiManager), m_sessionModel(sessionModel) {
   setWindowTitle(i18n("Follow from Jules Session ID"));
 
@@ -24,7 +26,8 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager, SessionModel *s
 
   QHBoxLayout *inputLayout = new QHBoxLayout();
   m_idEdit = new QLineEdit(this);
-  m_idEdit->setPlaceholderText(QStringLiteral("e.g. 14074060995680401415 or https://..."));
+  m_idEdit->setPlaceholderText(
+      QStringLiteral("e.g. 14074060995680401415 or https://..."));
   inputLayout->addWidget(m_idEdit);
 
   m_previewBtn = new QPushButton(i18n("Preview"), this);
@@ -35,8 +38,10 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager, SessionModel *s
   m_previewLabel->setWordWrap(true);
   layout->addWidget(m_previewLabel);
 
-  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
-  m_followBtn = buttonBox->addButton(i18n("Follow"), QDialogButtonBox::AcceptRole);
+  QDialogButtonBox *buttonBox =
+      new QDialogButtonBox(QDialogButtonBox::Cancel, this);
+  m_followBtn =
+      buttonBox->addButton(i18n("Follow"), QDialogButtonBox::AcceptRole);
   m_followBtn->setEnabled(false);
   layout->addWidget(buttonBox);
 
@@ -45,8 +50,10 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager, SessionModel *s
     m_previewLabel->clear();
   });
 
-  connect(m_previewBtn, &QPushButton::clicked, this, &FollowSessionDialog::previewSession);
-  connect(buttonBox, &QDialogButtonBox::accepted, this, &FollowSessionDialog::followSession);
+  connect(m_previewBtn, &QPushButton::clicked, this,
+          &FollowSessionDialog::previewSession);
+  connect(buttonBox, &QDialogButtonBox::accepted, this,
+          &FollowSessionDialog::followSession);
   connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
@@ -65,7 +72,8 @@ QString FollowSessionDialog::extractSessionId(const QString &input) const {
 void FollowSessionDialog::previewSession() {
   QString id = extractSessionId(m_idEdit->text());
   if (id.isEmpty()) {
-    QMessageBox::warning(this, i18n("Invalid Input"), i18n("Please enter a valid session ID or URL."));
+    QMessageBox::warning(this, i18n("Invalid Input"),
+                         i18n("Please enter a valid session ID or URL."));
     return;
   }
 
@@ -76,32 +84,40 @@ void FollowSessionDialog::previewSession() {
   disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this, nullptr);
   disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
 
-  connect(m_apiManager, &APIManager::sessionDetailsReceived, this, [this, id](const QJsonObject &data) {
-    disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this, nullptr);
-    disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
+  connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+          [this, id](const QJsonObject &data) {
+            disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+                       nullptr);
+            disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
 
-    m_previewBtn->setEnabled(true);
-    if (data.isEmpty() || data.value(QStringLiteral("id")).toString() != id) {
-      m_previewLabel->setText(i18n("Failed to load session details or ID mismatch."));
-      return;
-    }
+            m_previewBtn->setEnabled(true);
+            if (data.isEmpty() ||
+                data.value(QStringLiteral("id")).toString() != id) {
+              m_previewLabel->setText(
+                  i18n("Failed to load session details or ID mismatch."));
+              return;
+            }
 
-    QString title = data.value(QStringLiteral("title")).toString();
-    if (title.isEmpty()) {
-      title = data.value(QStringLiteral("prompt")).toString();
-    }
-    QString status = data.value(QStringLiteral("state")).toString();
+            QString title = data.value(QStringLiteral("title")).toString();
+            if (title.isEmpty()) {
+              title = data.value(QStringLiteral("prompt")).toString();
+            }
+            QString status = data.value(QStringLiteral("state")).toString();
 
-    m_previewLabel->setText(i18n("<b>ID:</b> %1<br><b>Title:</b> %2<br><b>Status:</b> %3", id, title, status));
-  });
+            m_previewLabel->setText(
+                i18n("<b>ID:</b> %1<br><b>Title:</b> %2<br><b>Status:</b> %3",
+                     id, title, status));
+          });
 
-  connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &error) {
-    disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this, nullptr);
-    disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
+  connect(m_apiManager, &APIManager::errorOccurred, this,
+          [this](const QString &error) {
+            disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+                       nullptr);
+            disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
 
-    m_previewBtn->setEnabled(true);
-    m_previewLabel->setText(i18n("Error: %1", error));
-  });
+            m_previewBtn->setEnabled(true);
+            m_previewLabel->setText(i18n("Error: %1", error));
+          });
 
   m_apiManager->getSession(id);
 }
@@ -109,7 +125,8 @@ void FollowSessionDialog::previewSession() {
 void FollowSessionDialog::followSession() {
   QString id = extractSessionId(m_idEdit->text());
   if (id.isEmpty()) {
-    QMessageBox::warning(this, i18n("Invalid Input"), i18n("Please enter a valid session ID or URL."));
+    QMessageBox::warning(this, i18n("Invalid Input"),
+                         i18n("Please enter a valid session ID or URL."));
     return;
   }
 
@@ -119,27 +136,35 @@ void FollowSessionDialog::followSession() {
   disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this, nullptr);
   disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
 
-  connect(m_apiManager, &APIManager::sessionDetailsReceived, this, [this, id](const QJsonObject &data) {
-    disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this, nullptr);
-    disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
+  connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+          [this, id](const QJsonObject &data) {
+            disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+                       nullptr);
+            disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
 
-    if (!data.isEmpty() && data.value(QStringLiteral("id")).toString() == id) {
-      m_sessionModel->addSession(data);
-      m_sessionModel->saveSessions();
-      accept();
-    } else {
-      m_followBtn->setEnabled(true);
-      QMessageBox::warning(this, i18n("Error"), i18n("Failed to load session details or ID mismatch."));
-    }
-  });
+            if (!data.isEmpty() &&
+                data.value(QStringLiteral("id")).toString() == id) {
+              m_sessionModel->addSession(data);
+              m_sessionModel->saveSessions();
+              accept();
+            } else {
+              m_followBtn->setEnabled(true);
+              QMessageBox::warning(
+                  this, i18n("Error"),
+                  i18n("Failed to load session details or ID mismatch."));
+            }
+          });
 
-  connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &error) {
-    disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this, nullptr);
-    disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
+  connect(m_apiManager, &APIManager::errorOccurred, this,
+          [this](const QString &error) {
+            disconnect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+                       nullptr);
+            disconnect(m_apiManager, &APIManager::errorOccurred, this, nullptr);
 
-    m_followBtn->setEnabled(true);
-    QMessageBox::warning(this, i18n("Error"), i18n("Error fetching session: %1", error));
-  });
+            m_followBtn->setEnabled(true);
+            QMessageBox::warning(this, i18n("Error"),
+                                 i18n("Error fetching session: %1", error));
+          });
 
   m_apiManager->getSession(id);
 }

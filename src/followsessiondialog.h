@@ -13,7 +13,9 @@ class FollowSessionDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit FollowSessionDialog(APIManager *apiManager, SessionModel *sessionModel, QWidget *parent = nullptr);
+  explicit FollowSessionDialog(APIManager *apiManager,
+                               SessionModel *sessionModel,
+                               QWidget *parent = nullptr);
 
 private Q_SLOTS:
   void previewSession();
