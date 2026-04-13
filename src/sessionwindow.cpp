@@ -56,7 +56,8 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
   setupGUI(Default, QStringLiteral("sessionwindowui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
-    QAction *closeAct = actionCollection()->action(QStringLiteral("close_window"));
+    QAction *closeAct =
+        actionCollection()->action(QStringLiteral("close_window"));
     tb->insertWidget(closeAct, new QLabel(i18n(" Auto Refresh: "), this));
     tb->insertWidget(closeAct, m_autoRefreshCombo);
     tb->insertSeparator(closeAct);
@@ -103,7 +104,6 @@ void SessionWindow::setupActions() {
                                          QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
-
   m_autoRefreshCombo = new QComboBox(this);
   m_autoRefreshCombo->addItem(i18n("Off"), 0);
   m_autoRefreshCombo->addItem(i18n("10 seconds"), 10);
@@ -125,17 +125,17 @@ void SessionWindow::setupActions() {
         m_sessionData.value(QStringLiteral("automationMode")).toString();
     Q_EMIT templateRequested(templateData);
   });
-  actionCollection()->addAction(QStringLiteral("save_template"), saveTemplateAction);
+  actionCollection()->addAction(QStringLiteral("save_template"),
+                                saveTemplateAction);
 
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
                   i18n("Follow Session"), this);
-  connect(watchAction, &QAction::triggered, this,
-          [this, watchAction]() {
-            Q_EMIT watchRequested(m_sessionData);
-            m_isManaged = true;
-            watchAction->setEnabled(false);
-          });
+  connect(watchAction, &QAction::triggered, this, [this, watchAction]() {
+    Q_EMIT watchRequested(m_sessionData);
+    m_isManaged = true;
+    watchAction->setEnabled(false);
+  });
   actionCollection()->addAction(QStringLiteral("watch_session"), watchAction);
   if (m_isManaged) {
     watchAction->setEnabled(false);
@@ -148,7 +148,8 @@ void SessionWindow::setupActions() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
   });
-  actionCollection()->addAction(QStringLiteral("archive_session"), archiveAction);
+  actionCollection()->addAction(QStringLiteral("archive_session"),
+                                archiveAction);
   if (!m_isManaged) {
     archiveAction->setEnabled(false);
   }
@@ -224,13 +225,15 @@ void SessionWindow::setupActions() {
         QAction *openBranchAction = new QAction(i18n("Open Branch URL"), this);
         connect(openBranchAction, &QAction::triggered, this,
                 [branchUrl]() { QDesktopServices::openUrl(QUrl(branchUrl)); });
-        actionCollection()->addAction(QStringLiteral("open_branch"), openBranchAction);
+        actionCollection()->addAction(QStringLiteral("open_branch"),
+                                      openBranchAction);
 
         QAction *copyBranchAction = new QAction(i18n("Copy Branch URL"), this);
         connect(copyBranchAction, &QAction::triggered, this, [branchUrl]() {
           QGuiApplication::clipboard()->setText(branchUrl);
         });
-        actionCollection()->addAction(QStringLiteral("copy_branch"), copyBranchAction);
+        actionCollection()->addAction(QStringLiteral("copy_branch"),
+                                      copyBranchAction);
       }
     }
   }

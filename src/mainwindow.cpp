@@ -1919,8 +1919,7 @@ void MainWindow::createActions() {
           new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
                       i18n("Close"), rawWindow);
       closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, rawWindow,
-              &QMainWindow::close);
+      connect(closeAction, &QAction::triggered, rawWindow, &QMainWindow::close);
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
