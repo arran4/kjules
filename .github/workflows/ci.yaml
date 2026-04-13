@@ -405,6 +405,9 @@ jobs:
     needs: [route, discover]
     if: ${{ needs.discover.outputs.has_qt_cpp == 'true' && needs.route.outputs.run_release == 'true' }}
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.6
+      options: --privileged
     steps:
       - uses: actions/checkout@v4
       - name: Build Flatpak
