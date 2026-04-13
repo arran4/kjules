@@ -1,4 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <path fill="#4CAF50" d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm0 36c-8.84 0-16-7.16-16-16S15.16 8 24 8s16 7.16 16 16-7.16 16-16 16z"/>
-  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#FFFFFF">J</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <style>
+    .blue-ring { fill: #0000ff; }
+    .gold-ring { fill: #dec837; }
+    .text-outline { fill: none; stroke: #000; stroke-width: 6; stroke-linejoin: round; }
+    .text-fill { fill: #fff; }
+  </style>
+  <g transform="translate(64,64) scale(0.4) translate(-100,-100)">
+    <!-- 0 degrees -->
+    <path d="M 215 100 A 115 115 0 0 0 100 -15 L 100 20 A 80 80 0 0 1 180 100 Z" class="blue-ring" />
+    <!-- 90 degrees -->
+    <path d="M 100 215 A 115 115 0 0 0 215 100 L 180 100 A 80 80 0 0 1 100 180 Z" class="gold-ring" />
+    <!-- 180 degrees -->
+    <path d="M -15 100 A 115 115 0 0 0 100 215 L 100 180 A 80 80 0 0 1 20 100 Z" class="blue-ring" />
+    <!-- 270 degrees -->
+    <path d="M 100 -15 A 115 115 0 0 0 -15 100 L 20 100 A 80 80 0 0 1 100 20 Z" class="gold-ring" />
+
+    <!-- Inner narrow bands 45 degrees rotated -->
+    <g transform="rotate(45 100 100)">
+      <path d="M 180 100 A 80 80 0 0 0 100 20 L 100 30 A 70 70 0 0 1 170 100 Z" class="blue-ring" />
+      <path d="M 100 180 A 80 80 0 0 0 180 100 L 170 100 A 70 70 0 0 1 100 170 Z" class="gold-ring" />
+      <path d="M 20 100 A 80 80 0 0 0 100 180 L 100 170 A 70 70 0 0 1 30 100 Z" class="blue-ring" />
+      <path d="M 100 20 A 80 80 0 0 0 20 100 L 30 100 A 70 70 0 0 1 100 30 Z" class="gold-ring" />
+    </g>
+
+    <!-- Outer narrow bands -45 degrees rotated -->
+    <g transform="rotate(-45 100 100)">
+      <path d="M 215 100 A 115 115 0 0 0 100 -15 L 100 -25 A 125 125 0 0 1 225 100 Z" class="blue-ring" />
+      <path d="M 100 215 A 115 115 0 0 0 215 100 L 225 100 A 125 125 0 0 1 100 225 Z" class="gold-ring" />
+      <path d="M -15 100 A 115 115 0 0 0 100 215 L 100 225 A 125 125 0 0 1 -25 100 Z" class="blue-ring" />
+      <path d="M 100 -15 A 115 115 0 0 0 -15 100 L -25 100 A 125 125 0 0 1 100 -25 Z" class="gold-ring" />
+    </g>
+  </g>
+  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="48" font-weight="bold" class="text-outline">J</text>
+  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="48" font-weight="bold" class="text-fill">J</text>
 </svg>
