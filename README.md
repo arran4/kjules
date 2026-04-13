@@ -1,6 +1,6 @@
 # kjules
 
-A powerful KDE native desktop client written in C++ for tracking and managing GitHub tasks, PRs, and background processing sessions. Originally known as Kgithub-notify, **kjules** gives you a fast, native desktop experience for interacting with your GitHub workflow.
+A powerful KDE6/Qt6 native desktop client written in C++ for tracking and managing GitHub tasks, PRs, and background processing sessions. Originally known as Kgithub-notify, **kjules** gives you a fast, native desktop experience for interacting with your GitHub workflow.
 
 When you click on a notification or open the application, it presents you with a comprehensive desktop-native version of:
 *   [GitHub Notifications](https://github.com/notifications)
@@ -47,11 +47,11 @@ When you click on a notification or open the application, it presents you with a
 
 *   C++ Compiler (C++17 support required)
 *   CMake (version 3.16 or higher)
-*   Qt 5 or Qt 6 & KDE Frameworks libraries
+*   Qt 6 & KDE Frameworks 6 libraries
 
 On Ubuntu/Debian, install the required dependencies:
 ```bash
-sudo apt-get update && sudo apt-get install -y extra-cmake-modules libkf5xmlgui-dev libkf5config-dev libkf5i18n-dev libkf5coreaddons-dev qtbase5-dev libkf5crash-dev libkf5notifications-dev libkf5kio-dev libkf5dbusaddons-dev libkf5itemmodels-dev qttools5-dev libkf5wallet-dev libkf5archive-dev libkf5globalaccel-dev qtdeclarative5-dev
+sudo apt-get update && sudo apt-get install -y extra-cmake-modules qt6-base-dev qt6-tools-dev libkf6coreaddons-dev libkf6i18n-dev libkf6wallet-dev libkf6notifications-dev libkf6xmlgui-dev libkf6config-dev libkf6widgetsaddons-dev libkf6globalaccel-dev libkf6archive-dev
 ```
 
 ### Building
