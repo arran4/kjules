@@ -40,6 +40,9 @@ Q_SIGNALS:
 
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
+  void onSubmitSession();
+  void onSubmitPRSession();
+  void onLoadTemplate();
   void onSaveDraft();
   void onSaveTemplate();
   void onSelectAll();
@@ -49,6 +52,7 @@ private Q_SLOTS:
   void updateModels();
   QString getDefaultBranch(const QModelIndex &sourceIdx);
   void applyFilter();
+  void toggleSelectedSourcesView();
 
 protected:
   void showEvent(QShowEvent *event) override;
@@ -71,6 +75,8 @@ private:
   QPushButton *m_saveTemplateButton;
   QMap<QString, QString> m_selectedSources;
   QString m_draftComment;
+
+  QWidget *m_sourceSelectionWidget;
 };
 
 #endif // NEWSESSIONDIALOG_H
