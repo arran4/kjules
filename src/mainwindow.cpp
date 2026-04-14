@@ -1849,7 +1849,7 @@ void MainWindow::createActions() {
               filteredSessions.append(session);
             }
           }
-          KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+          QMainWindow *sessionsWindow = new QMainWindow(this);
           sessionsWindow->setObjectName(
               QStringLiteral("FollowingNewSessions_%1").arg(id));
           SessionModel *localModel = new SessionModel(
@@ -1876,12 +1876,11 @@ void MainWindow::createActions() {
                           i18n("Close"), sessionsWindow);
           closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
           connect(closeAction, &QAction::triggered, sessionsWindow,
-                  &KXmlGuiWindow::close);
+                  &QMainWindow::close);
           fileMenu->addAction(closeAction);
           sessionsWindow->menuBar()->addMenu(fileMenu);
 
           sessionsWindow->setCentralWidget(listView);
-          sessionsWindow->setupGUI();
           sessionsWindow->resize(600, 400);
           sessionsWindow->show();
         }
@@ -1902,7 +1901,7 @@ void MainWindow::createActions() {
       QJsonObject rawData =
           m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
               .toJsonObject();
-      KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+      QMainWindow *rawWindow = new QMainWindow(this);
       rawWindow->setObjectName(
           QStringLiteral("RawDataWindow_%1")
               .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
@@ -1920,13 +1919,11 @@ void MainWindow::createActions() {
           new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
                       i18n("Close"), rawWindow);
       closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, rawWindow,
-              &KXmlGuiWindow::close);
+      connect(closeAction, &QAction::triggered, rawWindow, &QMainWindow::close);
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
       rawWindow->setCentralWidget(textBrowser);
-      rawWindow->setupGUI();
       rawWindow->resize(600, 400);
       rawWindow->show();
     }

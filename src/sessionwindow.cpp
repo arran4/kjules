@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QGuiApplication>
+#include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
@@ -26,6 +27,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QWidgetAction>
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, bool isManaged,
@@ -52,8 +54,8 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
   }
 
   setupUi(m_sessionData);
-  setupGUI();
   setupActions();
+  setupGUI(Default, QStringLiteral("sessionwindowui.rc"));
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("SessionWindow"));
@@ -70,6 +72,7 @@ SessionWindow::~SessionWindow() {
 }
 
 void SessionWindow::setupActions() {
+  // Add core actions to actionCollection
   QAction *refreshAction = new QAction(
       QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
   actionCollection()->addAction(QStringLiteral("refresh_session"),
@@ -94,18 +97,6 @@ void SessionWindow::setupActions() {
                                          QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
-  QMenu *fileMenu = new QMenu(i18n("File"), this);
-  fileMenu->addAction(closeAction);
-  menuBar()->addMenu(fileMenu);
-
-  setStandardToolBarMenuEnabled(true);
-
-  KToolBar *toolBar = new KToolBar(QStringLiteral("mainToolBar"), this);
-  toolBar->addAction(refreshAction);
-  toolBar->addAction(duplicateAction);
-  toolBar->addSeparator();
-
-  toolBar->addWidget(new QLabel(i18n(" Auto Refresh: "), this));
   m_autoRefreshCombo = new QComboBox(this);
   m_autoRefreshCombo->addItem(i18n("Off"), 0);
   m_autoRefreshCombo->addItem(i18n("10 seconds"), 10);
@@ -115,19 +106,17 @@ void SessionWindow::setupActions() {
   connect(m_autoRefreshCombo,
           QOverload<int>::of(&QComboBox::currentIndexChanged), this,
           &SessionWindow::updateAutoRefresh);
-  toolBar->addWidget(m_autoRefreshCombo);
 
-  toolBar->addSeparator();
-  toolBar->addAction(closeAction);
+  QWidget *comboContainer = new QWidget(this);
+  QHBoxLayout *comboLayout = new QHBoxLayout(comboContainer);
+  comboLayout->setContentsMargins(0, 0, 0, 0);
+  comboLayout->addWidget(new QLabel(i18n(" Auto Refresh: "), this));
+  comboLayout->addWidget(m_autoRefreshCombo);
 
-  addToolBar(toolBar);
-
-  // Setup Menu Bar
-  QMenuBar *menuBarWidget = menuBar();
-
-  QMenu *sessionMenu = menuBarWidget->addMenu(i18n("&Session"));
-  sessionMenu->addAction(refreshAction);
-  sessionMenu->addAction(duplicateAction);
+  QWidgetAction *autoRefreshAction = new QWidgetAction(this);
+  autoRefreshAction->setDefaultWidget(comboContainer);
+  actionCollection()->addAction(QStringLiteral("auto_refresh_combo"),
+                                autoRefreshAction);
 
   QAction *saveTemplateAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
@@ -140,20 +129,20 @@ void SessionWindow::setupActions() {
         m_sessionData.value(QStringLiteral("automationMode")).toString();
     Q_EMIT templateRequested(templateData);
   });
-  sessionMenu->addAction(saveTemplateAction);
-  sessionMenu->addSeparator();
+  actionCollection()->addAction(QStringLiteral("save_template"),
+                                saveTemplateAction);
 
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
                   i18n("Follow Session"), this);
-  connect(watchAction, &QAction::triggered, this,
-          [this, watchAction, sessionMenu]() {
-            Q_EMIT watchRequested(m_sessionData);
-            m_isManaged = true;
-            watchAction->setEnabled(false);
-          });
-  if (!m_isManaged) {
-    sessionMenu->addAction(watchAction);
+  connect(watchAction, &QAction::triggered, this, [this, watchAction]() {
+    Q_EMIT watchRequested(m_sessionData);
+    m_isManaged = true;
+    watchAction->setEnabled(false);
+  });
+  actionCollection()->addAction(QStringLiteral("watch_session"), watchAction);
+  if (m_isManaged) {
+    watchAction->setEnabled(false);
   }
 
   QAction *archiveAction =
@@ -163,8 +152,10 @@ void SessionWindow::setupActions() {
     Q_EMIT archiveRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
   });
-  if (m_isManaged) {
-    sessionMenu->addAction(archiveAction);
+  actionCollection()->addAction(QStringLiteral("archive_session"),
+                                archiveAction);
+  if (!m_isManaged) {
+    archiveAction->setEnabled(false);
   }
 
   QAction *deleteAction =
@@ -175,13 +166,10 @@ void SessionWindow::setupActions() {
     Q_EMIT deleteRequested(
         m_sessionData.value(QStringLiteral("id")).toString());
   });
-  if (m_isManaged) {
-    sessionMenu->addAction(deleteAction);
+  actionCollection()->addAction(QStringLiteral("delete_session"), deleteAction);
+  if (!m_isManaged) {
+    deleteAction->setEnabled(false);
   }
-  sessionMenu->addSeparator();
-  sessionMenu->addAction(closeAction);
-
-  QMenu *linksMenu = menuBarWidget->addMenu(i18n("&Links"));
 
   QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
   connect(openJulesAction, &QAction::triggered, this, [this]() {
@@ -189,7 +177,7 @@ void SessionWindow::setupActions() {
     QDesktopServices::openUrl(
         QUrl(QStringLiteral("https://jules.google.com/sessions/") + id));
   });
-  linksMenu->addAction(openJulesAction);
+  actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
   QAction *copyJulesAction = new QAction(i18n("Copy Jules URL"), this);
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
@@ -197,7 +185,7 @@ void SessionWindow::setupActions() {
     QGuiApplication::clipboard()->setText(
         QStringLiteral("https://jules.google.com/sessions/") + id);
   });
-  linksMenu->addAction(copyJulesAction);
+  actionCollection()->addAction(QStringLiteral("copy_jules"), copyJulesAction);
 
   QString prUrlStr;
   QJsonArray outputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
@@ -212,16 +200,15 @@ void SessionWindow::setupActions() {
   }
 
   if (!prUrlStr.isEmpty()) {
-    linksMenu->addSeparator();
     QAction *openPrAction = new QAction(i18n("Open Pull Request URL"), this);
     connect(openPrAction, &QAction::triggered, this,
             [prUrlStr]() { QDesktopServices::openUrl(QUrl(prUrlStr)); });
-    linksMenu->addAction(openPrAction);
+    actionCollection()->addAction(QStringLiteral("open_pr"), openPrAction);
 
     QAction *copyPrAction = new QAction(i18n("Copy Pull Request URL"), this);
     connect(copyPrAction, &QAction::triggered, this,
             [prUrlStr]() { QGuiApplication::clipboard()->setText(prUrlStr); });
-    linksMenu->addAction(copyPrAction);
+    actionCollection()->addAction(QStringLiteral("copy_pr"), copyPrAction);
 
     if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
       QJsonObject prInfo =
@@ -242,13 +229,15 @@ void SessionWindow::setupActions() {
         QAction *openBranchAction = new QAction(i18n("Open Branch URL"), this);
         connect(openBranchAction, &QAction::triggered, this,
                 [branchUrl]() { QDesktopServices::openUrl(QUrl(branchUrl)); });
-        linksMenu->addAction(openBranchAction);
+        actionCollection()->addAction(QStringLiteral("open_branch"),
+                                      openBranchAction);
 
         QAction *copyBranchAction = new QAction(i18n("Copy Branch URL"), this);
         connect(copyBranchAction, &QAction::triggered, this, [branchUrl]() {
           QGuiApplication::clipboard()->setText(branchUrl);
         });
-        linksMenu->addAction(copyBranchAction);
+        actionCollection()->addAction(QStringLiteral("copy_branch"),
+                                      copyBranchAction);
       }
     }
   }
