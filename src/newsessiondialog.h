@@ -2,7 +2,7 @@
 #define NEWSESSIONDIALOG_H
 
 #include "sourcemodel.h"
-#include <QDialog>
+#include <KXmlGuiWindow>
 #include <QJsonObject>
 #include <QSet>
 
@@ -13,10 +13,12 @@ class QComboBox;
 class QSortFilterProxyModel;
 class QCheckBox;
 
+class QPushButton;
+
 class SourceSelectionProxyModel;
 class TemplatesModel;
 
-class NewSessionDialog : public QDialog {
+class NewSessionDialog : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
@@ -38,6 +40,9 @@ Q_SIGNALS:
 
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
+  void onSubmitSession();
+  void onSubmitPRSession();
+  void onLoadTemplate();
   void onSaveDraft();
   void onSaveTemplate();
   void onSelectAll();
@@ -69,6 +74,8 @@ private:
   QPushButton *m_saveTemplateButton;
   QMap<QString, QString> m_selectedSources;
   QString m_draftComment;
+
+  QWidget *m_sourceSelectionWidget;
 };
 
 #endif // NEWSESSIONDIALOG_H

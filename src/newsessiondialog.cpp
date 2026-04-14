@@ -1,6 +1,8 @@
 #include "newsessiondialog.h"
 #include "savedialog.h"
 #include "templateselectiondialog.h"
+#include <KActionCollection>
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
@@ -81,17 +83,20 @@ private:
 NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                                    TemplatesModel *templatesModel,
                                    bool hasApiKey, QWidget *parent)
-    : QDialog(parent), m_sourceModel(sourceModel),
+    : KXmlGuiWindow(parent), m_sourceModel(sourceModel),
       m_templatesModel(templatesModel) {
+  setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Create New Session"));
   resize(700, 600);
 
-  QVBoxLayout *mainLayout = new QVBoxLayout(this);
+  QVBoxLayout *mainLayout = new QVBoxLayout();
 
   QFormLayout *formLayout = new QFormLayout();
 
   // Source Selection
-  QVBoxLayout *sourceLayout = new QVBoxLayout();
+  m_sourceSelectionWidget = new QWidget(this);
+  QVBoxLayout *sourceLayout = new QVBoxLayout(m_sourceSelectionWidget);
+  sourceLayout->setContentsMargins(0, 0, 0, 0);
 
   m_filterEdit = new QLineEdit(this);
   m_filterEdit->setPlaceholderText(tr("Filter sources..."));
@@ -223,17 +228,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             m_selectedView->clearSelection();
           });
 
-  formLayout->addRow(tr("Sources:"), sourceLayout);
+  formLayout->addRow(tr("Sources:"), m_sourceSelectionWidget);
 
   // Prompt
   m_promptEdit = new QTextEdit(this);
   m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
-  connect(m_loadTemplateButton, &QPushButton::clicked, this, [this]() {
-    TemplateSelectionDialog dlg(m_templatesModel, this);
-    if (dlg.exec() == QDialog::Accepted) {
-      setTemplateData(dlg.selectedTemplate());
-    }
-  });
 
   QVBoxLayout *promptLayout = new QVBoxLayout();
   promptLayout->addWidget(m_loadTemplateButton, 0, Qt::AlignLeft);
@@ -271,62 +270,21 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
   QPushButton *cancelButton = new QPushButton(tr("Cancel"), this);
-  connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
   QPushButton *draftButton = new QPushButton(tr("Save as Draft"), this);
-  connect(draftButton, &QPushButton::clicked, this,
-          &NewSessionDialog::onSaveDraft);
 
   m_saveTemplateButton = new QPushButton(tr("Save as Template"), this);
-  connect(m_saveTemplateButton, &QPushButton::clicked, this,
-          &NewSessionDialog::onSaveTemplate);
 
   m_createButton = new QPushButton(tr("Create Session"), this);
-
-  if (!hasApiKey) {
-    m_createButton->setEnabled(false);
-    m_createButton->setToolTip(
-        tr("An API key is required to create a session."));
-  }
-  connect(m_createButton, &QPushButton::clicked, this,
-          [this]() { onSubmit(QStringLiteral("")); });
 
   m_createPRButton = new QPushButton(tr("Create PR Session"), this);
   m_createPRButton->setDefault(true);
 
-  if (!hasApiKey) {
-    m_createPRButton->setEnabled(false);
-    m_createPRButton->setToolTip(
-        tr("An API key is required to create a session."));
-  }
-  connect(m_createPRButton, &QPushButton::clicked, this,
-          [this]() { onSubmit(QStringLiteral("AUTO_CREATE_PR")); });
-
-  QShortcut *ctrlEnterShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), this);
-  connect(ctrlEnterShortcut, &QShortcut::activated, m_createPRButton,
-          &QPushButton::click);
-
-  QShortcut *ctrlReturnShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
-  connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton,
-          &QPushButton::click);
-
   auto onCtrlShiftEnter = [this]() {
     m_keepOpenCheckBox->setChecked(true);
     m_keepSourceCheckBox->setChecked(true);
-    m_createPRButton->click();
+    onSubmitPRSession();
   };
-
-  QShortcut *ctrlShiftEnterShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter), this);
-  connect(ctrlShiftEnterShortcut, &QShortcut::activated, this,
-          onCtrlShiftEnter);
-
-  QShortcut *ctrlShiftReturnShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return), this);
-  connect(ctrlShiftReturnShortcut, &QShortcut::activated, this,
-          onCtrlShiftEnter);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -336,6 +294,150 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   buttonLayout->addWidget(m_createPRButton);
 
   mainLayout->addLayout(buttonLayout);
+
+  QWidget *centralWidget = new QWidget(this);
+  centralWidget->setLayout(mainLayout);
+  setCentralWidget(centralWidget);
+
+  // Setup Actions
+  QAction *closeAction =
+      actionCollection()->addAction(QStringLiteral("file_close"));
+  closeAction->setText(tr("&Close"));
+  closeAction->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
+  actionCollection()->setDefaultShortcut(closeAction, QKeySequence::Close);
+  connect(closeAction, &QAction::triggered, this, &QWidget::close);
+  connect(cancelButton, &QPushButton::clicked, closeAction, &QAction::trigger);
+
+  QAction *loadTemplateAction =
+      actionCollection()->addAction(QStringLiteral("load_template"));
+  loadTemplateAction->setText(tr("&Load from template"));
+  loadTemplateAction->setIcon(
+      QIcon::fromTheme(QStringLiteral("document-open")));
+  connect(loadTemplateAction, &QAction::triggered, this,
+          &NewSessionDialog::onLoadTemplate);
+  connect(m_loadTemplateButton, &QPushButton::clicked, loadTemplateAction,
+          &QAction::trigger);
+
+  QAction *saveTemplateAction =
+      actionCollection()->addAction(QStringLiteral("save_template"));
+  saveTemplateAction->setText(tr("Save as &Template"));
+  saveTemplateAction->setIcon(
+      QIcon::fromTheme(QStringLiteral("document-save-as")));
+  connect(saveTemplateAction, &QAction::triggered, this,
+          &NewSessionDialog::onSaveTemplate);
+  connect(m_saveTemplateButton, &QPushButton::clicked, saveTemplateAction,
+          &QAction::trigger);
+
+  QAction *saveDraftAction =
+      actionCollection()->addAction(QStringLiteral("save_draft"));
+  saveDraftAction->setText(tr("Save as &Draft"));
+  saveDraftAction->setIcon(QIcon::fromTheme(QStringLiteral("document-save")));
+  connect(saveDraftAction, &QAction::triggered, this,
+          &NewSessionDialog::onSaveDraft);
+  connect(draftButton, &QPushButton::clicked, saveDraftAction,
+          &QAction::trigger);
+
+  QAction *createSessionAction =
+      actionCollection()->addAction(QStringLiteral("create_session"));
+  createSessionAction->setText(tr("Create &Session"));
+  createSessionAction->setIcon(
+      QIcon::fromTheme(QStringLiteral("media-playback-start")));
+  actionCollection()->setDefaultShortcuts(
+      createSessionAction, {QKeySequence(Qt::CTRL | Qt::Key_Enter),
+                            QKeySequence(Qt::CTRL | Qt::Key_Return)});
+  connect(createSessionAction, &QAction::triggered, this,
+          &NewSessionDialog::onSubmitSession);
+  connect(m_createButton, &QPushButton::clicked, createSessionAction,
+          &QAction::trigger);
+
+  QAction *createPRSessionAction =
+      actionCollection()->addAction(QStringLiteral("create_pr_session"));
+  createPRSessionAction->setText(tr("Create &PR Session"));
+  createPRSessionAction->setIcon(
+      QIcon::fromTheme(QStringLiteral("vcs-branch")));
+  actionCollection()->setDefaultShortcuts(
+      createPRSessionAction,
+      {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
+       QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
+  connect(createPRSessionAction, &QAction::triggered, this, onCtrlShiftEnter);
+  connect(m_createPRButton, &QPushButton::clicked, createPRSessionAction,
+          &QAction::trigger);
+
+  if (!hasApiKey) {
+    m_createButton->setEnabled(false);
+    m_createButton->setToolTip(
+        tr("An API key is required to create a session."));
+    createSessionAction->setEnabled(false);
+    m_createPRButton->setEnabled(false);
+    m_createPRButton->setToolTip(
+        tr("An API key is required to create a session."));
+    createPRSessionAction->setEnabled(false);
+  }
+
+  QAction *hideSelectedSourcesAction =
+      actionCollection()->addAction(QStringLiteral("hide_selected_sources"));
+  hideSelectedSourcesAction->setText(tr("&Hide Selected Sources"));
+  hideSelectedSourcesAction->setCheckable(true);
+  actionCollection()->setDefaultShortcut(hideSelectedSourcesAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_H));
+  connect(
+      hideSelectedSourcesAction, &QAction::toggled, this,
+      [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
+
+  // Sync checkboxes with actions
+  QAction *requirePlanApprovalAction =
+      actionCollection()->addAction(QStringLiteral("require_plan_approval"));
+  requirePlanApprovalAction->setText(tr("Require &Plan Approval"));
+  requirePlanApprovalAction->setCheckable(true);
+  requirePlanApprovalAction->setChecked(
+      m_requirePlanApprovalCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(requirePlanApprovalAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_P));
+  connect(requirePlanApprovalAction, &QAction::toggled,
+          m_requirePlanApprovalCheckBox, &QCheckBox::setChecked);
+  connect(m_requirePlanApprovalCheckBox, &QCheckBox::toggled,
+          requirePlanApprovalAction, &QAction::setChecked);
+
+  QAction *keepOpenAction =
+      actionCollection()->addAction(QStringLiteral("keep_open_after_saving"));
+  keepOpenAction->setText(tr("&Keep window open after saving"));
+  keepOpenAction->setCheckable(true);
+  keepOpenAction->setChecked(m_keepOpenCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(keepOpenAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_K));
+  connect(keepOpenAction, &QAction::toggled, m_keepOpenCheckBox,
+          &QCheckBox::setChecked);
+  connect(m_keepOpenCheckBox, &QCheckBox::toggled, keepOpenAction,
+          &QAction::setChecked);
+
+  QAction *keepSourceAction =
+      actionCollection()->addAction(QStringLiteral("keep_source_selected"));
+  keepSourceAction->setText(tr("Clear &source selection after saving"));
+  keepSourceAction->setCheckable(true);
+  keepSourceAction->setChecked(!m_keepSourceCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(keepSourceAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_L));
+  connect(keepSourceAction, &QAction::toggled, this,
+          [this](bool checked) { m_keepSourceCheckBox->setChecked(!checked); });
+  connect(m_keepSourceCheckBox, &QCheckBox::toggled, this,
+          [keepSourceAction](bool checked) {
+            keepSourceAction->setChecked(!checked);
+          });
+
+  setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
+}
+
+void NewSessionDialog::onSubmitSession() { onSubmit(QString()); }
+
+void NewSessionDialog::onSubmitPRSession() {
+  onSubmit(QStringLiteral("AUTO_CREATE_PR"));
+}
+
+void NewSessionDialog::onLoadTemplate() {
+  TemplateSelectionDialog dlg(m_templatesModel, this);
+  if (dlg.exec() == QDialog::Accepted) {
+    setTemplateData(dlg.selectedTemplate());
+  }
 }
 
 void NewSessionDialog::setEditMode(bool isEdit) {
@@ -520,7 +622,7 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
       updateModels();
     }
   } else {
-    accept();
+    close();
   }
 }
 
@@ -552,7 +654,7 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
 
   Q_EMIT saveDraftRequested(draft);
-  accept();
+  close();
 }
 
 void NewSessionDialog::onSaveTemplate() {
@@ -590,7 +692,7 @@ void NewSessionDialog::onSaveTemplate() {
 }
 
 void NewSessionDialog::showEvent(QShowEvent *event) {
-  QDialog::showEvent(event);
+  KXmlGuiWindow::showEvent(event);
   if (!m_selectedSources.isEmpty()) {
     m_promptEdit->setFocus();
   } else {

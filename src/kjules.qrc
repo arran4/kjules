@@ -2,6 +2,7 @@
     <qresource prefix="/kxmlgui5/kjules">
         <file>kjulesui.rc</file>
         <file>sessionswindowui.rc</file>
+        <file>newsessiondialogui.rc</file>
         <file>sessionwindowui.rc</file>
     </qresource>
     <qresource prefix="/">
