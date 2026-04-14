@@ -1467,7 +1467,7 @@ void MainWindow::onRefreshProgressUpdated(int current, int total) {
   m_sessionRefreshProgressBar->setMaximum(total);
   m_sessionRefreshProgressBar->setValue(current);
   m_sessionRefreshProgressBar->setFormat(
-      i18n("Refreshing %1/%2", current, total));
+      i18n("Refreshing %1/%2", qMin(current + 1, total), total));
 }
 
 void MainWindow::onRefreshProgressFinished() {
