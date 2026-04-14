@@ -1,5 +1,6 @@
 #include "refreshprogresswindow.h"
 #include "apimanager.h"
+#include "mainwindow.h"
 
 #include <KLocalizedString>
 #include <QProgressBar>
@@ -34,6 +35,12 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
           &RefreshProgressWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::errorOccurred, this,
           &RefreshProgressWindow::onErrorOccurred);
+
+  MainWindow *mainWindow = qobject_cast<MainWindow *>(parent);
+  if (mainWindow) {
+    connect(mainWindow, &MainWindow::sessionAutoArchived, this,
+            &RefreshProgressWindow::onSessionAutoArchived);
+  }
 
   // Start processing asynchronously so the UI can show up
   QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
@@ -72,6 +79,12 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
     m_progressBar->setValue(m_currentIndex);
     processNext();
   }
+}
+
+void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
+                                                  const QString &reason) {
+  m_textBrowser->append(i18n(
+      "<font color='orange'>Session %1 auto-archived: %2</font>", id, reason));
 }
 
 void RefreshProgressWindow::onErrorOccurred(const QString &message) {

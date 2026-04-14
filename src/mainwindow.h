@@ -34,6 +34,9 @@ public:
 
   void setMockApi(bool useMock);
 
+Q_SIGNALS:
+  void sessionAutoArchived(const QString &id, const QString &reason);
+
 protected:
   void closeEvent(QCloseEvent *event) override;
 

@@ -1457,11 +1457,18 @@ void MainWindow::checkAutoArchiveSessions() {
 
   QDateTime now = QDateTime::currentDateTimeUtc();
 
-  QList<int> rowsToArchive;
+  struct ArchiveItem {
+    int row;
+    QString id;
+    QString reason;
+  };
+  QList<ArchiveItem> itemsToArchive;
 
   for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
     QJsonObject session = m_sessionModel->getSession(i);
+    QString sessionId = session.value(QStringLiteral("id")).toString();
     bool shouldArchive = false;
+    QString archiveReason;
 
     if (autoArchiveEnabled) {
       QString createTimeStr =
@@ -1470,6 +1477,7 @@ void MainWindow::checkAutoArchiveSessions() {
           QDateTime::fromString(createTimeStr, Qt::ISODate).toUTC();
       if (createTime.isValid() && createTime.daysTo(now) >= autoArchiveDays) {
         shouldArchive = true;
+        archiveReason = i18np("Older than 1 day", "Older than %1 days", autoArchiveDays);
       }
     }
 
@@ -1481,27 +1489,29 @@ void MainWindow::checkAutoArchiveSessions() {
                 QStringLiteral("merged") ||
             prInfo.value(QStringLiteral("merged_at")).isString()) {
           shouldArchive = true;
+          archiveReason = i18n("PR is merged");
         }
       }
     }
 
     if (shouldArchive) {
-      rowsToArchive.append(i);
+      itemsToArchive.append({i, sessionId, archiveReason});
     }
   }
 
-  for (int row : rowsToArchive) {
-    QJsonObject session = m_sessionModel->getSession(row);
+  for (const ArchiveItem &item : itemsToArchive) {
+    QJsonObject session = m_sessionModel->getSession(item.row);
     m_archiveModel->addSession(session);
-    m_sessionModel->removeSession(row);
+    m_sessionModel->removeSession(item.row);
+    Q_EMIT sessionAutoArchived(item.id, item.reason);
   }
 
-  if (!rowsToArchive.isEmpty()) {
+  if (!itemsToArchive.isEmpty()) {
     m_archiveModel->saveSessions();
     m_sessionModel->saveSessions();
     ActivityLogWindow::instance()->logMessage(
         i18np("Auto-archived 1 following session.",
-              "Auto-archived %1 following sessions.", rowsToArchive.size()));
+              "Auto-archived %1 following sessions.", itemsToArchive.size()));
   }
 }
 
