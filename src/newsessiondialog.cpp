@@ -280,40 +280,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_createPRButton = new QPushButton(tr("Create PR Session"), this);
   m_createPRButton->setDefault(true);
 
-  if (!hasApiKey) {
-    m_createButton->setEnabled(false);
-    m_createButton->setToolTip(
-        tr("An API key is required to create a session."));
-    m_createPRButton->setEnabled(false);
-    m_createPRButton->setToolTip(
-        tr("An API key is required to create a session."));
-  }
-
-  QShortcut *ctrlEnterShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), this);
-  connect(ctrlEnterShortcut, &QShortcut::activated, m_createPRButton,
-          &QPushButton::click);
-
-  QShortcut *ctrlReturnShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
-  connect(ctrlReturnShortcut, &QShortcut::activated, m_createPRButton,
-          &QPushButton::click);
-
   auto onCtrlShiftEnter = [this]() {
     m_keepOpenCheckBox->setChecked(true);
     m_keepSourceCheckBox->setChecked(true);
-    m_createPRButton->click();
+    onSubmitPRSession();
   };
-
-  QShortcut *ctrlShiftEnterShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter), this);
-  connect(ctrlShiftEnterShortcut, &QShortcut::activated, this,
-          onCtrlShiftEnter);
-
-  QShortcut *ctrlShiftReturnShortcut =
-      new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return), this);
-  connect(ctrlShiftReturnShortcut, &QShortcut::activated, this,
-          onCtrlShiftEnter);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -388,18 +359,27 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       createPRSessionAction,
       {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
-  connect(createPRSessionAction, &QAction::triggered, this, [this]() {
-    m_keepOpenCheckBox->setChecked(true);
-    m_keepSourceCheckBox->setChecked(true);
-    onSubmitPRSession();
-  });
-  connect(m_createPRButton, &QPushButton::clicked, this,
-          &NewSessionDialog::onSubmitPRSession);
+  connect(createPRSessionAction, &QAction::triggered, this, onCtrlShiftEnter);
+  connect(m_createPRButton, &QPushButton::clicked, createPRSessionAction,
+          &QAction::trigger);
+
+  if (!hasApiKey) {
+    m_createButton->setEnabled(false);
+    m_createButton->setToolTip(
+        tr("An API key is required to create a session."));
+    createSessionAction->setEnabled(false);
+    m_createPRButton->setEnabled(false);
+    m_createPRButton->setToolTip(
+        tr("An API key is required to create a session."));
+    createPRSessionAction->setEnabled(false);
+  }
 
   QAction *hideSelectedSourcesAction =
       actionCollection()->addAction(QStringLiteral("hide_selected_sources"));
   hideSelectedSourcesAction->setText(tr("&Hide Selected Sources"));
   hideSelectedSourcesAction->setCheckable(true);
+  actionCollection()->setDefaultShortcut(hideSelectedSourcesAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_H));
   connect(
       hideSelectedSourcesAction, &QAction::toggled, this,
       [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
@@ -411,6 +391,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   requirePlanApprovalAction->setCheckable(true);
   requirePlanApprovalAction->setChecked(
       m_requirePlanApprovalCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(requirePlanApprovalAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_P));
   connect(requirePlanApprovalAction, &QAction::toggled,
           m_requirePlanApprovalCheckBox, &QCheckBox::setChecked);
   connect(m_requirePlanApprovalCheckBox, &QCheckBox::toggled,
@@ -421,6 +403,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   keepOpenAction->setText(tr("&Keep window open after saving"));
   keepOpenAction->setCheckable(true);
   keepOpenAction->setChecked(m_keepOpenCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(keepOpenAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_K));
   connect(keepOpenAction, &QAction::toggled, m_keepOpenCheckBox,
           &QCheckBox::setChecked);
   connect(m_keepOpenCheckBox, &QCheckBox::toggled, keepOpenAction,
@@ -431,6 +415,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   keepSourceAction->setText(tr("Clear &source selection after saving"));
   keepSourceAction->setCheckable(true);
   keepSourceAction->setChecked(!m_keepSourceCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(keepSourceAction,
+                                         QKeySequence(Qt::CTRL | Qt::Key_L));
   connect(keepSourceAction, &QAction::toggled, this,
           [this](bool checked) { m_keepSourceCheckBox->setChecked(!checked); });
   connect(m_keepSourceCheckBox, &QCheckBox::toggled, this,
