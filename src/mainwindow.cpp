@@ -2262,6 +2262,9 @@ void MainWindow::updateCountdownStatus() {
     }
     updateStatus(i18n("Next attempt in %1...", timeStr));
   }
+
+  // Inform the queue model to update display of active wait items
+  m_queueModel->refreshWaitItems();
 }
 
 void MainWindow::toggleQueueState() {
