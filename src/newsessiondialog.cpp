@@ -341,6 +341,12 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QWidget *centralWidget = new QWidget(this);
   centralWidget->setLayout(mainLayout);
   setCentralWidget(centralWidget);
+
+  QShortcut *ctrlWShortcut =
+      new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), this);
+  connect(ctrlWShortcut, &QShortcut::activated, this, &QWidget::close);
+
+  setupGUI(Default, QStringLiteral("kjulesui.rc"));
 }
 
 void NewSessionDialog::setEditMode(bool isEdit) {
