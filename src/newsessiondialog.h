@@ -52,7 +52,6 @@ private Q_SLOTS:
   void updateModels();
   QString getDefaultBranch(const QModelIndex &sourceIdx);
   void applyFilter();
-  void toggleSelectedSourcesView();
 
 protected:
   void showEvent(QShowEvent *event) override;

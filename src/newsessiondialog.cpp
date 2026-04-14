@@ -333,8 +333,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       actionCollection()->addAction(QStringLiteral("file_close"));
   closeAction->setText(tr("&Close"));
   closeAction->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
-  actionCollection()->setDefaultShortcuts(
-      closeAction, {QKeySequence::Close, QKeySequence(Qt::CTRL | Qt::Key_W)});
+  actionCollection()->setDefaultShortcut(closeAction, QKeySequence::Close);
   connect(closeAction, &QAction::triggered, this, &QWidget::close);
   connect(cancelButton, &QPushButton::clicked, closeAction, &QAction::trigger);
 
@@ -389,17 +388,21 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       createPRSessionAction,
       {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
-  connect(createPRSessionAction, &QAction::triggered, this,
+  connect(createPRSessionAction, &QAction::triggered, this, [this]() {
+    m_keepOpenCheckBox->setChecked(true);
+    m_keepSourceCheckBox->setChecked(true);
+    onSubmitPRSession();
+  });
+  connect(m_createPRButton, &QPushButton::clicked, this,
           &NewSessionDialog::onSubmitPRSession);
-  connect(m_createPRButton, &QPushButton::clicked, createPRSessionAction,
-          &QAction::trigger);
 
   QAction *hideSelectedSourcesAction =
       actionCollection()->addAction(QStringLiteral("hide_selected_sources"));
   hideSelectedSourcesAction->setText(tr("&Hide Selected Sources"));
   hideSelectedSourcesAction->setCheckable(true);
-  connect(hideSelectedSourcesAction, &QAction::triggered, this,
-          &NewSessionDialog::toggleSelectedSourcesView);
+  connect(
+      hideSelectedSourcesAction, &QAction::toggled, this,
+      [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
 
   // Sync checkboxes with actions
   QAction *requirePlanApprovalAction =
@@ -425,13 +428,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   QAction *keepSourceAction =
       actionCollection()->addAction(QStringLiteral("keep_source_selected"));
-  keepSourceAction->setText(tr("Keep &source selected after saving"));
+  keepSourceAction->setText(tr("Clear &source selection after saving"));
   keepSourceAction->setCheckable(true);
-  keepSourceAction->setChecked(m_keepSourceCheckBox->isChecked());
-  connect(keepSourceAction, &QAction::toggled, m_keepSourceCheckBox,
-          &QCheckBox::setChecked);
-  connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction,
-          &QAction::setChecked);
+  keepSourceAction->setChecked(!m_keepSourceCheckBox->isChecked());
+  connect(keepSourceAction, &QAction::toggled, this,
+          [this](bool checked) { m_keepSourceCheckBox->setChecked(!checked); });
+  connect(m_keepSourceCheckBox, &QCheckBox::toggled, this,
+          [keepSourceAction](bool checked) {
+            keepSourceAction->setChecked(!checked);
+          });
 
   setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
 }
@@ -447,10 +452,6 @@ void NewSessionDialog::onLoadTemplate() {
   if (dlg.exec() == QDialog::Accepted) {
     setTemplateData(dlg.selectedTemplate());
   }
-}
-
-void NewSessionDialog::toggleSelectedSourcesView() {
-  m_sourceSelectionWidget->setVisible(!m_sourceSelectionWidget->isVisible());
 }
 
 void NewSessionDialog::setEditMode(bool isEdit) {
