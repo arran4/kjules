@@ -1477,7 +1477,8 @@ void MainWindow::checkAutoArchiveSessions() {
           QDateTime::fromString(createTimeStr, Qt::ISODate).toUTC();
       if (createTime.isValid() && createTime.daysTo(now) >= autoArchiveDays) {
         shouldArchive = true;
-        archiveReason = i18np("Older than 1 day", "Older than %1 days", autoArchiveDays);
+        archiveReason =
+            i18np("Older than 1 day", "Older than %1 days", autoArchiveDays);
       }
     }
 
