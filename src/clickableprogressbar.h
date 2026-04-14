@@ -1,8 +1,8 @@
 #ifndef CLICKABLEPROGRESSBAR_H
 #define CLICKABLEPROGRESSBAR_H
 
-#include <QProgressBar>
 #include <QMouseEvent>
+#include <QProgressBar>
 
 class ClickableProgressBar : public QProgressBar {
   Q_OBJECT

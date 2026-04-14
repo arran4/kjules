@@ -1,7 +1,7 @@
 #include "clickableprogressbar.h"
 
-ClickableProgressBar::ClickableProgressBar(QWidget *parent) : QProgressBar(parent) {
-}
+ClickableProgressBar::ClickableProgressBar(QWidget *parent)
+    : QProgressBar(parent) {}
 
 ClickableProgressBar::~ClickableProgressBar() {}
 
