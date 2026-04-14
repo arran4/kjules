@@ -125,6 +125,12 @@ void SessionWindow::setupActions() {
     Q_EMIT watchRequested(m_sessionData);
     m_isManaged = true;
     watchAction->setEnabled(false);
+    if (QAction *archiveAction = actionCollection()->action(QStringLiteral("archive_session"))) {
+      archiveAction->setEnabled(true);
+    }
+    if (QAction *deleteAction = actionCollection()->action(QStringLiteral("delete_session"))) {
+      deleteAction->setEnabled(true);
+    }
   });
   actionCollection()->addAction(QStringLiteral("watch_session"), watchAction);
 
