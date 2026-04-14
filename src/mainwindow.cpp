@@ -11,6 +11,7 @@
 #include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
+#include "clickableprogressbar.h"
 #include "queuemodel.h"
 #include "refreshprogresswindow.h"
 #include "restoredialog.h"
@@ -81,7 +82,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
-      m_queuePaused(false) {
+      m_queuePaused(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
@@ -610,10 +611,25 @@ void MainWindow::setupUi() {
               }
             }
             if (!idsToRefresh.isEmpty()) {
-              RefreshProgressWindow *progressWindow =
-                  new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-              progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-              progressWindow->show();
+              if (m_refreshProgressWindow && !m_refreshProgressWindow->isFinishedProcess()) {
+                  m_refreshProgressWindow->addSessionIds(idsToRefresh);
+                  m_refreshProgressWindow->show();
+                  m_refreshProgressWindow->raise();
+                  m_refreshProgressWindow->activateWindow();
+              } else {
+                  if (m_refreshProgressWindow) {
+                      m_refreshProgressWindow->deleteLater();
+                  }
+                  m_refreshProgressWindow =
+                      new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                  connect(m_refreshProgressWindow, &RefreshProgressWindow::progressUpdated,
+                          this, &MainWindow::onRefreshProgressUpdated);
+                  connect(m_refreshProgressWindow, &RefreshProgressWindow::progressFinished,
+                          this, &MainWindow::onRefreshProgressFinished);
+
+                  m_sessionRefreshProgressBar->show();
+                  m_refreshProgressWindow->show();
+              }
             } else {
               updateStatus(i18n("No following sessions to refresh."));
             }
@@ -1421,6 +1437,12 @@ void MainWindow::setupUi() {
   m_sourceProgressBar->hide();
   statusBar()->addPermanentWidget(m_sourceProgressBar);
 
+  m_sessionRefreshProgressBar = new ClickableProgressBar(this);
+  m_sessionRefreshProgressBar->hide();
+  connect(m_sessionRefreshProgressBar, &ClickableProgressBar::clicked,
+          this, &MainWindow::onSessionRefreshProgressBarClicked);
+  statusBar()->addPermanentWidget(m_sessionRefreshProgressBar);
+
   m_cancelRefreshBtn = new QPushButton(i18n("Cancel"), this);
   m_cancelRefreshBtn->hide();
   connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
@@ -1436,6 +1458,24 @@ void MainWindow::setupUi() {
 
   // Initial title update
   updateTabTitles();
+}
+
+void MainWindow::onRefreshProgressUpdated(int current, int total) {
+    m_sessionRefreshProgressBar->setMaximum(total);
+    m_sessionRefreshProgressBar->setValue(current);
+    m_sessionRefreshProgressBar->setFormat(i18n("Refreshing %1/%2", current, total));
+}
+
+void MainWindow::onRefreshProgressFinished() {
+    m_sessionRefreshProgressBar->hide();
+}
+
+void MainWindow::onSessionRefreshProgressBarClicked() {
+    if (m_refreshProgressWindow) {
+        m_refreshProgressWindow->show();
+        m_refreshProgressWindow->raise();
+        m_refreshProgressWindow->activateWindow();
+    }
 }
 
 void MainWindow::connectModelForTabUpdates(QAbstractItemModel *model) {
@@ -1775,10 +1815,25 @@ void MainWindow::createActions() {
       }
     }
     if (!idsToRefresh.isEmpty()) {
-      RefreshProgressWindow *progressWindow =
-          new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-      progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-      progressWindow->show();
+      if (m_refreshProgressWindow && !m_refreshProgressWindow->isFinishedProcess()) {
+          m_refreshProgressWindow->addSessionIds(idsToRefresh);
+          m_refreshProgressWindow->show();
+          m_refreshProgressWindow->raise();
+          m_refreshProgressWindow->activateWindow();
+      } else {
+          if (m_refreshProgressWindow) {
+              m_refreshProgressWindow->deleteLater();
+          }
+          m_refreshProgressWindow =
+              new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+          connect(m_refreshProgressWindow, &RefreshProgressWindow::progressUpdated,
+                  this, &MainWindow::onRefreshProgressUpdated);
+          connect(m_refreshProgressWindow, &RefreshProgressWindow::progressFinished,
+                  this, &MainWindow::onRefreshProgressFinished);
+
+          m_sessionRefreshProgressBar->show();
+          m_refreshProgressWindow->show();
+      }
     } else {
       updateStatus(i18n("No following sessions to refresh."));
     }

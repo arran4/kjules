@@ -24,6 +24,8 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QAction;
+class RefreshProgressWindow;
+class ClickableProgressBar;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -95,6 +97,9 @@ private Q_SLOTS:
   void connectModelForTabUpdates(QAbstractItemModel *model);
   void checkAutoArchiveSessions();
   void updateCountdownStatus();
+  void onRefreshProgressUpdated(int current, int total);
+  void onRefreshProgressFinished();
+  void onSessionRefreshProgressBarClicked();
 
 private:
   void setupUi();
@@ -133,6 +138,7 @@ private:
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
+  ClickableProgressBar *m_sessionRefreshProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
   QAction *m_refreshFollowingAction;
@@ -165,6 +171,8 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
+
+  RefreshProgressWindow *m_refreshProgressWindow;
 };
 
 #endif // MAINWINDOW_H

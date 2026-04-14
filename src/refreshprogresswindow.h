@@ -19,6 +19,13 @@ public:
                                  QWidget *parent = nullptr);
   ~RefreshProgressWindow() override;
 
+  void addSessionIds(const QStringList &ids);
+  bool isFinishedProcess() const { return m_isFinished; }
+
+Q_SIGNALS:
+  void progressUpdated(int current, int total);
+  void progressFinished();
+
 private Q_SLOTS:
   void processNext();
   void onSessionReloaded(const QJsonObject &session);
@@ -33,6 +40,7 @@ private:
   int m_totalCount;
   int m_currentIndex;
   APIManager *m_apiManager;
+  bool m_isFinished;
 };
 
 #endif // REFRESHPROGRESSWINDOW_H

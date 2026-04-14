@@ -68,6 +68,7 @@ set(kjules_SRCS
     src/queuemodel.cpp
     src/activitybrowser.cpp
     src/activitylogwindow.cpp
+    src/clickableprogressbar.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/errorwindow.cpp
