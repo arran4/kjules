@@ -35,15 +35,22 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMInstallIcons)
 include(FeatureSummary)
 
+option(USE_MOCK_API "Build with mock API support" OFF)
+
 add_definitions(-DQT_NO_CAST_FROM_ASCII
                 -DQT_NO_CAST_TO_ASCII
                 -DQT_NO_URL_CAST_FROM_STRING
                 -DQT_NO_KEYWORDS)
 
+if(USE_MOCK_API)
+    add_definitions(-DUSE_MOCK_API)
+endif()
+
 set(kjules_SRCS
     src/main.cpp
     src/mainwindow.cpp
     src/apimanager.cpp
+    src/followsessiondialog.cpp
     src/backupdialog.cpp
     src/restoredialog.cpp
     src/sessionmodel.cpp
@@ -61,6 +68,7 @@ set(kjules_SRCS
     src/queuemodel.cpp
     src/activitybrowser.cpp
     src/activitylogwindow.cpp
+    src/clickableprogressbar.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/errorwindow.cpp
@@ -73,6 +81,8 @@ set(kjules_SRCS
 )
 
 add_executable(kjules ${kjules_SRCS})
+
+target_compile_definitions(kjules PRIVATE KJULES_VERSION="${PROJECT_VERSION}")
 
 if (QT_MAJOR_VERSION STREQUAL "6")
     target_link_libraries(kjules
@@ -113,9 +123,11 @@ install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES org.kde.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
 if (QT_MAJOR_VERSION STREQUAL "6")
-    install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
+    install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
+    install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 else()
-    install(FILES src/kjulesui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/kjules)
+    install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/kjules)
+    install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFY5RCDIR})
 endif()
 
 enable_testing()

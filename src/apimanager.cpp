@@ -6,12 +6,13 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 
-const QString BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
+const QString DEFAULT_BASE_URL =
+    QStringLiteral("https://jules.googleapis.com/v1alpha");
 
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
-      m_wallet(nullptr), m_tokenFailed(false), m_listSourcesReply(nullptr),
-      m_listSessionsReply(nullptr) {
+      m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr), m_tokenFailed(false),
+      m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -38,6 +39,10 @@ void APIManager::setApiKey(const QString &key) {
 }
 
 QString APIManager::apiKey() const { return m_apiKey; }
+
+void APIManager::setBaseUrl(const QString &url) { m_baseUrl = url; }
+
+QString APIManager::baseUrl() const { return m_baseUrl; }
 
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
@@ -101,7 +106,7 @@ void APIManager::onWalletOpened(bool success) {
 
 QNetworkRequest APIManager::createRequest(const QString &endpoint,
                                           const QString &overrideApiKey) {
-  QNetworkRequest request(QUrl(BASE_URL + endpoint));
+  QNetworkRequest request(QUrl(m_baseUrl + endpoint));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
   QString key = overrideApiKey.isEmpty() ? m_apiKey : overrideApiKey;
@@ -305,9 +310,8 @@ void APIManager::listSources(const QString &pageToken) {
   }
 
   if (m_listSourcesReply) {
-    // If a request is already in progress, abort it or ignore new request.
-    // For additive pagination, we might just ignore the new request if it's the
-    // same, but the UI should prevent calling this if already refreshing.
+    // If a request is already in progress, ignore new request.
+    return;
   }
 
   QString endpoint = QStringLiteral("/sources");
@@ -484,8 +488,13 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
     QJsonObject githubRepoContext;
-    githubRepoContext[QStringLiteral("startingBranch")] =
-        QStringLiteral("main");
+    if (requestData.contains(QStringLiteral("startingBranch"))) {
+      githubRepoContext[QStringLiteral("startingBranch")] =
+          requestData.value(QStringLiteral("startingBranch")).toString();
+    } else {
+      githubRepoContext[QStringLiteral("startingBranch")] =
+          QStringLiteral("main");
+    }
     sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
   }
 
@@ -660,14 +669,6 @@ void APIManager::getSession(const QString &sessionId) {
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
-  // If just ID, prepend "sessions/"? API doc says name is "sessions/..."
-  // We'll assume the caller passes the full name or ID correctly or we
-  // construct it. The listSessions returns objects with "name": "sessions/..."
-  // and "id": "..."
-
-  // If we use the ID, we might need to construct the URL.
-  // The endpoint is /sessions/{sessionId}
-
   QString cleanId = sessionId;
   if (cleanId.startsWith(QStringLiteral("sessions/"))) {
     cleanId = cleanId.mid(9);

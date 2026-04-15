@@ -24,6 +24,8 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QAction;
+class RefreshProgressWindow;
+class ClickableProgressBar;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -31,6 +33,11 @@ class MainWindow : public KXmlGuiWindow {
 public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
+
+  void setMockApi(bool useMock);
+
+Q_SIGNALS:
+  void sessionAutoArchived(const QString &id, const QString &reason);
 
 protected:
   void closeEvent(QCloseEvent *event) override;
@@ -40,8 +47,8 @@ private Q_SLOTS:
   void refreshSources();
   void showNewSessionDialog();
   void showSettingsDialog();
-  void onSessionCreated(const QStringList &sources, const QString &prompt,
-                        const QString &automationMode,
+  void onSessionCreated(const QMap<QString, QString> &sources,
+                        const QString &prompt, const QString &automationMode,
                         bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
@@ -93,6 +100,9 @@ private Q_SLOTS:
   void connectModelForTabUpdates(QAbstractItemModel *model);
   void checkAutoArchiveSessions();
   void updateCountdownStatus();
+  void onRefreshProgressUpdated(int current, int total);
+  void onRefreshProgressFinished();
+  void onSessionRefreshProgressBarClicked();
 
 private:
   void setupUi();
@@ -100,6 +110,8 @@ private:
   void createActions();
 
   APIManager *m_apiManager;
+  QHash<QString, QString> m_previousSessionStates;
+  QHash<QString, QString> m_previousSessionPrStates;
   SessionModel *m_sessionModel;
   SessionModel *m_archiveModel;
   SourceModel *m_sourceModel;
@@ -129,12 +141,14 @@ private:
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QProgressBar *m_sourceProgressBar;
+  ClickableProgressBar *m_sessionRefreshProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
   QAction *m_refreshFollowingAction;
   QAction *m_refreshSourceAction;
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
+  QAction *m_followFromIdAction;
   QAction *m_toggleFavouriteAction;
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
@@ -160,6 +174,8 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
+
+  RefreshProgressWindow *m_refreshProgressWindow;
 };
 
 #endif // MAINWINDOW_H

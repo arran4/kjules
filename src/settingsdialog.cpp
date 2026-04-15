@@ -5,12 +5,15 @@
 #include <KSharedConfig>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
+#include <QFile>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QStandardPaths>
 #include <QVBoxLayout>
 
 SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
@@ -35,6 +38,15 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_closeToTrayEdit = new QCheckBox(i18n("Close to Tray"), this);
   m_closeToTrayEdit->setChecked(config.readEntry("CloseToTray", false));
   formLayout->addRow(QString(), m_closeToTrayEdit);
+
+  m_autostartEdit = new QCheckBox(i18n("Open automatically upon login"), this);
+  m_autostartEdit->setChecked(config.readEntry("Autostart", false));
+  formLayout->addRow(QString(), m_autostartEdit);
+
+  m_autostartTrayEdit = new QCheckBox(
+      i18n("When opening automatically start in system tray"), this);
+  m_autostartTrayEdit->setChecked(config.readEntry("AutostartTray", false));
+  formLayout->addRow(QString(), m_autostartTrayEdit);
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
@@ -150,10 +162,36 @@ void SettingsDialog::onSave() {
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
+  config.writeEntry("Autostart", m_autostartEdit->isChecked());
+  config.writeEntry("AutostartTray", m_autostartTrayEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.writeEntry("RefreshWorkers", m_refreshWorkersEdit->value());
   config.sync();
+
+  QString autostartPath =
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
+      QStringLiteral("/autostart");
+  QDir dir(autostartPath);
+  if (!dir.exists()) {
+    dir.mkpath(QStringLiteral("."));
+  }
+  QString desktopFilePath =
+      dir.filePath(QStringLiteral("org.kde.kjules.desktop"));
+
+  if (m_autostartEdit->isChecked()) {
+    QFile file(desktopFilePath);
+    if (file.open(QIODevice::WriteOnly)) {
+      file.write("[Desktop Entry]\n"
+                 "Name=kJules\n"
+                 "Exec=kjules --autostarted\n"
+                 "Icon=sc-apps-kjules\n"
+                 "Type=Application\n");
+      file.close();
+    }
+  } else {
+    QFile::remove(desktopFilePath);
+  }
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));

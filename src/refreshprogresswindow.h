@@ -21,13 +21,23 @@ public:
                                  QWidget *parent = nullptr);
   ~RefreshProgressWindow() override;
 
+  void addSessionIds(const QStringList &ids);
+  bool isFinishedProcess() const { return m_isFinished; }
+
+Q_SIGNALS:
+  void progressUpdated(int current, int total);
+  void progressFinished();
+
 private Q_SLOTS:
   void processNext();
   void onSessionReloaded(const QJsonObject &session);
+
   void onSessionReloadFailed(const QString &sessionId, const QString &message);
   void onGithubPullRequestInfoReceived(const QString &prUrl,
                                        const QJsonObject &info);
   void onGithubPullRequestFailed(const QString &prUrl, const QString &message);
+
+  void onSessionAutoArchived(const QString &id, const QString &reason);
 
 private:
   void finishCurrentTask(const QString &id);
@@ -44,6 +54,7 @@ private:
   QSet<QString> m_activeTasks;
   QMultiMap<QString, QString> m_activeTasksPrUrls; // prUrl -> id
   APIManager *m_apiManager;
+  bool m_isFinished;
 };
 
 #endif // REFRESHPROGRESSWINDOW_H

@@ -245,6 +245,24 @@ QueueItem QueueModel::getItem(int index) const {
   return QueueItem();
 }
 
+void QueueModel::refreshWaitItems() {
+  int start = -1;
+  for (int i = 0; i < m_items.size(); ++i) {
+    const auto &item = m_items.at(i);
+    if (item.isWaitItem && item.waitStartTime.isValid()) {
+      if (start == -1)
+        start = i;
+    } else if (start != -1) {
+      Q_EMIT dataChanged(index(start, 0), index(i - 1, 0), {StatusRole});
+      start = -1;
+    }
+  }
+  if (start != -1) {
+    Q_EMIT dataChanged(index(start, 0), index(m_items.size() - 1, 0),
+                       {StatusRole});
+  }
+}
+
 bool QueueModel::isEmpty() const { return m_items.isEmpty(); }
 
 int QueueModel::size() const { return m_items.size(); }

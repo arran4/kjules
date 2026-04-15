@@ -30,7 +30,6 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
       index.data(DraftsModel::AutomationModeRole).toString();
   QString source = index.data(DraftsModel::SourceRole).toString();
 
-  // For ErrorsModel, we might need to extract data from RequestRole
   QVariant requestVar = index.data(ErrorsModel::RequestRole);
   if (requestVar.isValid() && !requestVar.isNull()) {
     QJsonObject reqObj = requestVar.toJsonObject();

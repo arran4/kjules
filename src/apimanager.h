@@ -26,6 +26,9 @@ public:
   void setGithubToken(const QString &token);
   QString githubToken() const;
 
+  void setBaseUrl(const QString &url);
+  QString baseUrl() const;
+
   void loadApiKeyFromWallet();
   void saveApiKeyToWallet(const QString &key);
   void loadGithubTokenFromWallet();
@@ -83,6 +86,7 @@ private:
   QNetworkAccessManager *m_nam;
   QString m_apiKey;
   QString m_githubToken;
+  QString m_baseUrl;
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;
   QNetworkReply *m_listSourcesReply;

@@ -3,11 +3,13 @@
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
+#include "clickableprogressbar.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -80,7 +82,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
-      m_queuePaused(false) {
+      m_queuePaused(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
@@ -121,6 +123,70 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
+            const QString id = session.value(QStringLiteral("id")).toString();
+            const QString newState =
+                session.value(QStringLiteral("state")).toString();
+            const QString prevState = m_previousSessionStates.value(id);
+
+            if (!prevState.isEmpty() && prevState != newState) {
+              QString eventId;
+              QString title;
+              QString text;
+
+              if (newState == QStringLiteral("DONE") &&
+                  (prevState == QStringLiteral("RUNNING") ||
+                   prevState == QStringLiteral("QUEUED"))) {
+                eventId = QStringLiteral("followingSessionCompleted");
+                title = i18n("Following Session Completed");
+                text = i18n("Session %1 has completed.", id);
+              } else if (newState == QStringLiteral("RUNNING") &&
+                         prevState == QStringLiteral("QUEUED")) {
+                // Following session requires attention (this represents
+                // transitioning to in-progress) We'll use the
+                // 'followingSessionRequiresAttention' event since moving to
+                // progress often means we need to look at it
+                eventId = QStringLiteral("followingSessionRequiresAttention");
+                title = i18n("Following Session Requires Attention");
+                text = i18n("Session %1 is now running.", id);
+              } else if (newState == QStringLiteral("ERROR")) {
+                eventId = QStringLiteral("followingSessionFailed");
+                title = i18n("Following Session Failed");
+                text = i18n("Session %1 has encountered an error.", id);
+              }
+
+              if (!eventId.isEmpty()) {
+                KNotification *notification = new KNotification(
+                    eventId, KNotification::CloseOnTimeout, this);
+                notification->setTitle(title);
+                notification->setText(text);
+                connect(notification, &KNotification::closed, notification,
+                        &QObject::deleteLater);
+
+                auto actionHandler = [this]() {
+                  if (m_tabWidget) {
+                    for (int i = 0; i < m_tabWidget->count(); ++i) {
+                      if (m_tabWidget->widget(i)->objectName() ==
+                          QStringLiteral("followingTab")) {
+                        m_tabWidget->setCurrentIndex(i);
+                        break;
+                      }
+                    }
+                  }
+                };
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+                notification->setDefaultAction(i18n("View"));
+                connect(notification, &KNotification::defaultActivated, this,
+                        actionHandler);
+#else
+            auto action = notification->addDefaultAction(i18n("View"));
+            connect(action, &KNotificationAction::activated, this, actionHandler);
+#endif
+                notification->sendEvent();
+              }
+            }
+            m_previousSessionStates[id] = newState;
+
             m_sessionModel->updateSession(session);
             // We need to fetch github PR info if we have one
             for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
@@ -194,6 +260,12 @@ MainWindow::MainWindow(QWidget *parent)
   // Initial refresh
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
+}
+
+void MainWindow::setMockApi(bool useMock) {
+  if (useMock) {
+    m_apiManager->setBaseUrl(QStringLiteral("http://localhost:8080/v1alpha"));
+  }
 }
 
 MainWindow::~MainWindow() {}
@@ -539,10 +611,28 @@ void MainWindow::setupUi() {
               }
             }
             if (!idsToRefresh.isEmpty()) {
-              RefreshProgressWindow *progressWindow =
-                  new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-              progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-              progressWindow->show();
+              if (m_refreshProgressWindow &&
+                  !m_refreshProgressWindow->isFinishedProcess()) {
+                m_refreshProgressWindow->addSessionIds(idsToRefresh);
+                m_refreshProgressWindow->show();
+                m_refreshProgressWindow->raise();
+                m_refreshProgressWindow->activateWindow();
+              } else {
+                if (m_refreshProgressWindow) {
+                  m_refreshProgressWindow->deleteLater();
+                }
+                m_refreshProgressWindow =
+                    new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::progressUpdated, this,
+                        &MainWindow::onRefreshProgressUpdated);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::progressFinished, this,
+                        &MainWindow::onRefreshProgressFinished);
+
+                m_sessionRefreshProgressBar->show();
+                m_refreshProgressWindow->show();
+              }
             } else {
               updateStatus(i18n("No following sessions to refresh."));
             }
@@ -697,14 +787,14 @@ void MainWindow::setupUi() {
                       initData[QStringLiteral("sources")] = sourcesArr;
                     }
                     bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-                    NewSessionDialog dialog(m_sourceModel, m_templatesModel,
-                                            hasApiKey, this);
-                    dialog.setInitialData(initData);
-                    connect(&dialog, &NewSessionDialog::createSessionRequested,
+                    auto window = new NewSessionDialog(
+                        m_sourceModel, m_templatesModel, hasApiKey, this);
+                    window->setInitialData(initData);
+                    connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
-                    connect(&dialog, &NewSessionDialog::saveDraftRequested,
-                            this, &MainWindow::onDraftSaved);
-                    dialog.exec();
+                    connect(window, &NewSessionDialog::saveDraftRequested, this,
+                            &MainWindow::onDraftSaved);
+                    window->show();
                   });
 
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
@@ -1350,6 +1440,12 @@ void MainWindow::setupUi() {
   m_sourceProgressBar->hide();
   statusBar()->addPermanentWidget(m_sourceProgressBar);
 
+  m_sessionRefreshProgressBar = new ClickableProgressBar(this);
+  m_sessionRefreshProgressBar->hide();
+  connect(m_sessionRefreshProgressBar, &ClickableProgressBar::clicked, this,
+          &MainWindow::onSessionRefreshProgressBarClicked);
+  statusBar()->addPermanentWidget(m_sessionRefreshProgressBar);
+
   m_cancelRefreshBtn = new QPushButton(i18n("Cancel"), this);
   m_cancelRefreshBtn->hide();
   connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
@@ -1365,6 +1461,25 @@ void MainWindow::setupUi() {
 
   // Initial title update
   updateTabTitles();
+}
+
+void MainWindow::onRefreshProgressUpdated(int current, int total) {
+  m_sessionRefreshProgressBar->setMaximum(total);
+  m_sessionRefreshProgressBar->setValue(current);
+  m_sessionRefreshProgressBar->setFormat(
+      i18n("Refreshing %1/%2", qMin(current + 1, total), total));
+}
+
+void MainWindow::onRefreshProgressFinished() {
+  m_sessionRefreshProgressBar->hide();
+}
+
+void MainWindow::onSessionRefreshProgressBarClicked() {
+  if (m_refreshProgressWindow) {
+    m_refreshProgressWindow->show();
+    m_refreshProgressWindow->raise();
+    m_refreshProgressWindow->activateWindow();
+  }
 }
 
 void MainWindow::connectModelForTabUpdates(QAbstractItemModel *model) {
@@ -1386,11 +1501,18 @@ void MainWindow::checkAutoArchiveSessions() {
 
   QDateTime now = QDateTime::currentDateTimeUtc();
 
-  QList<int> rowsToArchive;
+  struct ArchiveItem {
+    int row;
+    QString id;
+    QString reason;
+  };
+  QList<ArchiveItem> itemsToArchive;
 
   for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
     QJsonObject session = m_sessionModel->getSession(i);
+    QString sessionId = session.value(QStringLiteral("id")).toString();
     bool shouldArchive = false;
+    QString archiveReason;
 
     if (autoArchiveEnabled) {
       QString createTimeStr =
@@ -1399,6 +1521,8 @@ void MainWindow::checkAutoArchiveSessions() {
           QDateTime::fromString(createTimeStr, Qt::ISODate).toUTC();
       if (createTime.isValid() && createTime.daysTo(now) >= autoArchiveDays) {
         shouldArchive = true;
+        archiveReason =
+            i18np("Older than 1 day", "Older than %1 days", autoArchiveDays);
       }
     }
 
@@ -1410,27 +1534,29 @@ void MainWindow::checkAutoArchiveSessions() {
                 QStringLiteral("merged") ||
             prInfo.value(QStringLiteral("merged_at")).isString()) {
           shouldArchive = true;
+          archiveReason = i18n("PR is merged");
         }
       }
     }
 
     if (shouldArchive) {
-      rowsToArchive.append(i);
+      itemsToArchive.append({i, sessionId, archiveReason});
     }
   }
 
-  for (int row : rowsToArchive) {
-    QJsonObject session = m_sessionModel->getSession(row);
+  for (const ArchiveItem &item : itemsToArchive) {
+    QJsonObject session = m_sessionModel->getSession(item.row);
     m_archiveModel->addSession(session);
-    m_sessionModel->removeSession(row);
+    m_sessionModel->removeSession(item.row);
+    Q_EMIT sessionAutoArchived(item.id, item.reason);
   }
 
-  if (!rowsToArchive.isEmpty()) {
+  if (!itemsToArchive.isEmpty()) {
     m_archiveModel->saveSessions();
     m_sessionModel->saveSessions();
     ActivityLogWindow::instance()->logMessage(
         i18np("Auto-archived 1 following session.",
-              "Auto-archived %1 following sessions.", rowsToArchive.size()));
+              "Auto-archived %1 following sessions.", itemsToArchive.size()));
   }
 }
 
@@ -1466,15 +1592,54 @@ void MainWindow::updateTabTitles() {
 
 void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
                                                  const QJsonObject &info) {
+  QString newPrState = info.value(QStringLiteral("state")).toString();
+
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex index = m_sessionModel->index(i, 0);
     if (m_sessionModel->data(index, SessionModel::PrUrlRole).toString() ==
         prUrl) {
       QJsonObject session = m_sessionModel->getSession(i);
+      QString id = session.value(QStringLiteral("id")).toString();
+
+      QString prevPrState = m_previousSessionPrStates.value(id);
+      if (!prevPrState.isEmpty() && prevPrState != newPrState) {
+        if (newPrState == QStringLiteral("open")) {
+          KNotification *notification =
+              new KNotification(QStringLiteral("followingSessionNewPROpened"),
+                                KNotification::CloseOnTimeout, this);
+          notification->setTitle(i18n("Following Session New PR Opened"));
+          notification->setText(i18n("Session %1 has a new PR opened.", id));
+          connect(notification, &KNotification::closed, notification,
+                  &QObject::deleteLater);
+
+          auto actionHandler = [this]() {
+            if (m_tabWidget) {
+              for (int i = 0; i < m_tabWidget->count(); ++i) {
+                if (m_tabWidget->widget(i)->objectName() ==
+                    QStringLiteral("followingTab")) {
+                  m_tabWidget->setCurrentIndex(i);
+                  break;
+                }
+              }
+            }
+          };
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+          notification->setDefaultAction(i18n("View"));
+          connect(notification, &KNotification::defaultActivated, this,
+                  actionHandler);
+#else
+          auto action = notification->addDefaultAction(i18n("View"));
+          connect(action, &KNotificationAction::activated, this, actionHandler);
+#endif
+          notification->sendEvent();
+        }
+      }
+      m_previousSessionPrStates[id] = newPrState;
+
       session[QStringLiteral("githubPrInfo")] = info;
       m_sessionModel->updateSession(session);
-      // Let's also update archive model and watch model if needed.
-      // Actually, since they all use SessionModel, we'll iterate through them.
+      // Also update archive model and watch model if needed.
     }
   }
 
@@ -1579,15 +1744,76 @@ void MainWindow::createActions() {
     window->show();
   });
 
+  m_followFromIdAction =
+      new QAction(i18n("Follow from Jules Session ID"), this);
+  actionCollection()->addAction(QStringLiteral("follow_from_id"),
+                                m_followFromIdAction);
+  connect(m_followFromIdAction, &QAction::triggered, this, [this]() {
+    FollowSessionDialog dialog(m_apiManager, this);
+    if (dialog.exec() == QDialog::Accepted) {
+      QString id = dialog.sessionId();
+      if (!id.isEmpty()) {
+        QJsonObject session = dialog.sessionData();
+        if (!session.isEmpty()) {
+          m_sessionModel->addSession(session);
+          m_sessionModel->saveSessions();
+          updateStatus(i18n("Started following session %1", id));
+        } else {
+          QMetaObject::Connection *connection = new QMetaObject::Connection;
+          *connection = connect(
+              m_apiManager, &APIManager::sessionDetailsReceived, this,
+              [this, id, connection](const QJsonObject &session) {
+                if (session.value(QStringLiteral("id")).toString() == id) {
+                  m_sessionModel->addSession(session);
+                  m_sessionModel->saveSessions();
+                  updateStatus(i18n("Started following session %1", id));
+                  disconnect(*connection);
+                  delete connection;
+                }
+              });
+
+          // Also clean up on error to prevent memory leaks
+          QMetaObject::Connection *errorConnection =
+              new QMetaObject::Connection;
+          *errorConnection = connect(m_apiManager, &APIManager::errorOccurred,
+                                     this, [connection, errorConnection]() {
+                                       disconnect(*connection);
+                                       delete connection;
+                                       disconnect(*errorConnection);
+                                       delete errorConnection;
+                                     });
+
+          m_apiManager->getSession(id);
+        }
+      }
+    }
+  });
+
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
-  actionCollection()->setDefaultShortcut(m_refreshSourcesAction,
-                                         QKeySequence(Qt::Key_F5));
   connect(m_refreshSourcesAction, &QAction::triggered, this,
           &MainWindow::refreshSources);
   actionCollection()->addAction(QStringLiteral("refresh_sources"),
                                 m_refreshSourcesAction);
+
+  QAction *refreshCurrentTabAction =
+      new QAction(i18n("Refresh Current Tab"), this);
+  actionCollection()->setDefaultShortcut(refreshCurrentTabAction,
+                                         QKeySequence(Qt::Key_F5));
+  connect(refreshCurrentTabAction, &QAction::triggered, this, [this]() {
+    if (m_tabWidget && m_tabWidget->currentWidget()) {
+      if (m_tabWidget->currentWidget()->objectName() ==
+          QStringLiteral("sourcesTab")) {
+        m_refreshSourcesAction->trigger();
+      } else if (m_tabWidget->currentWidget()->objectName() ==
+                 QStringLiteral("followingTab")) {
+        m_refreshFollowingAction->trigger();
+      }
+    }
+  });
+  actionCollection()->addAction(QStringLiteral("refresh_current_tab"),
+                                refreshCurrentTabAction);
 
   m_refreshFollowingAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
@@ -1603,10 +1829,28 @@ void MainWindow::createActions() {
       }
     }
     if (!idsToRefresh.isEmpty()) {
-      RefreshProgressWindow *progressWindow =
-          new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-      progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-      progressWindow->show();
+      if (m_refreshProgressWindow &&
+          !m_refreshProgressWindow->isFinishedProcess()) {
+        m_refreshProgressWindow->addSessionIds(idsToRefresh);
+        m_refreshProgressWindow->show();
+        m_refreshProgressWindow->raise();
+        m_refreshProgressWindow->activateWindow();
+      } else {
+        if (m_refreshProgressWindow) {
+          m_refreshProgressWindow->deleteLater();
+        }
+        m_refreshProgressWindow =
+            new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+        connect(m_refreshProgressWindow,
+                &RefreshProgressWindow::progressUpdated, this,
+                &MainWindow::onRefreshProgressUpdated);
+        connect(m_refreshProgressWindow,
+                &RefreshProgressWindow::progressFinished, this,
+                &MainWindow::onRefreshProgressFinished);
+
+        m_sessionRefreshProgressBar->show();
+        m_refreshProgressWindow->show();
+      }
     } else {
       updateStatus(i18n("No following sessions to refresh."));
     }
@@ -1723,7 +1967,7 @@ void MainWindow::createActions() {
               filteredSessions.append(session);
             }
           }
-          KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+          QMainWindow *sessionsWindow = new QMainWindow(this);
           sessionsWindow->setObjectName(
               QStringLiteral("FollowingNewSessions_%1").arg(id));
           SessionModel *localModel = new SessionModel(
@@ -1750,12 +1994,11 @@ void MainWindow::createActions() {
                           i18n("Close"), sessionsWindow);
           closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
           connect(closeAction, &QAction::triggered, sessionsWindow,
-                  &KXmlGuiWindow::close);
+                  &QMainWindow::close);
           fileMenu->addAction(closeAction);
           sessionsWindow->menuBar()->addMenu(fileMenu);
 
           sessionsWindow->setCentralWidget(listView);
-          sessionsWindow->setupGUI();
           sessionsWindow->resize(600, 400);
           sessionsWindow->show();
         }
@@ -1776,7 +2019,7 @@ void MainWindow::createActions() {
       QJsonObject rawData =
           m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
               .toJsonObject();
-      KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+      QMainWindow *rawWindow = new QMainWindow(this);
       rawWindow->setObjectName(
           QStringLiteral("RawDataWindow_%1")
               .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
@@ -1794,13 +2037,11 @@ void MainWindow::createActions() {
           new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
                       i18n("Close"), rawWindow);
       closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, rawWindow,
-              &KXmlGuiWindow::close);
+      connect(closeAction, &QAction::triggered, rawWindow, &QMainWindow::close);
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
       rawWindow->setCentralWidget(textBrowser);
-      rawWindow->setupGUI();
       rawWindow->resize(600, 400);
       rawWindow->show();
     }
@@ -2025,14 +2266,15 @@ void MainWindow::refreshSources() {
 
 void MainWindow::showNewSessionDialog() {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
-  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::showSettingsDialog() {
@@ -2054,6 +2296,9 @@ void MainWindow::loadQueueSettings() {
 }
 
 void MainWindow::updateCountdownStatus() {
+  // Inform the queue model to update display of active wait items
+  m_queueModel->refreshWaitItems();
+
   if (m_queuePaused || m_queueModel->isEmpty()) {
     return;
   }
@@ -2115,13 +2360,14 @@ void MainWindow::toggleQueueState() {
   }
 }
 
-void MainWindow::onSessionCreated(const QStringList &sources,
+void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
                                   bool requirePlanApproval) {
-  for (const QString &source : sources) {
+  for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
-    req[QStringLiteral("source")] = source;
+    req[QStringLiteral("source")] = it.key();
+    req[QStringLiteral("startingBranch")] = it.value();
     req[QStringLiteral("prompt")] = prompt;
     if (requirePlanApproval) {
       req[QStringLiteral("requirePlanApproval")] = true;
@@ -2193,7 +2439,16 @@ void MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused)
     return;
   if (m_queueModel->isEmpty()) {
-    m_queueTimer->stop();
+    if (m_queueTimer->isActive()) {
+      KNotification *notification = new KNotification(
+          QStringLiteral("queueEmpty"), KNotification::CloseOnTimeout, this);
+      notification->setTitle(i18n("Queue Empty"));
+      notification->setText(i18n("The processing queue is now empty."));
+      connect(notification, &KNotification::closed, notification,
+              &QObject::deleteLater);
+      notification->sendEvent();
+      m_queueTimer->stop();
+    }
     return;
   }
 
@@ -2250,12 +2505,12 @@ void MainWindow::onSessionCreatedResult(bool success,
   QueueItem item = m_queueModel->peek(); // Peek the item we were processing
   m_queueModel
       ->recordRun(); // Record that we completed a run successfully or not
-  m_queueModel
-      ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
   m_isProcessingQueue = false;
 
   if (success) {
     m_queueModel->dequeue(); // Pop the item only on successful state transition
+    m_queueModel
+        ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
     m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext"))
                            .toObject()
@@ -2340,17 +2595,18 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
   QJsonObject templateData = tmpl;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(templateData);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(templateData);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+  connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
-  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::onQueueActivated(const QModelIndex &index) {
@@ -2468,25 +2724,33 @@ void MainWindow::editQueueItem(int row) {
     return;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setEditMode(true);
-  dialog.setInitialData(item.requestData);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setEditMode(true);
+  window->setInitialData(item.requestData);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, row](const QStringList &sources, const QString &p,
-                      const QString &a, bool requirePlanApproval) {
-            m_queueModel->removeItem(row);
+  QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
+
+  connect(window, &NewSessionDialog::createSessionRequested,
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
+            if (persistentIndex.isValid()) {
+              m_queueModel->removeItem(persistentIndex.row());
+            }
             onSessionCreated(sources, p, a, requirePlanApproval);
           });
 
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, row](const QJsonObject &d) {
-            m_queueModel->removeItem(row);
+  connect(window, &NewSessionDialog::saveDraftRequested,
+          [this, persistentIndex](const QJsonObject &d) {
+            if (persistentIndex.isValid()) {
+              m_queueModel->removeItem(persistentIndex.row());
+            }
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Task moved to drafts."));
           });
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::convertQueueItemToDraft(int row) {
@@ -2603,49 +2867,65 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(request);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(request);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+  QPersistentModelIndex persistentIndex(index);
+
+  connect(window, &NewSessionDialog::createSessionRequested,
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
-            m_errorsModel->removeError(index.row());
+            if (persistentIndex.isValid()) {
+              m_errorsModel->removeError(persistentIndex.row());
+            }
           });
 
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, index](const QJsonObject &d) {
+  connect(window, &NewSessionDialog::saveDraftRequested,
+          [this, persistentIndex](const QJsonObject &d) {
             m_draftsModel->addDraft(d);
-            m_errorsModel->removeError(index.row());
+            if (persistentIndex.isValid()) {
+              m_errorsModel->removeError(persistentIndex.row());
+            }
             updateStatus(i18n("Draft saved and error removed."));
           });
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(draft);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(draft);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+  QPersistentModelIndex persistentIndex(index);
+
+  connect(window, &NewSessionDialog::createSessionRequested,
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
-            m_draftsModel->removeDraft(index.row());
+            if (persistentIndex.isValid()) {
+              m_draftsModel->removeDraft(persistentIndex.row());
+            }
           });
 
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, index](const QJsonObject &d) {
-            m_draftsModel->removeDraft(index.row());
+  connect(window, &NewSessionDialog::saveDraftRequested,
+          [this, persistentIndex](const QJsonObject &d) {
+            if (persistentIndex.isValid()) {
+              m_draftsModel->removeDraft(persistentIndex.row());
+            }
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Draft updated."));
           });
-  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::onSourceActivated(const QModelIndex &index) {
@@ -2671,14 +2951,15 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(initData);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(initData);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+  connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {

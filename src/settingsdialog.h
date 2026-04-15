@@ -24,6 +24,8 @@ private:
   QLineEdit *m_apiKeyEdit;
   QLineEdit *m_githubTokenEdit;
   QCheckBox *m_closeToTrayEdit;
+  QCheckBox *m_autostartEdit;
+  QCheckBox *m_autostartTrayEdit;
   QSpinBox *m_queueIntervalEdit;
   QSpinBox *m_queueBackoffEdit;
   QSpinBox *m_waitTimeEdit;
