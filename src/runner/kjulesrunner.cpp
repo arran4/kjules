@@ -30,12 +30,12 @@ void KJulesRunner::match(KRunner::RunnerContext &context) {
 void KJulesRunner::match(Plasma::RunnerContext &context) {
 #endif
   QString term = context.query();
-  if (!term.startsWith(QStringLiteral("kjules "))) {
-    return;
-  }
-
-  QString prompt = term.mid(7).trimmed();
-  if (prompt.isEmpty()) {
+  QString prompt;
+  if (term == QStringLiteral("kjules")) {
+    prompt = QString();
+  } else if (term.startsWith(QStringLiteral("kjules "))) {
+    prompt = term.mid(7).trimmed();
+  } else {
     return;
   }
 
@@ -47,7 +47,9 @@ void KJulesRunner::match(Plasma::RunnerContext &context) {
   match.setCategoryRelevance(Plasma::QueryMatch::CategoryRelevance::Highest);
 #endif
   match.setIconName(QStringLiteral("sc-apps-kjules"));
-  match.setText(i18n("Create new kjules session: %1", prompt));
+  match.setText(prompt.isEmpty()
+                    ? i18n("Create new kjules session")
+                    : i18n("Create new kjules session: %1", prompt));
   match.setData(prompt);
   match.setId(term);
   context.addMatch(match);

@@ -264,7 +264,7 @@ MainWindow::MainWindow(QWidget *parent)
   QDBusConnection::sessionBus().registerService(
       QStringLiteral("org.kde.kjules"));
   QDBusConnection::sessionBus().registerObject(QStringLiteral("/"), this,
-                                               QDBusConnection::ExportAllSlots);
+                                               QDBusConnection::ExportScriptableSlots);
 }
 
 void MainWindow::setMockApi(bool useMock) {
