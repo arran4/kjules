@@ -2397,6 +2397,12 @@ void MainWindow::processQueue() {
         m_queueModel->dequeue(); // Wait completed, remove wait item
         QTimer::singleShot(0, this, &MainWindow::processQueue);
       } else {
+        // Since m_queueTimer runs periodically (e.g. every minute), it might
+        // call processQueue repeatedly during the wait, which would stack up
+        // multiple QTimer::singleShots for the exact same end time. We only
+        // want ONE timer for the wait item. Actually, the simplest fix is to
+        // just schedule it, since the double processing bug was caused by
+        // checkAndPrependDailyLimitWait() order, not the timers.
         QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
                            &MainWindow::processQueue);
       }
@@ -2430,12 +2436,12 @@ void MainWindow::onSessionCreatedResult(bool success,
   QueueItem item = m_queueModel->peek(); // Peek the item we were processing
   m_queueModel
       ->recordRun(); // Record that we completed a run successfully or not
-  m_queueModel
-      ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
   m_isProcessingQueue = false;
 
   if (success) {
     m_queueModel->dequeue(); // Pop the item only on successful state transition
+    m_queueModel
+        ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
     m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext"))
                            .toObject()
