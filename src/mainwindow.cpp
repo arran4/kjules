@@ -36,6 +36,7 @@
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QCursor>
+#include <QDBusConnection>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
@@ -49,7 +50,6 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
-#include <QDBusConnection>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
@@ -261,8 +261,10 @@ MainWindow::MainWindow(QWidget *parent)
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 
-  QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.kjules"));
-  QDBusConnection::sessionBus().registerObject(QStringLiteral("/"), this, QDBusConnection::ExportAllSlots);
+  QDBusConnection::sessionBus().registerService(
+      QStringLiteral("org.kde.kjules"));
+  QDBusConnection::sessionBus().registerObject(QStringLiteral("/"), this,
+                                               QDBusConnection::ExportAllSlots);
 }
 
 void MainWindow::setMockApi(bool useMock) {
@@ -2226,7 +2228,7 @@ void MainWindow::showNewSessionDialogWithPrompt(const QString &prompt) {
           &MainWindow::onTemplateSaved);
 
   if (!isVisible()) {
-      show();
+    show();
   }
   activateWindow();
   raise();
