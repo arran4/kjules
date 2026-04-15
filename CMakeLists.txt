@@ -27,7 +27,6 @@ if (QT_MAJOR_VERSION STREQUAL "6")
 else()
     find_package(Qt5 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test DBus)
     find_package(KF5 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
-    find_package(KF5Runner REQUIRED)
 endif()
 
 include(KDEInstallDirs)
