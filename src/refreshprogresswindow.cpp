@@ -69,15 +69,7 @@ void RefreshProgressWindow::processNext() {
   while (m_activeTasks.size() < m_maxWorkers && m_currentIndex < m_totalCount) {
     QString id = m_queue[m_currentIndex];
 
-    // We normalize the session ID, similar to APIManager
-    QString cleanId = id;
-    if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-      cleanId = cleanId.mid(9);
-    } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-      cleanId = cleanId.mid(10);
-    } else if (cleanId.startsWith(QStringLiteral("/"))) {
-      cleanId = cleanId.mid(1);
-    }
+    QString cleanId = APIManager::cleanSessionId(id);
 
     m_activeTasks.insert(cleanId);
     m_textBrowser->append(i18n("Refreshing session %1...", cleanId));
@@ -97,7 +89,7 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
-  QString id = session.value(QStringLiteral("id")).toString();
+  QString id = APIManager::cleanSessionId(session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
     m_textBrowser->append(i18n(
         "<font color='green'>Successfully reloaded session %1.</font>", id));
@@ -152,10 +144,11 @@ void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl, cons
 }
 
 void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId, const QString &message) {
-  if (m_activeTasks.contains(sessionId)) {
+  QString cleanId = APIManager::cleanSessionId(sessionId);
+  if (m_activeTasks.contains(cleanId)) {
     m_textBrowser->append(
-        i18n("<font color='red'>Failed to reload session %1: %2</font>", sessionId,
+        i18n("<font color='red'>Failed to reload session %1: %2</font>", cleanId,
              message));
-    finishCurrentTask(sessionId);
+    finishCurrentTask(cleanId);
   }
 }

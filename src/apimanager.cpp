@@ -160,14 +160,7 @@ void APIManager::listActivities(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
+  QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
@@ -205,6 +198,22 @@ void APIManager::listActivities(const QString &sessionId) {
   });
 }
 
+QString APIManager::cleanSessionId(const QString &sessionId) {
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("session/"))) {
+    cleanId = cleanId.mid(8);
+  } else if (cleanId.startsWith(QStringLiteral("/session/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+  return cleanId;
+}
+
 void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
@@ -212,14 +221,7 @@ void APIManager::reloadSession(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
+  QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {

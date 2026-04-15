@@ -43,6 +43,7 @@ public:
   void cancelListSessions();
   void getSession(const QString &sessionId);
   void reloadSession(const QString &sessionId);
+  static QString cleanSessionId(const QString &sessionId);
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
   void fetchGithubInfo(const QString &sourceId);
