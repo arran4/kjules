@@ -308,6 +308,7 @@ void APIManager::listSources(const QString &pageToken) {
 
   if (m_listSourcesReply) {
     // If a request is already in progress, ignore new request.
+    return;
   }
 
   QString endpoint = QStringLiteral("/sources");

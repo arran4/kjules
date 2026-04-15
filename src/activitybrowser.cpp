@@ -673,7 +673,6 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 void ActivityBrowser::onCustomContextMenu(const QPoint &pos) {
   QMenu menu(this);
 
-  QString clickedId;
   QString anchor = anchorAt(pos);
 
   QAction *copyAction = menu.addAction(i18n("Copy Selected Text"));
