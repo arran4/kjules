@@ -70,6 +70,7 @@ private:
   int m_jobsSinceLastWait = 0;
   void load();
   void save();
+  void removeTrailingWaitItems();
 };
 
 #endif // QUEUEMODEL_H

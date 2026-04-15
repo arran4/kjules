@@ -147,11 +147,6 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
 }
 
 void QueueModel::enqueueItem(const QueueItem &item) {
-  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-  m_items.append(item);
-  endInsertRows();
-  m_jobsSinceLastWait++;
-
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   QString tier = config.readEntry("Tier", QStringLiteral("free"));
   int jobsBeforeWait = 3;
@@ -175,6 +170,11 @@ void QueueModel::enqueueItem(const QueueItem &item) {
     m_jobsSinceLastWait = 0;
   }
 
+  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+  m_items.append(item);
+  endInsertRows();
+  m_jobsSinceLastWait++;
+
   save();
 }
 
@@ -194,6 +194,7 @@ QueueItem QueueModel::dequeue() {
   beginRemoveRows(QModelIndex(), 0, 0);
   QueueItem item = m_items.takeFirst();
   endRemoveRows();
+  removeTrailingWaitItems();
   save();
   return item;
 }
@@ -234,6 +235,7 @@ void QueueModel::removeItem(int index) {
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
     endRemoveRows();
+    removeTrailingWaitItems();
     save();
   }
 }
@@ -288,6 +290,10 @@ void QueueModel::recordRun() {
 }
 
 void QueueModel::checkAndPrependDailyLimitWait() {
+  if (m_items.isEmpty()) {
+    return;
+  }
+
   pruneRunTimestamps();
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -376,7 +382,21 @@ void QueueModel::load() {
   for (int i = 0; i < arr.size(); ++i) {
     m_items.append(QueueItem::fromJson(arr[i].toObject()));
   }
+
+  // Clean up trailing wait items from loaded state
+  while (!m_items.isEmpty() && m_items.last().isWaitItem) {
+    m_items.removeLast();
+  }
+
   endResetModel();
+}
+
+void QueueModel::removeTrailingWaitItems() {
+  while (!m_items.isEmpty() && m_items.last().isWaitItem) {
+    beginRemoveRows(QModelIndex(), m_items.size() - 1, m_items.size() - 1);
+    m_items.removeLast();
+    endRemoveRows();
+  }
 }
 
 void QueueModel::save() {
