@@ -30,6 +30,7 @@ private Q_SLOTS:
   void processNext();
   void onSessionReloaded(const QJsonObject &session);
   void onErrorOccurred(const QString &message);
+  void onSessionAutoArchived(const QString &id, const QString &reason);
 
 private:
   QProgressBar *m_progressBar;
