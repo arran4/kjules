@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Name": "KJules",
+        "Description": "Create new kjules sessions",
+        "Icon": "sc-apps-kjules",
+        "Id": "kjulesrunner",
+        "Version": "0.1",
+        "License": "BSD"
+    }
+}

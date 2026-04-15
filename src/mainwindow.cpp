@@ -49,6 +49,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+#include <QDBusConnection>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
@@ -259,6 +260,9 @@ MainWindow::MainWindow(QWidget *parent)
   // Initial refresh
   QTimer::singleShot(0, this, [this]() { refreshSources(); });
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
+
+  QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.kjules"));
+  QDBusConnection::sessionBus().registerObject(QStringLiteral("/"), this, QDBusConnection::ExportAllSlots);
 }
 
 void MainWindow::setMockApi(bool useMock) {
@@ -2203,6 +2207,33 @@ void MainWindow::showNewSessionDialog() {
   connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
   window->show();
+}
+
+void MainWindow::showNewSessionDialogWithPrompt(const QString &prompt) {
+  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+
+  QJsonObject initialData;
+  initialData[QStringLiteral("prompt")] = prompt;
+  window->setInitialData(initialData);
+
+  connect(window, &NewSessionDialog::createSessionRequested, this,
+          &MainWindow::onSessionCreated);
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
+          &MainWindow::onDraftSaved);
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
+          &MainWindow::onTemplateSaved);
+
+  if (!isVisible()) {
+      show();
+  }
+  activateWindow();
+  raise();
+
+  window->show();
+  window->activateWindow();
+  window->raise();
 }
 
 void MainWindow::showSettingsDialog() {
