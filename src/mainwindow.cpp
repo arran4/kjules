@@ -1709,7 +1709,8 @@ void MainWindow::createActions() {
           &MainWindow::showNewSessionDialog);
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
+  KGlobalAccel::setGlobalShortcut(
+      newSessionAction, QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_J));
   actionCollection()->setDefaultShortcut(newSessionAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_N));
 
@@ -1907,7 +1908,8 @@ void MainWindow::createActions() {
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
-  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction,
+                                  QKeySequence(Qt::META | Qt::Key_J));
   actionCollection()->setDefaultShortcut(toggleWindowAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_M));
 
