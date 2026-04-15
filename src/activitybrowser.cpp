@@ -673,11 +673,6 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 void ActivityBrowser::onCustomContextMenu(const QPoint &pos) {
   QMenu menu(this);
 
-  QString clickedId; // In a real browser we might map pos to block, but
-                     // QTextBrowser doesn't make this trivial
-  // Let's just provide a generic "Copy All JSON" for now, or if they right
-  // clicked near text we can't easily extract the ID. However, QTextBrowser
-  // cursor gives us block.
   QString anchor = anchorAt(pos);
 
   QAction *copyAction = menu.addAction(i18n("Copy Selected Text"));

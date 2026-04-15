@@ -307,9 +307,8 @@ void APIManager::listSources(const QString &pageToken) {
   }
 
   if (m_listSourcesReply) {
-    // If a request is already in progress, abort it or ignore new request.
-    // For additive pagination, we might just ignore the new request if it's the
-    // same, but the UI should prevent calling this if already refreshing.
+    // If a request is already in progress, ignore new request.
+    return;
   }
 
   QString endpoint = QStringLiteral("/sources");
@@ -662,14 +661,6 @@ void APIManager::getSession(const QString &sessionId) {
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
-  // If just ID, prepend "sessions/"? API doc says name is "sessions/..."
-  // We'll assume the caller passes the full name or ID correctly or we
-  // construct it. The listSessions returns objects with "name": "sessions/..."
-  // and "id": "..."
-
-  // If we use the ID, we might need to construct the URL.
-  // The endpoint is /sessions/{sessionId}
-
   QString cleanId = sessionId;
   if (cleanId.startsWith(QStringLiteral("sessions/"))) {
     cleanId = cleanId.mid(9);

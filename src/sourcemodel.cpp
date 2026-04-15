@@ -435,7 +435,6 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
   QJsonObject source = sourceConst;
   QString id = source.value(QStringLiteral("id")).toString();
   if (id.isEmpty()) {
-    // If id isn't there, maybe it's in name
     id = source.value(QStringLiteral("name")).toString();
   }
 
@@ -676,16 +675,8 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     source[QStringLiteral("local_heat")] = std::round(heat * 10.0) / 10.0;
     if (!lastUsed.isEmpty()) {
       source[QStringLiteral("local_lastUsed")] = lastUsed;
-    } else {
-      // Only remove last used if it's currently set, but we usually want to
-      // keep it Wait, if there are 0 sessions, we might want to keep
-      // local_lastUsed to remember when it was last used. So do nothing if
-      // lastUsed is empty.
     }
 
-    // Only mark changed if we are actually modifying it. Since QJsonObject
-    // comparison can be tricky, we'll assume it changed if we process it. But
-    // wait, we should only emit if there's a difference.
     if (m_sources[i].toObject() != source) {
       m_sources[i] = source;
       changed = true;
