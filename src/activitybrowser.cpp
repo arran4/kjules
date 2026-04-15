@@ -512,6 +512,20 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity,
         html += generateRawJsonHtml(art, expanded);
       }
     }
+  } else if (activity.contains(QStringLiteral("sessionFailed"))) {
+    html += QStringLiteral("<div class='role'>") + i18n("Session Failed") +
+            orgSuffix + QStringLiteral("</div>");
+    QJsonObject sf = activity.value(QStringLiteral("sessionFailed")).toObject();
+    QString reason = sf.value(QStringLiteral("reason")).toString();
+
+    html += QStringLiteral("<div class='box' style='border: 2px solid #e74c3c; background-color: #fceceb; color: #c0392b;'>");
+    html += QStringLiteral("<b style='font-size: 1.1em;'>") + i18n("Error:") + QStringLiteral("</b><br/>");
+    if (!reason.isEmpty()) {
+      html += QStringLiteral("<pre style='white-space: pre-wrap; font-family: monospace;'>") + reason.toHtmlEscaped() + QStringLiteral("</pre>");
+    }
+    html += QStringLiteral("<div style='text-align: center; margin-top: 15px;'>");
+    html += QStringLiteral("<a class='btn' style='background-color: #e74c3c; color: white; text-decoration: none;' href='duplicate:'>") + i18n("Relog / Duplicate Session") + QStringLiteral("</a>");
+    html += QStringLiteral("</div></div>");
   } else {
     // Unknown or fallback
     QString role = activity.value(QStringLiteral("role")).toString();
@@ -541,7 +555,9 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
   QString scheme = url.scheme();
   QString path = url.path();
 
-  if (scheme == QStringLiteral("expand")) {
+  if (scheme == QStringLiteral("duplicate")) {
+    Q_EMIT duplicateRequested();
+  } else if (scheme == QStringLiteral("expand")) {
     m_expandedItems.insert(path);
     renderHtml();
   } else if (scheme == QStringLiteral("collapse")) {

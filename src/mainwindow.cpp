@@ -1672,7 +1672,7 @@ void MainWindow::setupTrayIcon() {
 
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   m_trayMenu->addAction(newSessionAction);
 
   m_trayMenu->addSeparator();
@@ -1706,7 +1706,7 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
                   i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
@@ -2264,7 +2264,7 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
-void MainWindow::showNewSessionDialog() {
+void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
@@ -2274,6 +2274,9 @@ void MainWindow::showNewSessionDialog() {
           &MainWindow::onDraftSaved);
   connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
+  if (!initialData.isEmpty()) {
+    window->setInitialData(initialData);
+  }
   window->show();
 }
 
@@ -2963,6 +2966,11 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::duplicateRequested, this,
+          [this](const QJsonObject &sessionData) {
+            showNewSessionDialog(sessionData);
+          });
+
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
             SaveDialog dlg(QStringLiteral("Template"), this);

@@ -16,6 +16,9 @@ public:
   void setActivities(const QJsonArray &activities);
   void setPrompt(const QString &prompt);
 
+Q_SIGNALS:
+  void duplicateRequested();
+
 private Q_SLOTS:
   void onAnchorClicked(const QUrl &url);
   void onCustomContextMenu(const QPoint &pos);
