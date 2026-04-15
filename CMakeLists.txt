@@ -82,6 +82,8 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
+target_compile_definitions(kjules PRIVATE KJULES_VERSION="${PROJECT_VERSION}")
+
 if (QT_MAJOR_VERSION STREQUAL "6")
     target_link_libraries(kjules
         Qt6::Core
