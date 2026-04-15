@@ -384,13 +384,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       hideSelectedSourcesAction, &QAction::toggled, this,
       [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
 
-  QAction *jumpToPromptAction =
-      actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
-  jumpToPromptAction->setText(tr("Jump to &Prompt"));
-  actionCollection()->setDefaultShortcut(jumpToPromptAction,
-                                         QKeySequence(Qt::ALT | Qt::Key_P));
-  connect(jumpToPromptAction, &QAction::triggered, m_promptEdit, qOverload<>(&QWidget::setFocus));
-
   // Sync checkboxes with actions
   QAction *requirePlanApprovalAction =
       actionCollection()->addAction(QStringLiteral("require_plan_approval"));
