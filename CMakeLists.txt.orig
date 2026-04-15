@@ -40,7 +40,8 @@ option(USE_MOCK_API "Build with mock API support" OFF)
 add_definitions(-DQT_NO_CAST_FROM_ASCII
                 -DQT_NO_CAST_TO_ASCII
                 -DQT_NO_URL_CAST_FROM_STRING
-                -DQT_NO_KEYWORDS)
+                -DQT_NO_KEYWORDS
+                -DKJULES_VERSION=\"${PROJECT_VERSION}\")
 
 if(USE_MOCK_API)
     add_definitions(-DUSE_MOCK_API)
@@ -81,8 +82,6 @@ set(kjules_SRCS
 )
 
 add_executable(kjules ${kjules_SRCS})
-
-target_compile_definitions(kjules PRIVATE KJULES_VERSION="${PROJECT_VERSION}")
 
 if (QT_MAJOR_VERSION STREQUAL "6")
     target_link_libraries(kjules
