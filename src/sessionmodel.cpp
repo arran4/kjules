@@ -49,6 +49,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
       obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
 
   data.isFavourite = obj.value(QStringLiteral("local_favourite")).toBool();
+  data.localNotes = obj.value(QStringLiteral("local_notes")).toString();
 
   data.hasChangeSet = false;
   QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
@@ -179,6 +180,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.prLabels;
   case FavouriteRole:
     return session.isFavourite;
+  case LocalNotesRole:
+    return session.localNotes;
   default:
     return QVariant();
   }
@@ -243,6 +246,17 @@ void SessionModel::toggleFavourite(const QString &id) {
   }
 }
 
+void SessionModel::setLocalNotes(const QString &id, const QString &notes) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    data.localNotes = notes;
+    data.rawObject[QStringLiteral("local_notes")] = notes;
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
+}
+
 void SessionModel::setSessions(const QJsonArray &sessions) {
   beginResetModel();
   m_sessions.clear();
@@ -269,11 +283,14 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
     QString id = obj.value(QStringLiteral("id")).toString();
     if (m_idToIndex.contains(id)) {
       int row = m_idToIndex.value(id);
-      // Preserve local_favourite
+      // Preserve local_favourite and local_notes
       bool isFav = m_sessions[row].isFavourite;
+      QString localNotes = m_sessions[row].localNotes;
       SessionData data = parseSessionData(obj);
       data.isFavourite = isFav;
       data.rawObject[QStringLiteral("local_favourite")] = isFav;
+      data.localNotes = localNotes;
+      data.rawObject[QStringLiteral("local_notes")] = localNotes;
       data.id = id; // Ensure ID matches
       m_sessions[row] = data;
       Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
@@ -318,11 +335,14 @@ void SessionModel::updateSession(const QJsonObject &session) {
   QString id = sessionWithRefresh.value(QStringLiteral("id")).toString();
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
-    // Preserve local_favourite
+    // Preserve local_favourite and local_notes
     bool isFav = m_sessions[i].isFavourite;
+    QString localNotes = m_sessions[i].localNotes;
     SessionData data = parseSessionData(sessionWithRefresh);
     data.isFavourite = isFav;
     data.rawObject[QStringLiteral("local_favourite")] = isFav;
+    data.localNotes = localNotes;
+    data.rawObject[QStringLiteral("local_notes")] = localNotes;
     data.id = id; // Ensure ID matches
     m_sessions[i] = data;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));

@@ -19,6 +19,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
+#include <QTextEdit>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -408,6 +409,19 @@ void SessionWindow::renderDetailsAndDiff() {
                  QStringLiteral("</td></tr>");
   detailsHtml += QStringLiteral("</table>");
 
+  QString localNotes =
+      m_sessionData.value(QStringLiteral("local_notes")).toString();
+  if (!localNotes.isEmpty()) {
+    QString snippet = localNotes;
+    if (snippet.length() > 200) {
+      snippet = snippet.left(200) + QStringLiteral("...");
+    }
+    detailsHtml += QStringLiteral("<hr/><h3>") + i18n("Notes") +
+                   QStringLiteral("</h3><p style=\"white-space: pre-wrap; "
+                                  "font-family: sans-serif;\">") +
+                   snippet.toHtmlEscaped() + QStringLiteral("</p>");
+  }
+
   QJsonArray outputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
   QString diffText;
   for (int i = 0; i < outputs.size(); ++i) {
@@ -536,6 +550,12 @@ void SessionWindow::renderDetailsAndDiff() {
   }
 }
 
+void SessionWindow::showNotesTab() {
+  if (m_tabWidget && m_notesTabWidget) {
+    m_tabWidget->setCurrentWidget(m_notesTabWidget);
+  }
+}
+
 void SessionWindow::duplicateSession() {
   QString prompt = m_sessionData.value(QStringLiteral("prompt")).toString();
   QString source = m_sessionData.value(QStringLiteral("sourceContext"))
@@ -577,6 +597,26 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_activityBrowser = new ActivityBrowser(this);
   m_textBrowser = new QTextBrowser(this);
 
+  m_notesTabWidget = new QWidget(this);
+  QVBoxLayout *notesLayout = new QVBoxLayout(m_notesTabWidget);
+  m_notesEdit = new QTextEdit(this);
+  m_notesEdit->setPlainText(
+      sessionData.value(QStringLiteral("local_notes")).toString());
+  QPushButton *saveNotesButton = new QPushButton(i18n("Save Notes"), this);
+  notesLayout->addWidget(m_notesEdit);
+  notesLayout->addWidget(saveNotesButton);
+
+  connect(saveNotesButton, &QPushButton::clicked, this, [this]() {
+    QString notes = m_notesEdit->toPlainText();
+    m_sessionData[QStringLiteral("local_notes")] = notes;
+    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    Q_EMIT notesChanged(id, notes);
+    renderDetailsAndDiff();
+    if (m_statusLabel) {
+      m_statusLabel->setText(i18n("Notes saved."));
+    }
+  });
+
   m_activityTabWidget = new QWidget(this);
   QVBoxLayout *activityLayout = new QVBoxLayout(m_activityTabWidget);
   activityLayout->addWidget(m_activityBrowser);
@@ -610,6 +650,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));
   m_tabWidget->addTab(m_rawActivitiesBrowser, i18n("Raw Activities"));
   m_tabWidget->addTab(m_textBrowser, i18n("Raw JSON"));
+  m_tabWidget->addTab(m_notesTabWidget, i18n("Notes"));
 
   QString title = sessionData.value(QStringLiteral("title")).toString();
   QString sessionId = sessionData.value(QStringLiteral("id")).toString();

@@ -5,6 +5,7 @@
 #include <QJsonObject>
 
 class QTextBrowser;
+class QTextEdit;
 class QTabWidget;
 class QLabel;
 class QTimer;
@@ -31,6 +32,10 @@ private:
   void updateAutoRefresh();
   void renderDetailsAndDiff();
 
+public:
+  void showNotesTab();
+
+private:
   QJsonObject m_sessionData;
   APIManager *m_apiManager;
   bool m_isManaged;
@@ -46,6 +51,9 @@ private:
   QTextBrowser *m_rawActivitiesBrowser;
   QTextBrowser *m_textBrowser;
 
+  QWidget *m_notesTabWidget;
+  QTextEdit *m_notesEdit;
+
   QWidget *m_activityTabWidget;
   class QLineEdit *m_chatInput;
 
@@ -55,6 +63,7 @@ Q_SIGNALS:
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
   void refreshRequested(const QString &id);
+  void notesChanged(const QString &id, const QString &notes);
 };
 
 #endif // SESSIONWINDOW_H
