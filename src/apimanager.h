@@ -46,6 +46,7 @@ public:
   void cancelListSessions();
   void getSession(const QString &sessionId);
   void reloadSession(const QString &sessionId);
+  void approveSession(const QString &sessionId);
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
   void fetchGithubInfo(const QString &sourceId);
@@ -63,6 +64,7 @@ Q_SIGNALS:
                         const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
   void sessionReloaded(const QJsonObject &session);
+  void sessionApproved(const QJsonObject &session);
   void sourceDetailsReceived(const QJsonObject &source);
   void activitiesReceived(const QString &sessionId,
                           const QJsonArray &activities);

@@ -43,6 +43,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
   }
 
   data.state = obj.value(QStringLiteral("state")).toString();
+
   data.updateTime = QDateTime::fromString(
       obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
   data.createTime = QDateTime::fromString(
@@ -83,6 +84,11 @@ SessionData parseSessionData(const QJsonObject &obj) {
     }
   }
 
+  if (data.state == QStringLiteral("AWAITING_APPROVAL") ||
+     (data.state == QStringLiteral("COMPLETED") && data.hasChangeSet && data.prUrl.isEmpty())) {
+    data.state = QStringLiteral("Awaiting User");
+  }
+
   data.rawObject = obj;
   return data;
 }
@@ -114,7 +120,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ColFavourite:
       return session.isFavourite ? i18n("Yes") : i18n("No");
     case ColState:
-      return session.state;
+      return session.state == QStringLiteral("Awaiting User") ? i18n("Awaiting User") : session.state;
     case ColChangeSet:
       return session.hasChangeSet ? i18n("has changes set") : QString();
     case ColPR:

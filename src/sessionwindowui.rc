@@ -10,6 +10,8 @@
       <Action name="duplicate_session"/>
       <Action name="save_template"/>
       <Separator/>
+      <Action name="approve_session"/>
+      <Separator/>
       <Action name="watch_session"/>
       <Action name="archive_session"/>
       <Action name="delete_session"/>
@@ -27,6 +29,8 @@
   <ToolBar name="mainToolBar"><text>Main Toolbar</text>
     <Action name="refresh_session"/>
     <Action name="duplicate_session"/>
+    <Separator/>
+    <Action name="approve_session"/>
     <Separator/>
     <Action name="close_window"/>
   </ToolBar>

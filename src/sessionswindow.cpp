@@ -471,6 +471,26 @@ void SessionsWindow::setupUi() {
             }
           }
 
+          bool allAwaitingUser = true;
+          for (const QModelIndex &idx : selectedRows) {
+            QString state = m_proxyModel->data(idx, SessionModel::StateRole).toString();
+            if (state != QStringLiteral("Awaiting User")) {
+              allAwaitingUser = false;
+              break;
+            }
+          }
+
+          if (allAwaitingUser) {
+            QAction *approveAction = menu.addAction(i18n("Approve"));
+            connect(approveAction, &QAction::triggered, [this, selectedRows]() {
+              for (const QModelIndex &idx : selectedRows) {
+                QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+                m_apiManager->approveSession(id);
+              }
+            });
+            menu.addSeparator();
+          }
+
           QAction *watchAction =
               menu.addAction(QIcon::fromTheme(QStringLiteral("visibility")),
                              i18n("Follow Session"));

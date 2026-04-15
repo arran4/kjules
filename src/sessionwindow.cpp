@@ -128,6 +128,38 @@ void SessionWindow::setupActions() {
   actionCollection()->addAction(QStringLiteral("save_template"),
                                 saveTemplateAction);
 
+  QAction *approveAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("dialog-ok-apply")),
+                  i18n("Approve Session"), this);
+  connect(approveAction, &QAction::triggered, this, [this]() {
+    m_apiManager->approveSession(
+        m_sessionData.value(QStringLiteral("id")).toString());
+  });
+  actionCollection()->addAction(QStringLiteral("approve_session"),
+                                approveAction);
+
+  QString sessionState = m_sessionData.value(QStringLiteral("state")).toString();
+  bool sessionHasChangeSet = false;
+  QString sessionPrUrl;
+  QJsonArray sessionOutputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
+  for (int i = 0; i < sessionOutputs.size(); ++i) {
+    QJsonObject outputObj = sessionOutputs[i].toObject();
+    if (outputObj.contains(QStringLiteral("changeSet"))) {
+      sessionHasChangeSet = true;
+    }
+    if (outputObj.contains(QStringLiteral("pullRequest"))) {
+      QJsonObject prObj = outputObj.value(QStringLiteral("pullRequest")).toObject();
+      sessionPrUrl = prObj.value(QStringLiteral("url")).toString();
+    }
+  }
+
+  if (sessionState == QStringLiteral("AWAITING_APPROVAL") ||
+      (sessionState == QStringLiteral("COMPLETED") && sessionHasChangeSet && sessionPrUrl.isEmpty())) {
+    approveAction->setEnabled(true);
+  } else {
+    approveAction->setEnabled(false);
+  }
+
   QAction *watchAction =
       new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
                   i18n("Follow Session"), this);

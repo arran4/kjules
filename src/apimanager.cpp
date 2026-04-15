@@ -654,6 +654,56 @@ void APIManager::cancelListSessions() {
   }
 }
 
+void APIManager::approveSession(const QString &sessionId) {
+  if (!canConnect()) {
+    Q_EMIT errorOccurred(QStringLiteral(
+        "Cannot approve session: No token or previous failure."));
+    return;
+  }
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+
+  if (cleanId.contains(QStringLiteral("..")) ||
+      cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    return;
+  }
+
+  QString endpoint = QStringLiteral("/sessions/") + cleanId + QStringLiteral(":approvePlan");
+  QNetworkRequest request = createRequest(endpoint);
+
+  QJsonObject emptyObj;
+  QJsonDocument emptyDoc(emptyObj);
+  QByteArray emptyData = emptyDoc.toJson();
+
+  QNetworkReply *reply = m_nam->post(request, emptyData);
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      Q_EMIT sessionApproved(doc.object());
+      Q_EMIT sessionReloaded(doc.object());
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_tokenFailed = true;
+      }
+      QByteArray responseData = reply->readAll();
+      QString errorMsg = QStringLiteral("Failed to approve session: ") + reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData));
+    }
+    reply->deleteLater();
+  });
+}
+
 void APIManager::getSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
