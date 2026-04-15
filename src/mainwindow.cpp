@@ -2286,6 +2286,9 @@ void MainWindow::loadQueueSettings() {
 }
 
 void MainWindow::updateCountdownStatus() {
+  // Inform the queue model to update display of active wait items
+  m_queueModel->refreshWaitItems();
+
   if (m_queuePaused || m_queueModel->isEmpty()) {
     return;
   }

@@ -59,6 +59,7 @@ public:
   bool isEmpty() const;
   void clear();
   int size() const;
+  void refreshWaitItems();
 
   QueueItem getItem(int index) const;
 
