@@ -2224,9 +2224,6 @@ void MainWindow::loadQueueSettings() {
 }
 
 void MainWindow::updateCountdownStatus() {
-  // Inform the queue model to update display of active wait items
-  m_queueModel->refreshWaitItems();
-
   if (m_queuePaused || m_queueModel->isEmpty()) {
     return;
   }
@@ -2265,6 +2262,9 @@ void MainWindow::updateCountdownStatus() {
     }
     updateStatus(i18n("Next attempt in %1...", timeStr));
   }
+
+  // Inform the queue model to update display of active wait items
+  m_queueModel->refreshWaitItems();
 }
 
 void MainWindow::toggleQueueState() {
