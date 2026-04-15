@@ -388,6 +388,16 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity,
                 .toHtmlEscaped() +
             QStringLiteral("</div>");
 
+  } else if (activity.contains(QStringLiteral("sessionFailed"))) {
+    html += QStringLiteral("<div class='role'>") + i18n("Session Failed") +
+            orgSuffix + QStringLiteral("</div>");
+    QJsonObject sf = activity.value(QStringLiteral("sessionFailed")).toObject();
+    QString reason = sf.value(QStringLiteral("reason")).toString();
+    if (!reason.isEmpty()) {
+      html += QStringLiteral("<div class='content'>") +
+              reason.toHtmlEscaped() + QStringLiteral("</div>");
+    }
+
   } else if (activity.contains(QStringLiteral("sessionCompleted"))) {
     html += QStringLiteral("<div class='role'>") + i18n("Session Completed") +
             orgSuffix + QStringLiteral("</div>");
