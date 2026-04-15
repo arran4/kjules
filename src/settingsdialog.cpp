@@ -57,6 +57,11 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
   formLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
 
+  m_refreshWorkersEdit = new QSpinBox(this);
+  m_refreshWorkersEdit->setRange(1, 100);
+  m_refreshWorkersEdit->setValue(config.readEntry("RefreshWorkers", 3));
+  formLayout->addRow(i18n("Concurrent refresh workers:"), m_refreshWorkersEdit);
+
   m_tierComboBox = new QComboBox(this);
   m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
   m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
@@ -147,6 +152,7 @@ void SettingsDialog::onSave() {
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
+  config.writeEntry("RefreshWorkers", m_refreshWorkersEdit->value());
   config.sync();
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(),

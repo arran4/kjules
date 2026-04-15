@@ -231,7 +231,7 @@ void APIManager::reloadSession(const QString &sessionId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -242,9 +242,9 @@ void APIManager::reloadSession(const QString &sessionId) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(
-          QStringLiteral("Failed to reload session details: ") +
-          reply->errorString());
+      QString errorMsg = QStringLiteral("Failed to reload session details: ") + reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT sessionReloadFailed(sessionId, errorMsg);
     }
     reply->deleteLater();
   });
@@ -416,7 +416,11 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isObject()) {
         Q_EMIT githubPullRequestInfoReceived(prUrl, doc.object());
+      } else {
+        Q_EMIT githubPullRequestFailed(prUrl, QStringLiteral("Invalid JSON response"));
       }
+    } else {
+      Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
     }
   });
 }
