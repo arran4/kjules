@@ -11,7 +11,7 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
                                              APIManager *apiManager,
                                              QWidget *parent)
     : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()),
-      m_currentIndex(0), m_apiManager(apiManager) {
+      m_currentIndex(0), m_apiManager(apiManager), m_isFinished(false) {
   setWindowTitle(i18n("Refresh Progress"));
   resize(600, 400);
 
@@ -42,18 +42,38 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
 
 RefreshProgressWindow::~RefreshProgressWindow() {}
 
+void RefreshProgressWindow::addSessionIds(const QStringList &ids) {
+  m_queue.append(ids);
+  m_totalCount += ids.size();
+  m_progressBar->setMaximum(m_totalCount);
+
+  // If we were finished, we need to restart processing
+  if (m_isFinished && !ids.isEmpty()) {
+    m_isFinished = false;
+    m_closeButton->setEnabled(false);
+    QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
+                              Qt::QueuedConnection);
+  }
+}
+
 void RefreshProgressWindow::processNext() {
+  Q_EMIT progressUpdated(m_currentIndex, m_totalCount);
+
   if (!m_apiManager->canConnect()) {
     m_textBrowser->append(i18n("<b>Error:</b> Cannot refresh: No token or "
                                "previous failure. Processing stopped."));
     m_progressBar->setValue(m_totalCount); // Force completion
     m_closeButton->setEnabled(true);
+    m_isFinished = true;
+    Q_EMIT progressFinished();
     return;
   }
 
   if (m_currentIndex >= m_totalCount) {
     m_textBrowser->append(i18n("<b>Finished.</b>"));
     m_closeButton->setEnabled(true);
+    m_isFinished = true;
+    Q_EMIT progressFinished();
     return;
   }
 
