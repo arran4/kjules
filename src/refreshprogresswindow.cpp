@@ -2,8 +2,8 @@
 #include "apimanager.h"
 
 #include <KConfigGroup>
-#include <KSharedConfig>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTextBrowser>
@@ -81,7 +81,16 @@ void RefreshProgressWindow::processNext() {
 void RefreshProgressWindow::finishCurrentTask(const QString &id) {
   if (m_activeTasks.contains(id)) {
     m_activeTasks.remove(id);
-    m_activeTasksPrUrls.remove(id);
+
+    // Remove the id from the multimap
+    QMutableMapIterator<QString, QString> i(m_activeTasksPrUrls);
+    while (i.hasNext()) {
+      i.next();
+      if (i.value() == id) {
+        i.remove();
+      }
+    }
+
     m_processedCount++;
     m_progressBar->setValue(m_processedCount);
     processNext();
@@ -89,20 +98,22 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
-  QString id = APIManager::cleanSessionId(session.value(QStringLiteral("id")).toString());
+  QString id = APIManager::cleanSessionId(
+      session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
     m_textBrowser->append(i18n(
         "<font color='green'>Successfully reloaded session %1.</font>", id));
 
     QString prUrl;
     if (session.contains(QStringLiteral("pullRequest"))) {
-      QJsonObject prObj = session.value(QStringLiteral("pullRequest")).toObject();
+      QJsonObject prObj =
+          session.value(QStringLiteral("pullRequest")).toObject();
       prUrl = prObj.value(QStringLiteral("url")).toString();
     }
 
     if (!prUrl.isEmpty()) {
       m_textBrowser->append(i18n("Fetching GitHub PR info for %1...", id));
-      m_activeTasksPrUrls.insert(id, prUrl);
+      m_activeTasksPrUrls.insert(prUrl, id);
       m_apiManager->fetchGithubPullRequest(prUrl);
     } else {
       finishCurrentTask(id);
@@ -110,45 +121,35 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
   }
 }
 
-void RefreshProgressWindow::onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info) {
+void RefreshProgressWindow::onGithubPullRequestInfoReceived(
+    const QString &prUrl, const QJsonObject &info) {
   Q_UNUSED(info);
-  QString idToFinish;
-  for (auto it = m_activeTasksPrUrls.begin(); it != m_activeTasksPrUrls.end(); ++it) {
-    if (it.value() == prUrl) {
-      idToFinish = it.key();
-      break;
-    }
-  }
-
-  if (!idToFinish.isEmpty()) {
+  QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
+  for (const QString &id : idsToFinish) {
     m_textBrowser->append(i18n(
-        "<font color='green'>Successfully fetched PR info for %1.</font>", idToFinish));
-    finishCurrentTask(idToFinish);
+        "<font color='green'>Successfully fetched PR info for %1.</font>", id));
+    finishCurrentTask(id);
   }
 }
 
-void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl, const QString &message) {
-  QString idToFinish;
-  for (auto it = m_activeTasksPrUrls.begin(); it != m_activeTasksPrUrls.end(); ++it) {
-    if (it.value() == prUrl) {
-      idToFinish = it.key();
-      break;
-    }
-  }
-
-  if (!idToFinish.isEmpty()) {
-    m_textBrowser->append(i18n(
-        "<font color='orange'>GitHub fetch failed for %1: %2</font>", idToFinish, message));
-    finishCurrentTask(idToFinish);
+void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl,
+                                                      const QString &message) {
+  QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
+  for (const QString &id : idsToFinish) {
+    m_textBrowser->append(
+        i18n("<font color='orange'>GitHub fetch failed for %1: %2</font>", id,
+             message));
+    finishCurrentTask(id);
   }
 }
 
-void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId, const QString &message) {
+void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId,
+                                                  const QString &message) {
   QString cleanId = APIManager::cleanSessionId(sessionId);
   if (m_activeTasks.contains(cleanId)) {
     m_textBrowser->append(
-        i18n("<font color='red'>Failed to reload session %1: %2</font>", cleanId,
-             message));
+        i18n("<font color='red'>Failed to reload session %1: %2</font>",
+             cleanId, message));
     finishCurrentTask(cleanId);
   }
 }

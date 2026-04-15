@@ -3,9 +3,9 @@
 
 #include <QDialog>
 #include <QJsonObject>
-#include <QStringList>
-#include <QSet>
 #include <QMap>
+#include <QSet>
+#include <QStringList>
 
 class QProgressBar;
 class QTextBrowser;
@@ -25,7 +25,8 @@ private Q_SLOTS:
   void processNext();
   void onSessionReloaded(const QJsonObject &session);
   void onSessionReloadFailed(const QString &sessionId, const QString &message);
-  void onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
+  void onGithubPullRequestInfoReceived(const QString &prUrl,
+                                       const QJsonObject &info);
   void onGithubPullRequestFailed(const QString &prUrl, const QString &message);
 
 private:
@@ -41,7 +42,7 @@ private:
   int m_processedCount;
   int m_maxWorkers;
   QSet<QString> m_activeTasks;
-  QMap<QString, QString> m_activeTasksPrUrls; // id -> prUrl
+  QMultiMap<QString, QString> m_activeTasksPrUrls; // prUrl -> id
   APIManager *m_apiManager;
 };
 

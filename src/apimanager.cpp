@@ -244,7 +244,8 @@ void APIManager::reloadSession(const QString &sessionId) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      QString errorMsg = QStringLiteral("Failed to reload session details: ") + reply->errorString();
+      QString errorMsg = QStringLiteral("Failed to reload session details: ") +
+                         reply->errorString();
       Q_EMIT errorOccurred(errorMsg);
       Q_EMIT sessionReloadFailed(sessionId, errorMsg);
     }
@@ -419,7 +420,8 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
       if (doc.isObject()) {
         Q_EMIT githubPullRequestInfoReceived(prUrl, doc.object());
       } else {
-        Q_EMIT githubPullRequestFailed(prUrl, QStringLiteral("Invalid JSON response"));
+        Q_EMIT githubPullRequestFailed(prUrl,
+                                       QStringLiteral("Invalid JSON response"));
       }
     } else {
       Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
