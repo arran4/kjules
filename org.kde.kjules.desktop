@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=kJules
-Comment=A powerful KDE native desktop client for tracking and managing GitHub tasks
+Comment=A powerful KDE native desktop client for tracking and managing Jules tasks and sessions
 Exec=kjules
 Icon=sc-apps-kjules
 Type=Application
