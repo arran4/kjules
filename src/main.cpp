@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
   KLocalizedString::setApplicationDomain("kjules");
 
   KAboutData aboutData(
-      QStringLiteral("kjules"), i18n("kJules"), QStringLiteral("0.1.0"),
+      QStringLiteral("kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
       i18n(
           "A KDE native desktop client for tracking and managing GitHub tasks"),
       KAboutLicense::GPL, i18n("(c) 2024"),
