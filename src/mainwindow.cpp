@@ -2633,46 +2633,25 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
 
   QMenu menu;
 
+  QAction *errorAction = nullptr;
+  QAction *editAction = nullptr;
+  QAction *draftAction = nullptr;
+  QAction *copyTemplateAction = nullptr;
+  QAction *sendAction = nullptr;
+
   if (item.isWaitItem) {
     QMenu *modifyTimeMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("clock")), i18n("Modify Time"));
 
-    QAction *reduce10Action = modifyTimeMenu->addAction(i18n("Reduce by 10%"));
-    QAction *reduce50Action = modifyTimeMenu->addAction(i18n("Reduce by 50%"));
-    QAction *reduce90Action = modifyTimeMenu->addAction(i18n("Reduce by 90%"));
+    modifyTimeMenu->addAction(i18n("Reduce by 10%"))->setData(0.9);
+    modifyTimeMenu->addAction(i18n("Reduce by 50%"))->setData(0.5);
+    modifyTimeMenu->addAction(i18n("Reduce by 90%"))->setData(0.1);
     modifyTimeMenu->addSeparator();
-    QAction *increase10Action = modifyTimeMenu->addAction(i18n("Increase by 10%"));
-    QAction *increase50Action = modifyTimeMenu->addAction(i18n("Increase by 50%"));
-    QAction *increase90Action = modifyTimeMenu->addAction(i18n("Increase by 90%"));
+    modifyTimeMenu->addAction(i18n("Increase by 10%"))->setData(1.1);
+    modifyTimeMenu->addAction(i18n("Increase by 50%"))->setData(1.5);
+    modifyTimeMenu->addAction(i18n("Increase by 90%"))->setData(1.9);
 
     menu.addSeparator();
-    QAction *deleteAction = menu.addAction(
-        QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
-
-    QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
-
-    if (selected == deleteAction) {
-      if (m_deleteQueueItemsLambda) {
-        m_deleteQueueItemsLambda();
-      }
-    } else if (selected) {
-      double multiplier = 1.0;
-      if (selected == reduce10Action) multiplier = 0.9;
-      else if (selected == reduce50Action) multiplier = 0.5;
-      else if (selected == reduce90Action) multiplier = 0.1;
-      else if (selected == increase10Action) multiplier = 1.1;
-      else if (selected == increase50Action) multiplier = 1.5;
-      else if (selected == increase90Action) multiplier = 1.9;
-
-      if (multiplier != 1.0) {
-        qint64 elapsed = item.waitStartTime.isValid() ? item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc()) : 0;
-        qint64 remaining = qMax(qint64(0), item.waitSeconds - elapsed);
-        qint64 newRemaining = remaining * multiplier;
-        item.waitSeconds = elapsed + newRemaining;
-        m_queueModel->updateItem(row, item);
-      }
-    }
   } else {
-    QAction *errorAction = nullptr;
     if (item.errorCount > 0) {
       errorAction =
           menu.addAction(QIcon::fromTheme(QStringLiteral("dialog-error")),
@@ -2680,30 +2659,50 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       menu.addSeparator();
     }
 
-    QAction *editAction = menu.addAction(
+    editAction = menu.addAction(
         QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
-    QAction *deleteAction = menu.addAction(
-        QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
-    QAction *draftAction =
+  }
+
+  QAction *deleteAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
+
+  if (!item.isWaitItem) {
+    draftAction =
         menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
                        i18n("Convert to Draft"));
-    QAction *copyTemplateAction = menu.addAction(
+    copyTemplateAction = menu.addAction(
         QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
-    QAction *sendAction = menu.addAction(
+    sendAction = menu.addAction(
         QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
+  }
 
-    QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
+  QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
+
+  if (!selected) return;
+
+  if (selected == deleteAction) {
+    if (m_deleteQueueItemsLambda) {
+      m_deleteQueueItemsLambda();
+    }
+  } else if (item.isWaitItem) {
+    double multiplier = selected->data().toDouble();
+    if (multiplier == 0.0) multiplier = 1.0;
+
+    if (multiplier != 1.0) {
+      qint64 elapsed = item.waitStartTime.isValid() ? item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc()) : 0;
+      qint64 remaining = qMax(qint64(0), item.waitSeconds - elapsed);
+      qint64 newRemaining = remaining * multiplier;
+      item.waitSeconds = static_cast<int>(elapsed + newRemaining);
+      m_queueModel->updateItem(row, item);
+    }
+  } else {
     if (errorAction && selected == errorAction) {
       showErrorDetails(row);
-    } else if (selected == editAction) {
+    } else if (editAction && selected == editAction) {
       editQueueItem(row);
-    } else if (selected == deleteAction) {
-      if (m_deleteQueueItemsLambda) {
-        m_deleteQueueItemsLambda();
-      }
-    } else if (selected == draftAction) {
+    } else if (draftAction && selected == draftAction) {
       convertQueueItemToDraft(row);
-    } else if (selected == copyTemplateAction) {
+    } else if (copyTemplateAction && selected == copyTemplateAction) {
       SaveDialog dlg(QStringLiteral("Template"), this);
       if (dlg.exec() == QDialog::Accepted) {
         QJsonObject data = item.requestData;
@@ -2712,7 +2711,7 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
         m_templatesModel->addTemplate(data);
         updateStatus(i18n("Template created from queued item."));
       }
-    } else if (selected == sendAction) {
+    } else if (sendAction && selected == sendAction) {
       sendQueueItemNow(row);
     }
   }
