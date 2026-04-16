@@ -392,9 +392,14 @@ void QueueModel::load() {
 }
 
 void QueueModel::removeTrailingWaitItems() {
-  while (!m_items.isEmpty() && m_items.last().isWaitItem) {
-    beginRemoveRows(QModelIndex(), m_items.size() - 1, m_items.size() - 1);
-    m_items.removeLast();
+  int firstWaitToRemove = m_items.size();
+  while (firstWaitToRemove > 0 && m_items.at(firstWaitToRemove - 1).isWaitItem) {
+    firstWaitToRemove--;
+  }
+
+  if (firstWaitToRemove < m_items.size()) {
+    beginRemoveRows(QModelIndex(), firstWaitToRemove, m_items.size() - 1);
+    m_items.remove(firstWaitToRemove, m_items.size() - firstWaitToRemove);
     endRemoveRows();
   }
 }
