@@ -1820,6 +1820,7 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Following"), this);
   connect(m_refreshFollowingAction, &QAction::triggered, this, [this]() {
+    m_sessionModel->clearAllUnreadChanges();
     QStringList idsToRefresh;
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
@@ -3029,9 +3030,10 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
+  QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+  m_sessionModel->clearUnreadChanges(id);
+
   if (sessionData.isEmpty()) {
-    QString id =
-        m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
