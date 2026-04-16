@@ -1,12 +1,14 @@
 # kjules
 
-A powerful KDE6/Qt6 native desktop client written in C++ for tracking and managing GitHub tasks, PRs, and background processing sessions. Originally known as Kgithub-notify, **kjules** gives you a fast, native desktop experience for interacting with your GitHub workflow.
+A powerful KDE6/Qt6 native desktop client written in C++ for tracking and managing Jules tasks and background processing sessions. **kjules** gives you a fast, native desktop experience for interacting with your Jules workflow.
 
 When you click on a notification or open the application, it presents you with a comprehensive desktop-native version of:
-*   [GitHub Notifications](https://github.com/notifications)
-*   [GitHub Pull Requests](https://github.com/pulls)
-*   The GitHub Feed and Activity Wall
-*   Explore
+*   Drafts (unsubmitted)
+*   Queue (processing)
+*   Errors (failed, pending retry)
+*   Following (active managed sessions)
+*   Archive (history)
+*   Templates
 
 ## Features
 
@@ -14,7 +16,7 @@ When you click on a notification or open the application, it presents you with a
 - **Detailed Session Views:** Dive deep into session details, view PR statuses and labels, track diffs, and read the JSON activity feed.
 - **Advanced Filtering:** Powerful built-in filtering using a drag-and-drop AST (Abstract Syntax Tree) visual filter editor.
 - **System Tray Integration:** Runs efficiently in the background, utilizing KDE's `KNotification` to deliver non-intrusive alerts for queue errors and completion events.
-- **Mock API Support:** Includes an interactive Go-based mock API server for local testing and realistic state simulation without consuming real GitHub API quotas.
+- **Mock API Support:** Includes an interactive Go-based mock API server for local testing and realistic state simulation without consuming real Jules API quotas.
 
 ## Screenshots
 

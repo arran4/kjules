@@ -2,9 +2,9 @@
 <component type="desktop-application">
   <id>org.kde.kjules</id>
   <name>kJules</name>
-  <summary>A powerful KDE native desktop client for tracking and managing GitHub tasks</summary>
+  <summary>A powerful KDE native desktop client for tracking and managing Jules tasks and sessions</summary>
   <description>
-    <p>A C++ application built with KDE Frameworks that provides a desktop interface for interacting with GitHub tasks.</p>
+    <p>A C++ application built with KDE Frameworks that provides a desktop interface for interacting with Jules tasks and sessions.</p>
   </description>
   <launchable type="desktop-id">org.kde.kjules.desktop</launchable>
   <metadata_license>CC0-1.0</metadata_license>
