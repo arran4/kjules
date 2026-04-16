@@ -559,8 +559,8 @@ void MainWindow::setupUi() {
 
           bool allAwaitingUser = true;
           QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+          const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
           for (const QModelIndex &idx : selectedRows) {
-            const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
             QModelIndex sIndex = p ? p->mapToSource(idx) : idx;
             QString state = m_sessionModel->data(sIndex, SessionModel::StateRole).toString();
             if (state != QStringLiteral("Awaiting User")) {
@@ -572,8 +572,8 @@ void MainWindow::setupUi() {
           if (allAwaitingUser) {
             QAction *approveAction = menu.addAction(i18n("Approve"));
             connect(approveAction, &QAction::triggered, [this, selectedRows]() {
+              const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
               for (const QModelIndex &idx : selectedRows) {
-                const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
                 QModelIndex sIndex = p ? p->mapToSource(idx) : idx;
                 QString currentId = m_sessionModel->data(sIndex, SessionModel::IdRole).toString();
                 m_apiManager->approveSession(currentId);
@@ -918,8 +918,8 @@ void MainWindow::setupUi() {
 
           bool allAwaitingUser = true;
           QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
+          const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
           for (const QModelIndex &idx : selectedRows) {
-            const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
             QModelIndex sIndex = p ? p->mapToSource(idx) : idx;
             QString state = m_archiveModel->data(sIndex, SessionModel::StateRole).toString();
             if (state != QStringLiteral("Awaiting User")) {
@@ -931,8 +931,8 @@ void MainWindow::setupUi() {
           if (allAwaitingUser) {
             QAction *approveAction = menu.addAction(i18n("Approve"));
             connect(approveAction, &QAction::triggered, [this, selectedRows]() {
+              const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
               for (const QModelIndex &idx : selectedRows) {
-                const QSortFilterProxyModel *p = qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
                 QModelIndex sIndex = p ? p->mapToSource(idx) : idx;
                 QString currentId = m_archiveModel->data(sIndex, SessionModel::IdRole).toString();
                 m_apiManager->approveSession(currentId);
