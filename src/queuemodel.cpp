@@ -393,7 +393,8 @@ void QueueModel::load() {
 
 void QueueModel::removeTrailingWaitItems() {
   int firstWaitToRemove = m_items.size();
-  while (firstWaitToRemove > 0 && m_items.at(firstWaitToRemove - 1).isWaitItem) {
+  while (firstWaitToRemove > 0 &&
+         m_items.at(firstWaitToRemove - 1).isWaitItem) {
     firstWaitToRemove--;
   }
 
