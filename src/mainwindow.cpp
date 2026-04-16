@@ -2682,6 +2682,9 @@ void MainWindow::sendQueueItemNow(int row) {
   if (item.isWaitItem) {
     m_queueModel->removeItem(row);
     updateStatus(i18n("Wait item removed from queue."));
+    if (row == 0) {
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    }
     return;
   }
   if (item.requestData.isEmpty())
