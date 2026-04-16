@@ -790,6 +790,8 @@ void MainWindow::setupUi() {
                     auto window = new NewSessionDialog(
                         m_sourceModel, m_templatesModel, hasApiKey, this);
                     window->setInitialData(initData);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2270,6 +2272,8 @@ void MainWindow::showNewSessionDialog() {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2601,6 +2605,8 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(templateData);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2733,6 +2739,8 @@ void MainWindow::editQueueItem(int row) {
 
   QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -2875,6 +2883,8 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -2906,6 +2916,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -2957,6 +2969,8 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(initData);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
