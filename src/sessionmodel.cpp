@@ -84,6 +84,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
   }
 
   data.rawObject = obj;
+  data.hasUnreadChanges = false;
   return data;
 }
 
@@ -147,9 +148,17 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
+    QFont font;
+    bool modified = false;
     if (index.column() == ColPR && !session.prNumber.isEmpty()) {
-      QFont font;
       font.setUnderline(true);
+      modified = true;
+    }
+    if (session.hasUnreadChanges) {
+      font.setBold(true);
+      modified = true;
+    }
+    if (modified) {
       return font;
     }
   }
@@ -271,10 +280,23 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       int row = m_idToIndex.value(id);
       // Preserve local_favourite
       bool isFav = m_sessions[row].isFavourite;
+      bool wasUnread = m_sessions[row].hasUnreadChanges;
+      QString oldState = m_sessions[row].state;
+      QString oldPrStatus = m_sessions[row].prStatus;
+      QString oldTitle = m_sessions[row].title;
+      bool oldHasChangeSet = m_sessions[row].hasChangeSet;
+
       SessionData data = parseSessionData(obj);
       data.isFavourite = isFav;
       data.rawObject[QStringLiteral("local_favourite")] = isFav;
       data.id = id; // Ensure ID matches
+
+      bool isUnread = wasUnread || (oldState != data.state) ||
+                      (oldPrStatus != data.prStatus) ||
+                      (oldTitle != data.title) ||
+                      (oldHasChangeSet != data.hasChangeSet);
+      data.hasUnreadChanges = isUnread;
+
       m_sessions[row] = data;
       Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
     } else {
@@ -320,10 +342,23 @@ void SessionModel::updateSession(const QJsonObject &session) {
     int i = m_idToIndex.value(id);
     // Preserve local_favourite
     bool isFav = m_sessions[i].isFavourite;
+    bool wasUnread = m_sessions[i].hasUnreadChanges;
+    QString oldState = m_sessions[i].state;
+    QString oldPrStatus = m_sessions[i].prStatus;
+    QString oldTitle = m_sessions[i].title;
+    bool oldHasChangeSet = m_sessions[i].hasChangeSet;
+
     SessionData data = parseSessionData(sessionWithRefresh);
     data.isFavourite = isFav;
     data.rawObject[QStringLiteral("local_favourite")] = isFav;
     data.id = id; // Ensure ID matches
+
+    bool isUnread = wasUnread || (oldState != data.state) ||
+                    (oldPrStatus != data.prStatus) ||
+                    (oldTitle != data.title) ||
+                    (oldHasChangeSet != data.hasChangeSet);
+    data.hasUnreadChanges = isUnread;
+
     m_sessions[i] = data;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     return;
@@ -425,6 +460,26 @@ void SessionModel::clearSessions() {
   m_sessions.clear();
   m_idToIndex.clear();
   endResetModel();
+}
+
+void SessionModel::clearUnreadChanges() {
+  if (m_sessions.isEmpty()) {
+    return;
+  }
+  for (int i = 0; i < m_sessions.size(); ++i) {
+    m_sessions[i].hasUnreadChanges = false;
+  }
+  Q_EMIT dataChanged(index(0, 0), index(m_sessions.size() - 1, ColCount - 1));
+}
+
+void SessionModel::markAsRead(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    int row = m_idToIndex.value(id);
+    if (m_sessions[row].hasUnreadChanges) {
+      m_sessions[row].hasUnreadChanges = false;
+      Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
+    }
+  }
 }
 
 bool SessionModel::contains(const QString &id) const {
