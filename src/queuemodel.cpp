@@ -153,26 +153,30 @@ void QueueModel::enqueueItem(const QueueItem &item) {
   m_jobsSinceLastWait++;
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
-  QString tier = config.readEntry("Tier", QStringLiteral("free"));
-  int jobsBeforeWait = 3;
-  if (tier == QStringLiteral("pro")) {
-    jobsBeforeWait = 15;
-  } else if (tier == QStringLiteral("max")) {
-    jobsBeforeWait = 30;
-  }
+  QString algorithm = config.readEntry("Algorithm", QStringLiteral("try_until_stop"));
 
-  pruneRunTimestamps();
+  if (algorithm == QStringLiteral("predict")) {
+    QString tier = config.readEntry("Tier", QStringLiteral("free"));
+    int jobsBeforeWait = 3;
+    if (tier == QStringLiteral("pro")) {
+      jobsBeforeWait = 15;
+    } else if (tier == QStringLiteral("max")) {
+      jobsBeforeWait = 30;
+    }
 
-  int waitTime = config.readEntry("WaitTime", 3600);
+    pruneRunTimestamps();
 
-  if (m_jobsSinceLastWait >= jobsBeforeWait) {
-    beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-    QueueItem waitItem;
-    waitItem.isWaitItem = true;
-    waitItem.waitSeconds = waitTime;
-    m_items.append(waitItem);
-    endInsertRows();
-    m_jobsSinceLastWait = 0;
+    int waitTime = config.readEntry("WaitTime", 3600);
+
+    if (m_jobsSinceLastWait >= jobsBeforeWait) {
+      beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      waitItem.waitSeconds = waitTime;
+      m_items.append(waitItem);
+      endInsertRows();
+      m_jobsSinceLastWait = 0;
+    }
   }
 
   save();
@@ -291,6 +295,12 @@ void QueueModel::checkAndPrependDailyLimitWait() {
   pruneRunTimestamps();
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  QString algorithm = config.readEntry("Algorithm", QStringLiteral("try_until_stop"));
+
+  if (algorithm != QStringLiteral("predict")) {
+    return;
+  }
+
   QString tier = config.readEntry("Tier", QStringLiteral("free"));
   int dailyLimit = 15;
   if (tier == QStringLiteral("pro")) {

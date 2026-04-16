@@ -69,6 +69,16 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
   formLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
 
+  m_algorithmComboBox = new QComboBox(this);
+  m_algorithmComboBox->addItem(i18n("Try until stop then back off for 1 hour"), QStringLiteral("try_until_stop"));
+  m_algorithmComboBox->addItem(i18n("Predict availability and back off"), QStringLiteral("predict"));
+  QString currentAlgorithm = config.readEntry("Algorithm", QStringLiteral("try_until_stop"));
+  int algoIndex = m_algorithmComboBox->findData(currentAlgorithm);
+  if (algoIndex >= 0) {
+    m_algorithmComboBox->setCurrentIndex(algoIndex);
+  }
+  formLayout->addRow(i18n("Queue backoff algorithm:"), m_algorithmComboBox);
+
   m_tierComboBox = new QComboBox(this);
   m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
   m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
@@ -160,6 +170,7 @@ void SettingsDialog::onSave() {
   config.writeEntry("Autostart", m_autostartEdit->isChecked());
   config.writeEntry("AutostartTray", m_autostartTrayEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
+  config.writeEntry("Algorithm", m_algorithmComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.sync();
 
