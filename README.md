@@ -1,6 +1,6 @@
 # kjules
 
-A powerful KDE6/Qt6 native desktop client written in C++ for tracking and managing Jules tasks, and background processing sessions. Originally known as Kgithub-notify, **kjules** gives you a fast, native desktop experience for interacting with your Jules workflow.
+A powerful KDE6/Qt6 native desktop client written in C++ for tracking and managing Jules tasks and background processing sessions. **kjules** gives you a fast, native desktop experience for interacting with your Jules workflow.
 
 When you click on a notification or open the application, it presents you with a comprehensive desktop-native version of:
 *   Drafts (unsubmitted)
