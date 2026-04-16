@@ -1820,7 +1820,6 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Following"), this);
   connect(m_refreshFollowingAction, &QAction::triggered, this, [this]() {
-    m_sessionModel->clearUnreadChanges();
     QStringList idsToRefresh;
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
