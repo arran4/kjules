@@ -388,6 +388,28 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity,
                 .toHtmlEscaped() +
             QStringLiteral("</div>");
 
+  } else if (activity.contains(QStringLiteral("sessionFailed"))) {
+    html += QStringLiteral("<div class='role'>") + i18n("Session Failed") +
+            orgSuffix + QStringLiteral("</div>");
+    QJsonObject sf = activity.value(QStringLiteral("sessionFailed")).toObject();
+    QString reason = sf.value(QStringLiteral("reason")).toString();
+    if (!reason.isEmpty()) {
+      html += QStringLiteral("<div class='content'>") + reason.toHtmlEscaped() +
+              QStringLiteral("</div>");
+    }
+
+    html +=
+        QStringLiteral("<div style='text-align: center; margin-top: 15px;'>");
+    html += QStringLiteral(
+                "<a class='btn' href='https://jules.google.com/sessions/") +
+            activity.value(QStringLiteral("name"))
+                .toString()
+                .split(QLatin1Char('/'))
+                .value(1) +
+            QStringLiteral("'>") + i18n("View on Jules") +
+            QStringLiteral("</a>");
+    html += QStringLiteral("</div>");
+
   } else if (activity.contains(QStringLiteral("sessionCompleted"))) {
     html += QStringLiteral("<div class='role'>") + i18n("Session Completed") +
             orgSuffix + QStringLiteral("</div>");
