@@ -41,7 +41,6 @@ Q_SIGNALS:
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
   void onSubmitSession();
-  void onSubmitPRSession();
   void onLoadTemplate();
   void onSaveDraft();
   void onSaveTemplate();
@@ -57,6 +56,8 @@ protected:
   void showEvent(QShowEvent *event) override;
 
 private:
+  void setAutomationModeFromData(const QJsonObject &data);
+
   SourceModel *m_sourceModel;
   TemplatesModel *m_templatesModel;
   QListView *m_unselectedView;
@@ -65,11 +66,11 @@ private:
   SourceSelectionProxyModel *m_selectedProxy;
   QLineEdit *m_filterEdit;
   QTextEdit *m_promptEdit;
+  QComboBox *m_automationModeComboBox;
   QCheckBox *m_requirePlanApprovalCheckBox;
   QCheckBox *m_keepOpenCheckBox;
   QCheckBox *m_keepSourceCheckBox;
   QPushButton *m_createButton;
-  QPushButton *m_createPRButton;
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;
   QMap<QString, QString> m_selectedSources;
