@@ -3,8 +3,8 @@
 
 #include <KXmlGuiWindow>
 #include <QDateTime>
-#include <QSystemTrayIcon>
 #include <QJsonObject>
+#include <QSystemTrayIcon>
 
 #include "sessionswindow.h"
 

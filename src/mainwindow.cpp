@@ -2969,13 +2969,20 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::duplicateRequested, this,
           [this](const QJsonObject &sessionData) {
             QJsonObject initData;
-            initData[QStringLiteral("prompt")] = sessionData.value(QStringLiteral("prompt")).toString();
-            const QJsonObject sourceContext = sessionData.value(QStringLiteral("sourceContext")).toObject();
-            const QString source = sourceContext.value(QStringLiteral("source")).toString();
+            initData[QStringLiteral("prompt")] =
+                sessionData.value(QStringLiteral("prompt")).toString();
+            const QJsonObject sourceContext =
+                sessionData.value(QStringLiteral("sourceContext")).toObject();
+            const QString source =
+                sourceContext.value(QStringLiteral("source")).toString();
             if (!source.isEmpty()) {
               QJsonObject sourceObj;
               sourceObj[QStringLiteral("name")] = source;
-              const QString branch = sourceContext.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch")).toString();
+              const QString branch =
+                  sourceContext.value(QStringLiteral("githubRepoContext"))
+                      .toObject()
+                      .value(QStringLiteral("startingBranch"))
+                      .toString();
               if (!branch.isEmpty()) {
                 sourceObj[QStringLiteral("branch")] = branch;
               }
