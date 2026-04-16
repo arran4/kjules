@@ -30,6 +30,12 @@
             <Action name="show_past_new_sessions" />
             <Action name="view_raw_data" />
             <Separator />
+            <Action name="archive_merged_following" />
+            <Action name="archive_paused_following" />
+            <Action name="archive_failed_following" />
+            <Action name="duplicate_failed_to_queue_and_archive" />
+            <Action name="purge_archive" />
+            <Separator />
             <Action name="open_url" />
             <Action name="copy_url" />
             <Separator />

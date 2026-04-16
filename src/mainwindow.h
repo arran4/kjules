@@ -161,6 +161,11 @@ private:
   QAction *m_importTemplatesAction;
   QAction *m_exportTemplatesAction;
   QAction *m_toggleQueueAction;
+  QAction *m_archiveMergedFollowingAction;
+  QAction *m_archivePausedFollowingAction;
+  QAction *m_archiveFailedFollowingAction;
+  QAction *m_duplicateFailedToQueueAndArchiveAction;
+  QAction *m_purgeArchiveAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
