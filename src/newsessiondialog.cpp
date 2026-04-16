@@ -21,6 +21,7 @@
 #include <QSortFilterProxyModel>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <QStatusBar>
 
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
@@ -423,6 +424,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           [keepSourceAction](bool checked) {
             keepSourceAction->setChecked(!checked);
           });
+
+  QAction *refreshSourcesAction =
+      actionCollection()->addAction(QStringLiteral("refresh_sources"));
+  refreshSourcesAction->setText(tr("Refresh Sources"));
+  refreshSourcesAction->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+  connect(refreshSourcesAction, &QAction::triggered, this, [this]() {
+    statusBar()->showMessage(tr("Refresh requested..."), 3000);
+    Q_EMIT refreshSourcesRequested();
+  });
 
   setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
 }
