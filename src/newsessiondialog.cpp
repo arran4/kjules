@@ -18,10 +18,11 @@
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
+#include <QIcon>
 #include <QSortFilterProxyModel>
+#include <QStatusBar>
 #include <QTextEdit>
 #include <QVBoxLayout>
-#include <QStatusBar>
 
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
