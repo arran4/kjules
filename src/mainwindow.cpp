@@ -3030,7 +3030,8 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
-  QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+  QString id =
+      m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
   m_sessionModel->clearUnreadChanges(id);
 
   if (sessionData.isEmpty()) {

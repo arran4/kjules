@@ -344,7 +344,7 @@ void SessionModel::updateSession(const QJsonObject &session) {
     if (m_sessions[i].state != data.state ||
         m_sessions[i].prStatus != data.prStatus ||
         m_sessions[i].title != data.title) {
-        isSubstantiallyChanged = true;
+      isSubstantiallyChanged = true;
     }
 
     data.hasUnreadChanges = hadUnread || isSubstantiallyChanged;
