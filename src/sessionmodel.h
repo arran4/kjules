@@ -28,6 +28,7 @@ struct SessionData {
   QString prStatus;
   QStringList prLabels;
   QJsonObject rawObject;
+  bool hasUnreadChanges = false;
 };
 
 class SessionModel : public QAbstractTableModel {
@@ -91,6 +92,8 @@ public:
   void loadSessions();
   void saveSessions();
   void clearSessions();
+  void clearUnreadChanges();
+  void markAsRead(const QString &id);
   bool contains(const QString &id) const;
   void setNextPageToken(const QString &token);
   QString nextPageToken() const;

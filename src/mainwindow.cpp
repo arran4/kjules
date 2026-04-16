@@ -3053,6 +3053,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
+  m_sessionModel->markAsRead(sessionId);
   SessionWindow *window = new SessionWindow(
       session, m_apiManager, m_sessionModel->contains(sessionId), this);
   connect(window, &SessionWindow::watchRequested, this,
@@ -3074,10 +3075,12 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   if (sessionData.isEmpty()) {
     QString id =
         m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+    m_sessionModel->markAsRead(id);
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+    m_sessionModel->markAsRead(sessionId);
     SessionWindow *window = new SessionWindow(
         sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
     connect(window, &SessionWindow::watchRequested, this,
