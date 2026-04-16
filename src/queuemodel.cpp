@@ -150,12 +150,12 @@ void QueueModel::enqueueItem(const QueueItem &item) {
   beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   m_items.append(item);
   endInsertRows();
-  m_jobsSinceLastWait++;
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   QString algorithm = config.readEntry("Algorithm", QStringLiteral("try_until_stop"));
 
   if (algorithm == QStringLiteral("predict")) {
+    m_jobsSinceLastWait++;
     QString tier = config.readEntry("Tier", QStringLiteral("free"));
     int jobsBeforeWait = 3;
     if (tier == QStringLiteral("pro")) {
