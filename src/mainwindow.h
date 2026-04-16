@@ -66,6 +66,7 @@ private Q_SLOTS:
   void showSessionWindow(const QJsonObject &session);
   void connectSessionWindow(SessionWindow *window);
   void updateStatus(const QString &message);
+
   void onError(const QString &message);
   void toggleWindow();
   void toggleWindowVisibility();
@@ -105,6 +106,7 @@ private Q_SLOTS:
   void onSessionRefreshProgressBarClicked();
 
 private:
+  QString m_openNotesForSession;
   void setupUi();
   void setupTrayIcon();
   void createActions();

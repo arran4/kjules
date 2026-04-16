@@ -120,7 +120,9 @@ MainWindow::MainWindow(QWidget *parent)
             onSessionCreatedResult(true, session, QString());
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
-          &MainWindow::showSessionWindow);
+          [this](const QJsonObject &session) {
+            showSessionWindow(session);
+          });
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
             const QString id = session.value(QStringLiteral("id")).toString();
@@ -556,6 +558,7 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
+          QAction *notesAction = menu.addAction(i18n("Notes"));
           QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -737,6 +740,36 @@ void MainWindow::setupUi() {
             });
           }
 
+          connect(notesAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_sessionView->selectionModel()->selectedRows();
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_sessionView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              QJsonObject sessionData =
+                  m_sessionModel->getSession(mappedIdx.row());
+              if (!sessionData.isEmpty()) {
+                QString sessionId =
+                    sessionData.value(QStringLiteral("id")).toString();
+                SessionWindow *window =
+                    new SessionWindow(sessionData, m_apiManager,
+                                      m_sessionModel->contains(sessionId), this);
+                connectSessionWindow(window);
+                window->show();
+                window->showNotesTab();
+              } else {
+                QString id =
+                    m_sessionModel->data(mappedIdx, SessionModel::IdRole)
+                        .toString();
+                m_openNotesForSession = id;
+                m_apiManager->getSession(id);
+                updateStatus(i18n("Fetching details for session %1...", id));
+              }
+            }
+          });
+
           auto archiveSelectedSessions = [this]() {
             QModelIndexList selectedRows =
                 m_sessionView->selectionModel()->selectedRows();
@@ -889,11 +922,42 @@ void MainWindow::setupUi() {
           QMenu menu;
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
+          QAction *notesAction = menu.addAction(i18n("Notes"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
+
+          connect(notesAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_archiveView->selectionModel()->selectedRows();
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_archiveView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              QJsonObject sessionData =
+                  m_archiveModel->getSession(mappedIdx.row());
+              if (!sessionData.isEmpty()) {
+                QString sessionId =
+                    sessionData.value(QStringLiteral("id")).toString();
+                SessionWindow *window =
+                    new SessionWindow(sessionData, m_apiManager,
+                                      m_archiveModel->contains(sessionId), this);
+                connectSessionWindow(window);
+                window->show();
+                window->showNotesTab();
+              } else {
+                QString id =
+                    m_archiveModel->data(mappedIdx, SessionModel::IdRole)
+                        .toString();
+                m_openNotesForSession = id;
+                m_apiManager->getSession(id);
+                updateStatus(i18n("Fetching details for session %1...", id));
+              }
+            }
+          });
 
           connect(openSessionAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
@@ -2963,6 +3027,16 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::notesChanged, this,
+          [this](const QString &id, const QString &notes) {
+            if (m_sessionModel->contains(id)) {
+              m_sessionModel->setLocalNotes(id, notes);
+            }
+            if (m_archiveModel->contains(id)) {
+              m_archiveModel->setLocalNotes(id, notes);
+            }
+          });
+
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
             SaveDialog dlg(QStringLiteral("Template"), this);
@@ -3019,6 +3093,11 @@ void MainWindow::showSessionWindow(const QJsonObject &session) {
 
   connectSessionWindow(window);
   window->show();
+
+  if (m_openNotesForSession == sessionId) {
+      window->showNotesTab();
+      m_openNotesForSession.clear();
+  }
 }
 
 void MainWindow::onSessionActivated(const QModelIndex &index) {
