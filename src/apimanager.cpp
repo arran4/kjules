@@ -121,6 +121,18 @@ bool APIManager::canConnect() const {
   return !m_apiKey.isEmpty() && !m_tokenFailed;
 }
 
+QString APIManager::cleanSessionId(const QString &sessionId) {
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+  return cleanId;
+}
+
 void APIManager::testConnection(const QString &apiKey) {
   // If apiKey is empty, we are using the stored key.
   if (apiKey.isEmpty() && !canConnect()) {
@@ -165,15 +177,7 @@ void APIManager::listActivities(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
-
+  QString cleanId = cleanSessionId(sessionId);
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
@@ -217,15 +221,7 @@ void APIManager::reloadSession(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
-
+  QString cleanId = cleanSessionId(sessionId);
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
@@ -660,15 +656,8 @@ void APIManager::approveSession(const QString &sessionId) {
         "Cannot approve session: No token or previous failure."));
     return;
   }
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
 
+  QString cleanId = cleanSessionId(sessionId);
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
@@ -711,15 +700,7 @@ void APIManager::getSession(const QString &sessionId) {
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
-
+  QString cleanId = cleanSessionId(sessionId);
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));

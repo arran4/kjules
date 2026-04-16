@@ -93,6 +93,8 @@ private:
 
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());
+
+  QString cleanSessionId(const QString &sessionId);
 };
 
 #endif // APIMANAGER_H
