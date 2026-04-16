@@ -2049,6 +2049,63 @@ void MainWindow::createActions() {
     }
   });
 
+  m_openJulesUrlAction = new QAction(i18n("Open Jules URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_jules_url"), m_openJulesUrlAction);
+  connect(m_openJulesUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+    int count = 0;
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString id =
+          m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+
+      if (!id.isEmpty()) {
+        QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
+        QDesktopServices::openUrl(QUrl(urlStr));
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
+    } else {
+      updateStatus(i18n("Invalid session ID for opening Jules URL."));
+    }
+  });
+
+  m_openGithubUrlAction = new QAction(i18n("Open Github URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_github_url"), m_openGithubUrlAction);
+  connect(m_openGithubUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+    int count = 0;
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString prUrl =
+          m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
+
+      if (!prUrl.isEmpty()) {
+        QDesktopServices::openUrl(QUrl(prUrl));
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(i18np("Opened 1 Github URL.", "Opened %1 Github URLs.", count));
+    } else {
+      updateStatus(i18n("No Github PR URLs found for selected sessions."));
+    }
+  });
+
   m_openUrlAction = new QAction(i18n("Open URL"), this);
   actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
   connect(m_openUrlAction, &QAction::triggered, this, [this]() {
@@ -2230,14 +2287,14 @@ void MainWindow::createActions() {
   actionCollection()->addAction(QStringLiteral("purge_archive"), m_purgeArchiveAction);
   connect(m_purgeArchiveAction, &QAction::triggered, this, [this]() {
     int count = m_archiveModel->rowCount();
-    for (int i = count - 1; i >= 0; --i) {
-        m_archiveModel->removeSession(i);
-    }
     if (count > 0) {
+      if (QMessageBox::question(this, i18n("Purge Archive"), i18np("Are you sure you want to purge the archive (1 session)?", "Are you sure you want to purge the archive (%1 sessions)?", count)) == QMessageBox::Yes) {
+        m_archiveModel->clearSessions();
         m_archiveModel->saveSessions();
         updateStatus(i18np("Archive purged (1 session removed).", "Archive purged (%1 sessions removed).", count));
+      }
     } else {
-        updateStatus(i18n("Archive is already empty."));
+      updateStatus(i18n("Archive is already empty."));
     }
   });
 
