@@ -21,8 +21,8 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager,
 
   QHBoxLayout *inputLayout = new QHBoxLayout();
   m_inputEdit = new QLineEdit(this);
-  m_inputEdit->setPlaceholderText(i18n(
-      "e.g. 14074060995680401415 or https://jules.google.com/session/..."));
+  m_inputEdit->setPlaceholderText(i18n("e.g. 14074060995680401415 or %1...")
+                                      .arg(APIManager::julesSessionBaseUrl()));
   inputLayout->addWidget(m_inputEdit);
 
   m_previewBtn = new QPushButton(i18n("Preview"), this);
@@ -69,7 +69,9 @@ QString FollowSessionDialog::extractSessionId(const QString &input) const {
   QUrl url(text);
   if (url.isValid() && !url.scheme().isEmpty()) {
     QString path = url.path();
-    if (path.startsWith(QStringLiteral("/sessions/"))) {
+    if (path.startsWith(QStringLiteral("/session/"))) {
+      return path.mid(9);
+    } else if (path.startsWith(QStringLiteral("/sessions/"))) {
       return path.mid(10);
     }
   }

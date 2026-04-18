@@ -93,6 +93,8 @@ public:
   void loadSessions();
   void saveSessions();
   void clearSessions();
+  void clearUnreadChanges();
+  void markAsRead(const QString &id);
   bool contains(const QString &id) const;
   void setNextPageToken(const QString &token);
   QString nextPageToken() const;
