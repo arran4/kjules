@@ -48,7 +48,8 @@ public:
     LastRefreshedRole,
     PrStatusRole,
     PrLabelsRole,
-    FavouriteRole
+    FavouriteRole,
+    UnreadChangesRole
   };
 
   enum Columns {
@@ -97,6 +98,9 @@ public:
   bool contains(const QString &id) const;
   void setNextPageToken(const QString &token);
   QString nextPageToken() const;
+
+  void clearAllUnreadChanges();
+  void clearUnreadChanges(const QString &id);
 
 Q_SIGNALS:
   void sessionsLoadedOrUpdated();

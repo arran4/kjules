@@ -148,17 +148,23 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
-    QFont font;
+    bool hasUnread = session.hasUnreadChanges;
+    bool hasPR = (index.column() == ColPR && !session.prNumber.isEmpty());
     bool modified = false;
+
     if (index.column() == ColPR && !session.prNumber.isEmpty()) {
-      font.setUnderline(true);
       modified = true;
     }
     if (session.hasUnreadChanges) {
-      font.setBold(true);
       modified = true;
     }
-    if (modified) {
+
+    if (hasUnread || hasPR || modified) {
+      QFont font;
+      if (hasUnread)
+        font.setBold(true);
+      if (hasPR)
+        font.setUnderline(true);
       return font;
     }
   }
@@ -188,6 +194,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.prLabels;
   case FavouriteRole:
     return session.isFavourite;
+  case UnreadChangesRole:
+    return session.hasUnreadChanges;
   default:
     return QVariant();
   }
@@ -353,11 +361,15 @@ void SessionModel::updateSession(const QJsonObject &session) {
     data.rawObject[QStringLiteral("local_favourite")] = isFav;
     data.id = id; // Ensure ID matches
 
-    bool isUnread = wasUnread || (oldState != data.state) ||
-                    (oldPrStatus != data.prStatus) ||
-                    (oldTitle != data.title) ||
-                    (oldHasChangeSet != data.hasChangeSet);
-    data.hasUnreadChanges = isUnread;
+    bool isSubstantiallyChanged = false;
+    if (m_sessions[i].state != data.state ||
+        m_sessions[i].prStatus != data.prStatus ||
+        m_sessions[i].title != data.title ||
+        (oldHasChangeSet != data.hasChangeSet)) {
+      isSubstantiallyChanged = true;
+    }
+
+    data.hasUnreadChanges = wasUnread || isSubstantiallyChanged;
 
     m_sessions[i] = data;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
@@ -484,4 +496,27 @@ void SessionModel::markAsRead(const QString &id) {
 
 bool SessionModel::contains(const QString &id) const {
   return m_idToIndex.contains(id);
+}
+
+void SessionModel::clearAllUnreadChanges() {
+  bool changed = false;
+  for (int i = 0; i < m_sessions.size(); ++i) {
+    if (m_sessions[i].hasUnreadChanges) {
+      m_sessions[i].hasUnreadChanges = false;
+      changed = true;
+    }
+  }
+  if (changed) {
+    Q_EMIT dataChanged(index(0, 0), index(m_sessions.size() - 1, ColCount - 1));
+  }
+}
+
+void SessionModel::clearUnreadChanges(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    if (m_sessions[i].hasUnreadChanges) {
+      m_sessions[i].hasUnreadChanges = false;
+      Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    }
+  }
 }
