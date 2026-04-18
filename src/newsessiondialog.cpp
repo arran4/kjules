@@ -1,6 +1,8 @@
 #include "newsessiondialog.h"
 #include "savedialog.h"
 #include "templateselectiondialog.h"
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <KActionCollection>
 #include <QAction>
 #include <QCheckBox>
@@ -95,7 +97,13 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       m_templatesModel(templatesModel) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Create New Session"));
-  resize(700, 600);
+
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("NewSessionDialog"));
+  if (!restoreGeometry(
+          config.readEntry(QStringLiteral("Geometry"), QByteArray()))) {
+    resize(700, 600);
+  }
 
   QVBoxLayout *mainLayout = new QVBoxLayout();
 
@@ -755,6 +763,13 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   } else {
     m_filterEdit->setFocus();
   }
+}
+
+void NewSessionDialog::hideEvent(QHideEvent *event) {
+  QDialog::hideEvent(event);
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("NewSessionDialog"));
+  config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
 }
 
 bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
