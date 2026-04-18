@@ -12,7 +12,7 @@
 SessionModel::SessionModel(const QString &cacheFileName, QObject *parent)
     : QAbstractTableModel(parent), m_cacheFileName(cacheFileName) {}
 
-SessionData parseSessionData(const QJsonObject &obj) {
+SessionData SessionModel::parseSessionData(const QJsonObject &obj) {
   SessionData data;
   data.id = obj.value(QStringLiteral("id")).toString();
   data.name = obj.value(QStringLiteral("name")).toString();

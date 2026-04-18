@@ -79,6 +79,8 @@ public:
                       int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  static SessionData parseSessionData(const QJsonObject &obj);
+
   void setSessions(const QJsonArray &sessions);
   int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);

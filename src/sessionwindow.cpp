@@ -2,6 +2,7 @@
 
 #include "activitybrowser.h"
 #include "apimanager.h"
+#include "sessionmodel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -138,23 +139,9 @@ void SessionWindow::setupActions() {
   actionCollection()->addAction(QStringLiteral("approve_session"),
                                 approveAction);
 
-  QString sessionState = m_sessionData.value(QStringLiteral("state")).toString();
-  bool sessionHasChangeSet = false;
-  QString sessionPrUrl;
-  QJsonArray sessionOutputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
-  for (int i = 0; i < sessionOutputs.size(); ++i) {
-    QJsonObject outputObj = sessionOutputs[i].toObject();
-    if (outputObj.contains(QStringLiteral("changeSet"))) {
-      sessionHasChangeSet = true;
-    }
-    if (outputObj.contains(QStringLiteral("pullRequest"))) {
-      QJsonObject prObj = outputObj.value(QStringLiteral("pullRequest")).toObject();
-      sessionPrUrl = prObj.value(QStringLiteral("url")).toString();
-    }
-  }
+  SessionData parsedData = SessionModel::parseSessionData(m_sessionData);
 
-  if (sessionState == QStringLiteral("AWAITING_APPROVAL") ||
-      (sessionState == QStringLiteral("COMPLETED") && sessionHasChangeSet && sessionPrUrl.isEmpty())) {
+  if (parsedData.state == QStringLiteral("Awaiting User")) {
     approveAction->setEnabled(true);
   } else {
     approveAction->setEnabled(false);
