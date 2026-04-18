@@ -518,6 +518,7 @@ void MainWindow::setupUi() {
       m_sessionView, &QTreeView::customContextMenuRequested,
       [this, deleteFollowingSessions](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
           if (!m_sessionView->selectionModel()->isSelected(index)) {
             m_sessionView->selectionModel()->select(
@@ -530,7 +531,6 @@ void MainWindow::setupUi() {
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-          QMenu menu;
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
@@ -820,9 +820,17 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template created from session."));
             }
           });
-
-          menu.exec(m_sessionView->mapToGlobal(pos));
         }
+
+        if (!menu.actions().isEmpty()) {
+          menu.addSeparator();
+        }
+        menu.addAction(m_archiveMergedFollowingAction);
+        menu.addAction(m_archivePausedFollowingAction);
+        menu.addAction(m_archiveFailedFollowingAction);
+        menu.addAction(m_duplicateFailedToQueueAndArchiveAction);
+
+        menu.exec(m_sessionView->viewport()->mapToGlobal(pos));
       });
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
@@ -884,6 +892,7 @@ void MainWindow::setupUi() {
       m_archiveView, &QTreeView::customContextMenuRequested,
       [this, deleteArchiveSessions](const QPoint &pos) {
         QModelIndex index = m_archiveView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
           if (!m_archiveView->selectionModel()->isSelected(index)) {
             m_archiveView->selectionModel()->select(
@@ -891,7 +900,6 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_archiveView->setCurrentIndex(index);
           }
-          QMenu menu;
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
@@ -972,9 +980,14 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template created from archived session."));
             }
           });
-
-          menu.exec(m_archiveView->mapToGlobal(pos));
         }
+
+        if (!menu.actions().isEmpty()) {
+          menu.addSeparator();
+        }
+        menu.addAction(m_purgeArchiveAction);
+
+        menu.exec(m_archiveView->viewport()->mapToGlobal(pos));
       });
   connect(
       m_archiveView, &QTreeView::doubleClicked, this,
