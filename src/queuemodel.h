@@ -57,6 +57,7 @@ public:
 
   void enqueue(const QJsonObject &requestData);
   void enqueueItem(const QueueItem &item);
+  void insertItem(int index, const QueueItem &item);
   void updateItem(int index, const QueueItem &item);
   QueueItem dequeue();
   QueueItem peek() const;
