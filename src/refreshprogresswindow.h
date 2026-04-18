@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QJsonObject>
 #include <QMap>
+#include <QMultiMap>
 #include <QSet>
 #include <QStringList>
 
