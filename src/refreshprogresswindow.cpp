@@ -1,6 +1,7 @@
 #include "refreshprogresswindow.h"
 #include "apimanager.h"
 #include "mainwindow.h"
+#include "sessionmodel.h"
 
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -12,9 +13,10 @@
 
 RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
                                              APIManager *apiManager,
+                                             SessionModel *sessionModel,
                                              QWidget *parent)
     : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()),
-      m_currentIndex(0), m_processedCount(0), m_apiManager(apiManager),
+      m_currentIndex(0), m_processedCount(0),m_apiManager(apiManager), m_sessionModel(sessionModel),
       m_isFinished(false) {
   setWindowTitle(i18n("Refresh Progress"));
 
@@ -30,6 +32,9 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
   layout->addWidget(m_progressBar);
 
   m_textBrowser = new QTextBrowser(this);
+  m_textBrowser->setOpenLinks(false);
+  connect(m_textBrowser, &QTextBrowser::anchorClicked, this,
+          &RefreshProgressWindow::onAnchorClicked);
   layout->addWidget(m_textBrowser);
 
   m_closeButton = new QPushButton(i18n("Close"), this);
@@ -122,12 +127,32 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
   }
 }
 
+void RefreshProgressWindow::onAnchorClicked(const QUrl &url) {
+  if (url.scheme() == QStringLiteral("session")) {
+    Q_EMIT openSessionRequested(url.path());
+  }
+}
+
+QString RefreshProgressWindow::getSessionLink(const QString &id) const {
+  const QString escapedId = id.toHtmlEscaped();
+  if (!m_sessionModel)
+    return escapedId;
+
+  const QString name = m_sessionModel->getSessionName(id);
+  if (name.isEmpty()) {
+    return QStringLiteral("<a href=\"session:%1\">%2</a>").arg(escapedId, escapedId);
+  }
+  return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>")
+      .arg(escapedId, name.toHtmlEscaped(), escapedId);
+}
+
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
   QString id = APIManager::cleanSessionId(
       session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
+    QString link = getSessionLink(id);
     m_textBrowser->append(i18n(
-        "<font color='green'>Successfully reloaded session %1.</font>", id));
+        "<font color='green'>Successfully reloaded session %1.</font>", link));
 
     QString prUrl;
     if (session.contains(QStringLiteral("pullRequest"))) {
@@ -148,8 +173,9 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
 
 void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
                                                   const QString &reason) {
+  QString link = getSessionLink(id);
   m_textBrowser->append(i18n(
-      "<font color='orange'>Session %1 auto-archived: %2</font>", id, reason));
+      "<font color='orange'>Session %1 auto-archived: %2</font>", link, reason));
 }
 
 void RefreshProgressWindow::onGithubPullRequestInfoReceived(
@@ -167,8 +193,9 @@ void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl,
                                                       const QString &message) {
   QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
   for (const QString &id : idsToFinish) {
+    QString link = getSessionLink(id);
     m_textBrowser->append(
-        i18n("<font color='orange'>GitHub fetch failed for %1: %2</font>", id,
+        i18n("<font color='orange'>GitHub fetch failed for %1: %2</font>", link,
              message));
     finishCurrentTask(id);
   }

@@ -649,13 +649,20 @@ void MainWindow::setupUi() {
                   m_refreshProgressWindow->deleteLater();
                 }
                 m_refreshProgressWindow =
-                    new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                    new RefreshProgressWindow(idsToRefresh, m_apiManager, m_sessionModel, this);
                 connect(m_refreshProgressWindow,
                         &RefreshProgressWindow::progressUpdated, this,
                         &MainWindow::onRefreshProgressUpdated);
                 connect(m_refreshProgressWindow,
                         &RefreshProgressWindow::progressFinished, this,
                         &MainWindow::onRefreshProgressFinished);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::openSessionRequested, this,
+                        [this](const QString &id) {
+                          m_apiManager->getSession(id);
+                          updateStatus(
+                              i18n("Fetching details for session %1...", id));
+                        });
 
                 m_sessionRefreshProgressBar->show();
                 m_refreshProgressWindow->show();
@@ -2026,13 +2033,20 @@ void MainWindow::createActions() {
           m_refreshProgressWindow->deleteLater();
         }
         m_refreshProgressWindow =
-            new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+            new RefreshProgressWindow(idsToRefresh, m_apiManager, m_sessionModel, this);
         connect(m_refreshProgressWindow,
                 &RefreshProgressWindow::progressUpdated, this,
                 &MainWindow::onRefreshProgressUpdated);
         connect(m_refreshProgressWindow,
                 &RefreshProgressWindow::progressFinished, this,
                 &MainWindow::onRefreshProgressFinished);
+        connect(m_refreshProgressWindow,
+                &RefreshProgressWindow::openSessionRequested, this,
+                [this](const QString &id) {
+                  m_apiManager->getSession(id);
+                  updateStatus(
+                      i18n("Fetching details for session %1...", id));
+                });
 
         m_sessionRefreshProgressBar->show();
         m_refreshProgressWindow->show();

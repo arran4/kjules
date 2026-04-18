@@ -88,6 +88,7 @@ public:
   void toggleFavourite(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
+  QString getSessionName(const QString &id) const;
   QJsonArray getAllSessions() const;
   void clear();
   void loadSessions();

@@ -7,11 +7,13 @@
 #include <QMultiMap>
 #include <QSet>
 #include <QStringList>
+#include <QUrl>
 
 class QProgressBar;
 class QTextBrowser;
 class QPushButton;
 class APIManager;
+class SessionModel;
 
 class RefreshProgressWindow : public QDialog {
   Q_OBJECT
@@ -19,6 +21,7 @@ class RefreshProgressWindow : public QDialog {
 public:
   explicit RefreshProgressWindow(const QStringList &sessionIds,
                                  APIManager *apiManager,
+                                 SessionModel *sessionModel,
                                  QWidget *parent = nullptr);
   ~RefreshProgressWindow() override;
 
@@ -28,9 +31,11 @@ public:
 Q_SIGNALS:
   void progressUpdated(int current, int total);
   void progressFinished();
+  void openSessionRequested(const QString &id);
 
 private Q_SLOTS:
   void processNext();
+  void onAnchorClicked(const QUrl &url);
   void onSessionReloaded(const QJsonObject &session);
 
   void onSessionReloadFailed(const QString &sessionId, const QString &message);
@@ -41,6 +46,7 @@ private Q_SLOTS:
   void onSessionAutoArchived(const QString &id, const QString &reason);
 
 private:
+  QString getSessionLink(const QString &id) const;
   void finishCurrentTask(const QString &id);
 
   QProgressBar *m_progressBar;
@@ -55,6 +61,7 @@ private:
   QSet<QString> m_activeTasks;
   QMultiMap<QString, QString> m_activeTasksPrUrls; // prUrl -> id
   APIManager *m_apiManager;
+  SessionModel *m_sessionModel;
   bool m_isFinished;
 };
 
