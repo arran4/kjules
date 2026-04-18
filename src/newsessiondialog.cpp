@@ -73,7 +73,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("NewSessionDialog"));
-  if (!restoreGeometry(config.readEntry("Geometry", QByteArray()))) {
+  if (!restoreGeometry(
+          config.readEntry(QStringLiteral("Geometry"), QByteArray()))) {
     resize(700, 600);
   }
 
@@ -526,9 +527,8 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
 }
 
 void NewSessionDialog::hideEvent(QHideEvent *event) {
+  QDialog::hideEvent(event);
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("NewSessionDialog"));
-  config.writeEntry("Geometry", saveGeometry());
-  config.sync();
-  QDialog::hideEvent(event);
+  config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
 }
