@@ -1,28 +1,33 @@
 #include "queuemodel.h"
 #include <utility>
 
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QStandardPaths>
-#include <KConfigGroup>
-#include <KSharedConfig>
 #include <QRandomGenerator>
+#include <QStandardPaths>
 #include <limits>
 
 qint64 QueueModel::maxBackoffSeconds() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  qint64 maxWait = queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
-  if (maxWait < 0) maxWait = 8 * 60 * 60; // Failsafe
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  qint64 maxWait =
+      queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
+  if (maxWait < 0)
+    maxWait = 8 * 60 * 60; // Failsafe
   return maxWait;
 }
 
-static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase, int errorCount) {
+static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase,
+                                          int errorCount) {
   int power = qMax(0, errorCount - 1);
-  if (power > 20) power = 20; // Prevent huge shifts
+  if (power > 20)
+    power = 20; // Prevent huge shifts
   qint64 multiplier = 1;
   bool overflow = false;
   for (int i = 0; i < power; ++i) {
@@ -33,13 +38,14 @@ static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase, int e
     multiplier *= expBase;
   }
 
-  if (overflow || initialWait > std::numeric_limits<qint64>::max() / multiplier) {
+  if (overflow ||
+      initialWait > std::numeric_limits<qint64>::max() / multiplier) {
     return std::numeric_limits<qint64>::max();
   }
   return initialWait * multiplier;
 }
 
-static qint64 calculateRandomBackoff(KConfigGroup& queueConfig) {
+static qint64 calculateRandomBackoff(KConfigGroup &queueConfig) {
   int randMin = queueConfig.readEntry("BackoffRandomMin", 10) * 60;
   int randMax = queueConfig.readEntry("BackoffRandomMax", 60) * 60;
   if (randMax > randMin) {
@@ -48,15 +54,15 @@ static qint64 calculateRandomBackoff(KConfigGroup& queueConfig) {
   return randMin;
 }
 
-static qint64 calculateFixedBackoff(qint64 initialWait) {
-  return initialWait;
-}
+static qint64 calculateFixedBackoff(qint64 initialWait) { return initialWait; }
 
 qint64 QueueModel::calculateBackoff(int errorCount) {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
 
   QString type = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  qint64 initialWait = queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
+  qint64 initialWait =
+      queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
   qint64 waitSeconds = initialWait;
 
   if (type == QStringLiteral("exponential")) {

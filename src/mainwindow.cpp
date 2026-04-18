@@ -2402,7 +2402,8 @@ void MainWindow::processErrorRetries() {
       QDateTime timestamp = QDateTime::fromString(timestampStr, Qt::ISODate);
       int errorCount = 1;
       if (error.contains(QStringLiteral("pastErrors"))) {
-        errorCount += error.value(QStringLiteral("pastErrors")).toArray().size();
+        errorCount +=
+            error.value(QStringLiteral("pastErrors")).toArray().size();
       }
       qint64 backoffSecs = QueueModel::calculateBackoff(errorCount);
       if (timestamp.isValid() && timestamp.secsTo(now) >= backoffSecs) {
@@ -2555,7 +2556,8 @@ void MainWindow::onSessionCreatedResult(bool success,
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
                                QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-      waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60, QueueModel::maxBackoffSeconds());
+      waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60,
+                                  QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else if (isResourceExhausted) {
