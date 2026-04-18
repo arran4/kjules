@@ -1,0 +1,136 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -2415,7 +2415,7 @@
+         for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+           if (m_sessionModel
+                   ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+-                  .toString() == QStringLiteral("COMPLETED")) {
++                  .toString() == QStringLiteral("DONE")) {
+             QJsonObject session = m_sessionModel->getSession(i);
+             m_archiveModel->addSession(session);
+             m_sessionModel->removeSession(i);
+@@ -2469,32 +2469,7 @@
+       m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
+       [this]() {
+-        int count = 0;
+-        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+-          if (m_sessionModel
+-                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+-                  .toString() == QStringLiteral("ERROR")) {
+-            QJsonObject session = m_sessionModel->getSession(i);
+-
+-            QJsonObject req;
+-            req[QStringLiteral("source")] =
+-                session.value(QStringLiteral("sourceContext"))
+-                    .toObject()
+-                    .value(QStringLiteral("source"))
+-                    .toString();
+-            req[QStringLiteral("prompt")] =
+-                session.value(QStringLiteral("prompt")).toString();
+-            if (session.contains(QStringLiteral("automationMode"))) {
+-              req[QStringLiteral("automationMode")] =
+-                  session.value(QStringLiteral("automationMode")).toString();
+-            }
+-
+-            m_queueModel->enqueue(req);
+-
+-            m_archiveModel->addSession(session);
+-            m_sessionModel->removeSession(i);
+-            count++;
+-          }
+-        }
+-        if (count > 0) {
+-          m_archiveModel->saveSessions();
+-          m_sessionModel->saveSessions();
+-          updateStatus(i18np("1 session duplicated to queue and archived.",
+-                             "%1 sessions duplicated to queue and archived.",
+-                             count));
+-        } else {
+-          updateStatus(i18n("No sessions in \"Failed\" state found."));
+-        }
++        duplicateFollowingItemsToQueue(QStringLiteral("ERROR"), i18n("Failed"));
+       });
+
+@@ -2517,32 +2492,7 @@
+       m_duplicatePausedToQueueAndArchiveAction, &QAction::triggered, this,
+       [this]() {
+-        int count = 0;
+-        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+-          if (m_sessionModel
+-                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+-                  .toString() == QStringLiteral("PAUSED")) {
+-            QJsonObject session = m_sessionModel->getSession(i);
+-
+-            QJsonObject req;
+-            req[QStringLiteral("source")] =
+-                session.value(QStringLiteral("sourceContext"))
+-                    .toObject()
+-                    .value(QStringLiteral("source"))
+-                    .toString();
+-            req[QStringLiteral("prompt")] =
+-                session.value(QStringLiteral("prompt")).toString();
+-            if (session.contains(QStringLiteral("automationMode"))) {
+-              req[QStringLiteral("automationMode")] =
+-                  session.value(QStringLiteral("automationMode")).toString();
+-            }
+-
+-            m_queueModel->enqueue(req);
+-
+-            m_archiveModel->addSession(session);
+-            m_sessionModel->removeSession(i);
+-            count++;
+-          }
+-        }
+-        if (count > 0) {
+-          m_archiveModel->saveSessions();
+-          m_sessionModel->saveSessions();
+-          updateStatus(i18np("1 session duplicated to queue and archived.",
+-                             "%1 sessions duplicated to queue and archived.",
+-                             count));
+-        } else {
+-          updateStatus(i18n("No sessions in \"Paused\" state found."));
+-        }
++        duplicateFollowingItemsToQueue(QStringLiteral("PAUSED"), i18n("Paused"));
+       });
+
+@@ -2565,32 +2515,7 @@
+       m_duplicateCanceledToQueueAndArchiveAction, &QAction::triggered, this,
+       [this]() {
+-        int count = 0;
+-        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+-          if (m_sessionModel
+-                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+-                  .toString() == QStringLiteral("CANCELED")) {
+-            QJsonObject session = m_sessionModel->getSession(i);
+-
+-            QJsonObject req;
+-            req[QStringLiteral("source")] =
+-                session.value(QStringLiteral("sourceContext"))
+-                    .toObject()
+-                    .value(QStringLiteral("source"))
+-                    .toString();
+-            req[QStringLiteral("prompt")] =
+-                session.value(QStringLiteral("prompt")).toString();
+-            if (session.contains(QStringLiteral("automationMode"))) {
+-              req[QStringLiteral("automationMode")] =
+-                  session.value(QStringLiteral("automationMode")).toString();
+-            }
+-
+-            m_queueModel->enqueue(req);
+-
+-            m_archiveModel->addSession(session);
+-            m_sessionModel->removeSession(i);
+-            count++;
+-          }
+-        }
+-        if (count > 0) {
+-          m_archiveModel->saveSessions();
+-          m_sessionModel->saveSessions();
+-          updateStatus(i18np("1 session duplicated to queue and archived.",
+-                             "%1 sessions duplicated to queue and archived.",
+-                             count));
+-        } else {
+-          updateStatus(i18n("No sessions in \"Canceled\" state found."));
+-        }
++        duplicateFollowingItemsToQueue(QStringLiteral("CANCELED"), i18n("Canceled"));
+       });

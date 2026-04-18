@@ -2415,7 +2415,7 @@ void MainWindow::createActions() {
         for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
           if (m_sessionModel
                   ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
-                  .toString() == QStringLiteral("COMPLETED")) {
+                  .toString() == QStringLiteral("DONE")) {
             QJsonObject session = m_sessionModel->getSession(i);
             m_archiveModel->addSession(session);
             m_sessionModel->removeSession(i);
@@ -2466,46 +2466,11 @@ void MainWindow::createActions() {
   actionCollection()->addAction(
       QStringLiteral("duplicate_failed_to_queue_and_archive"),
       m_duplicateFailedToQueueAndArchiveAction);
-  connect(
-      m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
-      [this]() {
-        int count = 0;
-        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
-          if (m_sessionModel
-                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
-                  .toString() == QStringLiteral("ERROR")) {
-            QJsonObject session = m_sessionModel->getSession(i);
-
-            QJsonObject req;
-            req[QStringLiteral("source")] =
-                session.value(QStringLiteral("sourceContext"))
-                    .toObject()
-                    .value(QStringLiteral("source"))
-                    .toString();
-            req[QStringLiteral("prompt")] =
-                session.value(QStringLiteral("prompt")).toString();
-            if (session.contains(QStringLiteral("automationMode"))) {
-              req[QStringLiteral("automationMode")] =
-                  session.value(QStringLiteral("automationMode")).toString();
-            }
-
-            m_queueModel->enqueue(req);
-
-            m_archiveModel->addSession(session);
-            m_sessionModel->removeSession(i);
-            count++;
-          }
-        }
-        if (count > 0) {
-          m_archiveModel->saveSessions();
-          m_sessionModel->saveSessions();
-          updateStatus(i18np("1 session duplicated to queue and archived.",
-                             "%1 sessions duplicated to queue and archived.",
-                             count));
-        } else {
-          updateStatus(i18n("No sessions in \"Failed\" state found."));
-        }
-      });
+  connect(m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("ERROR"),
+                                           i18n("Failed"));
+          });
 
   m_duplicatePausedToQueueAndArchiveAction =
       new QAction(i18n("Duplicate all Following items that are in \"Paused\" "
@@ -2514,46 +2479,11 @@ void MainWindow::createActions() {
   actionCollection()->addAction(
       QStringLiteral("duplicate_paused_to_queue_and_archive"),
       m_duplicatePausedToQueueAndArchiveAction);
-  connect(
-      m_duplicatePausedToQueueAndArchiveAction, &QAction::triggered, this,
-      [this]() {
-        int count = 0;
-        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
-          if (m_sessionModel
-                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
-                  .toString() == QStringLiteral("PAUSED")) {
-            QJsonObject session = m_sessionModel->getSession(i);
-
-            QJsonObject req;
-            req[QStringLiteral("source")] =
-                session.value(QStringLiteral("sourceContext"))
-                    .toObject()
-                    .value(QStringLiteral("source"))
-                    .toString();
-            req[QStringLiteral("prompt")] =
-                session.value(QStringLiteral("prompt")).toString();
-            if (session.contains(QStringLiteral("automationMode"))) {
-              req[QStringLiteral("automationMode")] =
-                  session.value(QStringLiteral("automationMode")).toString();
-            }
-
-            m_queueModel->enqueue(req);
-
-            m_archiveModel->addSession(session);
-            m_sessionModel->removeSession(i);
-            count++;
-          }
-        }
-        if (count > 0) {
-          m_archiveModel->saveSessions();
-          m_sessionModel->saveSessions();
-          updateStatus(i18np("1 session duplicated to queue and archived.",
-                             "%1 sessions duplicated to queue and archived.",
-                             count));
-        } else {
-          updateStatus(i18n("No sessions in \"Paused\" state found."));
-        }
-      });
+  connect(m_duplicatePausedToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("PAUSED"),
+                                           i18n("Paused"));
+          });
 
   m_duplicateCanceledToQueueAndArchiveAction =
       new QAction(i18n("Duplicate all Following items that are in \"Canceled\" "
@@ -2562,46 +2492,11 @@ void MainWindow::createActions() {
   actionCollection()->addAction(
       QStringLiteral("duplicate_canceled_to_queue_and_archive"),
       m_duplicateCanceledToQueueAndArchiveAction);
-  connect(
-      m_duplicateCanceledToQueueAndArchiveAction, &QAction::triggered, this,
-      [this]() {
-        int count = 0;
-        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
-          if (m_sessionModel
-                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
-                  .toString() == QStringLiteral("CANCELED")) {
-            QJsonObject session = m_sessionModel->getSession(i);
-
-            QJsonObject req;
-            req[QStringLiteral("source")] =
-                session.value(QStringLiteral("sourceContext"))
-                    .toObject()
-                    .value(QStringLiteral("source"))
-                    .toString();
-            req[QStringLiteral("prompt")] =
-                session.value(QStringLiteral("prompt")).toString();
-            if (session.contains(QStringLiteral("automationMode"))) {
-              req[QStringLiteral("automationMode")] =
-                  session.value(QStringLiteral("automationMode")).toString();
-            }
-
-            m_queueModel->enqueue(req);
-
-            m_archiveModel->addSession(session);
-            m_sessionModel->removeSession(i);
-            count++;
-          }
-        }
-        if (count > 0) {
-          m_archiveModel->saveSessions();
-          m_sessionModel->saveSessions();
-          updateStatus(i18np("1 session duplicated to queue and archived.",
-                             "%1 sessions duplicated to queue and archived.",
-                             count));
-        } else {
-          updateStatus(i18n("No sessions in \"Canceled\" state found."));
-        }
-      });
+  connect(m_duplicateCanceledToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("CANCELED"),
+                                           i18n("Canceled"));
+          });
 
   m_purgeArchiveAction = new QAction(i18n("Purge archive"), this);
   actionCollection()->addAction(QStringLiteral("purge_archive"),
@@ -2848,6 +2743,45 @@ void MainWindow::updateCountdownStatus() {
       timeStr = i18np("1 second", "%1 seconds", secondsLeft);
     }
     updateStatus(i18n("Next attempt in %1...", timeStr));
+  }
+}
+
+void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState,
+                                                const QString &stateName) {
+  int count = 0;
+  for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+    if (m_sessionModel
+            ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+            .toString() == targetState) {
+      QJsonObject session = m_sessionModel->getSession(i);
+
+      QJsonObject req;
+      req[QStringLiteral("source")] =
+          session.value(QStringLiteral("sourceContext"))
+              .toObject()
+              .value(QStringLiteral("source"))
+              .toString();
+      req[QStringLiteral("prompt")] =
+          session.value(QStringLiteral("prompt")).toString();
+      if (session.contains(QStringLiteral("automationMode"))) {
+        req[QStringLiteral("automationMode")] =
+            session.value(QStringLiteral("automationMode")).toString();
+      }
+
+      m_queueModel->enqueue(req);
+
+      m_archiveModel->addSession(session);
+      m_sessionModel->removeSession(i);
+      count++;
+    }
+  }
+  if (count > 0) {
+    m_archiveModel->saveSessions();
+    m_sessionModel->saveSessions();
+    updateStatus(i18np("1 session duplicated to queue and archived.",
+                       "%1 sessions duplicated to queue and archived.", count));
+  } else {
+    updateStatus(i18n("No sessions in \"%1\" state found.", stateName));
   }
 }
 

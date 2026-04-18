@@ -98,6 +98,8 @@ private Q_SLOTS:
   void importTemplates();
   void copyTemplateToClipboard(const QModelIndex &index);
   void pasteTemplateFromClipboard();
+  void duplicateFollowingItemsToQueue(const QString &targetState,
+                                      const QString &stateName);
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
