@@ -12,6 +12,7 @@
 #include <QIcon>
 #include <QInputDialog>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -313,6 +314,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QWidget *centralWidget = new QWidget(this);
   centralWidget->setLayout(mainLayout);
   setCentralWidget(centralWidget);
+
+  m_filterEdit->installEventFilter(this);
+  m_unselectedView->installEventFilter(this);
+  m_selectedView->installEventFilter(this);
 
   // Setup Actions
   QAction *closeAction =
@@ -734,6 +739,50 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   } else {
     m_filterEdit->setFocus();
   }
+}
+
+bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
+  if (event->type() == QEvent::KeyPress) {
+    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+    auto focusList = [](QListView *view, QSortFilterProxyModel *proxy) {
+      view->setFocus();
+      if (!view->currentIndex().isValid() && proxy->rowCount() > 0) {
+        view->setCurrentIndex(proxy->index(0, 0));
+      }
+      return true;
+    };
+
+    auto handleUp = [this](QListView *view) {
+      QModelIndex currentIdx = view->currentIndex();
+      if (!currentIdx.isValid() || currentIdx.row() == 0) {
+        m_filterEdit->setFocus();
+        return true;
+      }
+      return false;
+    };
+
+    if (obj == m_filterEdit && keyEvent->key() == Qt::Key_Down) {
+      if (m_unselectedProxy->rowCount() > 0) {
+        return focusList(m_unselectedView, m_unselectedProxy);
+      }
+    } else if (obj == m_unselectedView) {
+      if (keyEvent->key() == Qt::Key_Right) {
+        return focusList(m_selectedView, m_selectedProxy);
+      } else if (keyEvent->key() == Qt::Key_Up) {
+        if (handleUp(m_unselectedView))
+          return true;
+      }
+    } else if (obj == m_selectedView) {
+      if (keyEvent->key() == Qt::Key_Left) {
+        return focusList(m_unselectedView, m_unselectedProxy);
+      } else if (keyEvent->key() == Qt::Key_Up) {
+        if (handleUp(m_selectedView))
+          return true;
+      }
+    }
+  }
+  return KXmlGuiWindow::eventFilter(obj, event);
 }
 
 QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
