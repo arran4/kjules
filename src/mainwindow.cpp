@@ -3014,7 +3014,8 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
   if (!index.isValid())
     return;
   if (!m_holdingView->selectionModel()->isSelected(index)) {
-    m_holdingView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_holdingView->selectionModel()->select(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
     m_holdingView->setCurrentIndex(index);
   }
   int row = index.row();
@@ -3077,7 +3078,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   if (!index.isValid())
     return;
   if (!m_queueView->selectionModel()->isSelected(index)) {
-    m_queueView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_queueView->selectionModel()->select(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
     m_queueView->setCurrentIndex(index);
   }
   int row = index.row();

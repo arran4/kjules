@@ -440,9 +440,11 @@ void QueueModel::moveItem(int from, int to) {
   if (beginMoveRows(QModelIndex(), from, from, QModelIndex(),
                     destinationChild)) {
     if (from < to)
-      std::rotate(m_items.begin() + from, m_items.begin() + from + 1, m_items.begin() + to + 1);
+      std::rotate(m_items.begin() + from, m_items.begin() + from + 1,
+                  m_items.begin() + to + 1);
     else
-      std::rotate(m_items.begin() + to, m_items.begin() + from, m_items.begin() + from + 1);
+      std::rotate(m_items.begin() + to, m_items.begin() + from,
+                  m_items.begin() + from + 1);
     endMoveRows();
     save();
   }
