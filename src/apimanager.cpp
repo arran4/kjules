@@ -515,7 +515,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   connect(
       reply, &QNetworkReply::finished, this,
-      [this, reply, request, json, data]() {
+      [this, reply, request, json, data, requestData]() {
         QByteArray responseData = reply->readAll();
         if (reply->error() == QNetworkReply::NoError) {
           QJsonDocument doc = QJsonDocument::fromJson(responseData);
@@ -588,7 +588,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
                                 httpRes;
 
           QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
-          Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr,
+          Q_EMIT sessionCreationFailed(requestData, errDoc.object(), errorStr,
                                        httpDetails);
           QString errorMsg = QStringLiteral("Failed to create session: ") +
                              reply->errorString();
