@@ -147,20 +147,15 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
-    QFont font;
-    bool hasFontChanges = false;
+    bool hasUnread = session.hasUnreadChanges;
+    bool hasPR = (index.column() == ColPR && !session.prNumber.isEmpty());
 
-    if (index.column() == ColPR && !session.prNumber.isEmpty()) {
-      font.setUnderline(true);
-      hasFontChanges = true;
-    }
-
-    if (session.hasUnreadChanges) {
-      font.setBold(true);
-      hasFontChanges = true;
-    }
-
-    if (hasFontChanges) {
+    if (hasUnread || hasPR) {
+      QFont font;
+      if (hasUnread)
+        font.setBold(true);
+      if (hasPR)
+        font.setUnderline(true);
       return font;
     }
   }
