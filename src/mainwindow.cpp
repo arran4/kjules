@@ -2116,6 +2116,68 @@ void MainWindow::createActions() {
     }
   });
 
+  m_openJulesUrlAction = new QAction(i18n("Open Jules URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_jules_url"),
+                                m_openJulesUrlAction);
+  connect(m_openJulesUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+    int count = 0;
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString id =
+          m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+
+      if (!id.isEmpty()) {
+        QString urlStr =
+            QStringLiteral("https://jules.google.com/session/") + id;
+        QDesktopServices::openUrl(QUrl(urlStr));
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(
+          i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
+    } else {
+      updateStatus(i18n("Invalid session ID for opening Jules URL."));
+    }
+  });
+
+  m_openGithubUrlAction = new QAction(i18n("Open Github URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_github_url"),
+                                m_openGithubUrlAction);
+  connect(m_openGithubUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+    int count = 0;
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString prUrl =
+          m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
+
+      if (!prUrl.isEmpty()) {
+        QDesktopServices::openUrl(QUrl(prUrl));
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(
+          i18np("Opened 1 Github URL.", "Opened %1 Github URLs.", count));
+    } else {
+      updateStatus(i18n("No Github PR URLs found for selected sessions."));
+    }
+  });
+
   m_openUrlAction = new QAction(i18n("Open URL"), this);
   actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
   connect(m_openUrlAction, &QAction::triggered, this, [this]() {
@@ -2198,6 +2260,154 @@ void MainWindow::createActions() {
                                 m_toggleQueueAction);
   connect(m_toggleQueueAction, &QAction::triggered, this,
           &MainWindow::toggleQueueState);
+
+  m_archiveMergedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"PR merged\" state"),
+      this);
+  actionCollection()->addAction(QStringLiteral("archive_merged_following"),
+                                m_archiveMergedFollowingAction);
+  connect(m_archiveMergedFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      if (m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::PrStatusRole)
+              .toString() == QStringLiteral("merged")) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_sessionModel->removeSession(i);
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_archiveModel->saveSessions();
+      m_sessionModel->saveSessions();
+      updateStatus(
+          i18np("1 session archived.", "%1 sessions archived.", count));
+    } else {
+      updateStatus(i18n("No sessions in \"PR merged\" state found."));
+    }
+  });
+
+  m_archivePausedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Paused\" state"), this);
+  actionCollection()->addAction(QStringLiteral("archive_paused_following"),
+                                m_archivePausedFollowingAction);
+  connect(m_archivePausedFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      if (m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+              .toString() == QStringLiteral("PAUSED")) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_sessionModel->removeSession(i);
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_archiveModel->saveSessions();
+      m_sessionModel->saveSessions();
+      updateStatus(
+          i18np("1 session archived.", "%1 sessions archived.", count));
+    } else {
+      updateStatus(i18n("No sessions in \"Paused\" state found."));
+    }
+  });
+
+  m_archiveFailedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Failed\" state"), this);
+  actionCollection()->addAction(QStringLiteral("archive_failed_following"),
+                                m_archiveFailedFollowingAction);
+  connect(m_archiveFailedFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      if (m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+              .toString() == QStringLiteral("ERROR")) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_sessionModel->removeSession(i);
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_archiveModel->saveSessions();
+      m_sessionModel->saveSessions();
+      updateStatus(
+          i18np("1 session archived.", "%1 sessions archived.", count));
+    } else {
+      updateStatus(i18n("No sessions in \"Failed\" state found."));
+    }
+  });
+
+  m_duplicateFailedToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Failed\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_failed_to_queue_and_archive"),
+      m_duplicateFailedToQueueAndArchiveAction);
+  connect(
+      m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
+      [this]() {
+        int count = 0;
+        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+          if (m_sessionModel
+                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+                  .toString() == QStringLiteral("ERROR")) {
+            QJsonObject session = m_sessionModel->getSession(i);
+
+            QJsonObject req;
+            req[QStringLiteral("source")] =
+                session.value(QStringLiteral("sourceContext"))
+                    .toObject()
+                    .value(QStringLiteral("source"))
+                    .toString();
+            req[QStringLiteral("prompt")] =
+                session.value(QStringLiteral("prompt")).toString();
+            if (session.contains(QStringLiteral("automationMode"))) {
+              req[QStringLiteral("automationMode")] =
+                  session.value(QStringLiteral("automationMode")).toString();
+            }
+
+            m_queueModel->enqueue(req);
+
+            m_archiveModel->addSession(session);
+            m_sessionModel->removeSession(i);
+            count++;
+          }
+        }
+        if (count > 0) {
+          m_archiveModel->saveSessions();
+          m_sessionModel->saveSessions();
+          updateStatus(i18np("1 session duplicated to queue and archived.",
+                             "%1 sessions duplicated to queue and archived.",
+                             count));
+        } else {
+          updateStatus(i18n("No sessions in \"Failed\" state found."));
+        }
+      });
+
+  m_purgeArchiveAction = new QAction(i18n("Purge archive"), this);
+  actionCollection()->addAction(QStringLiteral("purge_archive"),
+                                m_purgeArchiveAction);
+  connect(m_purgeArchiveAction, &QAction::triggered, this, [this]() {
+    int count = m_archiveModel->rowCount();
+    if (count > 0) {
+      if (QMessageBox::question(
+              this, i18n("Purge Archive"),
+              i18np("Are you sure you want to purge the archive (1 session)?",
+                    "Are you sure you want to purge the archive (%1 sessions)?",
+                    count)) == QMessageBox::Yes) {
+        m_archiveModel->clearSessions();
+        m_archiveModel->saveSessions();
+        updateStatus(i18np("Archive purged (1 session removed).",
+                           "Archive purged (%1 sessions removed).", count));
+      }
+    } else {
+      updateStatus(i18n("Archive is already empty."));
+    }
+  });
 
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
