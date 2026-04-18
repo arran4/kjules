@@ -300,13 +300,6 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
 }
 
 void QueueModel::enqueueItem(const QueueItem &item) {
-  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-  m_items.append(item);
-  endInsertRows();
-
-  if (!m_isHolding) {
-    m_jobsSinceLastWait++;
-  }
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   QString tier = config.readEntry("Tier", QStringLiteral("free"));
   int jobsBeforeWait = 3;
@@ -316,19 +309,11 @@ void QueueModel::enqueueItem(const QueueItem &item) {
     jobsBeforeWait = 30;
   }
 
-    KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
-    QString tier = config.readEntry("Tier", QStringLiteral("free"));
-    int jobsBeforeWait = 3;
-    if (tier == QStringLiteral("pro")) {
-      jobsBeforeWait = 15;
-    } else if (tier == QStringLiteral("max")) {
-      jobsBeforeWait = 30;
-    }
+  pruneRunTimestamps();
 
-    pruneRunTimestamps();
+  int waitTime = config.readEntry("WaitTime", 3600);
 
-    int waitTime = config.readEntry("WaitTime", 3600);
-
+  if (!m_isHolding) {
     if (m_jobsSinceLastWait >= jobsBeforeWait) {
       beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
       QueueItem waitItem;
@@ -338,12 +323,12 @@ void QueueModel::enqueueItem(const QueueItem &item) {
       endInsertRows();
       m_jobsSinceLastWait = 0;
     }
+    m_jobsSinceLastWait++;
   }
 
   beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   m_items.append(item);
   endInsertRows();
-  m_jobsSinceLastWait++;
 
   save();
 }
