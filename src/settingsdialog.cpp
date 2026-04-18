@@ -100,8 +100,11 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
-  m_followingAutoRefreshCombo->setCurrentIndex(
-      sessionConfig.readEntry("FollowingAutoRefreshIndex", 0));
+  int followingInterval = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
+  if (followingIndex >= 0) {
+    m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
+  }
   formLayout->addRow(i18n("Following auto-refresh:"),
                      m_followingAutoRefreshCombo);
 
@@ -208,8 +211,8 @@ void SettingsDialog::onSave() {
                              QStringLiteral("SessionWindow"));
   sessionConfig.writeEntry("AutoRefreshIndex",
                            m_globalAutoRefreshCombo->currentIndex());
-  sessionConfig.writeEntry("FollowingAutoRefreshIndex",
-                           m_followingAutoRefreshCombo->currentIndex());
+  sessionConfig.writeEntry("FollowingAutoRefreshInterval",
+                           m_followingAutoRefreshCombo->currentData().toInt());
   sessionConfig.writeEntry("AutoArchiveEnabled",
                            m_autoArchiveCheckbox->isChecked());
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());

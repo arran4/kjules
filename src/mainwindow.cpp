@@ -2304,15 +2304,7 @@ void MainWindow::loadQueueSettings() {
 void MainWindow::updateFollowingRefreshTimer() {
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
                              QStringLiteral("SessionWindow"));
-  int index = sessionConfig.readEntry("FollowingAutoRefreshIndex", 0);
-  int seconds = 0;
-  switch (index) {
-  case 1: seconds = 300; break;  // 5 minutes
-  case 2: seconds = 900; break;  // 15 minutes
-  case 3: seconds = 1800; break; // 30 minutes
-  case 4: seconds = 3600; break; // 1 hour
-  default: seconds = 0; break;   // Off
-  }
+  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
 
   if (seconds > 0) {
     m_followingRefreshTimer->start(seconds * 1000);
