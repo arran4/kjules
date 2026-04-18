@@ -3226,6 +3226,16 @@ void MainWindow::onSourcesRefreshFinished() {
                 "Source refresh completed: %1 new sources found.",
                 m_sourcesAddedCount));
     }
+
+    KNotification *notification = new KNotification(
+        QStringLiteral("sourcesRefreshFinished"), KNotification::CloseOnTimeout,
+        this);
+    notification->setTitle(i18n("Sources Refresh Finished"));
+    notification->setText(i18n("Loaded %1 sources in total, %2 new.",
+                               m_sourcesLoadedCount, m_sourcesAddedCount));
+    connect(notification, &KNotification::closed, notification,
+            &QObject::deleteLater);
+    notification->sendEvent();
   } else {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
                       m_sourcesLoadedCount, m_sourcesAddedCount));
