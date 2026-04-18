@@ -89,7 +89,7 @@ private Q_SLOTS:
   void sendQueueItemNow(int row);
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
-  void showErrorDetails(int row);
+  void showErrorDetails(int row, QueueModel *model);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
   void restoreData();

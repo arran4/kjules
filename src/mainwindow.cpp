@@ -2676,7 +2676,7 @@ void MainWindow::onQueueActivated(const QModelIndex &index) {
   int row = index.row();
   QueueItem item = m_queueModel->getItem(row);
   if (item.errorCount > 0) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_queueModel);
   } else {
     editQueueItem(row);
   }
@@ -2706,7 +2706,7 @@ void MainWindow::onHoldingActivated(const QModelIndex &index) {
   int row = index.row();
   QueueItem item = m_holdingModel->getItem(row);
   if (item.errorCount > 0) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_holdingModel);
   }
 }
 
@@ -2714,7 +2714,6 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
   QModelIndex index = m_holdingView->indexAt(pos);
   if (!index.isValid())
     return;
-  int row = index.row();
 
   QMenu menu;
   QAction *requeueAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
@@ -2778,7 +2777,7 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
   if (errorAction && selected == errorAction) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_queueModel);
   } else if (selected == editAction) {
     editQueueItem(row);
   } else if (selected == deleteAction) {
@@ -2826,22 +2825,22 @@ void MainWindow::sendQueueItemNow(int row) {
   m_apiManager->createSessionAsync(item.requestData);
 }
 
-void MainWindow::showErrorDetails(int row) {
-  QueueItem item = m_queueModel->getItem(row);
+void MainWindow::showErrorDetails(int row, QueueModel *model) {
+  QueueItem item = model->getItem(row);
   if (item.requestData.isEmpty())
     return;
 
   ErrorWindow *window = new ErrorWindow(row, item, this);
   connect(window, &ErrorWindow::editRequested, this,
           &MainWindow::editQueueItem);
-  connect(window, &ErrorWindow::deleteRequested, this, [this](int r) {
-    m_queueModel->removeItem(r);
-    updateStatus(i18n("Task removed from queue."));
+  connect(window, &ErrorWindow::deleteRequested, this, [this, model](int r) {
+    model->removeItem(r);
+    updateStatus(i18n("Task removed."));
   });
   connect(window, &ErrorWindow::draftRequested, this,
           &MainWindow::convertQueueItemToDraft);
-  connect(window, &ErrorWindow::templateRequested, this, [this, row]() {
-    QueueItem item = m_queueModel->getItem(row);
+  connect(window, &ErrorWindow::templateRequested, this, [this, row, model]() {
+    QueueItem item = model->getItem(row);
     if (item.requestData.isEmpty())
       return;
     SaveDialog dlg(QStringLiteral("Template"), this);
