@@ -540,9 +540,11 @@ void MainWindow::setupUi() {
                            .toString();
           QAction *openJulesUrlAction = nullptr;
           QAction *copyJulesUrlAction = nullptr;
+          QAction *copyJulesIdAction = nullptr;
           if (!id.isEmpty()) {
             openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
             copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
+            copyJulesIdAction = menu.addAction(i18n("Copy Jules ID"));
           }
 
           QString prUrl =
@@ -638,7 +640,7 @@ void MainWindow::setupUi() {
             }
           });
 
-          if (openJulesUrlAction && copyJulesUrlAction) {
+          if (openJulesUrlAction && copyJulesUrlAction && copyJulesIdAction) {
             connect(openJulesUrlAction, &QAction::triggered, [this]() {
               QModelIndexList selectedRows =
                   m_sessionView->selectionModel()->selectedRows();
@@ -686,6 +688,30 @@ void MainWindow::setupUi() {
                 updateStatus(i18np("1 Jules URL copied to clipboard.",
                                    "%1 Jules URLs copied to clipboard.",
                                    urls.size()));
+              }
+            });
+            connect(copyJulesIdAction, &QAction::triggered, [this]() {
+              QModelIndexList selectedRows =
+                  m_sessionView->selectionModel()->selectedRows();
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_sessionView->model());
+              QStringList ids;
+              for (const QModelIndex &idx : selectedRows) {
+                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+                QString currentId =
+                    m_sessionModel->data(mappedIdx, SessionModel::IdRole)
+                        .toString();
+                if (!currentId.isEmpty()) {
+                  ids.append(currentId);
+                }
+              }
+              if (!ids.isEmpty()) {
+                QGuiApplication::clipboard()->setText(
+                    ids.join(QLatin1Char('\n')));
+                updateStatus(i18np("1 Jules ID copied to clipboard.",
+                                   "%1 Jules IDs copied to clipboard.",
+                                   ids.size()));
               }
             });
           }
