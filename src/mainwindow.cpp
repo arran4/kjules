@@ -77,9 +77,12 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)),
-      m_queueModel(new QueueModel(this)), m_errorsModel(new ErrorsModel(this)),
-      m_errorRetryTimer(new QTimer(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_queueModel(new QueueModel(this)),
+      m_holdingModel(
+          new QueueModel(this, QStringLiteral("holding.json"), true)),
+      m_errorsModel(new ErrorsModel(this)), m_errorRetryTimer(new QTimer(this)),
+      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
       m_queuePaused(false), m_refreshProgressWindow(nullptr) {
@@ -790,6 +793,8 @@ void MainWindow::setupUi() {
                     auto window = new NewSessionDialog(
                         m_sourceModel, m_templatesModel, hasApiKey, this);
                     window->setInitialData(initData);
+                    connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+                            &MainWindow::refreshSources);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -1228,6 +1233,12 @@ void MainWindow::setupUi() {
   m_queueView->setModel(m_queueModel);
   m_queueView->setItemDelegate(new QueueDelegate(this));
   m_queueView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_queueView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_queueView->setDragDropMode(QAbstractItemView::DragDrop);
+  m_queueView->setDragEnabled(true);
+  m_queueView->setAcceptDrops(true);
+  m_queueView->setDropIndicatorShown(true);
+  m_queueView->setDefaultDropAction(Qt::MoveAction);
   connect(m_queueView, &QListView::activated, this,
           &MainWindow::onQueueActivated);
   connect(m_queueView, &QListView::customContextMenuRequested, this,
@@ -1265,6 +1276,62 @@ void MainWindow::setupUi() {
   m_queueView->addAction(queueDeleteAction);
 
   m_tabWidget->addTab(m_queueView, i18n("Queue"));
+
+  m_holdingView = new QListView(this);
+  m_holdingView->setModel(m_holdingModel);
+  m_holdingView->setItemDelegate(new QueueDelegate(this));
+  m_holdingView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_holdingView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_holdingView->setDragDropMode(QAbstractItemView::DragDrop);
+  m_holdingView->setDragEnabled(true);
+  m_holdingView->setAcceptDrops(true);
+  m_holdingView->setDropIndicatorShown(true);
+  m_holdingView->setDefaultDropAction(Qt::MoveAction);
+  connect(m_holdingView, &QListView::activated, this,
+          &MainWindow::onHoldingActivated);
+  connect(m_holdingView, &QListView::customContextMenuRequested, this,
+          &MainWindow::onHoldingContextMenu);
+
+  m_deleteHoldingItemsLambda = [this]() {
+    QModelIndexList selectedRows =
+        m_holdingView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    if (QMessageBox::question(
+            this, i18n("Remove Task"),
+            i18np("Remove this task from the holding queue?",
+                  "Remove these tasks from the holding queue?",
+                  selectedRows.size())) == QMessageBox::Yes) {
+      QList<int> rowsToDelete;
+      for (const QModelIndex &idx : selectedRows) {
+        if (!rowsToDelete.contains(idx.row())) {
+          rowsToDelete.append(idx.row());
+        }
+      }
+      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+      for (int row : rowsToDelete) {
+        m_holdingModel->removeItem(row);
+      }
+      updateStatus(i18np("Task removed from holding queue.",
+                         "%1 tasks removed from holding queue.",
+                         rowsToDelete.size()));
+    }
+  };
+
+  QAction *holdingDeleteAction = new QAction(i18n("Delete"), m_holdingView);
+  holdingDeleteAction->setShortcut(QKeySequence::Delete);
+  holdingDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(holdingDeleteAction, &QAction::triggered, m_deleteHoldingItemsLambda);
+  m_holdingView->addAction(holdingDeleteAction);
+
+  connect(m_holdingModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateHoldingTabVisibility);
+  updateHoldingTabVisibility();
 
   // Errors View
   QWidget *errTab = new QWidget(this);
@@ -1672,7 +1739,7 @@ void MainWindow::setupTrayIcon() {
 
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   m_trayMenu->addAction(newSessionAction);
 
   m_trayMenu->addSeparator();
@@ -1706,10 +1773,11 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
                   i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
+  KGlobalAccel::setGlobalShortcut(
+      newSessionAction, QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_J));
   actionCollection()->setDefaultShortcut(newSessionAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_N));
 
@@ -1907,7 +1975,8 @@ void MainWindow::createActions() {
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
-  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction,
+                                  QKeySequence(Qt::META | Qt::Key_J));
   actionCollection()->setDefaultShortcut(toggleWindowAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_M));
 
@@ -2264,16 +2333,21 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
-void MainWindow::showNewSessionDialog() {
+void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
   connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
+  if (!initialData.isEmpty()) {
+    window->setInitialData(initialData);
+  }
   window->show();
 }
 
@@ -2599,6 +2673,8 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(templateData);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2615,9 +2691,75 @@ void MainWindow::onQueueActivated(const QModelIndex &index) {
   int row = index.row();
   QueueItem item = m_queueModel->getItem(row);
   if (item.errorCount > 0) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_queueModel);
   } else {
     editQueueItem(row);
+  }
+}
+
+void MainWindow::updateHoldingTabVisibility() {
+  int holdingIdx = m_tabWidget->indexOf(m_holdingView);
+  if (m_holdingModel->isEmpty()) {
+    if (holdingIdx != -1) {
+      m_tabWidget->removeTab(holdingIdx);
+    }
+  } else {
+    if (holdingIdx == -1) {
+      int queueIdx = m_tabWidget->indexOf(m_queueView);
+      if (queueIdx != -1) {
+        m_tabWidget->insertTab(queueIdx + 1, m_holdingView, i18n("Holding"));
+      } else {
+        m_tabWidget->addTab(m_holdingView, i18n("Holding"));
+      }
+    } else {
+      m_tabWidget->setTabText(holdingIdx,
+                              i18n("Holding (%1)", m_holdingModel->size()));
+    }
+  }
+}
+
+void MainWindow::onHoldingActivated(const QModelIndex &index) {
+  int row = index.row();
+  QueueItem item = m_holdingModel->getItem(row);
+  if (item.errorCount > 0) {
+    showErrorDetails(row, m_holdingModel);
+  }
+}
+
+void MainWindow::onHoldingContextMenu(const QPoint &pos) {
+  QModelIndex index = m_holdingView->indexAt(pos);
+  if (!index.isValid())
+    return;
+
+  QMenu menu;
+  QAction *requeueAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
+  QAction *deleteAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
+
+  QAction *selected = menu.exec(m_holdingView->viewport()->mapToGlobal(pos));
+  if (selected == requeueAction) {
+    QModelIndexList selectedRows =
+        m_holdingView->selectionModel()->selectedRows();
+    QList<int> rowsToRequeue;
+    for (const QModelIndex &idx : selectedRows) {
+      if (!rowsToRequeue.contains(idx.row())) {
+        rowsToRequeue.append(idx.row());
+      }
+    }
+    std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
+    for (int r : rowsToRequeue) {
+      QueueItem item = m_holdingModel->getItem(r);
+      m_holdingModel->removeItem(r);
+      item.isWaitItem = false;
+      m_queueModel->enqueueItem(item);
+    }
+    updateStatus(i18np("Task moved back to queue.",
+                       "%1 tasks moved back to queue.", rowsToRequeue.size()));
+  } else if (selected == deleteAction) {
+    if (m_deleteHoldingItemsLambda) {
+      m_deleteHoldingItemsLambda();
+    }
   }
 }
 
@@ -2649,10 +2791,14 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
   QAction *sendAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
+  menu.addSeparator();
+  QAction *holdAction =
+      menu.addAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
+                     i18n("Move to Holding"));
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
   if (errorAction && selected == errorAction) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_queueModel);
   } else if (selected == editAction) {
     editQueueItem(row);
   } else if (selected == deleteAction) {
@@ -2672,11 +2818,37 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     }
   } else if (selected == sendAction) {
     sendQueueItemNow(row);
+  } else if (selected == holdAction) {
+    QModelIndexList selectedRows =
+        m_queueView->selectionModel()->selectedRows();
+    QList<int> rowsToHold;
+    for (const QModelIndex &idx : selectedRows) {
+      if (!rowsToHold.contains(idx.row())) {
+        rowsToHold.append(idx.row());
+      }
+    }
+    std::sort(rowsToHold.begin(), rowsToHold.end(), std::greater<int>());
+    for (int r : rowsToHold) {
+      QueueItem holdItem = m_queueModel->getItem(r);
+      m_queueModel->removeItem(r);
+      holdItem.isWaitItem = false;
+      m_holdingModel->enqueueItem(holdItem);
+    }
+    updateStatus(i18np("Task moved to holding queue.",
+                       "%1 tasks moved to holding queue.", rowsToHold.size()));
   }
 }
 
 void MainWindow::sendQueueItemNow(int row) {
   QueueItem item = m_queueModel->getItem(row);
+  if (item.isWaitItem) {
+    m_queueModel->removeItem(row);
+    updateStatus(i18n("Wait item removed from queue."));
+    if (row == 0) {
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    }
+    return;
+  }
   if (item.requestData.isEmpty())
     return;
   m_queueModel->removeItem(row);
@@ -2684,22 +2856,22 @@ void MainWindow::sendQueueItemNow(int row) {
   m_apiManager->createSessionAsync(item.requestData);
 }
 
-void MainWindow::showErrorDetails(int row) {
-  QueueItem item = m_queueModel->getItem(row);
+void MainWindow::showErrorDetails(int row, QueueModel *model) {
+  QueueItem item = model->getItem(row);
   if (item.requestData.isEmpty())
     return;
 
   ErrorWindow *window = new ErrorWindow(row, item, this);
   connect(window, &ErrorWindow::editRequested, this,
           &MainWindow::editQueueItem);
-  connect(window, &ErrorWindow::deleteRequested, this, [this](int r) {
-    m_queueModel->removeItem(r);
-    updateStatus(i18n("Task removed from queue."));
+  connect(window, &ErrorWindow::deleteRequested, this, [this, model](int r) {
+    model->removeItem(r);
+    updateStatus(i18n("Task removed."));
   });
   connect(window, &ErrorWindow::draftRequested, this,
           &MainWindow::convertQueueItemToDraft);
-  connect(window, &ErrorWindow::templateRequested, this, [this, row]() {
-    QueueItem item = m_queueModel->getItem(row);
+  connect(window, &ErrorWindow::templateRequested, this, [this, row, model]() {
+    QueueItem item = model->getItem(row);
     if (item.requestData.isEmpty())
       return;
     SaveDialog dlg(QStringLiteral("Template"), this);
@@ -2731,6 +2903,8 @@ void MainWindow::editQueueItem(int row) {
 
   QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -2873,6 +3047,8 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -2904,6 +3080,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -2955,6 +3133,8 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(initData);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2963,6 +3143,31 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::duplicateRequested, this,
+          [this](const QJsonObject &sessionData) {
+            QJsonObject initData;
+            initData[QStringLiteral("prompt")] =
+                sessionData.value(QStringLiteral("prompt")).toString();
+            const QJsonObject sourceContext =
+                sessionData.value(QStringLiteral("sourceContext")).toObject();
+            const QString source =
+                sourceContext.value(QStringLiteral("source")).toString();
+            if (!source.isEmpty()) {
+              QJsonObject sourceObj;
+              sourceObj[QStringLiteral("name")] = source;
+              const QString branch =
+                  sourceContext.value(QStringLiteral("githubRepoContext"))
+                      .toObject()
+                      .value(QStringLiteral("startingBranch"))
+                      .toString();
+              if (!branch.isEmpty()) {
+                sourceObj[QStringLiteral("branch")] = branch;
+              }
+              initData[QStringLiteral("sources")] = QJsonArray{sourceObj};
+            }
+            showNewSessionDialog(initData);
+          });
+
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
             SaveDialog dlg(QStringLiteral("Template"), this);
@@ -3009,6 +3214,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
+  m_sessionModel->markAsRead(sessionId);
   SessionWindow *window = new SessionWindow(
       session, m_apiManager, m_sessionModel->contains(sessionId), this);
   connect(window, &SessionWindow::watchRequested, this,
@@ -3030,10 +3236,12 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   if (sessionData.isEmpty()) {
     QString id =
         m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+    m_sessionModel->markAsRead(id);
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+    m_sessionModel->markAsRead(sessionId);
     SessionWindow *window = new SessionWindow(
         sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
     connect(window, &SessionWindow::watchRequested, this,

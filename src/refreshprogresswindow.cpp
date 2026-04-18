@@ -52,6 +52,12 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
             &RefreshProgressWindow::onSessionAutoArchived);
   }
 
+  MainWindow *mainWindow = qobject_cast<MainWindow *>(parent);
+  if (mainWindow) {
+    connect(mainWindow, &MainWindow::sessionAutoArchived, this,
+            &RefreshProgressWindow::onSessionAutoArchived);
+  }
+
   // Start processing asynchronously so the UI can show up
   QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
                             Qt::QueuedConnection);
@@ -147,6 +153,12 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
       finishCurrentTask(id);
     }
   }
+}
+
+void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
+                                                  const QString &reason) {
+  m_textBrowser->append(i18n(
+      "<font color='orange'>Session %1 auto-archived: %2</font>", id, reason));
 }
 
 void RefreshProgressWindow::onGithubPullRequestInfoReceived(

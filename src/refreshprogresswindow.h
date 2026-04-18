@@ -38,6 +38,7 @@ private Q_SLOTS:
   void onGithubPullRequestFailed(const QString &prUrl, const QString &message);
 
   void onSessionAutoArchived(const QString &id, const QString &reason);
+  void onErrorOccurred(const QString &message);
 
 private:
   void finishCurrentTask(const QString &id);

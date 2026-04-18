@@ -18,7 +18,9 @@
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
+#include <QIcon>
 #include <QSortFilterProxyModel>
+#include <QStatusBar>
 #include <QTextEdit>
 #include <QVBoxLayout>
 
@@ -40,7 +42,8 @@ public:
           sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
       if (m_selectedSources->contains(name)) {
         QString branch = m_selectedSources->value(name);
-        return name + QStringLiteral(" (") + branch + QStringLiteral(")");
+        QString displayName = sourceModel()->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
+        return displayName + QStringLiteral(" (") + branch + QStringLiteral(")");
       }
     }
     return QSortFilterProxyModel::data(index, role);
@@ -174,11 +177,13 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
         QString name =
             m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+        QString displayName =
+            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
 
         QString currentBranch = m_selectedSources.value(name);
         bool ok;
         QString newBranch = QInputDialog::getText(
-            this, tr("Select Branch"), tr("Branch for %1:").arg(name),
+            this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
             QLineEdit::Normal, currentBranch, &ok);
         if (ok && !newBranch.isEmpty()) {
           m_selectedSources[name] = newBranch;
@@ -423,6 +428,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           [keepSourceAction](bool checked) {
             keepSourceAction->setChecked(!checked);
           });
+
+  QAction *refreshSourcesAction =
+      actionCollection()->addAction(QStringLiteral("refresh_sources"));
+  refreshSourcesAction->setText(tr("Refresh Sources"));
+  refreshSourcesAction->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+  connect(refreshSourcesAction, &QAction::triggered, this, [this]() {
+    statusBar()->showMessage(tr("Refresh requested..."), 3000);
+    Q_EMIT refreshSourcesRequested();
+  });
 
   setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
 }
