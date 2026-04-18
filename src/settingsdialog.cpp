@@ -57,11 +57,45 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueIntervalEdit->setValue(queueConfig.readEntry("TimerInterval", 1));
   formLayout->addRow(i18n("Queue processing interval:"), m_queueIntervalEdit);
 
+  m_queueBackoffTypeCombo = new QComboBox(this);
+  m_queueBackoffTypeCombo->addItem(i18n("Fixed"), QStringLiteral("fixed"));
+  m_queueBackoffTypeCombo->addItem(i18n("Exponential"), QStringLiteral("exponential"));
+  m_queueBackoffTypeCombo->addItem(i18n("Random"), QStringLiteral("random"));
+  QString currentBackoffType = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  int backoffTypeIndex = m_queueBackoffTypeCombo->findData(currentBackoffType);
+  if (backoffTypeIndex >= 0) {
+    m_queueBackoffTypeCombo->setCurrentIndex(backoffTypeIndex);
+  }
+  formLayout->addRow(i18n("Queue failure backoff type:"), m_queueBackoffTypeCombo);
+
   m_queueBackoffEdit = new QSpinBox(this);
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
   m_queueBackoffEdit->setSuffix(i18n(" minutes"));
   m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  formLayout->addRow(i18n("Queue failure backoff:"), m_queueBackoffEdit);
+  formLayout->addRow(i18n("Queue failure fixed/initial backoff:"), m_queueBackoffEdit);
+
+  m_queueBackoffExpBaseEdit = new QSpinBox(this);
+  m_queueBackoffExpBaseEdit->setRange(1, 100);
+  m_queueBackoffExpBaseEdit->setValue(queueConfig.readEntry("BackoffExpBase", 2));
+  formLayout->addRow(i18n("Queue failure exponential base:"), m_queueBackoffExpBaseEdit);
+
+  m_queueBackoffRandomMinEdit = new QSpinBox(this);
+  m_queueBackoffRandomMinEdit->setRange(1, 10080);
+  m_queueBackoffRandomMinEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffRandomMinEdit->setValue(queueConfig.readEntry("BackoffRandomMin", 10));
+  formLayout->addRow(i18n("Queue failure random min:"), m_queueBackoffRandomMinEdit);
+
+  m_queueBackoffRandomMaxEdit = new QSpinBox(this);
+  m_queueBackoffRandomMaxEdit->setRange(1, 10080);
+  m_queueBackoffRandomMaxEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffRandomMaxEdit->setValue(queueConfig.readEntry("BackoffRandomMax", 60));
+  formLayout->addRow(i18n("Queue failure random max:"), m_queueBackoffRandomMaxEdit);
+
+  m_queueBackoffMaxEdit = new QSpinBox(this);
+  m_queueBackoffMaxEdit->setRange(1, 10080); // Up to 1 week
+  m_queueBackoffMaxEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffMaxEdit->setValue(queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
+  formLayout->addRow(i18n("Queue failure maximum backoff:"), m_queueBackoffMaxEdit);
 
   m_waitTimeEdit = new QSpinBox(this);
   m_waitTimeEdit->setRange(1, 10080);
@@ -190,7 +224,12 @@ void SettingsDialog::onSave() {
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
+  queueConfig.writeEntry("BackoffType", m_queueBackoffTypeCombo->currentData().toString());
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
+  queueConfig.writeEntry("BackoffExpBase", m_queueBackoffExpBaseEdit->value());
+  queueConfig.writeEntry("BackoffRandomMin", m_queueBackoffRandomMinEdit->value());
+  queueConfig.writeEntry("BackoffRandomMax", m_queueBackoffRandomMaxEdit->value());
+  queueConfig.writeEntry("BackoffMax", m_queueBackoffMaxEdit->value());
   queueConfig.sync();
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),

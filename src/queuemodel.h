@@ -26,8 +26,9 @@ struct QueueItem {
 
 class QueueModel : public QAbstractListModel {
   Q_OBJECT
-
 public:
+  static qint64 calculateBackoff(int errorCount);
+
   enum Roles {
     RequestDataRole = Qt::UserRole + 1,
     ErrorCountRole,

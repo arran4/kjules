@@ -8,6 +8,55 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
+#include <KConfigGroup>
+#include <KSharedConfig>
+#include <QRandomGenerator>
+#include <limits>
+
+qint64 QueueModel::calculateBackoff(int errorCount) {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+
+  QString type = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  qint64 initialWait = queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
+  qint64 waitSeconds = initialWait;
+
+  if (type == QStringLiteral("exponential")) {
+    int expBase = queueConfig.readEntry("BackoffExpBase", 2);
+    // Be careful with large error counts (e.g. over 30) to avoid overflow
+    // If errorCount is 1, waitSeconds = initialWait * expBase^0 = initialWait
+    // If errorCount is 2, waitSeconds = initialWait * expBase^1 = initialWait * expBase
+    int power = qMax(0, errorCount - 1);
+    if (power > 20) power = 20; // Prevent huge shifts
+    qint64 multiplier = 1;
+    bool overflow = false;
+    for (int i = 0; i < power; ++i) {
+      if (multiplier > std::numeric_limits<qint64>::max() / expBase) {
+        overflow = true;
+        break;
+      }
+      multiplier *= expBase;
+    }
+
+    if (overflow || initialWait > std::numeric_limits<qint64>::max() / multiplier) {
+      waitSeconds = std::numeric_limits<qint64>::max();
+    } else {
+      waitSeconds = initialWait * multiplier;
+    }
+  } else if (type == QStringLiteral("random")) {
+    int randMin = queueConfig.readEntry("BackoffRandomMin", 10) * 60;
+    int randMax = queueConfig.readEntry("BackoffRandomMax", 60) * 60;
+    if (randMax > randMin) {
+      waitSeconds = QRandomGenerator::global()->bounded(randMin, randMax + 1);
+    } else {
+      waitSeconds = randMin;
+    }
+  }
+
+  qint64 maxWait = queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
+  if (maxWait < 0) maxWait = 8 * 60 * 60; // Failsafe
+
+  return qMin(waitSeconds, maxWait);
+}
 
 QJsonObject QueueItem::toJson() const {
   QJsonObject obj;
@@ -163,13 +212,16 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 
   pruneRunTimestamps();
 
-  int waitTime = config.readEntry("WaitTime", 3600);
+  qint64 waitTime = config.readEntry("WaitTime", 3600);
 
   if (m_jobsSinceLastWait >= jobsBeforeWait) {
     beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
     QueueItem waitItem;
     waitItem.isWaitItem = true;
-    waitItem.waitSeconds = waitTime;
+    KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+    qint64 maxWait = queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
+    if (maxWait < 0) maxWait = 8 * 60 * 60;
+    waitItem.waitSeconds = qMin(waitTime, maxWait);
     m_items.append(waitItem);
     endInsertRows();
     m_jobsSinceLastWait = 0;
@@ -323,7 +375,10 @@ void QueueModel::checkAndPrependDailyLimitWait() {
         }
       }
 
-      waitItem.waitSeconds = secondsUntilNext;
+      KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+      qint64 maxWait = queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
+      if (maxWait < 0) maxWait = 8 * 60 * 60;
+      waitItem.waitSeconds = qMin(secondsUntilNext, maxWait);
       prependWaitItem(waitItem);
     }
   }
