@@ -1,7 +1,5 @@
 set(kjulesrunner_SRCS kjulesrunner.cpp kjulesrunner.h)
 
-if (QT_MAJOR_VERSION STREQUAL "6")
-    add_library(kjulesrunner MODULE ${kjulesrunner_SRCS})
-    target_link_libraries(kjulesrunner Qt6::Core Qt6::DBus KF6::Runner KF6::I18n)
-    install(TARGETS kjulesrunner DESTINATION ${KDE_INSTALL_PLUGINDIR}/kf${QT_MAJOR_VERSION}/krunner)
-endif()
+add_library(kjulesrunner MODULE ${kjulesrunner_SRCS})
+target_link_libraries(kjulesrunner Qt6::Core Qt6::DBus KF6::Runner KF6::I18n)
+install(TARGETS kjulesrunner DESTINATION ${KDE_INSTALL_PLUGINDIR}/kf6/krunner)

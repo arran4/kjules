@@ -1,0 +1,94 @@
+--- CMakeLists.txt
++++ CMakeLists.txt
+@@ -7,9 +7,5 @@
+-if(NOT DEFINED QT_MAJOR_VERSION)
+-    set(QT_MAJOR_VERSION 6)
+-endif()
+-
+-set(QT_DEFAULT_MAJOR_VERSION ${QT_MAJOR_VERSION})
++set(QT_MAJOR_VERSION 6)
+
+ set(CMAKE_AUTOMOC ON)
+ set(CMAKE_AUTORCC ON)
+@@ -23,10 +19,5 @@
+-if (QT_MAJOR_VERSION STREQUAL "6")
+-    find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test DBus)
+-    find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive Runner)
+-else()
+-    find_package(Qt5 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test DBus)
+-    find_package(KF5 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
+-endif()
++find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test DBus)
++find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive Runner)
+
+ include(KDEInstallDirs)
+@@ -83,32 +74,15 @@
+-if (QT_MAJOR_VERSION STREQUAL "6")
+-    target_link_libraries(kjules
+-        Qt6::Core
+-        Qt6::Gui
+-        Qt6::Widgets
+-        Qt6::Network
+-        KF6::CoreAddons
+-        KF6::I18n
+-        KF6::Wallet
+-        KF6::Notifications
+-        KF6::XmlGui
+-        KF6::ConfigCore
+-        KF6::WidgetsAddons
+-        KF6::GlobalAccel
+-        KF6::Archive
+-    )
+-else()
+-    target_link_libraries(kjules
+-        Qt5::Core
+-        Qt5::Gui
+-        Qt5::Widgets
+-        Qt5::Network
+-        KF5::CoreAddons
+-        KF5::I18n
+-        KF5::Wallet
+-        KF5::Notifications
+-        KF5::XmlGui
+-        KF5::ConfigCore
+-        KF5::WidgetsAddons
+-        KF5::GlobalAccel
+-        KF5::Archive
+-    )
+-endif()
++target_link_libraries(kjules
++    Qt6::Core
++    Qt6::Gui
++    Qt6::Widgets
++    Qt6::Network
++    KF6::CoreAddons
++    KF6::I18n
++    KF6::Wallet
++    KF6::Notifications
++    KF6::XmlGui
++    KF6::ConfigCore
++    KF6::WidgetsAddons
++    KF6::GlobalAccel
++    KF6::Archive
++)
+@@ -121,9 +95,4 @@
+-if (QT_MAJOR_VERSION STREQUAL "6")
+-    install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
+-    install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
+-else()
+-    install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/kjules)
+-    install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFY5RCDIR})
+-endif()
++install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
++install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
+--- src/runner/CMakeLists.txt
++++ src/runner/CMakeLists.txt
+@@ -2,8 +2,3 @@
+-if (QT_MAJOR_VERSION STREQUAL "6")
+-    add_library(kjulesrunner MODULE ${kjulesrunner_SRCS})
+-    target_link_libraries(kjulesrunner Qt6::Core Qt6::DBus KF6::Runner KF6::I18n)
+-    install(TARGETS kjulesrunner DESTINATION ${KDE_INSTALL_PLUGINDIR}/kf${QT_MAJOR_VERSION}/krunner)
+-endif()
++add_library(kjulesrunner MODULE ${kjulesrunner_SRCS})
++target_link_libraries(kjulesrunner Qt6::Core Qt6::DBus KF6::Runner KF6::I18n)
++install(TARGETS kjulesrunner DESTINATION ${KDE_INSTALL_PLUGINDIR}/kf6/krunner)
