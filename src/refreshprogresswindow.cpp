@@ -52,12 +52,6 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
             &RefreshProgressWindow::onSessionAutoArchived);
   }
 
-  MainWindow *mainWindow = qobject_cast<MainWindow *>(parent);
-  if (mainWindow) {
-    connect(mainWindow, &MainWindow::sessionAutoArchived, this,
-            &RefreshProgressWindow::onSessionAutoArchived);
-  }
-
   // Start processing asynchronously so the UI can show up
   QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
                             Qt::QueuedConnection);
@@ -117,7 +111,7 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
     m_activeTasks.remove(id);
 
     // Remove the id from the multimap
-    QMutableMapIterator<QString, QString> i(m_activeTasksPrUrls);
+    QMutableMultiMapIterator<QString, QString> i(m_activeTasksPrUrls);
     while (i.hasNext()) {
       i.next();
       if (i.value() == id) {
@@ -192,10 +186,4 @@ void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId,
              cleanId, message));
     finishCurrentTask(cleanId);
   }
-}
-
-void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
-                                                  const QString &reason) {
-  m_textBrowser->append(i18n(
-      "<font color='orange'>Session %1 auto-archived: %2</font>", id, reason));
 }
