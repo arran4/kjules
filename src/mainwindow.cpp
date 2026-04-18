@@ -1433,6 +1433,7 @@ void MainWindow::setupUi() {
           QMenu menu;
           QAction *editAction = menu.addAction(i18n("Edit / Modify"));
           QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
+          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
           QAction *requeueAction = menu.addAction(i18n("Requeue"));
@@ -1444,6 +1445,21 @@ void MainWindow::setupUi() {
             for (const QModelIndex &idx : selectedRows) {
               onErrorActivated(idx);
             }
+          });
+
+          connect(requeueAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
+            QList<int> rowsToRequeue;
+            for (const QModelIndex &idx : selectedRows) {
+              if (!rowsToRequeue.contains(idx.row())) {
+                rowsToRequeue.append(idx.row());
+              }
+            }
+            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
+            for (int row : rowsToRequeue) {
+              requeueError(row);
+            }
+            updateStatus(i18n("Requeued selected errors."));
           });
 
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
@@ -1553,6 +1569,22 @@ void MainWindow::setupUi() {
                 if (!m_queuePaused && !m_queueTimer->isActive()) {
                   m_queueTimer->start();
                 }
+              });
+
+              connect(window, &ErrorWindow::requeueRequested, [this](int row) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+                QueueItem item;
+                item.requestData = req;
+                if (errData.contains(QStringLiteral("pastErrors"))) {
+                  item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
+                }
+                QJsonObject strippedError = errData;
+                strippedError.remove(QStringLiteral("pastErrors"));
+                item.pastErrors.append(strippedError);
+                m_queueModel->enqueueItem(item);
+                m_errorsModel->removeError(row);
+                updateStatus(i18n("Error requeued."));
               });
 
               window->setAttribute(Qt::WA_DeleteOnClose);
@@ -3244,6 +3276,21 @@ void MainWindow::sendQueueItemNow(int row) {
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
   m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::requeueError(int sourceRow) {
+  QJsonObject errData = m_errorsModel->getError(sourceRow);
+  QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+  QueueItem item;
+  item.requestData = req;
+  if (errData.contains(QStringLiteral("pastErrors"))) {
+    item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
+  }
+  QJsonObject strippedError = errData;
+  strippedError.remove(QStringLiteral("pastErrors"));
+  item.pastErrors.append(strippedError);
+  m_queueModel->enqueueItem(item);
+  m_errorsModel->removeError(sourceRow);
 }
 
 void MainWindow::showErrorDetails(int row, QueueModel *model) {
