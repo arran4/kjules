@@ -3,7 +3,9 @@
 #include "mainwindow.h"
 #include "sessionmodel.h"
 
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTextBrowser>
@@ -14,9 +16,12 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
                                              SessionModel *sessionModel,
                                              QWidget *parent)
     : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()),
-      m_currentIndex(0), m_apiManager(apiManager), m_sessionModel(sessionModel),
+      m_currentIndex(0), m_processedCount(0),m_apiManager(apiManager), m_sessionModel(sessionModel),
       m_isFinished(false) {
   setWindowTitle(i18n("Refresh Progress"));
+
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  m_maxWorkers = config.readEntry("RefreshWorkers", 3);
   resize(600, 400);
 
   QVBoxLayout *layout = new QVBoxLayout(this);
@@ -39,8 +44,12 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
 
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           &RefreshProgressWindow::onSessionReloaded);
-  connect(m_apiManager, &APIManager::errorOccurred, this,
-          &RefreshProgressWindow::onErrorOccurred);
+  connect(m_apiManager, &APIManager::sessionReloadFailed, this,
+          &RefreshProgressWindow::onSessionReloadFailed);
+  connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
+          &RefreshProgressWindow::onGithubPullRequestInfoReceived);
+  connect(m_apiManager, &APIManager::githubPullRequestFailed, this,
+          &RefreshProgressWindow::onGithubPullRequestFailed);
 
   MainWindow *mainWindow = qobject_cast<MainWindow *>(parent);
   if (mainWindow) {
@@ -82,7 +91,7 @@ void RefreshProgressWindow::processNext() {
     return;
   }
 
-  if (m_currentIndex >= m_totalCount) {
+  if (m_processedCount >= m_totalCount) {
     m_textBrowser->append(i18n("<b>Finished.</b>"));
     m_closeButton->setEnabled(true);
     m_isFinished = true;
@@ -90,10 +99,32 @@ void RefreshProgressWindow::processNext() {
     return;
   }
 
-  QString id = m_queue[m_currentIndex];
-  QString link = getSessionLink(id);
-  m_textBrowser->append(i18n("Refreshing session %1...", link));
-  m_apiManager->reloadSession(id);
+  while (m_activeTasks.size() < m_maxWorkers && m_currentIndex < m_totalCount) {
+    QString id = m_queue[m_currentIndex];
+
+    QString cleanId = APIManager::cleanSessionId(id);
+
+    m_activeTasks.insert(cleanId);
+    m_textBrowser->append(i18n("Refreshing session %1...", cleanId));
+    m_apiManager->reloadSession(id); // Pass the original one, it gets cleaned
+    m_currentIndex++;
+  }
+}
+
+void RefreshProgressWindow::finishCurrentTask(const QString &id) {
+  if (m_activeTasks.contains(id)) {
+    m_activeTasks.remove(id);
+
+    // Remove the id from the multimap
+    auto keys = m_activeTasksPrUrls.keys(id);
+    for (const QString &key : keys) {
+      m_activeTasksPrUrls.remove(key, id);
+    }
+
+    m_processedCount++;
+    m_progressBar->setValue(m_processedCount);
+    processNext();
+  }
 }
 
 void RefreshProgressWindow::onAnchorClicked(const QUrl &url) {
@@ -116,15 +147,27 @@ QString RefreshProgressWindow::getSessionLink(const QString &id) const {
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
-  QString id = session.value(QStringLiteral("id")).toString();
-  // Verify it's the one we are waiting for just in case
-  if (m_currentIndex < m_totalCount && id == m_queue[m_currentIndex]) {
+  QString id = APIManager::cleanSessionId(
+      session.value(QStringLiteral("id")).toString());
+  if (m_activeTasks.contains(id)) {
     QString link = getSessionLink(id);
     m_textBrowser->append(i18n(
         "<font color='green'>Successfully reloaded session %1.</font>", link));
-    m_currentIndex++;
-    m_progressBar->setValue(m_currentIndex);
-    processNext();
+
+    QString prUrl;
+    if (session.contains(QStringLiteral("pullRequest"))) {
+      QJsonObject prObj =
+          session.value(QStringLiteral("pullRequest")).toObject();
+      prUrl = prObj.value(QStringLiteral("url")).toString();
+    }
+
+    if (!prUrl.isEmpty()) {
+      m_textBrowser->append(i18n("Fetching GitHub PR info for %1...", id));
+      m_activeTasksPrUrls.insert(prUrl, id);
+      m_apiManager->fetchGithubPullRequest(prUrl);
+    } else {
+      finishCurrentTask(id);
+    }
   }
 }
 
@@ -135,17 +178,36 @@ void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
       "<font color='orange'>Session %1 auto-archived: %2</font>", link, reason));
 }
 
-void RefreshProgressWindow::onErrorOccurred(const QString &message) {
-  // The APIManager emits this for any error. We assume it correlates to the
-  // current item being processed.
-  if (m_currentIndex < m_totalCount) {
-    QString id = m_queue[m_currentIndex];
+void RefreshProgressWindow::onGithubPullRequestInfoReceived(
+    const QString &prUrl, const QJsonObject &info) {
+  Q_UNUSED(info);
+  QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
+  for (const QString &id : idsToFinish) {
+    m_textBrowser->append(i18n(
+        "<font color='green'>Successfully fetched PR info for %1.</font>", id));
+    finishCurrentTask(id);
+  }
+}
+
+void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl,
+                                                      const QString &message) {
+  QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
+  for (const QString &id : idsToFinish) {
     QString link = getSessionLink(id);
     m_textBrowser->append(
-        i18n("<font color='red'>Failed to reload session %1: %2</font>", link,
+        i18n("<font color='orange'>GitHub fetch failed for %1: %2</font>", link,
              message));
-    m_currentIndex++;
-    m_progressBar->setValue(m_currentIndex);
-    processNext();
+    finishCurrentTask(id);
+  }
+}
+
+void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId,
+                                                  const QString &message) {
+  QString cleanId = APIManager::cleanSessionId(sessionId);
+  if (m_activeTasks.contains(cleanId)) {
+    m_textBrowser->append(
+        i18n("<font color='red'>Failed to reload session %1: %2</font>",
+             cleanId, message));
+    finishCurrentTask(cleanId);
   }
 }
