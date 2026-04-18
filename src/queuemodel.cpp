@@ -196,10 +196,15 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
   }
 
   // External move handling
+  int currentDestRow = destRow;
+  if (currentDestRow < 0) {
+    currentDestRow = m_items.size();
+  }
   for (int i = 0; i < itemsArray.size(); ++i) {
     QueueItem newItem = QueueItem::fromJson(itemsArray[i].toObject());
     newItem.isWaitItem = false;
-    enqueueItem(newItem);
+    insertItem(currentDestRow, newItem);
+    currentDestRow++;
   }
 
   return true;
@@ -328,6 +333,21 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 
   beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
   m_items.append(item);
+  endInsertRows();
+
+  save();
+}
+
+void QueueModel::insertItem(int index, const QueueItem &item) {
+  if (index < 0) {
+    index = 0;
+  }
+  if (index > m_items.size()) {
+    index = m_items.size();
+  }
+
+  beginInsertRows(QModelIndex(), index, index);
+  m_items.insert(index, item);
   endInsertRows();
 
   save();
