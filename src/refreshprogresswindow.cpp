@@ -111,16 +111,9 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
     m_activeTasks.remove(id);
 
     // Remove the id from the multimap
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QMutableMultiMapIterator<QString, QString> i(m_activeTasksPrUrls);
-#else
-    QMutableMapIterator<QString, QString> i(m_activeTasksPrUrls);
-#endif
-    while (i.hasNext()) {
-      i.next();
-      if (i.value() == id) {
-        i.remove();
-      }
+    auto keys = m_activeTasksPrUrls.keys(id);
+    for (const QString &key : keys) {
+      m_activeTasksPrUrls.remove(key, id);
     }
 
     m_processedCount++;
