@@ -42,7 +42,7 @@ public:
           sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
       if (m_selectedSources->contains(name)) {
         QString branch = m_selectedSources->value(name);
-        QString displayName = sourceModel()->data(sourceIdx, Qt::DisplayRole).toString();
+        QString displayName = sourceModel()->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
         return displayName + QStringLiteral(" (") + branch + QStringLiteral(")");
       }
     }
