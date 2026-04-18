@@ -1,14 +1,14 @@
 #include "newsessiondialog.h"
 #include "savedialog.h"
 #include "templateselectiondialog.h"
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
-#include <KConfigGroup>
-#include <KSharedConfig>
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
@@ -71,7 +71,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       m_templatesModel(templatesModel) {
   setWindowTitle(tr("Create New Session"));
 
-  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("NewSessionDialog"));
   if (!restoreGeometry(config.readEntry("Geometry", QByteArray()))) {
     resize(700, 600);
   }
@@ -525,7 +526,8 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
 }
 
 void NewSessionDialog::hideEvent(QHideEvent *event) {
-  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("NewSessionDialog"));
   config.writeEntry("Geometry", saveGeometry());
   config.sync();
   QDialog::hideEvent(event);
