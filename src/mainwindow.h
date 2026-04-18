@@ -112,6 +112,8 @@ private Q_SLOTS:
   void autoRefreshFollowing();
 
 private:
+  QStringList getSelectedSessionIds() const;
+
   void updateFollowingRefreshTimer();
   void setupUi();
   void setupTrayIcon();

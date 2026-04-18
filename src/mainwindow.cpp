@@ -289,6 +289,23 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   }
 }
 
+QStringList MainWindow::getSelectedSessionIds() const {
+  QModelIndexList selectedRows =
+      m_sessionView->selectionModel()->selectedRows();
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+  QStringList ids;
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    QString currentId =
+        m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+    if (!currentId.isEmpty()) {
+      ids.append(currentId);
+    }
+  }
+  return ids;
+}
+
 void MainWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
@@ -548,9 +565,11 @@ void MainWindow::setupUi() {
                            .toString();
           QAction *openJulesUrlAction = nullptr;
           QAction *copyJulesUrlAction = nullptr;
+          QAction *copyJulesIdAction = nullptr;
           if (!id.isEmpty()) {
             openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
             copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
+            copyJulesIdAction = menu.addAction(i18n("Copy Jules ID"));
           }
 
           QString prUrl =
@@ -646,7 +665,7 @@ void MainWindow::setupUi() {
             }
           });
 
-          if (openJulesUrlAction && copyJulesUrlAction) {
+          if (openJulesUrlAction && copyJulesUrlAction && copyJulesIdAction) {
             connect(openJulesUrlAction, &QAction::triggered, [this]() {
               QModelIndexList selectedRows =
                   m_sessionView->selectionModel()->selectedRows();
@@ -671,22 +690,11 @@ void MainWindow::setupUi() {
                   i18np("Opened 1 session", "Opened %1 sessions", count));
             });
             connect(copyJulesUrlAction, &QAction::triggered, [this]() {
-              QModelIndexList selectedRows =
-                  m_sessionView->selectionModel()->selectedRows();
-              const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(
-                      m_sessionView->model());
+              QStringList ids = getSelectedSessionIds();
               QStringList urls;
-              for (const QModelIndex &idx : selectedRows) {
-                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-                QString currentId =
-                    m_sessionModel->data(mappedIdx, SessionModel::IdRole)
-                        .toString();
-                if (!currentId.isEmpty()) {
-                  urls.append(
-                      QStringLiteral("https://jules.google.com/session/") +
-                      currentId);
-                }
+              for (const QString &id : ids) {
+                urls.append(
+                    QStringLiteral("https://jules.google.com/session/") + id);
               }
               if (!urls.isEmpty()) {
                 QGuiApplication::clipboard()->setText(
@@ -694,6 +702,16 @@ void MainWindow::setupUi() {
                 updateStatus(i18np("1 Jules URL copied to clipboard.",
                                    "%1 Jules URLs copied to clipboard.",
                                    urls.size()));
+              }
+            });
+            connect(copyJulesIdAction, &QAction::triggered, [this]() {
+              QStringList ids = getSelectedSessionIds();
+              if (!ids.isEmpty()) {
+                QGuiApplication::clipboard()->setText(
+                    ids.join(QLatin1Char('\n')));
+                updateStatus(i18np("1 Jules ID copied to clipboard.",
+                                   "%1 Jules IDs copied to clipboard.",
+                                   ids.size()));
               }
             });
           }
