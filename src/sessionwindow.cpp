@@ -190,7 +190,7 @@ void SessionWindow::setupActions() {
   connect(openJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
     QDesktopServices::openUrl(
-        QUrl(QStringLiteral("https://jules.google.com/sessions/") + id));
+        QUrl(QStringLiteral("https://jules.google.com/session/") + id));
   });
   actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
@@ -198,7 +198,7 @@ void SessionWindow::setupActions() {
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
     QGuiApplication::clipboard()->setText(
-        QStringLiteral("https://jules.google.com/sessions/") + id);
+        QStringLiteral("https://jules.google.com/session/") + id);
   });
   actionCollection()->addAction(QStringLiteral("copy_jules"), copyJulesAction);
 
@@ -386,7 +386,7 @@ void SessionWindow::renderDetailsAndDiff() {
       QStringLiteral("</h2><table>");
 
   QString julesUrl =
-      QStringLiteral("https://jules.google.com/sessions/") + sessionId;
+      QStringLiteral("https://jules.google.com/session/") + sessionId;
   detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
                  QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");

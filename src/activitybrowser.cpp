@@ -453,7 +453,7 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity,
               i18n("View Pull Request") + QStringLiteral("</a>");
     }
     html += QStringLiteral(
-                "<a class='btn' href='https://jules.google.com/sessions/") +
+                "<a class='btn' href='https://jules.google.com/session/") +
             activity.value(QStringLiteral("name"))
                 .toString()
                 .split(QLatin1Char('/'))
