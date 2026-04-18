@@ -175,6 +175,10 @@ private:
   QAction *m_archiveMergedFollowingAction;
   QAction *m_archivePausedFollowingAction;
   QAction *m_archiveFailedFollowingAction;
+  QAction *m_archiveCompletedFollowingAction;
+  QAction *m_archiveCanceledFollowingAction;
+  QAction *m_duplicatePausedToQueueAndArchiveAction;
+  QAction *m_duplicateCanceledToQueueAndArchiveAction;
   QAction *m_duplicateFailedToQueueAndArchiveAction;
   QAction *m_purgeArchiveAction;
   QAction *m_openJulesUrlAction;
