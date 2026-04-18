@@ -793,8 +793,8 @@ void MainWindow::setupUi() {
                     auto window = new NewSessionDialog(
                         m_sourceModel, m_templatesModel, hasApiKey, this);
                     window->setInitialData(initData);
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
+                    connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+                            &MainWindow::refreshSources);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,

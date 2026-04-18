@@ -165,14 +165,7 @@ void APIManager::listActivities(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
+  QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
@@ -210,6 +203,22 @@ void APIManager::listActivities(const QString &sessionId) {
   });
 }
 
+QString APIManager::cleanSessionId(const QString &sessionId) {
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("session/"))) {
+    cleanId = cleanId.mid(8);
+  } else if (cleanId.startsWith(QStringLiteral("/session/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+  return cleanId;
+}
+
 void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
@@ -217,14 +226,7 @@ void APIManager::reloadSession(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
+  QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
@@ -236,7 +238,7 @@ void APIManager::reloadSession(const QString &sessionId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -247,9 +249,10 @@ void APIManager::reloadSession(const QString &sessionId) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(
-          QStringLiteral("Failed to reload session details: ") +
-          reply->errorString());
+      QString errorMsg = QStringLiteral("Failed to reload session details: ") +
+                         reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT sessionReloadFailed(sessionId, errorMsg);
     }
     reply->deleteLater();
   });
@@ -420,7 +423,12 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isObject()) {
         Q_EMIT githubPullRequestInfoReceived(prUrl, doc.object());
+      } else {
+        Q_EMIT githubPullRequestFailed(prUrl,
+                                       QStringLiteral("Invalid JSON response"));
       }
+    } else {
+      Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
     }
   });
 }
