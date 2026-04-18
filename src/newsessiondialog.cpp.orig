@@ -488,14 +488,6 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
         }
       }
     }
-  } else if (data.contains(QStringLiteral("sourceContext")) && data.value(QStringLiteral("sourceContext")).toObject().contains(QStringLiteral("sources"))) {
-    QJsonArray arr = data.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("sources")).toArray();
-    for (const auto &val : arr) {
-      QJsonObject sObj = val.toObject();
-      QString name = sObj.value(QStringLiteral("name")).toString();
-      QString branch = sObj.value(QStringLiteral("branch")).toString();
-      m_selectedSources.insert(name, branch);
-    }
   } else if (data.contains(QStringLiteral("source"))) {
     QString name = data.value(QStringLiteral("source")).toString();
     QString branch = data.value(QStringLiteral("startingBranch")).toString();
