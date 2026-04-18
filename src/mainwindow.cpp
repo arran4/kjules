@@ -3013,6 +3013,10 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
   QModelIndex index = m_holdingView->indexAt(pos);
   if (!index.isValid())
     return;
+  if (!m_holdingView->selectionModel()->isSelected(index)) {
+    m_holdingView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_holdingView->setCurrentIndex(index);
+  }
   int row = index.row();
 
   QMenu menu;
@@ -3072,6 +3076,10 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   QModelIndex index = m_queueView->indexAt(pos);
   if (!index.isValid())
     return;
+  if (!m_queueView->selectionModel()->isSelected(index)) {
+    m_queueView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_queueView->setCurrentIndex(index);
+  }
   int row = index.row();
 
   QueueItem item = m_queueModel->getItem(row);
