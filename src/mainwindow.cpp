@@ -1349,18 +1349,7 @@ void MainWindow::setupUi() {
             }
             std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
             for (int row : rowsToRequeue) {
-              QJsonObject errData = m_errorsModel->getError(row);
-              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-              QueueItem item;
-              item.requestData = req;
-              if (errData.contains(QStringLiteral("pastErrors"))) {
-                item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
-              }
-              QJsonObject strippedError = errData;
-              strippedError.remove(QStringLiteral("pastErrors"));
-              item.pastErrors.append(strippedError);
-              m_queueModel->enqueueItem(item);
-              m_errorsModel->removeError(row);
+              requeueError(row);
             }
             updateStatus(i18n("Requeued selected errors."));
           });
@@ -2727,6 +2716,21 @@ void MainWindow::sendQueueItemNow(int row) {
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
   m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::requeueError(int sourceRow) {
+  QJsonObject errData = m_errorsModel->getError(sourceRow);
+  QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+  QueueItem item;
+  item.requestData = req;
+  if (errData.contains(QStringLiteral("pastErrors"))) {
+    item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
+  }
+  QJsonObject strippedError = errData;
+  strippedError.remove(QStringLiteral("pastErrors"));
+  item.pastErrors.append(strippedError);
+  m_queueModel->enqueueItem(item);
+  m_errorsModel->removeError(sourceRow);
 }
 
 void MainWindow::showErrorDetails(int row) {
