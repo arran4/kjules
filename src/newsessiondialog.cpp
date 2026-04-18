@@ -19,6 +19,7 @@
 #include <QSet>
 #include <QShortcut>
 #include <QIcon>
+#include <QKeyEvent>
 #include <QSortFilterProxyModel>
 #include <QStatusBar>
 #include <QTextEdit>
@@ -300,6 +301,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QWidget *centralWidget = new QWidget(this);
   centralWidget->setLayout(mainLayout);
   setCentralWidget(centralWidget);
+
+  m_filterEdit->installEventFilter(this);
+  m_unselectedView->installEventFilter(this);
+  m_selectedView->installEventFilter(this);
 
   // Setup Actions
   QAction *closeAction =
@@ -709,6 +714,52 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   } else {
     m_filterEdit->setFocus();
   }
+}
+
+bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
+  if (event->type() == QEvent::KeyPress) {
+    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+    if (obj == m_filterEdit && keyEvent->key() == Qt::Key_Down) {
+      if (m_unselectedProxy->rowCount() > 0) {
+        m_unselectedView->setFocus();
+        if (!m_unselectedView->currentIndex().isValid()) {
+          m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
+        }
+        return true;
+      }
+    } else if (obj == m_unselectedView) {
+      if (keyEvent->key() == Qt::Key_Right) {
+        m_selectedView->setFocus();
+        if (!m_selectedView->currentIndex().isValid() &&
+            m_selectedProxy->rowCount() > 0) {
+          m_selectedView->setCurrentIndex(m_selectedProxy->index(0, 0));
+        }
+        return true;
+      } else if (keyEvent->key() == Qt::Key_Up) {
+        QModelIndex currentIdx = m_unselectedView->currentIndex();
+        if (!currentIdx.isValid() || currentIdx.row() == 0) {
+          m_filterEdit->setFocus();
+          return true;
+        }
+      }
+    } else if (obj == m_selectedView) {
+      if (keyEvent->key() == Qt::Key_Left) {
+        m_unselectedView->setFocus();
+        if (!m_unselectedView->currentIndex().isValid() &&
+            m_unselectedProxy->rowCount() > 0) {
+          m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
+        }
+        return true;
+      } else if (keyEvent->key() == Qt::Key_Up) {
+        QModelIndex currentIdx = m_selectedView->currentIndex();
+        if (!currentIdx.isValid() || currentIdx.row() == 0) {
+          m_filterEdit->setFocus();
+          return true;
+        }
+      }
+    }
+  }
+  return KXmlGuiWindow::eventFilter(obj, event);
 }
 
 QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {

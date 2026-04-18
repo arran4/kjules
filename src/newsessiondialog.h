@@ -56,6 +56,7 @@ private Q_SLOTS:
 
 protected:
   void showEvent(QShowEvent *event) override;
+  bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
   SourceModel *m_sourceModel;
