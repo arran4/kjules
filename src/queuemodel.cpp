@@ -422,6 +422,27 @@ QueueItem QueueModel::getItem(int index) const {
   return QueueItem();
 }
 
+void QueueModel::moveItem(int from, int to) {
+  if (from < 0 || from >= m_items.size() || to < 0 || to >= m_items.size() ||
+      from == to) {
+    return;
+  }
+
+  int destinationChild = (to > from) ? to + 1 : to;
+
+  if (beginMoveRows(QModelIndex(), from, from, QModelIndex(),
+                    destinationChild)) {
+    if (from < to)
+      std::rotate(m_items.begin() + from, m_items.begin() + from + 1,
+                  m_items.begin() + to + 1);
+    else
+      std::rotate(m_items.begin() + to, m_items.begin() + from,
+                  m_items.begin() + from + 1);
+    endMoveRows();
+    save();
+  }
+}
+
 void QueueModel::refreshWaitItems() {
   int start = -1;
   for (int i = 0; i < m_items.size(); ++i) {
