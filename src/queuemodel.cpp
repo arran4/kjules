@@ -54,8 +54,8 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   return item;
 }
 
-#include <QMimeData>
 #include <QDataStream>
+#include <QMimeData>
 
 QueueModel::QueueModel(QObject *parent, const QString &filename, bool isHolding)
     : QAbstractListModel(parent), m_filename(filename), m_isHolding(isHolding) {
@@ -99,13 +99,16 @@ QMimeData *QueueModel::mimeData(const QModelIndexList &indexes) const {
     }
   }
 
-  // Encode both the item data and original rows (useful for internal move detection)
+  // Encode both the item data and original rows (useful for internal move
+  // detection)
   stream << QJsonDocument(itemsArray).toJson(QJsonDocument::Compact);
   // Also encode source model pointer to detect internal moves
   stream << reinterpret_cast<quintptr>(this);
-  for (int r : std::as_const(sourceRows)) stream << r;
+  for (int r : std::as_const(sourceRows))
+    stream << r;
 
-  mimeData->setData(QStringLiteral("application/x-kjules-queue-item"), encodedData);
+  mimeData->setData(QStringLiteral("application/x-kjules-queue-item"),
+                    encodedData);
   return mimeData;
 }
 
@@ -126,7 +129,8 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
   else
     destRow = rowCount(QModelIndex());
 
-  QByteArray encodedData = data->data(QStringLiteral("application/x-kjules-queue-item"));
+  QByteArray encodedData =
+      data->data(QStringLiteral("application/x-kjules-queue-item"));
   QDataStream stream(&encodedData, QIODevice::ReadOnly);
 
   QByteArray jsonData;
@@ -152,36 +156,38 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
       sourceRows.append(r);
     }
 
-    // Process internal moves manually to avoid Qt ItemViews messing up the data structure.
-    // If we return true with MoveAction, Qt calls removeRows. So we return false and do the move manually.
+    // Process internal moves manually to avoid Qt ItemViews messing up the data
+    // structure. If we return true with MoveAction, Qt calls removeRows. So we
+    // return false and do the move manually.
     std::sort(sourceRows.begin(), sourceRows.end());
 
     // Edge case: moving to same place
-    if (sourceRows.size() == 1 && (destRow == sourceRows.first() || destRow == sourceRows.first() + 1)) {
-        return false;
+    if (sourceRows.size() == 1 &&
+        (destRow == sourceRows.first() || destRow == sourceRows.first() + 1)) {
+      return false;
     }
 
     QVector<QueueItem> newItems;
     QVector<QueueItem> movingItems;
     for (int i = 0; i < sourceRows.size(); ++i) {
-        movingItems.append(m_items.at(sourceRows[i]));
+      movingItems.append(m_items.at(sourceRows[i]));
     }
 
     int adjustedDestRow = destRow;
     for (int r : std::as_const(sourceRows)) {
-        if (r < destRow) {
-            adjustedDestRow--;
-        }
+      if (r < destRow) {
+        adjustedDestRow--;
+      }
     }
 
     beginResetModel();
     for (int i = 0; i < m_items.size(); ++i) {
-        if (!sourceRows.contains(i)) {
-            newItems.append(m_items[i]);
-        }
+      if (!sourceRows.contains(i)) {
+        newItems.append(m_items[i]);
+      }
     }
     for (int i = 0; i < movingItems.size(); ++i) {
-        newItems.insert(adjustedDestRow + i, movingItems[i]);
+      newItems.insert(adjustedDestRow + i, movingItems[i]);
     }
     m_items = newItems;
     endResetModel();
@@ -438,7 +444,8 @@ void QueueModel::recordRun() {
 }
 
 void QueueModel::checkAndPrependDailyLimitWait() {
-  if (m_isHolding) return;
+  if (m_isHolding)
+    return;
   pruneRunTimestamps();
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));

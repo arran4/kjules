@@ -78,10 +78,11 @@ MainWindow::MainWindow(QWidget *parent)
       m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)),
       m_queueModel(new QueueModel(this)),
-      m_holdingModel(new QueueModel(this, QStringLiteral("holding.json"), true)),
-      m_errorsModel(new ErrorsModel(this)),
-      m_errorRetryTimer(new QTimer(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_holdingModel(
+          new QueueModel(this, QStringLiteral("holding.json"), true)),
+      m_errorsModel(new ErrorsModel(this)), m_errorRetryTimer(new QTimer(this)),
+      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
       m_queuePaused(false), m_refreshProgressWindow(nullptr) {
@@ -1294,10 +1295,11 @@ void MainWindow::setupUi() {
         m_holdingView->selectionModel()->selectedRows();
     if (selectedRows.isEmpty())
       return;
-    if (QMessageBox::question(this, i18n("Remove Task"),
-                              i18np("Remove this task from the holding queue?",
-                                    "Remove these tasks from the holding queue?",
-                                    selectedRows.size())) == QMessageBox::Yes) {
+    if (QMessageBox::question(
+            this, i18n("Remove Task"),
+            i18np("Remove this task from the holding queue?",
+                  "Remove these tasks from the holding queue?",
+                  selectedRows.size())) == QMessageBox::Yes) {
       QList<int> rowsToDelete;
       for (const QModelIndex &idx : selectedRows) {
         if (!rowsToDelete.contains(idx.row())) {
@@ -1310,7 +1312,8 @@ void MainWindow::setupUi() {
         m_holdingModel->removeItem(row);
       }
       updateStatus(i18np("Task removed from holding queue.",
-                         "%1 tasks removed from holding queue.", rowsToDelete.size()));
+                         "%1 tasks removed from holding queue.",
+                         rowsToDelete.size()));
     }
   };
 
@@ -1320,9 +1323,12 @@ void MainWindow::setupUi() {
   connect(holdingDeleteAction, &QAction::triggered, m_deleteHoldingItemsLambda);
   m_holdingView->addAction(holdingDeleteAction);
 
-  connect(m_holdingModel, &QAbstractListModel::rowsInserted, this, &MainWindow::updateHoldingTabVisibility);
-  connect(m_holdingModel, &QAbstractListModel::rowsRemoved, this, &MainWindow::updateHoldingTabVisibility);
-  connect(m_holdingModel, &QAbstractListModel::modelReset, this, &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateHoldingTabVisibility);
   updateHoldingTabVisibility();
 
   // Errors View
@@ -2697,7 +2703,8 @@ void MainWindow::updateHoldingTabVisibility() {
         m_tabWidget->addTab(m_holdingView, i18n("Holding"));
       }
     } else {
-      m_tabWidget->setTabText(holdingIdx, i18n("Holding (%1)", m_holdingModel->size()));
+      m_tabWidget->setTabText(holdingIdx,
+                              i18n("Holding (%1)", m_holdingModel->size()));
     }
   }
 }
@@ -2716,12 +2723,15 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
     return;
 
   QMenu menu;
-  QAction *requeueAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
-  QAction *deleteAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
+  QAction *requeueAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
+  QAction *deleteAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
 
   QAction *selected = menu.exec(m_holdingView->viewport()->mapToGlobal(pos));
   if (selected == requeueAction) {
-    QModelIndexList selectedRows = m_holdingView->selectionModel()->selectedRows();
+    QModelIndexList selectedRows =
+        m_holdingView->selectionModel()->selectedRows();
     QList<int> rowsToRequeue;
     for (const QModelIndex &idx : selectedRows) {
       if (!rowsToRequeue.contains(idx.row())) {
@@ -2735,7 +2745,8 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
       item.isWaitItem = false;
       m_queueModel->enqueueItem(item);
     }
-    updateStatus(i18np("Task moved back to queue.", "%1 tasks moved back to queue.", rowsToRequeue.size()));
+    updateStatus(i18np("Task moved back to queue.",
+                       "%1 tasks moved back to queue.", rowsToRequeue.size()));
   } else if (selected == deleteAction) {
     if (m_deleteHoldingItemsLambda) {
       m_deleteHoldingItemsLambda();
@@ -2772,8 +2783,9 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   QAction *sendAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
   menu.addSeparator();
-  QAction *holdAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("media-playback-pause")), i18n("Move to Holding"));
+  QAction *holdAction =
+      menu.addAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
+                     i18n("Move to Holding"));
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
   if (errorAction && selected == errorAction) {
@@ -2798,7 +2810,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   } else if (selected == sendAction) {
     sendQueueItemNow(row);
   } else if (selected == holdAction) {
-    QModelIndexList selectedRows = m_queueView->selectionModel()->selectedRows();
+    QModelIndexList selectedRows =
+        m_queueView->selectionModel()->selectedRows();
     QList<int> rowsToHold;
     for (const QModelIndex &idx : selectedRows) {
       if (!rowsToHold.contains(idx.row())) {
@@ -2812,7 +2825,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       holdItem.isWaitItem = false;
       m_holdingModel->enqueueItem(holdItem);
     }
-    updateStatus(i18np("Task moved to holding queue.", "%1 tasks moved to holding queue.", rowsToHold.size()));
+    updateStatus(i18np("Task moved to holding queue.",
+                       "%1 tasks moved to holding queue.", rowsToHold.size()));
   }
 }
 
