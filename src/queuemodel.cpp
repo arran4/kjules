@@ -428,13 +428,6 @@ void QueueModel::moveItem(int from, int to) {
     return;
   }
 
-  // beginMoveRows semantic: moving row N to position M
-  // If moving down (M > N), we pass M+1 as the destination child index.
-  // Wait, no. Qt's beginMoveRows is tricky:
-  // "If you want to move row to be before row M, the destination child is M."
-  // Moving from index 2 to index 4 means the item will end up at index 4,
-  // before the item that was originally at index 5. So destinationChild is 5.
-  // Wait, no. If from=2, to=3, we move item 2 to position 3.
   int destinationChild = (to > from) ? to + 1 : to;
 
   if (beginMoveRows(QModelIndex(), from, from, QModelIndex(),
