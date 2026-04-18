@@ -106,6 +106,8 @@ private Q_SLOTS:
   void onSessionRefreshProgressBarClicked();
 
 private:
+  QStringList getSelectedSessionIds() const;
+
   void setupUi();
   void setupTrayIcon();
   void createActions();
