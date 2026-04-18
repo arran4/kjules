@@ -42,7 +42,8 @@ public:
           sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
       if (m_selectedSources->contains(name)) {
         QString branch = m_selectedSources->value(name);
-        return name + QStringLiteral(" (") + branch + QStringLiteral(")");
+        QString displayName = sourceModel()->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
+        return displayName + QStringLiteral(" (") + branch + QStringLiteral(")");
       }
     }
     return QSortFilterProxyModel::data(index, role);
@@ -176,11 +177,13 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
         QString name =
             m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+        QString displayName =
+            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
 
         QString currentBranch = m_selectedSources.value(name);
         bool ok;
         QString newBranch = QInputDialog::getText(
-            this, tr("Select Branch"), tr("Branch for %1:").arg(name),
+            this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
             QLineEdit::Normal, currentBranch, &ok);
         if (ok && !newBranch.isEmpty()) {
           m_selectedSources[name] = newBranch;
