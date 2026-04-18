@@ -656,7 +656,7 @@ void MainWindow::setupUi() {
                         .toString();
                 if (!currentId.isEmpty()) {
                   QString urlStr =
-                      QStringLiteral("https://jules.google.com/sessions/") +
+                      QStringLiteral("https://jules.google.com/session/") +
                       currentId;
                   QDesktopServices::openUrl(QUrl(urlStr));
                   count++;
@@ -679,7 +679,7 @@ void MainWindow::setupUi() {
                         .toString();
                 if (!currentId.isEmpty()) {
                   urls.append(
-                      QStringLiteral("https://jules.google.com/sessions/") +
+                      QStringLiteral("https://jules.google.com/session/") +
                       currentId);
                 }
               }

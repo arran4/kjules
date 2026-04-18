@@ -21,6 +21,8 @@ public:
   explicit APIManager(QObject *parent = nullptr);
   ~APIManager();
 
+  static QString julesSessionBaseUrl() { return QStringLiteral("https://jules.google.com/session/"); }
+
   void setApiKey(const QString &key);
   QString apiKey() const;
   void setGithubToken(const QString &token);
