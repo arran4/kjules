@@ -9,6 +9,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QInputDialog>
 #include <QJsonArray>
 #include <QLabel>
@@ -18,7 +19,6 @@
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
-#include <QIcon>
 #include <QSortFilterProxyModel>
 #include <QStatusBar>
 #include <QTextEdit>
@@ -42,8 +42,12 @@ public:
           sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
       if (m_selectedSources->contains(name)) {
         QString branch = m_selectedSources->value(name);
-        QString displayName = sourceModel()->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
-        return displayName + QStringLiteral(" (") + branch + QStringLiteral(")");
+        QString displayName =
+            sourceModel()
+                ->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
+                .toString();
+        return displayName + QStringLiteral(" (") + branch +
+               QStringLiteral(")");
       }
     }
     return QSortFilterProxyModel::data(index, role);
@@ -178,7 +182,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QString name =
             m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
         QString displayName =
-            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
+            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
+                .toString();
 
         QString currentBranch = m_selectedSources.value(name);
         bool ok;
@@ -254,8 +259,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_automationModeComboBox = new QComboBox(this);
   m_automationModeComboBox->addItem(tr("Auto Create PR"),
                                     QStringLiteral("AUTO_CREATE_PR"));
-  m_automationModeComboBox->addItem(tr("No Automation"),
-                                    QStringLiteral("AUTOMATION_MODE_UNSPECIFIED"));
+  m_automationModeComboBox->addItem(
+      tr("No Automation"), QStringLiteral("AUTOMATION_MODE_UNSPECIFIED"));
   formLayout->addRow(tr("Automation Mode:"), m_automationModeComboBox);
 
   // Options
@@ -368,7 +373,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       createSessionKeepOpenAction,
       {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
-  connect(createSessionKeepOpenAction, &QAction::triggered, this, onCtrlShiftEnter);
+  connect(createSessionKeepOpenAction, &QAction::triggered, this,
+          onCtrlShiftEnter);
 
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
@@ -431,7 +437,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QAction *refreshSourcesAction =
       actionCollection()->addAction(QStringLiteral("refresh_sources"));
   refreshSourcesAction->setText(tr("Refresh Sources"));
-  refreshSourcesAction->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+  refreshSourcesAction->setIcon(
+      QIcon::fromTheme(QStringLiteral("view-refresh")));
   connect(refreshSourcesAction, &QAction::triggered, this, [this]() {
     statusBar()->showMessage(tr("Refresh requested..."), 3000);
     Q_EMIT refreshSourcesRequested();
@@ -677,7 +684,8 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("prompt")] = prompt;
   draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
-  draft[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
+  draft[QStringLiteral("automationMode")] =
+      m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveDraftRequested(draft);
   close();
@@ -711,7 +719,8 @@ void NewSessionDialog::onSaveTemplate() {
   tmpl[QStringLiteral("name")] = dlg.nameOrComment();
   tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
-  tmpl[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
+  tmpl[QStringLiteral("automationMode")] =
+      m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveTemplateRequested(tmpl);
   // We do not close the dialog when saving a template, it can be used multiple

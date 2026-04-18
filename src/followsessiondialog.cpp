@@ -21,8 +21,8 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager,
 
   QHBoxLayout *inputLayout = new QHBoxLayout();
   m_inputEdit = new QLineEdit(this);
-  m_inputEdit->setPlaceholderText(i18n(
-      "e.g. 14074060995680401415 or %1...").arg(APIManager::julesSessionBaseUrl()));
+  m_inputEdit->setPlaceholderText(i18n("e.g. 14074060995680401415 or %1...")
+                                      .arg(APIManager::julesSessionBaseUrl()));
   inputLayout->addWidget(m_inputEdit);
 
   m_previewBtn = new QPushButton(i18n("Preview"), this);
