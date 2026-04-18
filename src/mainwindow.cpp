@@ -3,11 +3,13 @@
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
+#include "clickableprogressbar.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -75,18 +77,25 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourceModel(new SourceModel(this)),
       m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)),
-      m_queueModel(new QueueModel(this)), m_errorsModel(new ErrorsModel(this)),
-      m_errorRetryTimer(new QTimer(this)), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
+      m_queueModel(new QueueModel(this)),
+      m_holdingModel(
+          new QueueModel(this, QStringLiteral("holding.json"), true)),
+      m_errorsModel(new ErrorsModel(this)), m_errorRetryTimer(new QTimer(this)),
+      m_isRefreshingSources(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0),
+      m_sessionRefreshTimer(new QTimer(this)),
+      m_followingRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
-      m_queuePaused(false) {
+      m_queuePaused(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
           &MainWindow::updateSessionStats);
   m_sessionRefreshTimer->start(60000); // 1 minute
+
+  connect(m_followingRefreshTimer, &QTimer::timeout, this,
+          &MainWindow::autoRefreshFollowing);
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
 
@@ -99,6 +108,7 @@ MainWindow::MainWindow(QWidget *parent)
   m_errorRetryTimer->start(60000); // 1 minute
 
   loadQueueSettings();
+  updateFollowingRefreshTimer();
   createActions();
   setupTrayIcon();
 
@@ -121,6 +131,70 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           [this](const QJsonObject &session) {
+            const QString id = session.value(QStringLiteral("id")).toString();
+            const QString newState =
+                session.value(QStringLiteral("state")).toString();
+            const QString prevState = m_previousSessionStates.value(id);
+
+            if (!prevState.isEmpty() && prevState != newState) {
+              QString eventId;
+              QString title;
+              QString text;
+
+              if (newState == QStringLiteral("DONE") &&
+                  (prevState == QStringLiteral("RUNNING") ||
+                   prevState == QStringLiteral("QUEUED"))) {
+                eventId = QStringLiteral("followingSessionCompleted");
+                title = i18n("Following Session Completed");
+                text = i18n("Session %1 has completed.", id);
+              } else if (newState == QStringLiteral("RUNNING") &&
+                         prevState == QStringLiteral("QUEUED")) {
+                // Following session requires attention (this represents
+                // transitioning to in-progress) We'll use the
+                // 'followingSessionRequiresAttention' event since moving to
+                // progress often means we need to look at it
+                eventId = QStringLiteral("followingSessionRequiresAttention");
+                title = i18n("Following Session Requires Attention");
+                text = i18n("Session %1 is now running.", id);
+              } else if (newState == QStringLiteral("ERROR")) {
+                eventId = QStringLiteral("followingSessionFailed");
+                title = i18n("Following Session Failed");
+                text = i18n("Session %1 has encountered an error.", id);
+              }
+
+              if (!eventId.isEmpty()) {
+                KNotification *notification = new KNotification(
+                    eventId, KNotification::CloseOnTimeout, this);
+                notification->setTitle(title);
+                notification->setText(text);
+                connect(notification, &KNotification::closed, notification,
+                        &QObject::deleteLater);
+
+                auto actionHandler = [this]() {
+                  if (m_tabWidget) {
+                    for (int i = 0; i < m_tabWidget->count(); ++i) {
+                      if (m_tabWidget->widget(i)->objectName() ==
+                          QStringLiteral("followingTab")) {
+                        m_tabWidget->setCurrentIndex(i);
+                        break;
+                      }
+                    }
+                  }
+                };
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+                notification->setDefaultAction(i18n("View"));
+                connect(notification, &KNotification::defaultActivated, this,
+                        actionHandler);
+#else
+            auto action = notification->addDefaultAction(i18n("View"));
+            connect(action, &KNotificationAction::activated, this, actionHandler);
+#endif
+                notification->sendEvent();
+              }
+            }
+            m_previousSessionStates[id] = newState;
+
             m_sessionModel->updateSession(session);
             // We need to fetch github PR info if we have one
             for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
@@ -213,6 +287,23 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   } else {
     KXmlGuiWindow::closeEvent(event);
   }
+}
+
+QStringList MainWindow::getSelectedSessionIds() const {
+  QModelIndexList selectedRows =
+      m_sessionView->selectionModel()->selectedRows();
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+  QStringList ids;
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    QString currentId =
+        m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+    if (!currentId.isEmpty()) {
+      ids.append(currentId);
+    }
+  }
+  return ids;
 }
 
 void MainWindow::setupUi() {
@@ -449,6 +540,7 @@ void MainWindow::setupUi() {
       m_sessionView, &QTreeView::customContextMenuRequested,
       [this, deleteFollowingSessions](const QPoint &pos) {
         QModelIndex index = m_sessionView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
           if (!m_sessionView->selectionModel()->isSelected(index)) {
             m_sessionView->selectionModel()->select(
@@ -461,7 +553,6 @@ void MainWindow::setupUi() {
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-          QMenu menu;
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
@@ -474,9 +565,11 @@ void MainWindow::setupUi() {
                            .toString();
           QAction *openJulesUrlAction = nullptr;
           QAction *copyJulesUrlAction = nullptr;
+          QAction *copyJulesIdAction = nullptr;
           if (!id.isEmpty()) {
             openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
             copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
+            copyJulesIdAction = menu.addAction(i18n("Copy Jules ID"));
           }
 
           QString prUrl =
@@ -545,16 +638,34 @@ void MainWindow::setupUi() {
               }
             }
             if (!idsToRefresh.isEmpty()) {
-              RefreshProgressWindow *progressWindow =
-                  new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-              progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-              progressWindow->show();
+              if (m_refreshProgressWindow &&
+                  !m_refreshProgressWindow->isFinishedProcess()) {
+                m_refreshProgressWindow->addSessionIds(idsToRefresh);
+                m_refreshProgressWindow->show();
+                m_refreshProgressWindow->raise();
+                m_refreshProgressWindow->activateWindow();
+              } else {
+                if (m_refreshProgressWindow) {
+                  m_refreshProgressWindow->deleteLater();
+                }
+                m_refreshProgressWindow =
+                    new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::progressUpdated, this,
+                        &MainWindow::onRefreshProgressUpdated);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::progressFinished, this,
+                        &MainWindow::onRefreshProgressFinished);
+
+                m_sessionRefreshProgressBar->show();
+                m_refreshProgressWindow->show();
+              }
             } else {
               updateStatus(i18n("No following sessions to refresh."));
             }
           });
 
-          if (openJulesUrlAction && copyJulesUrlAction) {
+          if (openJulesUrlAction && copyJulesUrlAction && copyJulesIdAction) {
             connect(openJulesUrlAction, &QAction::triggered, [this]() {
               QModelIndexList selectedRows =
                   m_sessionView->selectionModel()->selectedRows();
@@ -569,7 +680,7 @@ void MainWindow::setupUi() {
                         .toString();
                 if (!currentId.isEmpty()) {
                   QString urlStr =
-                      QStringLiteral("https://jules.google.com/sessions/") +
+                      QStringLiteral("https://jules.google.com/session/") +
                       currentId;
                   QDesktopServices::openUrl(QUrl(urlStr));
                   count++;
@@ -579,22 +690,11 @@ void MainWindow::setupUi() {
                   i18np("Opened 1 session", "Opened %1 sessions", count));
             });
             connect(copyJulesUrlAction, &QAction::triggered, [this]() {
-              QModelIndexList selectedRows =
-                  m_sessionView->selectionModel()->selectedRows();
-              const QSortFilterProxyModel *proxy =
-                  qobject_cast<const QSortFilterProxyModel *>(
-                      m_sessionView->model());
+              QStringList ids = getSelectedSessionIds();
               QStringList urls;
-              for (const QModelIndex &idx : selectedRows) {
-                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-                QString currentId =
-                    m_sessionModel->data(mappedIdx, SessionModel::IdRole)
-                        .toString();
-                if (!currentId.isEmpty()) {
-                  urls.append(
-                      QStringLiteral("https://jules.google.com/sessions/") +
-                      currentId);
-                }
+              for (const QString &id : ids) {
+                urls.append(
+                    QStringLiteral("https://jules.google.com/session/") + id);
               }
               if (!urls.isEmpty()) {
                 QGuiApplication::clipboard()->setText(
@@ -602,6 +702,16 @@ void MainWindow::setupUi() {
                 updateStatus(i18np("1 Jules URL copied to clipboard.",
                                    "%1 Jules URLs copied to clipboard.",
                                    urls.size()));
+              }
+            });
+            connect(copyJulesIdAction, &QAction::triggered, [this]() {
+              QStringList ids = getSelectedSessionIds();
+              if (!ids.isEmpty()) {
+                QGuiApplication::clipboard()->setText(
+                    ids.join(QLatin1Char('\n')));
+                updateStatus(i18np("1 Jules ID copied to clipboard.",
+                                   "%1 Jules IDs copied to clipboard.",
+                                   ids.size()));
               }
             });
           }
@@ -703,14 +813,16 @@ void MainWindow::setupUi() {
                       initData[QStringLiteral("sources")] = sourcesArr;
                     }
                     bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-                    NewSessionDialog dialog(m_sourceModel, m_templatesModel,
-                                            hasApiKey, this);
-                    dialog.setInitialData(initData);
-                    connect(&dialog, &NewSessionDialog::createSessionRequested,
+                    auto window = new NewSessionDialog(
+                        m_sourceModel, m_templatesModel, hasApiKey, this);
+                    window->setInitialData(initData);
+                    connect(window, &NewSessionDialog::refreshSourcesRequested,
+                            this, &MainWindow::refreshSources);
+                    connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
-                    connect(&dialog, &NewSessionDialog::saveDraftRequested,
-                            this, &MainWindow::onDraftSaved);
-                    dialog.exec();
+                    connect(window, &NewSessionDialog::saveDraftRequested, this,
+                            &MainWindow::onDraftSaved);
+                    window->show();
                   });
 
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
@@ -731,9 +843,21 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template created from session."));
             }
           });
-
-          menu.exec(m_sessionView->mapToGlobal(pos));
         }
+
+        if (!menu.actions().isEmpty()) {
+          menu.addSeparator();
+        }
+        menu.addAction(m_archiveMergedFollowingAction);
+        menu.addAction(m_archiveCompletedFollowingAction);
+        menu.addAction(m_archivePausedFollowingAction);
+        menu.addAction(m_archiveCanceledFollowingAction);
+        menu.addAction(m_archiveFailedFollowingAction);
+        menu.addAction(m_duplicatePausedToQueueAndArchiveAction);
+        menu.addAction(m_duplicateCanceledToQueueAndArchiveAction);
+        menu.addAction(m_duplicateFailedToQueueAndArchiveAction);
+
+        menu.exec(m_sessionView->viewport()->mapToGlobal(pos));
       });
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
@@ -795,6 +919,7 @@ void MainWindow::setupUi() {
       m_archiveView, &QTreeView::customContextMenuRequested,
       [this, deleteArchiveSessions](const QPoint &pos) {
         QModelIndex index = m_archiveView->indexAt(pos);
+        QMenu menu;
         if (index.isValid()) {
           if (!m_archiveView->selectionModel()->isSelected(index)) {
             m_archiveView->selectionModel()->select(
@@ -802,7 +927,6 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_archiveView->setCurrentIndex(index);
           }
-          QMenu menu;
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
@@ -883,9 +1007,14 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template created from archived session."));
             }
           });
-
-          menu.exec(m_archiveView->mapToGlobal(pos));
         }
+
+        if (!menu.actions().isEmpty()) {
+          menu.addSeparator();
+        }
+        menu.addAction(m_purgeArchiveAction);
+
+        menu.exec(m_archiveView->viewport()->mapToGlobal(pos));
       });
   connect(
       m_archiveView, &QTreeView::doubleClicked, this,
@@ -1144,6 +1273,12 @@ void MainWindow::setupUi() {
   m_queueView->setModel(m_queueModel);
   m_queueView->setItemDelegate(new QueueDelegate(this));
   m_queueView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_queueView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_queueView->setDragDropMode(QAbstractItemView::DragDrop);
+  m_queueView->setDragEnabled(true);
+  m_queueView->setAcceptDrops(true);
+  m_queueView->setDropIndicatorShown(true);
+  m_queueView->setDefaultDropAction(Qt::MoveAction);
   connect(m_queueView, &QListView::activated, this,
           &MainWindow::onQueueActivated);
   connect(m_queueView, &QListView::customContextMenuRequested, this,
@@ -1181,6 +1316,62 @@ void MainWindow::setupUi() {
   m_queueView->addAction(queueDeleteAction);
 
   m_tabWidget->addTab(m_queueView, i18n("Queue"));
+
+  m_holdingView = new QListView(this);
+  m_holdingView->setModel(m_holdingModel);
+  m_holdingView->setItemDelegate(new QueueDelegate(this));
+  m_holdingView->setContextMenuPolicy(Qt::CustomContextMenu);
+  m_holdingView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_holdingView->setDragDropMode(QAbstractItemView::DragDrop);
+  m_holdingView->setDragEnabled(true);
+  m_holdingView->setAcceptDrops(true);
+  m_holdingView->setDropIndicatorShown(true);
+  m_holdingView->setDefaultDropAction(Qt::MoveAction);
+  connect(m_holdingView, &QListView::activated, this,
+          &MainWindow::onHoldingActivated);
+  connect(m_holdingView, &QListView::customContextMenuRequested, this,
+          &MainWindow::onHoldingContextMenu);
+
+  m_deleteHoldingItemsLambda = [this]() {
+    QModelIndexList selectedRows =
+        m_holdingView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    if (QMessageBox::question(
+            this, i18n("Remove Task"),
+            i18np("Remove this task from the holding queue?",
+                  "Remove these tasks from the holding queue?",
+                  selectedRows.size())) == QMessageBox::Yes) {
+      QList<int> rowsToDelete;
+      for (const QModelIndex &idx : selectedRows) {
+        if (!rowsToDelete.contains(idx.row())) {
+          rowsToDelete.append(idx.row());
+        }
+      }
+      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+      for (int row : rowsToDelete) {
+        m_holdingModel->removeItem(row);
+      }
+      updateStatus(i18np("Task removed from holding queue.",
+                         "%1 tasks removed from holding queue.",
+                         rowsToDelete.size()));
+    }
+  };
+
+  QAction *holdingDeleteAction = new QAction(i18n("Delete"), m_holdingView);
+  holdingDeleteAction->setShortcut(QKeySequence::Delete);
+  holdingDeleteAction->setShortcutContext(Qt::WidgetShortcut);
+  connect(holdingDeleteAction, &QAction::triggered, m_deleteHoldingItemsLambda);
+  m_holdingView->addAction(holdingDeleteAction);
+
+  connect(m_holdingModel, &QAbstractListModel::rowsInserted, this,
+          &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::rowsRemoved, this,
+          &MainWindow::updateHoldingTabVisibility);
+  connect(m_holdingModel, &QAbstractListModel::modelReset, this,
+          &MainWindow::updateHoldingTabVisibility);
+  updateHoldingTabVisibility();
 
   // Errors View
   QWidget *errTab = new QWidget(this);
@@ -1244,6 +1435,7 @@ void MainWindow::setupUi() {
           QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
+          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered, [this]() {
@@ -1264,6 +1456,35 @@ void MainWindow::setupUi() {
               req[QStringLiteral("description")] = dlg.description();
               m_templatesModel->addTemplate(req);
               updateStatus(i18n("Template created from error item."));
+            }
+          });
+
+          connect(requeueAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_errorsView->selectionModel()->selectedRows();
+            QList<int> rowsToRequeue;
+            for (const QModelIndex &idx : selectedRows) {
+              if (!rowsToRequeue.contains(idx.row())) {
+                rowsToRequeue.append(idx.row());
+              }
+            }
+            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(),
+                      std::greater<int>());
+
+            for (int row : rowsToRequeue) {
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_queueModel->enqueue(req);
+              m_errorsModel->removeError(row);
+            }
+            if (!rowsToRequeue.isEmpty()) {
+              updateStatus(i18np("Requeued 1 error item.",
+                                 "Requeued %1 error items.",
+                                 rowsToRequeue.size()));
+              if (!m_queuePaused && !m_queueTimer->isActive()) {
+                m_queueTimer->start();
+              }
             }
           });
 
@@ -1322,6 +1543,17 @@ void MainWindow::setupUi() {
                 m_apiManager->createSessionAsync(req);
                 updateStatus(i18n("Sending error item immediately..."));
               });
+              connect(window, &ErrorWindow::requeueRequested, [this](int row) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
+                m_errorsModel->removeError(row);
+                m_queueModel->enqueue(req);
+                updateStatus(i18n("Error item requeued."));
+                if (!m_queuePaused && !m_queueTimer->isActive()) {
+                  m_queueTimer->start();
+                }
+              });
 
               window->setAttribute(Qt::WA_DeleteOnClose);
               window->show();
@@ -1356,6 +1588,12 @@ void MainWindow::setupUi() {
   m_sourceProgressBar->hide();
   statusBar()->addPermanentWidget(m_sourceProgressBar);
 
+  m_sessionRefreshProgressBar = new ClickableProgressBar(this);
+  m_sessionRefreshProgressBar->hide();
+  connect(m_sessionRefreshProgressBar, &ClickableProgressBar::clicked, this,
+          &MainWindow::onSessionRefreshProgressBarClicked);
+  statusBar()->addPermanentWidget(m_sessionRefreshProgressBar);
+
   m_cancelRefreshBtn = new QPushButton(i18n("Cancel"), this);
   m_cancelRefreshBtn->hide();
   connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
@@ -1371,6 +1609,25 @@ void MainWindow::setupUi() {
 
   // Initial title update
   updateTabTitles();
+}
+
+void MainWindow::onRefreshProgressUpdated(int current, int total) {
+  m_sessionRefreshProgressBar->setMaximum(total);
+  m_sessionRefreshProgressBar->setValue(current);
+  m_sessionRefreshProgressBar->setFormat(
+      i18n("Refreshing %1/%2", qMin(current + 1, total), total));
+}
+
+void MainWindow::onRefreshProgressFinished() {
+  m_sessionRefreshProgressBar->hide();
+}
+
+void MainWindow::onSessionRefreshProgressBarClicked() {
+  if (m_refreshProgressWindow) {
+    m_refreshProgressWindow->show();
+    m_refreshProgressWindow->raise();
+    m_refreshProgressWindow->activateWindow();
+  }
 }
 
 void MainWindow::connectModelForTabUpdates(QAbstractItemModel *model) {
@@ -1392,11 +1649,18 @@ void MainWindow::checkAutoArchiveSessions() {
 
   QDateTime now = QDateTime::currentDateTimeUtc();
 
-  QList<int> rowsToArchive;
+  struct ArchiveItem {
+    int row;
+    QString id;
+    QString reason;
+  };
+  QList<ArchiveItem> itemsToArchive;
 
   for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
     QJsonObject session = m_sessionModel->getSession(i);
+    QString sessionId = session.value(QStringLiteral("id")).toString();
     bool shouldArchive = false;
+    QString archiveReason;
 
     if (autoArchiveEnabled) {
       QString createTimeStr =
@@ -1405,6 +1669,8 @@ void MainWindow::checkAutoArchiveSessions() {
           QDateTime::fromString(createTimeStr, Qt::ISODate).toUTC();
       if (createTime.isValid() && createTime.daysTo(now) >= autoArchiveDays) {
         shouldArchive = true;
+        archiveReason =
+            i18np("Older than 1 day", "Older than %1 days", autoArchiveDays);
       }
     }
 
@@ -1416,27 +1682,29 @@ void MainWindow::checkAutoArchiveSessions() {
                 QStringLiteral("merged") ||
             prInfo.value(QStringLiteral("merged_at")).isString()) {
           shouldArchive = true;
+          archiveReason = i18n("PR is merged");
         }
       }
     }
 
     if (shouldArchive) {
-      rowsToArchive.append(i);
+      itemsToArchive.append({i, sessionId, archiveReason});
     }
   }
 
-  for (int row : rowsToArchive) {
-    QJsonObject session = m_sessionModel->getSession(row);
+  for (const ArchiveItem &item : itemsToArchive) {
+    QJsonObject session = m_sessionModel->getSession(item.row);
     m_archiveModel->addSession(session);
-    m_sessionModel->removeSession(row);
+    m_sessionModel->removeSession(item.row);
+    Q_EMIT sessionAutoArchived(item.id, item.reason);
   }
 
-  if (!rowsToArchive.isEmpty()) {
+  if (!itemsToArchive.isEmpty()) {
     m_archiveModel->saveSessions();
     m_sessionModel->saveSessions();
     ActivityLogWindow::instance()->logMessage(
         i18np("Auto-archived 1 following session.",
-              "Auto-archived %1 following sessions.", rowsToArchive.size()));
+              "Auto-archived %1 following sessions.", itemsToArchive.size()));
   }
 }
 
@@ -1472,15 +1740,54 @@ void MainWindow::updateTabTitles() {
 
 void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
                                                  const QJsonObject &info) {
+  QString newPrState = info.value(QStringLiteral("state")).toString();
+
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex index = m_sessionModel->index(i, 0);
     if (m_sessionModel->data(index, SessionModel::PrUrlRole).toString() ==
         prUrl) {
       QJsonObject session = m_sessionModel->getSession(i);
+      QString id = session.value(QStringLiteral("id")).toString();
+
+      QString prevPrState = m_previousSessionPrStates.value(id);
+      if (!prevPrState.isEmpty() && prevPrState != newPrState) {
+        if (newPrState == QStringLiteral("open")) {
+          KNotification *notification =
+              new KNotification(QStringLiteral("followingSessionNewPROpened"),
+                                KNotification::CloseOnTimeout, this);
+          notification->setTitle(i18n("Following Session New PR Opened"));
+          notification->setText(i18n("Session %1 has a new PR opened.", id));
+          connect(notification, &KNotification::closed, notification,
+                  &QObject::deleteLater);
+
+          auto actionHandler = [this]() {
+            if (m_tabWidget) {
+              for (int i = 0; i < m_tabWidget->count(); ++i) {
+                if (m_tabWidget->widget(i)->objectName() ==
+                    QStringLiteral("followingTab")) {
+                  m_tabWidget->setCurrentIndex(i);
+                  break;
+                }
+              }
+            }
+          };
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+          notification->setDefaultAction(i18n("View"));
+          connect(notification, &KNotification::defaultActivated, this,
+                  actionHandler);
+#else
+          auto action = notification->addDefaultAction(i18n("View"));
+          connect(action, &KNotificationAction::activated, this, actionHandler);
+#endif
+          notification->sendEvent();
+        }
+      }
+      m_previousSessionPrStates[id] = newPrState;
+
       session[QStringLiteral("githubPrInfo")] = info;
       m_sessionModel->updateSession(session);
-      // Let's also update archive model and watch model if needed.
-      // Actually, since they all use SessionModel, we'll iterate through them.
+      // Also update archive model and watch model if needed.
     }
   }
 
@@ -1513,7 +1820,7 @@ void MainWindow::setupTrayIcon() {
 
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   m_trayMenu->addAction(newSessionAction);
 
   m_trayMenu->addSeparator();
@@ -1547,10 +1854,11 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
                   i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
-  KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence());
+  KGlobalAccel::setGlobalShortcut(
+      newSessionAction, QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_J));
   actionCollection()->setDefaultShortcut(newSessionAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_N));
 
@@ -1585,6 +1893,51 @@ void MainWindow::createActions() {
     window->show();
   });
 
+  m_followFromIdAction =
+      new QAction(i18n("Follow from Jules Session ID"), this);
+  actionCollection()->addAction(QStringLiteral("follow_from_id"),
+                                m_followFromIdAction);
+  connect(m_followFromIdAction, &QAction::triggered, this, [this]() {
+    FollowSessionDialog dialog(m_apiManager, this);
+    if (dialog.exec() == QDialog::Accepted) {
+      QString id = dialog.sessionId();
+      if (!id.isEmpty()) {
+        QJsonObject session = dialog.sessionData();
+        if (!session.isEmpty()) {
+          m_sessionModel->addSession(session);
+          m_sessionModel->saveSessions();
+          updateStatus(i18n("Started following session %1", id));
+        } else {
+          QMetaObject::Connection *connection = new QMetaObject::Connection;
+          *connection = connect(
+              m_apiManager, &APIManager::sessionDetailsReceived, this,
+              [this, id, connection](const QJsonObject &session) {
+                if (session.value(QStringLiteral("id")).toString() == id) {
+                  m_sessionModel->addSession(session);
+                  m_sessionModel->saveSessions();
+                  updateStatus(i18n("Started following session %1", id));
+                  disconnect(*connection);
+                  delete connection;
+                }
+              });
+
+          // Also clean up on error to prevent memory leaks
+          QMetaObject::Connection *errorConnection =
+              new QMetaObject::Connection;
+          *errorConnection = connect(m_apiManager, &APIManager::errorOccurred,
+                                     this, [connection, errorConnection]() {
+                                       disconnect(*connection);
+                                       delete connection;
+                                       disconnect(*errorConnection);
+                                       delete errorConnection;
+                                     });
+
+          m_apiManager->getSession(id);
+        }
+      }
+    }
+  });
+
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
@@ -1615,6 +1968,7 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Following"), this);
   connect(m_refreshFollowingAction, &QAction::triggered, this, [this]() {
+    m_sessionModel->clearAllUnreadChanges();
     QStringList idsToRefresh;
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
@@ -1625,10 +1979,28 @@ void MainWindow::createActions() {
       }
     }
     if (!idsToRefresh.isEmpty()) {
-      RefreshProgressWindow *progressWindow =
-          new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
-      progressWindow->setAttribute(Qt::WA_DeleteOnClose);
-      progressWindow->show();
+      if (m_refreshProgressWindow &&
+          !m_refreshProgressWindow->isFinishedProcess()) {
+        m_refreshProgressWindow->addSessionIds(idsToRefresh);
+        m_refreshProgressWindow->show();
+        m_refreshProgressWindow->raise();
+        m_refreshProgressWindow->activateWindow();
+      } else {
+        if (m_refreshProgressWindow) {
+          m_refreshProgressWindow->deleteLater();
+        }
+        m_refreshProgressWindow =
+            new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+        connect(m_refreshProgressWindow,
+                &RefreshProgressWindow::progressUpdated, this,
+                &MainWindow::onRefreshProgressUpdated);
+        connect(m_refreshProgressWindow,
+                &RefreshProgressWindow::progressFinished, this,
+                &MainWindow::onRefreshProgressFinished);
+
+        m_sessionRefreshProgressBar->show();
+        m_refreshProgressWindow->show();
+      }
     } else {
       updateStatus(i18n("No following sessions to refresh."));
     }
@@ -1685,7 +2057,8 @@ void MainWindow::createActions() {
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
-  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction,
+                                  QKeySequence(Qt::META | Qt::Key_J));
   actionCollection()->setDefaultShortcut(toggleWindowAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_M));
 
@@ -1745,7 +2118,7 @@ void MainWindow::createActions() {
               filteredSessions.append(session);
             }
           }
-          KXmlGuiWindow *sessionsWindow = new KXmlGuiWindow(this);
+          QMainWindow *sessionsWindow = new QMainWindow(this);
           sessionsWindow->setObjectName(
               QStringLiteral("FollowingNewSessions_%1").arg(id));
           SessionModel *localModel = new SessionModel(
@@ -1772,12 +2145,11 @@ void MainWindow::createActions() {
                           i18n("Close"), sessionsWindow);
           closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
           connect(closeAction, &QAction::triggered, sessionsWindow,
-                  &KXmlGuiWindow::close);
+                  &QMainWindow::close);
           fileMenu->addAction(closeAction);
           sessionsWindow->menuBar()->addMenu(fileMenu);
 
           sessionsWindow->setCentralWidget(listView);
-          sessionsWindow->setupGUI();
           sessionsWindow->resize(600, 400);
           sessionsWindow->show();
         }
@@ -1798,7 +2170,7 @@ void MainWindow::createActions() {
       QJsonObject rawData =
           m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
               .toJsonObject();
-      KXmlGuiWindow *rawWindow = new KXmlGuiWindow(this);
+      QMainWindow *rawWindow = new QMainWindow(this);
       rawWindow->setObjectName(
           QStringLiteral("RawDataWindow_%1")
               .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
@@ -1816,15 +2188,75 @@ void MainWindow::createActions() {
           new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
                       i18n("Close"), rawWindow);
       closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, rawWindow,
-              &KXmlGuiWindow::close);
+      connect(closeAction, &QAction::triggered, rawWindow, &QMainWindow::close);
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
       rawWindow->setCentralWidget(textBrowser);
-      rawWindow->setupGUI();
       rawWindow->resize(600, 400);
       rawWindow->show();
+    }
+  });
+
+  m_openJulesUrlAction = new QAction(i18n("Open Jules URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_jules_url"),
+                                m_openJulesUrlAction);
+  connect(m_openJulesUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+    int count = 0;
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString id =
+          m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+
+      if (!id.isEmpty()) {
+        QString urlStr =
+            QStringLiteral("https://jules.google.com/session/") + id;
+        QDesktopServices::openUrl(QUrl(urlStr));
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(
+          i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
+    } else {
+      updateStatus(i18n("Invalid session ID for opening Jules URL."));
+    }
+  });
+
+  m_openGithubUrlAction = new QAction(i18n("Open Github URL"), this);
+  actionCollection()->addAction(QStringLiteral("open_github_url"),
+                                m_openGithubUrlAction);
+  connect(m_openGithubUrlAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+    int count = 0;
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString prUrl =
+          m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
+
+      if (!prUrl.isEmpty()) {
+        QDesktopServices::openUrl(QUrl(prUrl));
+        count++;
+      }
+    }
+    if (count > 0) {
+      updateStatus(
+          i18np("Opened 1 Github URL.", "Opened %1 Github URLs.", count));
+    } else {
+      updateStatus(i18n("No Github PR URLs found for selected sessions."));
     }
   });
 
@@ -1910,6 +2342,200 @@ void MainWindow::createActions() {
                                 m_toggleQueueAction);
   connect(m_toggleQueueAction, &QAction::triggered, this,
           &MainWindow::toggleQueueState);
+
+  m_archiveMergedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"PR merged\" state"),
+      this);
+  actionCollection()->addAction(QStringLiteral("archive_merged_following"),
+                                m_archiveMergedFollowingAction);
+  connect(m_archiveMergedFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      if (m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::PrStatusRole)
+              .toString() == QStringLiteral("merged")) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_sessionModel->removeSession(i);
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_archiveModel->saveSessions();
+      m_sessionModel->saveSessions();
+      updateStatus(
+          i18np("1 session archived.", "%1 sessions archived.", count));
+    } else {
+      updateStatus(i18n("No sessions in \"PR merged\" state found."));
+    }
+  });
+
+  m_archivePausedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Paused\" state"), this);
+  actionCollection()->addAction(QStringLiteral("archive_paused_following"),
+                                m_archivePausedFollowingAction);
+  connect(m_archivePausedFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      if (m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+              .toString() == QStringLiteral("PAUSED")) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_sessionModel->removeSession(i);
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_archiveModel->saveSessions();
+      m_sessionModel->saveSessions();
+      updateStatus(
+          i18np("1 session archived.", "%1 sessions archived.", count));
+    } else {
+      updateStatus(i18n("No sessions in \"Paused\" state found."));
+    }
+  });
+
+  m_archiveFailedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Failed\" state"), this);
+  actionCollection()->addAction(QStringLiteral("archive_failed_following"),
+                                m_archiveFailedFollowingAction);
+  connect(m_archiveFailedFollowingAction, &QAction::triggered, this, [this]() {
+    int count = 0;
+    for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+      if (m_sessionModel
+              ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+              .toString() == QStringLiteral("ERROR")) {
+        QJsonObject session = m_sessionModel->getSession(i);
+        m_archiveModel->addSession(session);
+        m_sessionModel->removeSession(i);
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_archiveModel->saveSessions();
+      m_sessionModel->saveSessions();
+      updateStatus(
+          i18np("1 session archived.", "%1 sessions archived.", count));
+    } else {
+      updateStatus(i18n("No sessions in \"Failed\" state found."));
+    }
+  });
+
+  m_archiveCompletedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Completed\" state"),
+      this);
+  actionCollection()->addAction(QStringLiteral("archive_completed_following"),
+                                m_archiveCompletedFollowingAction);
+  connect(
+      m_archiveCompletedFollowingAction, &QAction::triggered, this, [this]() {
+        int count = 0;
+        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+          if (m_sessionModel
+                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+                  .toString() == QStringLiteral("DONE")) {
+            QJsonObject session = m_sessionModel->getSession(i);
+            m_archiveModel->addSession(session);
+            m_sessionModel->removeSession(i);
+            count++;
+          }
+        }
+        if (count > 0) {
+          m_archiveModel->saveSessions();
+          m_sessionModel->saveSessions();
+          updateStatus(
+              i18np("1 session archived.", "%1 sessions archived.", count));
+        } else {
+          updateStatus(i18n("No sessions in \"Completed\" state found."));
+        }
+      });
+
+  m_archiveCanceledFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Canceled\" state"), this);
+  actionCollection()->addAction(QStringLiteral("archive_canceled_following"),
+                                m_archiveCanceledFollowingAction);
+  connect(
+      m_archiveCanceledFollowingAction, &QAction::triggered, this, [this]() {
+        int count = 0;
+        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+          if (m_sessionModel
+                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+                  .toString() == QStringLiteral("CANCELED")) {
+            QJsonObject session = m_sessionModel->getSession(i);
+            m_archiveModel->addSession(session);
+            m_sessionModel->removeSession(i);
+            count++;
+          }
+        }
+        if (count > 0) {
+          m_archiveModel->saveSessions();
+          m_sessionModel->saveSessions();
+          updateStatus(
+              i18np("1 session archived.", "%1 sessions archived.", count));
+        } else {
+          updateStatus(i18n("No sessions in \"Canceled\" state found."));
+        }
+      });
+
+  m_duplicateFailedToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Failed\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_failed_to_queue_and_archive"),
+      m_duplicateFailedToQueueAndArchiveAction);
+  connect(m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("ERROR"),
+                                           i18n("Failed"));
+          });
+
+  m_duplicatePausedToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Paused\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_paused_to_queue_and_archive"),
+      m_duplicatePausedToQueueAndArchiveAction);
+  connect(m_duplicatePausedToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("PAUSED"),
+                                           i18n("Paused"));
+          });
+
+  m_duplicateCanceledToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Canceled\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_canceled_to_queue_and_archive"),
+      m_duplicateCanceledToQueueAndArchiveAction);
+  connect(m_duplicateCanceledToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("CANCELED"),
+                                           i18n("Canceled"));
+          });
+
+  m_purgeArchiveAction = new QAction(i18n("Purge archive"), this);
+  actionCollection()->addAction(QStringLiteral("purge_archive"),
+                                m_purgeArchiveAction);
+  connect(m_purgeArchiveAction, &QAction::triggered, this, [this]() {
+    int count = m_archiveModel->rowCount();
+    if (count > 0) {
+      if (QMessageBox::question(
+              this, i18n("Purge Archive"),
+              i18np("Are you sure you want to purge the archive (1 session)?",
+                    "Are you sure you want to purge the archive (%1 sessions)?",
+                    count)) == QMessageBox::Yes) {
+        m_archiveModel->clearSessions();
+        m_archiveModel->saveSessions();
+        updateStatus(i18np("Archive purged (1 session removed).",
+                           "Archive purged (%1 sessions removed).", count));
+      }
+    } else {
+      updateStatus(i18n("Archive is already empty."));
+    }
+  });
 
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
@@ -2045,22 +2671,29 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
-void MainWindow::showNewSessionDialog() {
+void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
-  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
-  dialog.exec();
+  if (!initialData.isEmpty()) {
+    window->setInitialData(initialData);
+  }
+  window->show();
 }
 
 void MainWindow::showSettingsDialog() {
   SettingsDialog dialog(m_apiManager, this);
   if (dialog.exec() == QDialog::Accepted) {
     loadQueueSettings();
+    updateFollowingRefreshTimer();
   }
 }
 
@@ -2075,7 +2708,22 @@ void MainWindow::loadQueueSettings() {
   }
 }
 
+void MainWindow::updateFollowingRefreshTimer() {
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
+  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+
+  if (seconds > 0) {
+    m_followingRefreshTimer->start(seconds * 1000);
+  } else {
+    m_followingRefreshTimer->stop();
+  }
+}
+
 void MainWindow::updateCountdownStatus() {
+  // Inform the queue model to update display of active wait items
+  m_queueModel->refreshWaitItems();
+
   if (m_queuePaused || m_queueModel->isEmpty()) {
     return;
   }
@@ -2116,6 +2764,45 @@ void MainWindow::updateCountdownStatus() {
   }
 }
 
+void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState,
+                                                const QString &stateName) {
+  int count = 0;
+  for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+    if (m_sessionModel
+            ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+            .toString() == targetState) {
+      QJsonObject session = m_sessionModel->getSession(i);
+
+      QJsonObject req;
+      req[QStringLiteral("source")] =
+          session.value(QStringLiteral("sourceContext"))
+              .toObject()
+              .value(QStringLiteral("source"))
+              .toString();
+      req[QStringLiteral("prompt")] =
+          session.value(QStringLiteral("prompt")).toString();
+      if (session.contains(QStringLiteral("automationMode"))) {
+        req[QStringLiteral("automationMode")] =
+            session.value(QStringLiteral("automationMode")).toString();
+      }
+
+      m_queueModel->enqueue(req);
+
+      m_archiveModel->addSession(session);
+      m_sessionModel->removeSession(i);
+      count++;
+    }
+  }
+  if (count > 0) {
+    m_archiveModel->saveSessions();
+    m_sessionModel->saveSessions();
+    updateStatus(i18np("1 session duplicated to queue and archived.",
+                       "%1 sessions duplicated to queue and archived.", count));
+  } else {
+    updateStatus(i18n("No sessions in \"%1\" state found.", stateName));
+  }
+}
+
 void MainWindow::toggleQueueState() {
   m_queuePaused = !m_queuePaused;
   if (m_queuePaused) {
@@ -2137,13 +2824,14 @@ void MainWindow::toggleQueueState() {
   }
 }
 
-void MainWindow::onSessionCreated(const QStringList &sources,
+void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
                                   bool requirePlanApproval) {
-  for (const QString &source : sources) {
+  for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
-    req[QStringLiteral("source")] = source;
+    req[QStringLiteral("source")] = it.key();
+    req[QStringLiteral("startingBranch")] = it.value();
     req[QStringLiteral("prompt")] = prompt;
     if (requirePlanApproval) {
       req[QStringLiteral("requirePlanApproval")] = true;
@@ -2215,7 +2903,16 @@ void MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused)
     return;
   if (m_queueModel->isEmpty()) {
-    m_queueTimer->stop();
+    if (m_queueTimer->isActive()) {
+      KNotification *notification = new KNotification(
+          QStringLiteral("queueEmpty"), KNotification::CloseOnTimeout, this);
+      notification->setTitle(i18n("Queue Empty"));
+      notification->setText(i18n("The processing queue is now empty."));
+      connect(notification, &KNotification::closed, notification,
+              &QObject::deleteLater);
+      notification->sendEvent();
+      m_queueTimer->stop();
+    }
     return;
   }
 
@@ -2272,12 +2969,12 @@ void MainWindow::onSessionCreatedResult(bool success,
   QueueItem item = m_queueModel->peek(); // Peek the item we were processing
   m_queueModel
       ->recordRun(); // Record that we completed a run successfully or not
-  m_queueModel
-      ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
   m_isProcessingQueue = false;
 
   if (success) {
     m_queueModel->dequeue(); // Pop the item only on successful state transition
+    m_queueModel
+        ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
     m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext"))
                            .toObject()
@@ -2362,17 +3059,20 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
   QJsonObject templateData = tmpl;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(templateData);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(templateData);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
-  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::onQueueActivated(const QModelIndex &index) {
@@ -2381,9 +3081,75 @@ void MainWindow::onQueueActivated(const QModelIndex &index) {
   int row = index.row();
   QueueItem item = m_queueModel->getItem(row);
   if (item.errorCount > 0) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_queueModel);
   } else {
     editQueueItem(row);
+  }
+}
+
+void MainWindow::updateHoldingTabVisibility() {
+  int holdingIdx = m_tabWidget->indexOf(m_holdingView);
+  if (m_holdingModel->isEmpty()) {
+    if (holdingIdx != -1) {
+      m_tabWidget->removeTab(holdingIdx);
+    }
+  } else {
+    if (holdingIdx == -1) {
+      int queueIdx = m_tabWidget->indexOf(m_queueView);
+      if (queueIdx != -1) {
+        m_tabWidget->insertTab(queueIdx + 1, m_holdingView, i18n("Holding"));
+      } else {
+        m_tabWidget->addTab(m_holdingView, i18n("Holding"));
+      }
+    } else {
+      m_tabWidget->setTabText(holdingIdx,
+                              i18n("Holding (%1)", m_holdingModel->size()));
+    }
+  }
+}
+
+void MainWindow::onHoldingActivated(const QModelIndex &index) {
+  int row = index.row();
+  QueueItem item = m_holdingModel->getItem(row);
+  if (item.errorCount > 0) {
+    showErrorDetails(row, m_holdingModel);
+  }
+}
+
+void MainWindow::onHoldingContextMenu(const QPoint &pos) {
+  QModelIndex index = m_holdingView->indexAt(pos);
+  if (!index.isValid())
+    return;
+
+  QMenu menu;
+  QAction *requeueAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
+  QAction *deleteAction = menu.addAction(
+      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
+
+  QAction *selected = menu.exec(m_holdingView->viewport()->mapToGlobal(pos));
+  if (selected == requeueAction) {
+    QModelIndexList selectedRows =
+        m_holdingView->selectionModel()->selectedRows();
+    QList<int> rowsToRequeue;
+    for (const QModelIndex &idx : selectedRows) {
+      if (!rowsToRequeue.contains(idx.row())) {
+        rowsToRequeue.append(idx.row());
+      }
+    }
+    std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
+    for (int r : rowsToRequeue) {
+      QueueItem item = m_holdingModel->getItem(r);
+      m_holdingModel->removeItem(r);
+      item.isWaitItem = false;
+      m_queueModel->enqueueItem(item);
+    }
+    updateStatus(i18np("Task moved back to queue.",
+                       "%1 tasks moved back to queue.", rowsToRequeue.size()));
+  } else if (selected == deleteAction) {
+    if (m_deleteHoldingItemsLambda) {
+      m_deleteHoldingItemsLambda();
+    }
   }
 }
 
@@ -2415,10 +3181,14 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
   QAction *sendAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
+  menu.addSeparator();
+  QAction *holdAction =
+      menu.addAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
+                     i18n("Move to Holding"));
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
   if (errorAction && selected == errorAction) {
-    showErrorDetails(row);
+    showErrorDetails(row, m_queueModel);
   } else if (selected == editAction) {
     editQueueItem(row);
   } else if (selected == deleteAction) {
@@ -2438,11 +3208,37 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     }
   } else if (selected == sendAction) {
     sendQueueItemNow(row);
+  } else if (selected == holdAction) {
+    QModelIndexList selectedRows =
+        m_queueView->selectionModel()->selectedRows();
+    QList<int> rowsToHold;
+    for (const QModelIndex &idx : selectedRows) {
+      if (!rowsToHold.contains(idx.row())) {
+        rowsToHold.append(idx.row());
+      }
+    }
+    std::sort(rowsToHold.begin(), rowsToHold.end(), std::greater<int>());
+    for (int r : rowsToHold) {
+      QueueItem holdItem = m_queueModel->getItem(r);
+      m_queueModel->removeItem(r);
+      holdItem.isWaitItem = false;
+      m_holdingModel->enqueueItem(holdItem);
+    }
+    updateStatus(i18np("Task moved to holding queue.",
+                       "%1 tasks moved to holding queue.", rowsToHold.size()));
   }
 }
 
 void MainWindow::sendQueueItemNow(int row) {
   QueueItem item = m_queueModel->getItem(row);
+  if (item.isWaitItem) {
+    m_queueModel->removeItem(row);
+    updateStatus(i18n("Wait item removed from queue."));
+    if (row == 0) {
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    }
+    return;
+  }
   if (item.requestData.isEmpty())
     return;
   m_queueModel->removeItem(row);
@@ -2450,22 +3246,22 @@ void MainWindow::sendQueueItemNow(int row) {
   m_apiManager->createSessionAsync(item.requestData);
 }
 
-void MainWindow::showErrorDetails(int row) {
-  QueueItem item = m_queueModel->getItem(row);
+void MainWindow::showErrorDetails(int row, QueueModel *model) {
+  QueueItem item = model->getItem(row);
   if (item.requestData.isEmpty())
     return;
 
   ErrorWindow *window = new ErrorWindow(row, item, this);
   connect(window, &ErrorWindow::editRequested, this,
           &MainWindow::editQueueItem);
-  connect(window, &ErrorWindow::deleteRequested, this, [this](int r) {
-    m_queueModel->removeItem(r);
-    updateStatus(i18n("Task removed from queue."));
+  connect(window, &ErrorWindow::deleteRequested, this, [this, model](int r) {
+    model->removeItem(r);
+    updateStatus(i18n("Task removed."));
   });
   connect(window, &ErrorWindow::draftRequested, this,
           &MainWindow::convertQueueItemToDraft);
-  connect(window, &ErrorWindow::templateRequested, this, [this, row]() {
-    QueueItem item = m_queueModel->getItem(row);
+  connect(window, &ErrorWindow::templateRequested, this, [this, row, model]() {
+    QueueItem item = model->getItem(row);
     if (item.requestData.isEmpty())
       return;
     SaveDialog dlg(QStringLiteral("Template"), this);
@@ -2490,25 +3286,35 @@ void MainWindow::editQueueItem(int row) {
     return;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setEditMode(true);
-  dialog.setInitialData(item.requestData);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setEditMode(true);
+  window->setInitialData(item.requestData);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, row](const QStringList &sources, const QString &p,
-                      const QString &a, bool requirePlanApproval) {
-            m_queueModel->removeItem(row);
+  QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
+
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::createSessionRequested,
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
+            if (persistentIndex.isValid()) {
+              m_queueModel->removeItem(persistentIndex.row());
+            }
             onSessionCreated(sources, p, a, requirePlanApproval);
           });
 
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, row](const QJsonObject &d) {
-            m_queueModel->removeItem(row);
+  connect(window, &NewSessionDialog::saveDraftRequested,
+          [this, persistentIndex](const QJsonObject &d) {
+            if (persistentIndex.isValid()) {
+              m_queueModel->removeItem(persistentIndex.row());
+            }
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Task moved to drafts."));
           });
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::convertQueueItemToDraft(int row) {
@@ -2625,49 +3431,69 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(request);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(request);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+  QPersistentModelIndex persistentIndex(index);
+
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::createSessionRequested,
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
-            m_errorsModel->removeError(index.row());
+            if (persistentIndex.isValid()) {
+              m_errorsModel->removeError(persistentIndex.row());
+            }
           });
 
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, index](const QJsonObject &d) {
+  connect(window, &NewSessionDialog::saveDraftRequested,
+          [this, persistentIndex](const QJsonObject &d) {
             m_draftsModel->addDraft(d);
-            m_errorsModel->removeError(index.row());
+            if (persistentIndex.isValid()) {
+              m_errorsModel->removeError(persistentIndex.row());
+            }
             updateStatus(i18n("Draft saved and error removed."));
           });
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::onDraftActivated(const QModelIndex &index) {
   QJsonObject draft = m_draftsModel->getDraft(index.row());
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(draft);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(draft);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested,
-          [this, index](const QStringList &sources, const QString &p,
-                        const QString &a, bool requirePlanApproval) {
+  QPersistentModelIndex persistentIndex(index);
+
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::createSessionRequested,
+          [this, persistentIndex](const QMap<QString, QString> &sources,
+                                  const QString &p, const QString &a,
+                                  bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
-            m_draftsModel->removeDraft(index.row());
+            if (persistentIndex.isValid()) {
+              m_draftsModel->removeDraft(persistentIndex.row());
+            }
           });
 
-  connect(&dialog, &NewSessionDialog::saveDraftRequested,
-          [this, index](const QJsonObject &d) {
-            m_draftsModel->removeDraft(index.row());
+  connect(window, &NewSessionDialog::saveDraftRequested,
+          [this, persistentIndex](const QJsonObject &d) {
+            if (persistentIndex.isValid()) {
+              m_draftsModel->removeDraft(persistentIndex.row());
+            }
             m_draftsModel->addDraft(d);
             updateStatus(i18n("Draft updated."));
           });
-  connect(&dialog, &NewSessionDialog::saveTemplateRequested, this,
+  connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
 
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::onSourceActivated(const QModelIndex &index) {
@@ -2693,17 +3519,45 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   initData[QStringLiteral("sources")] = sourcesArr;
 
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  NewSessionDialog dialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  dialog.setInitialData(initData);
+  auto window =
+      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  window->setInitialData(initData);
 
-  connect(&dialog, &NewSessionDialog::createSessionRequested, this,
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
-  connect(&dialog, &NewSessionDialog::saveDraftRequested, this,
+  connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
-  dialog.exec();
+  window->show();
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::duplicateRequested, this,
+          [this](const QJsonObject &sessionData) {
+            QJsonObject initData;
+            initData[QStringLiteral("prompt")] =
+                sessionData.value(QStringLiteral("prompt")).toString();
+            const QJsonObject sourceContext =
+                sessionData.value(QStringLiteral("sourceContext")).toObject();
+            const QString source =
+                sourceContext.value(QStringLiteral("source")).toString();
+            if (!source.isEmpty()) {
+              QJsonObject sourceObj;
+              sourceObj[QStringLiteral("name")] = source;
+              const QString branch =
+                  sourceContext.value(QStringLiteral("githubRepoContext"))
+                      .toObject()
+                      .value(QStringLiteral("startingBranch"))
+                      .toString();
+              if (!branch.isEmpty()) {
+                sourceObj[QStringLiteral("branch")] = branch;
+              }
+              initData[QStringLiteral("sources")] = QJsonArray{sourceObj};
+            }
+            showNewSessionDialog(initData);
+          });
+
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
             SaveDialog dlg(QStringLiteral("Template"), this);
@@ -2750,6 +3604,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
+  m_sessionModel->markAsRead(sessionId);
   SessionWindow *window = new SessionWindow(
       session, m_apiManager, m_sessionModel->contains(sessionId), this);
   connect(window, &SessionWindow::watchRequested, this,
@@ -2768,13 +3623,17 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
+  QString id =
+      m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+  m_sessionModel->clearUnreadChanges(id);
+
   if (sessionData.isEmpty()) {
-    QString id =
-        m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+    m_sessionModel->markAsRead(id);
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+    m_sessionModel->markAsRead(sessionId);
     SessionWindow *window = new SessionWindow(
         sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
     connect(window, &SessionWindow::watchRequested, this,
@@ -2911,6 +3770,18 @@ void MainWindow::onSourcesRefreshFinished() {
           i18np("Source refresh completed: 1 new source found.",
                 "Source refresh completed: %1 new sources found.",
                 m_sourcesAddedCount));
+
+      KNotification *notification =
+          new KNotification(QStringLiteral("sourcesRefreshFinished"),
+                            KNotification::CloseOnTimeout, this);
+      notification->setTitle(i18n("Sources Refresh Finished"));
+      notification->setText(
+          i18np("Loaded %2 sources in total, 1 new source found.",
+                "Loaded %2 sources in total, %1 new sources found.",
+                m_sourcesAddedCount, m_sourcesLoadedCount));
+      connect(notification, &KNotification::closed, notification,
+              &QObject::deleteLater);
+      notification->sendEvent();
     }
   } else {
     updateStatus(i18n("Source refresh cancelled. Loaded %1 sources, %2 new.",
@@ -2952,6 +3823,26 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
+}
+
+void MainWindow::autoRefreshFollowing() {
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QModelIndex index = m_sessionModel->index(i, 0);
+    QString state =
+        m_sessionModel->data(index, SessionModel::StateRole).toString();
+    if (state == QStringLiteral("DONE") ||
+        state == QStringLiteral("CANCELED") ||
+        state == QStringLiteral("ERROR")) {
+      continue;
+    }
+    QString currentId =
+        m_sessionModel->data(index, SessionModel::IdRole).toString();
+    if (!currentId.isEmpty()) {
+      m_apiManager->reloadSession(currentId);
+    }
+  }
+  m_lastSessionRefreshTime = QDateTime::currentDateTime();
+  updateSessionStats();
 }
 
 void MainWindow::backupData() {

@@ -165,14 +165,7 @@ void APIManager::listActivities(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
+  QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
@@ -210,6 +203,22 @@ void APIManager::listActivities(const QString &sessionId) {
   });
 }
 
+QString APIManager::cleanSessionId(const QString &sessionId) {
+  QString cleanId = sessionId;
+  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
+    cleanId = cleanId.mid(10);
+  } else if (cleanId.startsWith(QStringLiteral("session/"))) {
+    cleanId = cleanId.mid(8);
+  } else if (cleanId.startsWith(QStringLiteral("/session/"))) {
+    cleanId = cleanId.mid(9);
+  } else if (cleanId.startsWith(QStringLiteral("/"))) {
+    cleanId = cleanId.mid(1);
+  }
+  return cleanId;
+}
+
 void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
@@ -217,14 +226,7 @@ void APIManager::reloadSession(const QString &sessionId) {
     return;
   }
 
-  QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
+  QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
@@ -236,7 +238,7 @@ void APIManager::reloadSession(const QString &sessionId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -247,9 +249,10 @@ void APIManager::reloadSession(const QString &sessionId) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(
-          QStringLiteral("Failed to reload session details: ") +
-          reply->errorString());
+      QString errorMsg = QStringLiteral("Failed to reload session details: ") +
+                         reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT sessionReloadFailed(sessionId, errorMsg);
     }
     reply->deleteLater();
   });
@@ -307,9 +310,8 @@ void APIManager::listSources(const QString &pageToken) {
   }
 
   if (m_listSourcesReply) {
-    // If a request is already in progress, abort it or ignore new request.
-    // For additive pagination, we might just ignore the new request if it's the
-    // same, but the UI should prevent calling this if already refreshing.
+    // If a request is already in progress, ignore new request.
+    return;
   }
 
   QString endpoint = QStringLiteral("/sources");
@@ -421,7 +423,12 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isObject()) {
         Q_EMIT githubPullRequestInfoReceived(prUrl, doc.object());
+      } else {
+        Q_EMIT githubPullRequestFailed(prUrl,
+                                       QStringLiteral("Invalid JSON response"));
       }
+    } else {
+      Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
     }
   });
 }
@@ -481,8 +488,13 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
     QJsonObject githubRepoContext;
-    githubRepoContext[QStringLiteral("startingBranch")] =
-        QStringLiteral("main");
+    if (requestData.contains(QStringLiteral("startingBranch"))) {
+      githubRepoContext[QStringLiteral("startingBranch")] =
+          requestData.value(QStringLiteral("startingBranch")).toString();
+    } else {
+      githubRepoContext[QStringLiteral("startingBranch")] =
+          QStringLiteral("main");
+    }
     sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
   }
 
@@ -503,7 +515,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   connect(
       reply, &QNetworkReply::finished, this,
-      [this, reply, request, json, data]() {
+      [this, reply, request, json, data, requestData]() {
         QByteArray responseData = reply->readAll();
         if (reply->error() == QNetworkReply::NoError) {
           QJsonDocument doc = QJsonDocument::fromJson(responseData);
@@ -576,7 +588,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
                                 httpRes;
 
           QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
-          Q_EMIT sessionCreationFailed(json, errDoc.object(), errorStr,
+          Q_EMIT sessionCreationFailed(requestData, errDoc.object(), errorStr,
                                        httpDetails);
           QString errorMsg = QStringLiteral("Failed to create session: ") +
                              reply->errorString();
@@ -657,14 +669,6 @@ void APIManager::getSession(const QString &sessionId) {
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
-  // If just ID, prepend "sessions/"? API doc says name is "sessions/..."
-  // We'll assume the caller passes the full name or ID correctly or we
-  // construct it. The listSessions returns objects with "name": "sessions/..."
-  // and "id": "..."
-
-  // If we use the ID, we might need to construct the URL.
-  // The endpoint is /sessions/{sessionId}
-
   QString cleanId = sessionId;
   if (cleanId.startsWith(QStringLiteral("sessions/"))) {
     cleanId = cleanId.mid(9);
