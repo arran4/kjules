@@ -105,7 +105,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
-  int followingInterval = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  int followingInterval =
+      sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
   int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
   if (followingIndex >= 0) {
     m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);

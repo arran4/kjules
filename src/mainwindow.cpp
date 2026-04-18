@@ -3721,11 +3721,15 @@ void MainWindow::updateSessionStats() {
 void MainWindow::autoRefreshFollowing() {
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex index = m_sessionModel->index(i, 0);
-    QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
-    if (state == QStringLiteral("DONE") || state == QStringLiteral("CANCELED") || state == QStringLiteral("ERROR")) {
+    QString state =
+        m_sessionModel->data(index, SessionModel::StateRole).toString();
+    if (state == QStringLiteral("DONE") ||
+        state == QStringLiteral("CANCELED") ||
+        state == QStringLiteral("ERROR")) {
       continue;
     }
-    QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
+    QString currentId =
+        m_sessionModel->data(index, SessionModel::IdRole).toString();
     if (!currentId.isEmpty()) {
       m_apiManager->reloadSession(currentId);
     }
