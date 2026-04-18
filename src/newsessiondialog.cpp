@@ -178,7 +178,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QString name =
             m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
         QString displayName =
-            m_sourceModel->data(sourceIdx, Qt::DisplayRole).toString();
+            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
 
         QString currentBranch = m_selectedSources.value(name);
         bool ok;
