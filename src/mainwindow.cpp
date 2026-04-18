@@ -2990,7 +2990,8 @@ void MainWindow::updateHoldingTabVisibility() {
     if (holdingIdx == -1) {
       int queueIdx = m_tabWidget->indexOf(m_queueView);
       if (queueIdx != -1) {
-        holdingIdx = m_tabWidget->insertTab(queueIdx + 1, m_holdingView, i18n("Holding"));
+        holdingIdx = m_tabWidget->insertTab(queueIdx + 1, m_holdingView,
+                                            i18n("Holding"));
       } else {
         holdingIdx = m_tabWidget->addTab(m_holdingView, i18n("Holding"));
       }
