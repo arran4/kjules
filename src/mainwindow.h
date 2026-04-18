@@ -98,6 +98,8 @@ private Q_SLOTS:
   void importTemplates();
   void copyTemplateToClipboard(const QModelIndex &index);
   void pasteTemplateFromClipboard();
+  void duplicateFollowingItemsToQueue(const QString &targetState,
+                                      const QString &stateName);
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
@@ -177,6 +179,10 @@ private:
   QAction *m_archiveMergedFollowingAction;
   QAction *m_archivePausedFollowingAction;
   QAction *m_archiveFailedFollowingAction;
+  QAction *m_archiveCompletedFollowingAction;
+  QAction *m_archiveCanceledFollowingAction;
+  QAction *m_duplicatePausedToQueueAndArchiveAction;
+  QAction *m_duplicateCanceledToQueueAndArchiveAction;
   QAction *m_duplicateFailedToQueueAndArchiveAction;
   QAction *m_purgeArchiveAction;
   QAction *m_openJulesUrlAction;

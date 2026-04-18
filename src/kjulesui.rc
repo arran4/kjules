@@ -31,8 +31,12 @@
             <Action name="view_raw_data" />
             <Separator />
             <Action name="archive_merged_following" />
+            <Action name="archive_completed_following" />
             <Action name="archive_paused_following" />
+            <Action name="archive_canceled_following" />
             <Action name="archive_failed_following" />
+            <Action name="duplicate_paused_to_queue_and_archive" />
+            <Action name="duplicate_canceled_to_queue_and_archive" />
             <Action name="duplicate_failed_to_queue_and_archive" />
             <Action name="purge_archive" />
             <Separator />
