@@ -1,0 +1,284 @@
+  connect(
+      m_sessionView, &QTreeView::customContextMenuRequested,
+      [this, deleteFollowingSessions](const QPoint &pos) {
+        QModelIndex index = m_sessionView->indexAt(pos);
+        if (index.isValid()) {
+          if (!m_sessionView->selectionModel()->isSelected(index)) {
+            m_sessionView->selectionModel()->select(
+                index, QItemSelectionModel::ClearAndSelect |
+                           QItemSelectionModel::Rows);
+            m_sessionView->setCurrentIndex(index);
+          }
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_sessionView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
+          QMenu menu;
+          menu.addAction(m_toggleFavouriteAction);
+          QAction *openSessionAction = menu.addAction(i18n("Open Session"));
+          QAction *openSessionsForSourceAction =
+              menu.addAction(i18n("Open Sessions for source"));
+          QAction *refreshSessionAction =
+              menu.addAction(i18n("Refresh session details"));
+          menu.addSeparator();
+
+          QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole)
+                           .toString();
+          QAction *openJulesUrlAction = nullptr;
+          QAction *copyJulesUrlAction = nullptr;
+          if (!id.isEmpty()) {
+            openJulesUrlAction = menu.addAction(i18n("Open Jules URL"));
+            copyJulesUrlAction = menu.addAction(i18n("Copy Jules URL"));
+          }
+
+          QString prUrl =
+              m_sessionModel->data(sourceIndex, SessionModel::PrUrlRole)
+                  .toString();
+          QAction *openGithubUrlAction = nullptr;
+          QAction *copyGithubUrlAction = nullptr;
+          if (!prUrl.isEmpty()) {
+            openGithubUrlAction = menu.addAction(i18n("Open Github URL"));
+            copyGithubUrlAction = menu.addAction(i18n("Copy Github URL"));
+          }
+
+          menu.addSeparator();
+          QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
+          QAction *archiveAction = menu.addAction(i18n("Archive"));
+          QAction *deleteAction = menu.addAction(i18n("Delete"));
+          menu.addSeparator();
+          QAction *newSessionFromSessionAction =
+              menu.addAction(i18n("New Session From Session"));
+          QAction *copyTemplateAction =
+              menu.addAction(i18n("Copy as Template"));
+
+          connect(openSessionAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_sessionView->selectionModel()->selectedRows();
+            for (const QModelIndex &idx : selectedRows) {
+              onSessionActivated(idx);
+            }
+          });
+
+          connect(openSessionsForSourceAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_sessionView->selectionModel()->selectedRows();
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_sessionView->model());
+            QStringList processedSources;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              QString source =
+                  m_sessionModel->data(mappedIdx, SessionModel::SourceRole)
+                      .toString();
+              if (!processedSources.contains(source) && !source.isEmpty()) {
+                processedSources.append(source);
+                SessionsWindow *window = new SessionsWindow(
+                    source, m_apiManager, m_sessionModel, this);
+                window->show();
+              }
+            }
+          });
+
+          connect(refreshSessionAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_sessionView->selectionModel()->selectedRows();
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_sessionView->model());
+            QStringList idsToRefresh;
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              QString currentId =
+                  m_sessionModel->data(mappedIdx, SessionModel::IdRole)
+                      .toString();
+              if (!currentId.isEmpty()) {
+                idsToRefresh.append(currentId);
+              }
+            }
+            if (!idsToRefresh.isEmpty()) {
+              if (m_refreshProgressWindow &&
+                  !m_refreshProgressWindow->isFinishedProcess()) {
+                m_refreshProgressWindow->addSessionIds(idsToRefresh);
+                m_refreshProgressWindow->show();
+                m_refreshProgressWindow->raise();
+                m_refreshProgressWindow->activateWindow();
+              } else {
+                if (m_refreshProgressWindow) {
+                  m_refreshProgressWindow->deleteLater();
+                }
+                m_refreshProgressWindow =
+                    new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::progressUpdated, this,
+                        &MainWindow::onRefreshProgressUpdated);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::progressFinished, this,
+                        &MainWindow::onRefreshProgressFinished);
+
+                m_sessionRefreshProgressBar->show();
+                m_refreshProgressWindow->show();
+              }
+            } else {
+              updateStatus(i18n("No following sessions to refresh."));
+            }
+          });
+
+          if (openJulesUrlAction && copyJulesUrlAction) {
+            connect(openJulesUrlAction, &QAction::triggered, [this]() {
+              QModelIndexList selectedRows =
+                  m_sessionView->selectionModel()->selectedRows();
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_sessionView->model());
+              int count = 0;
+              for (const QModelIndex &idx : selectedRows) {
+                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+                QString currentId =
+                    m_sessionModel->data(mappedIdx, SessionModel::IdRole)
+                        .toString();
+                if (!currentId.isEmpty()) {
+                  QString urlStr =
+                      QStringLiteral("https://jules.google.com/session/") +
+                      currentId;
+                  QDesktopServices::openUrl(QUrl(urlStr));
+                  count++;
+                }
+              }
+              updateStatus(
+                  i18np("Opened 1 session", "Opened %1 sessions", count));
+            });
+            connect(copyJulesUrlAction, &QAction::triggered, [this]() {
+              QModelIndexList selectedRows =
+                  m_sessionView->selectionModel()->selectedRows();
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_sessionView->model());
+              QStringList urls;
+              for (const QModelIndex &idx : selectedRows) {
+                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+                QString currentId =
+                    m_sessionModel->data(mappedIdx, SessionModel::IdRole)
+                        .toString();
+                if (!currentId.isEmpty()) {
+                  urls.append(
+                      QStringLiteral("https://jules.google.com/session/") +
+                      currentId);
+                }
+              }
+              if (!urls.isEmpty()) {
+                QGuiApplication::clipboard()->setText(
+                    urls.join(QLatin1Char('\n')));
+                updateStatus(i18np("1 Jules URL copied to clipboard.",
+                                   "%1 Jules URLs copied to clipboard.",
+                                   urls.size()));
+              }
+            });
+          }
+
+          if (openGithubUrlAction && copyGithubUrlAction) {
+            connect(openGithubUrlAction, &QAction::triggered, [this]() {
+              QModelIndexList selectedRows =
+                  m_sessionView->selectionModel()->selectedRows();
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_sessionView->model());
+              int count = 0;
+              for (const QModelIndex &idx : selectedRows) {
+                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+                QString currentPrUrl =
+                    m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole)
+                        .toString();
+                if (!currentPrUrl.isEmpty()) {
+                  QDesktopServices::openUrl(QUrl(currentPrUrl));
+                  count++;
+                }
+              }
+              updateStatus(
+                  i18np("Opened 1 Github URL", "Opened %1 Github URLs", count));
+            });
+            connect(copyGithubUrlAction, &QAction::triggered, [this]() {
+              QModelIndexList selectedRows =
+                  m_sessionView->selectionModel()->selectedRows();
+              const QSortFilterProxyModel *proxy =
+                  qobject_cast<const QSortFilterProxyModel *>(
+                      m_sessionView->model());
+              QStringList urls;
+              for (const QModelIndex &idx : selectedRows) {
+                QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+                QString currentPrUrl =
+                    m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole)
+                        .toString();
+                if (!currentPrUrl.isEmpty()) {
+                  urls.append(currentPrUrl);
+                }
+              }
+              if (!urls.isEmpty()) {
+                QGuiApplication::clipboard()->setText(
+                    urls.join(QLatin1Char('\n')));
+                updateStatus(i18np("1 Github URL copied to clipboard.",
+                                   "%1 Github URLs copied to clipboard.",
+                                   urls.size()));
+              }
+            });
+          }
+
+          auto archiveSelectedSessions = [this]() {
+            QModelIndexList selectedRows =
+                m_sessionView->selectionModel()->selectedRows();
+            QList<int> rowsToArchive;
+            const QSortFilterProxyModel *proxy =
+                qobject_cast<const QSortFilterProxyModel *>(
+                    m_sessionView->model());
+            for (const QModelIndex &idx : selectedRows) {
+              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+              if (!rowsToArchive.contains(mappedIdx.row())) {
+                rowsToArchive.append(mappedIdx.row());
+              }
+            }
+            std::sort(rowsToArchive.begin(), rowsToArchive.end(),
+                      std::greater<int>());
+
+            for (int row : rowsToArchive) {
+              QJsonObject session = m_sessionModel->getSession(row);
+              m_archiveModel->addSession(session);
+              m_sessionModel->removeSession(row);
+            }
+            m_archiveModel->saveSessions();
+            updateStatus(i18np("1 session archived.", "%1 sessions archived.",
+                               rowsToArchive.size()));
+          };
+
+          connect(completeAction, &QAction::triggered, archiveSelectedSessions);
+          connect(archiveAction, &QAction::triggered, archiveSelectedSessions);
+
+          connect(deleteAction, &QAction::triggered, deleteFollowingSessions);
+
+          connect(newSessionFromSessionAction, &QAction::triggered,
+                  [this, sourceIndex]() {
+                    QJsonObject session =
+                        m_sessionModel->getSession(sourceIndex.row());
+                    QString prompt =
+                        session.value(QStringLiteral("prompt")).toString();
+                    QString source =
+                        session.value(QStringLiteral("sourceContext"))
+                            .toObject()
+                            .value(QStringLiteral("source"))
+                            .toString();
+                    QJsonObject initData;
+                    initData[QStringLiteral("prompt")] = prompt;
+                    if (!source.isEmpty()) {
+                      QJsonArray sourcesArr;
+                      sourcesArr.append(source);
+                      initData[QStringLiteral("sources")] = sourcesArr;
+                    }
+                    bool hasApiKey = !m_apiManager->apiKey().isEmpty();
+                    auto window = new NewSessionDialog(
+                        m_sourceModel, m_templatesModel, hasApiKey, this);
+                    window->setInitialData(initData);
+                    connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+                            &MainWindow::refreshSources);
+                    connect(window, &NewSessionDialog::createSessionRequested,
+                            this, &MainWindow::onSessionCreated);
+                    connect(window, &NewSessionDialog::saveDraftRequested, this,
