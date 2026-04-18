@@ -389,7 +389,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   jumpToPromptAction->setText(tr("Jump to &Prompt"));
   actionCollection()->setDefaultShortcut(jumpToPromptAction,
                                          QKeySequence(Qt::ALT | Qt::Key_P));
-  connect(jumpToPromptAction, &QAction::triggered, m_promptEdit, qOverload<>(&QWidget::setFocus));
+  connect(jumpToPromptAction, &QAction::triggered, m_promptEdit,
+          qOverload<>(&QWidget::setFocus));
 
   // Sync checkboxes with actions
   QAction *requirePlanApprovalAction =
