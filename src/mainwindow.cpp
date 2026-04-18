@@ -3013,15 +3013,37 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
   QModelIndex index = m_holdingView->indexAt(pos);
   if (!index.isValid())
     return;
+  int row = index.row();
 
   QMenu menu;
+  QAction *moveUpAction = nullptr;
+  QAction *moveDownAction = nullptr;
+
+  if (m_holdingView->selectionModel()->selectedRows().size() == 1) {
+    if (row > 0) {
+      moveUpAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")),
+                                    i18n("Move Up"));
+    }
+    if (row < m_holdingModel->rowCount() - 1) {
+      moveDownAction = menu.addAction(
+          QIcon::fromTheme(QStringLiteral("go-down")), i18n("Move Down"));
+    }
+    if (moveUpAction || moveDownAction) {
+      menu.addSeparator();
+    }
+  }
+
   QAction *requeueAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
   QAction *deleteAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
 
   QAction *selected = menu.exec(m_holdingView->viewport()->mapToGlobal(pos));
-  if (selected == requeueAction) {
+  if (moveUpAction && selected == moveUpAction) {
+    m_holdingModel->moveItem(row, row - 1);
+  } else if (moveDownAction && selected == moveDownAction) {
+    m_holdingModel->moveItem(row, row + 1);
+  } else if (selected == requeueAction) {
     QModelIndexList selectedRows =
         m_holdingView->selectionModel()->selectedRows();
     QList<int> rowsToRequeue;
@@ -3055,6 +3077,24 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   QueueItem item = m_queueModel->getItem(row);
 
   QMenu menu;
+
+  QAction *moveUpAction = nullptr;
+  QAction *moveDownAction = nullptr;
+
+  if (m_queueView->selectionModel()->selectedRows().size() == 1) {
+    if (row > 0) {
+      moveUpAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")),
+                                    i18n("Move Up"));
+    }
+    if (row < m_queueModel->rowCount() - 1) {
+      moveDownAction = menu.addAction(
+          QIcon::fromTheme(QStringLiteral("go-down")), i18n("Move Down"));
+    }
+    if (moveUpAction || moveDownAction) {
+      menu.addSeparator();
+    }
+  }
+
   QAction *errorAction = nullptr;
   if (item.errorCount > 0) {
     errorAction =
@@ -3080,7 +3120,11 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
                      i18n("Move to Holding"));
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
-  if (errorAction && selected == errorAction) {
+  if (moveUpAction && selected == moveUpAction) {
+    m_queueModel->moveItem(row, row - 1);
+  } else if (moveDownAction && selected == moveDownAction) {
+    m_queueModel->moveItem(row, row + 1);
+  } else if (errorAction && selected == errorAction) {
     showErrorDetails(row, m_queueModel);
   } else if (selected == editAction) {
     editQueueItem(row);
@@ -3107,7 +3151,10 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     QList<int> rowsToHold;
     for (const QModelIndex &idx : selectedRows) {
       if (!rowsToHold.contains(idx.row())) {
-        rowsToHold.append(idx.row());
+        QueueItem checkItem = m_queueModel->getItem(idx.row());
+        if (!checkItem.isWaitItem) {
+          rowsToHold.append(idx.row());
+        }
       }
     }
     std::sort(rowsToHold.begin(), rowsToHold.end(), std::greater<int>());
@@ -3117,8 +3164,14 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       holdItem.isWaitItem = false;
       m_holdingModel->enqueueItem(holdItem);
     }
-    updateStatus(i18np("Task moved to holding queue.",
-                       "%1 tasks moved to holding queue.", rowsToHold.size()));
+    if (rowsToHold.size() > 0) {
+      updateStatus(i18np("Task moved to holding queue.",
+                         "%1 tasks moved to holding queue.",
+                         rowsToHold.size()));
+    } else {
+      updateStatus(
+          i18n("No tangible tasks selected to move to holding queue."));
+    }
   }
 }
 

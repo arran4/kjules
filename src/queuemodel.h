@@ -74,6 +74,7 @@ public:
   void refreshWaitItems();
 
   QueueItem getItem(int index) const;
+  void moveItem(int from, int to);
 
 private:
   QVector<QueueItem> m_items;
