@@ -9,8 +9,10 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QInputDialog>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -18,8 +20,6 @@
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
-#include <QIcon>
-#include <QKeyEvent>
 #include <QSortFilterProxyModel>
 #include <QStatusBar>
 #include <QTextEdit>
@@ -434,7 +434,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QAction *refreshSourcesAction =
       actionCollection()->addAction(QStringLiteral("refresh_sources"));
   refreshSourcesAction->setText(tr("Refresh Sources"));
-  refreshSourcesAction->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+  refreshSourcesAction->setIcon(
+      QIcon::fromTheme(QStringLiteral("view-refresh")));
   connect(refreshSourcesAction, &QAction::triggered, this, [this]() {
     statusBar()->showMessage(tr("Refresh requested..."), 3000);
     Q_EMIT refreshSourcesRequested();
@@ -745,13 +746,15 @@ bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
       if (keyEvent->key() == Qt::Key_Right) {
         return focusList(m_selectedView, m_selectedProxy);
       } else if (keyEvent->key() == Qt::Key_Up) {
-        if (handleUp(m_unselectedView)) return true;
+        if (handleUp(m_unselectedView))
+          return true;
       }
     } else if (obj == m_selectedView) {
       if (keyEvent->key() == Qt::Key_Left) {
         return focusList(m_unselectedView, m_unselectedProxy);
       } else if (keyEvent->key() == Qt::Key_Up) {
-        if (handleUp(m_selectedView)) return true;
+        if (handleUp(m_selectedView))
+          return true;
       }
     }
   }
