@@ -250,6 +250,14 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   formLayout->addRow(tr("Prompt:"), promptLayout);
 
+  // Automation Mode
+  m_automationModeComboBox = new QComboBox(this);
+  m_automationModeComboBox->addItem(tr("Auto Create PR"),
+                                    QStringLiteral("AUTO_CREATE_PR"));
+  m_automationModeComboBox->addItem(tr("No Automation"),
+                                    QStringLiteral("AUTOMATION_MODE_UNSPECIFIED"));
+  formLayout->addRow(tr("Automation Mode:"), m_automationModeComboBox);
+
   // Options
   QHBoxLayout *optionsLayout = new QHBoxLayout();
 
@@ -281,14 +289,12 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_saveTemplateButton = new QPushButton(tr("Save as Template"), this);
 
   m_createButton = new QPushButton(tr("Create Session"), this);
-
-  m_createPRButton = new QPushButton(tr("Create PR Session"), this);
-  m_createPRButton->setDefault(true);
+  m_createButton->setDefault(true);
 
   auto onCtrlShiftEnter = [this]() {
     m_keepOpenCheckBox->setChecked(true);
     m_keepSourceCheckBox->setChecked(true);
-    onSubmitPRSession();
+    onSubmitSession();
   };
 
   buttonLayout->addWidget(cancelButton);
@@ -296,7 +302,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   buttonLayout->addWidget(draftButton);
   buttonLayout->addWidget(m_saveTemplateButton);
   buttonLayout->addWidget(m_createButton);
-  buttonLayout->addWidget(m_createPRButton);
 
   mainLayout->addLayout(buttonLayout);
 
@@ -355,28 +360,22 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(m_createButton, &QPushButton::clicked, createSessionAction,
           &QAction::trigger);
 
-  QAction *createPRSessionAction =
-      actionCollection()->addAction(QStringLiteral("create_pr_session"));
-  createPRSessionAction->setText(tr("Create &PR Session"));
-  createPRSessionAction->setIcon(
-      QIcon::fromTheme(QStringLiteral("vcs-branch")));
+  // We still keep the Ctrl+Shift+Enter shortcut for keeping the window open
+  QAction *createSessionKeepOpenAction =
+      actionCollection()->addAction(QStringLiteral("create_session_keep_open"));
+  createSessionKeepOpenAction->setText(tr("Create Session & Keep Open"));
   actionCollection()->setDefaultShortcuts(
-      createPRSessionAction,
+      createSessionKeepOpenAction,
       {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
-  connect(createPRSessionAction, &QAction::triggered, this, onCtrlShiftEnter);
-  connect(m_createPRButton, &QPushButton::clicked, createPRSessionAction,
-          &QAction::trigger);
+  connect(createSessionKeepOpenAction, &QAction::triggered, this, onCtrlShiftEnter);
 
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
     m_createButton->setToolTip(
         tr("An API key is required to create a session."));
     createSessionAction->setEnabled(false);
-    m_createPRButton->setEnabled(false);
-    m_createPRButton->setToolTip(
-        tr("An API key is required to create a session."));
-    createPRSessionAction->setEnabled(false);
+    createSessionKeepOpenAction->setEnabled(false);
   }
 
   QAction *hideSelectedSourcesAction =
@@ -441,10 +440,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
 }
 
-void NewSessionDialog::onSubmitSession() { onSubmit(QString()); }
-
-void NewSessionDialog::onSubmitPRSession() {
-  onSubmit(QStringLiteral("AUTO_CREATE_PR"));
+void NewSessionDialog::onSubmitSession() {
+  onSubmit(m_automationModeComboBox->currentData().toString());
 }
 
 void NewSessionDialog::onLoadTemplate() {
@@ -458,11 +455,9 @@ void NewSessionDialog::setEditMode(bool isEdit) {
   if (isEdit) {
     setWindowTitle(tr("Edit Queued Session"));
     m_createButton->setText(tr("Requeue Session"));
-    m_createPRButton->setText(tr("Requeue PR Session"));
   } else {
     setWindowTitle(tr("Create New Session"));
     m_createButton->setText(tr("Create Session"));
-    m_createPRButton->setText(tr("Create PR Session"));
   }
 }
 
@@ -472,6 +467,14 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
     m_requirePlanApprovalCheckBox->setChecked(
         data.value(QStringLiteral("requirePlanApproval")).toBool());
+  }
+
+  if (data.contains(QStringLiteral("automationMode"))) {
+    QString mode = data.value(QStringLiteral("automationMode")).toString();
+    int idx = m_automationModeComboBox->findData(mode);
+    if (idx != -1) {
+      m_automationModeComboBox->setCurrentIndex(idx);
+    }
   }
 
   if (data.contains(QStringLiteral("comment"))) {
@@ -549,6 +552,14 @@ void NewSessionDialog::setTemplateData(const QJsonObject &data) {
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
     m_requirePlanApprovalCheckBox->setChecked(
         data.value(QStringLiteral("requirePlanApproval")).toBool());
+  }
+
+  if (data.contains(QStringLiteral("automationMode"))) {
+    QString mode = data.value(QStringLiteral("automationMode")).toString();
+    int idx = m_automationModeComboBox->findData(mode);
+    if (idx != -1) {
+      m_automationModeComboBox->setCurrentIndex(idx);
+    }
   }
 }
 
@@ -666,6 +677,7 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("prompt")] = prompt;
   draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
+  draft[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveDraftRequested(draft);
   close();
@@ -699,6 +711,7 @@ void NewSessionDialog::onSaveTemplate() {
   tmpl[QStringLiteral("name")] = dlg.nameOrComment();
   tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
+  tmpl[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveTemplateRequested(tmpl);
   // We do not close the dialog when saving a template, it can be used multiple
