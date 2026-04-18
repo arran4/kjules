@@ -56,6 +56,8 @@ private Q_SLOTS:
   void onTemplateActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
   void onQueueContextMenu(const QPoint &pos);
+  void onHoldingActivated(const QModelIndex &index);
+  void onHoldingContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
   void onSessionCreationFailed(const QJsonObject &request,
                                const QJsonObject &response,
@@ -79,6 +81,7 @@ private Q_SLOTS:
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
   void processQueue();
+  void updateHoldingTabVisibility();
   void processErrorRetries();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -118,6 +121,7 @@ private:
   DraftsModel *m_draftsModel;
   TemplatesModel *m_templatesModel;
   QueueModel *m_queueModel;
+  QueueModel *m_holdingModel;
   ErrorsModel *m_errorsModel;
   QTimer *m_errorRetryTimer;
 
@@ -127,8 +131,10 @@ private:
   QListView *m_draftsView;
   QListView *m_templatesView;
   QListView *m_queueView;
+  QListView *m_holdingView;
   QListView *m_errorsView;
   std::function<void()> m_deleteQueueItemsLambda;
+  std::function<void()> m_deleteHoldingItemsLambda;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
