@@ -1,9 +1,9 @@
 #include "newsessiondialog.h"
 #include "savedialog.h"
 #include "templateselectiondialog.h"
+#include <KActionCollection>
 #include <KConfigGroup>
 #include <KSharedConfig>
-#include <KActionCollection>
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
@@ -533,8 +533,14 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
         }
       }
     }
-  } else if (data.contains(QStringLiteral("sourceContext")) && data.value(QStringLiteral("sourceContext")).toObject().contains(QStringLiteral("sources"))) {
-    QJsonArray arr = data.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("sources")).toArray();
+  } else if (data.contains(QStringLiteral("sourceContext")) &&
+             data.value(QStringLiteral("sourceContext"))
+                 .toObject()
+                 .contains(QStringLiteral("sources"))) {
+    QJsonArray arr = data.value(QStringLiteral("sourceContext"))
+                         .toObject()
+                         .value(QStringLiteral("sources"))
+                         .toArray();
     for (const auto &val : arr) {
       QJsonObject sObj = val.toObject();
       QString name = sObj.value(QStringLiteral("name")).toString();

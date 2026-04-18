@@ -1448,14 +1448,16 @@ void MainWindow::setupUi() {
           });
 
           connect(requeueAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
+            QModelIndexList selectedRows =
+                m_errorsView->selectionModel()->selectedRows();
             QList<int> rowsToRequeue;
             for (const QModelIndex &idx : selectedRows) {
               if (!rowsToRequeue.contains(idx.row())) {
                 rowsToRequeue.append(idx.row());
               }
             }
-            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
+            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(),
+                      std::greater<int>());
             for (int row : rowsToRequeue) {
               requeueError(row);
             }
@@ -1573,11 +1575,13 @@ void MainWindow::setupUi() {
 
               connect(window, &ErrorWindow::requeueRequested, [this](int row) {
                 QJsonObject errData = m_errorsModel->getError(row);
-                QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
                 QueueItem item;
                 item.requestData = req;
                 if (errData.contains(QStringLiteral("pastErrors"))) {
-                  item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
+                  item.pastErrors =
+                      errData.value(QStringLiteral("pastErrors")).toArray();
                 }
                 QJsonObject strippedError = errData;
                 strippedError.remove(QStringLiteral("pastErrors"));
