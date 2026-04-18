@@ -719,43 +719,39 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
 bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+    auto focusList = [](QListView *view, QSortFilterProxyModel *proxy) {
+      view->setFocus();
+      if (!view->currentIndex().isValid() && proxy->rowCount() > 0) {
+        view->setCurrentIndex(proxy->index(0, 0));
+      }
+      return true;
+    };
+
+    auto handleUp = [this](QListView *view) {
+      QModelIndex currentIdx = view->currentIndex();
+      if (!currentIdx.isValid() || currentIdx.row() == 0) {
+        m_filterEdit->setFocus();
+        return true;
+      }
+      return false;
+    };
+
     if (obj == m_filterEdit && keyEvent->key() == Qt::Key_Down) {
       if (m_unselectedProxy->rowCount() > 0) {
-        m_unselectedView->setFocus();
-        if (!m_unselectedView->currentIndex().isValid()) {
-          m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
-        }
-        return true;
+        return focusList(m_unselectedView, m_unselectedProxy);
       }
     } else if (obj == m_unselectedView) {
       if (keyEvent->key() == Qt::Key_Right) {
-        m_selectedView->setFocus();
-        if (!m_selectedView->currentIndex().isValid() &&
-            m_selectedProxy->rowCount() > 0) {
-          m_selectedView->setCurrentIndex(m_selectedProxy->index(0, 0));
-        }
-        return true;
+        return focusList(m_selectedView, m_selectedProxy);
       } else if (keyEvent->key() == Qt::Key_Up) {
-        QModelIndex currentIdx = m_unselectedView->currentIndex();
-        if (!currentIdx.isValid() || currentIdx.row() == 0) {
-          m_filterEdit->setFocus();
-          return true;
-        }
+        if (handleUp(m_unselectedView)) return true;
       }
     } else if (obj == m_selectedView) {
       if (keyEvent->key() == Qt::Key_Left) {
-        m_unselectedView->setFocus();
-        if (!m_unselectedView->currentIndex().isValid() &&
-            m_unselectedProxy->rowCount() > 0) {
-          m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
-        }
-        return true;
+        return focusList(m_unselectedView, m_unselectedProxy);
       } else if (keyEvent->key() == Qt::Key_Up) {
-        QModelIndex currentIdx = m_selectedView->currentIndex();
-        if (!currentIdx.isValid() || currentIdx.row() == 0) {
-          m_filterEdit->setFocus();
-          return true;
-        }
+        if (handleUp(m_selectedView)) return true;
       }
     }
   }
