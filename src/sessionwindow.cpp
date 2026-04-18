@@ -171,7 +171,7 @@ void SessionWindow::setupActions() {
   connect(openJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
     QDesktopServices::openUrl(
-        QUrl(QStringLiteral("https://jules.google.com/sessions/") + id));
+        QUrl(QStringLiteral("https://jules.google.com/session/") + id));
   });
   actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
@@ -179,7 +179,7 @@ void SessionWindow::setupActions() {
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
     QGuiApplication::clipboard()->setText(
-        QStringLiteral("https://jules.google.com/sessions/") + id);
+        QStringLiteral("https://jules.google.com/session/") + id);
   });
   actionCollection()->addAction(QStringLiteral("copy_jules"), copyJulesAction);
 
@@ -367,7 +367,7 @@ void SessionWindow::renderDetailsAndDiff() {
       QStringLiteral("</h2><table>");
 
   QString julesUrl =
-      QStringLiteral("https://jules.google.com/sessions/") + sessionId;
+      QStringLiteral("https://jules.google.com/session/") + sessionId;
   detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
                  QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
@@ -537,20 +537,7 @@ void SessionWindow::renderDetailsAndDiff() {
 }
 
 void SessionWindow::duplicateSession() {
-  QString prompt = m_sessionData.value(QStringLiteral("prompt")).toString();
-  QString source = m_sessionData.value(QStringLiteral("sourceContext"))
-                       .toObject()
-                       .value(QStringLiteral("source"))
-                       .toString();
-
-  QJsonObject req;
-  req[QStringLiteral("source")] = source;
-  req[QStringLiteral("prompt")] = prompt;
-
-  if (m_apiManager) {
-    m_apiManager->createSessionAsync(req);
-    m_statusLabel->setText(i18n("Duplicate session requested."));
-  }
+  Q_EMIT duplicateRequested(m_sessionData);
 }
 
 void SessionWindow::setupUi(const QJsonObject &sessionData) {
@@ -575,6 +562,8 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
   m_rawActivitiesBrowser = new QTextBrowser(this);
   m_activityBrowser = new ActivityBrowser(this);
+  connect(m_activityBrowser, &ActivityBrowser::duplicateRequested, this,
+          &SessionWindow::duplicateSession);
   m_textBrowser = new QTextBrowser(this);
 
   m_activityTabWidget = new QWidget(this);

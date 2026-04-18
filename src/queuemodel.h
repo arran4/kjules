@@ -37,15 +37,27 @@ public:
     StatusRole
   };
 
-  explicit QueueModel(QObject *parent = nullptr);
+  explicit QueueModel(QObject *parent = nullptr,
+                      const QString &filename = QStringLiteral("queue.json"),
+                      bool isHolding = false);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
   QVariant data(const QModelIndex &index,
                 int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  Qt::ItemFlags flags(const QModelIndex &index) const override;
+  Qt::DropActions supportedDropActions() const override;
+  QStringList mimeTypes() const override;
+  QMimeData *mimeData(const QModelIndexList &indexes) const override;
+  bool dropMimeData(const QMimeData *data, Qt::DropAction action, int row,
+                    int column, const QModelIndex &parent) override;
+  bool removeRows(int row, int count,
+                  const QModelIndex &parent = QModelIndex()) override;
+
   void enqueue(const QJsonObject &requestData);
   void enqueueItem(const QueueItem &item);
+  void insertItem(int index, const QueueItem &item);
   void updateItem(int index, const QueueItem &item);
   QueueItem dequeue();
   QueueItem peek() const;
@@ -68,8 +80,11 @@ private:
   QVector<QDateTime> m_runTimestamps;
   void pruneRunTimestamps();
   int m_jobsSinceLastWait = 0;
+  QString m_filename;
+  bool m_isHolding;
   void load();
   void save();
+  void removeTrailingWaitItems();
 };
 
 #endif // QUEUEMODEL_H

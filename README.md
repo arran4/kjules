@@ -43,6 +43,14 @@ When you click on a notification or open the application, it presents you with a
   ![Screenshot 9](assets/screenshots/Screenshot_20260412_211716.png)
 </details>
 
+## Features
+
+- **Robust Session Management:** Manage tasks across an explicit state-based workflow including Drafts (unsubmitted), Queue (processing), Errors (failed, pending retry), Following (active managed sessions), and Archive (history).
+- **Detailed Session Views:** Dive deep into session details, view PR statuses and labels, track diffs, and read the JSON activity feed.
+- **Advanced Filtering:** Powerful built-in filtering using a drag-and-drop AST (Abstract Syntax Tree) visual filter editor.
+- **System Tray Integration:** Runs efficiently in the background, utilizing KDE's `KNotification` to deliver non-intrusive alerts for queue errors and completion events.
+- **Mock API Support:** Includes an interactive Go-based mock API server for local testing and realistic state simulation without consuming real GitHub API quotas.
+
 ## Build Instructions
 
 ### Prerequisites
