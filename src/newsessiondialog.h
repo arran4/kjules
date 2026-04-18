@@ -48,6 +48,7 @@ private Q_SLOTS:
 
 protected:
   void showEvent(QShowEvent *event) override;
+  void hideEvent(QHideEvent *event) override;
 
 private:
   SourceModel *m_sourceModel;

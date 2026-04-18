@@ -7,6 +7,8 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
@@ -68,7 +70,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     : QDialog(parent), m_sourceModel(sourceModel),
       m_templatesModel(templatesModel) {
   setWindowTitle(tr("Create New Session"));
-  resize(700, 600);
+
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
+  if (!restoreGeometry(config.readEntry("Geometry", QByteArray()))) {
+    resize(700, 600);
+  }
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
@@ -516,4 +522,11 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   } else {
     m_filterEdit->setFocus();
   }
+}
+
+void NewSessionDialog::hideEvent(QHideEvent *event) {
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
+  config.writeEntry("Geometry", saveGeometry());
+  config.sync();
+  QDialog::hideEvent(event);
 }
