@@ -103,15 +103,16 @@ void RefreshProgressWindow::onAnchorClicked(const QUrl &url) {
 }
 
 QString RefreshProgressWindow::getSessionLink(const QString &id) const {
+  const QString escapedId = id.toHtmlEscaped();
   if (!m_sessionModel)
-    return id;
+    return escapedId;
 
-  QString name = m_sessionModel->getSessionName(id);
+  const QString name = m_sessionModel->getSessionName(id);
   if (name.isEmpty()) {
-    return QStringLiteral("<a href=\"session:%1\">%1</a>").arg(id);
+    return QStringLiteral("<a href=\"session:%1\">%2</a>").arg(escapedId, escapedId);
   }
-  return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%1</a>")
-      .arg(id, name.toHtmlEscaped());
+  return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>")
+      .arg(escapedId, name.toHtmlEscaped(), escapedId);
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
