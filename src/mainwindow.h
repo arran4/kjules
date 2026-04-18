@@ -3,6 +3,7 @@
 
 #include <KXmlGuiWindow>
 #include <QDateTime>
+#include <QJsonObject>
 #include <QSystemTrayIcon>
 
 #include "sessionswindow.h"
@@ -45,7 +46,7 @@ protected:
 private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
-  void showNewSessionDialog();
+  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
   void showSettingsDialog();
   void onSessionCreated(const QMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,

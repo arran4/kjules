@@ -83,6 +83,7 @@ private:
   bool m_isHolding;
   void load();
   void save();
+  void removeTrailingWaitItems();
 };
 
 #endif // QUEUEMODEL_H

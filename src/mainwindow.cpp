@@ -793,6 +793,8 @@ void MainWindow::setupUi() {
                     auto window = new NewSessionDialog(
                         m_sourceModel, m_templatesModel, hasApiKey, this);
                     window->setInitialData(initData);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -1737,7 +1739,7 @@ void MainWindow::setupTrayIcon() {
 
   QAction *newSessionAction = new QAction(i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   m_trayMenu->addAction(newSessionAction);
 
   m_trayMenu->addSeparator();
@@ -1771,7 +1773,7 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
                   i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          &MainWindow::showNewSessionDialog);
+          [this]() { showNewSessionDialog(); });
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(
@@ -2331,16 +2333,21 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
-void MainWindow::showNewSessionDialog() {
+void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
   connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
+  if (!initialData.isEmpty()) {
+    window->setInitialData(initialData);
+  }
   window->show();
 }
 
@@ -2666,6 +2673,8 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(templateData);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2832,6 +2841,14 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
 
 void MainWindow::sendQueueItemNow(int row) {
   QueueItem item = m_queueModel->getItem(row);
+  if (item.isWaitItem) {
+    m_queueModel->removeItem(row);
+    updateStatus(i18n("Wait item removed from queue."));
+    if (row == 0) {
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    }
+    return;
+  }
   if (item.requestData.isEmpty())
     return;
   m_queueModel->removeItem(row);
@@ -2886,6 +2903,8 @@ void MainWindow::editQueueItem(int row) {
 
   QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3028,6 +3047,8 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3059,6 +3080,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3110,6 +3133,8 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(initData);
 
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3118,6 +3143,31 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
+  connect(window, &SessionWindow::duplicateRequested, this,
+          [this](const QJsonObject &sessionData) {
+            QJsonObject initData;
+            initData[QStringLiteral("prompt")] =
+                sessionData.value(QStringLiteral("prompt")).toString();
+            const QJsonObject sourceContext =
+                sessionData.value(QStringLiteral("sourceContext")).toObject();
+            const QString source =
+                sourceContext.value(QStringLiteral("source")).toString();
+            if (!source.isEmpty()) {
+              QJsonObject sourceObj;
+              sourceObj[QStringLiteral("name")] = source;
+              const QString branch =
+                  sourceContext.value(QStringLiteral("githubRepoContext"))
+                      .toObject()
+                      .value(QStringLiteral("startingBranch"))
+                      .toString();
+              if (!branch.isEmpty()) {
+                sourceObj[QStringLiteral("branch")] = branch;
+              }
+              initData[QStringLiteral("sources")] = QJsonArray{sourceObj};
+            }
+            showNewSessionDialog(initData);
+          });
+
   connect(window, &SessionWindow::templateRequested, this,
           [this](const QJsonObject &templateData) {
             SaveDialog dlg(QStringLiteral("Template"), this);
@@ -3164,6 +3214,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
+  m_sessionModel->markAsRead(sessionId);
   SessionWindow *window = new SessionWindow(
       session, m_apiManager, m_sessionModel->contains(sessionId), this);
   connect(window, &SessionWindow::watchRequested, this,
@@ -3185,10 +3236,12 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   if (sessionData.isEmpty()) {
     QString id =
         m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+    m_sessionModel->markAsRead(id);
     m_apiManager->getSession(id);
     updateStatus(i18n("Fetching details for session %1...", id));
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+    m_sessionModel->markAsRead(sessionId);
     SessionWindow *window = new SessionWindow(
         sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
     connect(window, &SessionWindow::watchRequested, this,

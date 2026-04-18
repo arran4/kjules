@@ -306,6 +306,15 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 
   if (!m_isHolding) {
     m_jobsSinceLastWait++;
+  }
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
+  QString tier = config.readEntry("Tier", QStringLiteral("free"));
+  int jobsBeforeWait = 3;
+  if (tier == QStringLiteral("pro")) {
+    jobsBeforeWait = 15;
+  } else if (tier == QStringLiteral("max")) {
+    jobsBeforeWait = 30;
+  }
 
     KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
     QString tier = config.readEntry("Tier", QStringLiteral("free"));
@@ -331,6 +340,11 @@ void QueueModel::enqueueItem(const QueueItem &item) {
     }
   }
 
+  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+  m_items.append(item);
+  endInsertRows();
+  m_jobsSinceLastWait++;
+
   save();
 }
 
@@ -350,6 +364,7 @@ QueueItem QueueModel::dequeue() {
   beginRemoveRows(QModelIndex(), 0, 0);
   QueueItem item = m_items.takeFirst();
   endRemoveRows();
+  removeTrailingWaitItems();
   save();
   return item;
 }
@@ -390,6 +405,7 @@ void QueueModel::removeItem(int index) {
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
     endRemoveRows();
+    removeTrailingWaitItems();
     save();
   }
 }
@@ -444,8 +460,13 @@ void QueueModel::recordRun() {
 }
 
 void QueueModel::checkAndPrependDailyLimitWait() {
-  if (m_isHolding)
+  if (m_isHolding) {
     return;
+  }
+  if (m_items.isEmpty()) {
+    return;
+  }
+
   pruneRunTimestamps();
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -534,7 +555,27 @@ void QueueModel::load() {
   for (int i = 0; i < arr.size(); ++i) {
     m_items.append(QueueItem::fromJson(arr[i].toObject()));
   }
+
+  // Clean up trailing wait items from loaded state
+  while (!m_items.isEmpty() && m_items.last().isWaitItem) {
+    m_items.removeLast();
+  }
+
   endResetModel();
+}
+
+void QueueModel::removeTrailingWaitItems() {
+  int firstWaitToRemove = m_items.size();
+  while (firstWaitToRemove > 0 &&
+         m_items.at(firstWaitToRemove - 1).isWaitItem) {
+    firstWaitToRemove--;
+  }
+
+  if (firstWaitToRemove < m_items.size()) {
+    beginRemoveRows(QModelIndex(), firstWaitToRemove, m_items.size() - 1);
+    m_items.remove(firstWaitToRemove, m_items.size() - firstWaitToRemove);
+    endRemoveRows();
+  }
 }
 
 void QueueModel::save() {

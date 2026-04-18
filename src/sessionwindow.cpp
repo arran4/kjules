@@ -537,20 +537,7 @@ void SessionWindow::renderDetailsAndDiff() {
 }
 
 void SessionWindow::duplicateSession() {
-  QString prompt = m_sessionData.value(QStringLiteral("prompt")).toString();
-  QString source = m_sessionData.value(QStringLiteral("sourceContext"))
-                       .toObject()
-                       .value(QStringLiteral("source"))
-                       .toString();
-
-  QJsonObject req;
-  req[QStringLiteral("source")] = source;
-  req[QStringLiteral("prompt")] = prompt;
-
-  if (m_apiManager) {
-    m_apiManager->createSessionAsync(req);
-    m_statusLabel->setText(i18n("Duplicate session requested."));
-  }
+  Q_EMIT duplicateRequested(m_sessionData);
 }
 
 void SessionWindow::setupUi(const QJsonObject &sessionData) {
@@ -575,6 +562,8 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
   m_rawActivitiesBrowser = new QTextBrowser(this);
   m_activityBrowser = new ActivityBrowser(this);
+  connect(m_activityBrowser, &ActivityBrowser::duplicateRequested, this,
+          &SessionWindow::duplicateSession);
   m_textBrowser = new QTextBrowser(this);
 
   m_activityTabWidget = new QWidget(this);

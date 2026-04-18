@@ -37,6 +37,7 @@ Q_SIGNALS:
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
+  void refreshSourcesRequested();
 
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);

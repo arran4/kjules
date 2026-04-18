@@ -10,6 +10,10 @@
       <Action name="create_session"/>
       <Action name="create_pr_session"/>
       <Separator/>
+      <Menu name="actions"><text>&amp;Actions</text>
+        <Action name="refresh_sources"/>
+      </Menu>
+      <Separator/>
       <Action name="file_close"/>
     </Menu>
     <Menu name="view"><text>&amp;View</text>
