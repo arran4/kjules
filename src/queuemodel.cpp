@@ -48,6 +48,10 @@ static qint64 calculateRandomBackoff(KConfigGroup& queueConfig) {
   return randMin;
 }
 
+static qint64 calculateFixedBackoff(qint64 initialWait) {
+  return initialWait;
+}
+
 qint64 QueueModel::calculateBackoff(int errorCount) {
   KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
 
@@ -60,6 +64,8 @@ qint64 QueueModel::calculateBackoff(int errorCount) {
     waitSeconds = calculateExponentialBackoff(initialWait, expBase, errorCount);
   } else if (type == QStringLiteral("random")) {
     waitSeconds = calculateRandomBackoff(queueConfig);
+  } else {
+    waitSeconds = calculateFixedBackoff(initialWait);
   }
 
   return qMin(waitSeconds, maxBackoffSeconds());
