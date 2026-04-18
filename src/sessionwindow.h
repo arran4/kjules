@@ -51,6 +51,7 @@ private:
 
 Q_SIGNALS:
   void watchRequested(const QJsonObject &sessionData);
+  void duplicateRequested(const QJsonObject &sessionData);
   void archiveRequested(const QString &id);
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
