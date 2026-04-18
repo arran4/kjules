@@ -1,6 +1,7 @@
 #include "refreshprogresswindow.h"
 #include "apimanager.h"
 #include "mainwindow.h"
+#include "sessionmodel.h"
 
 #include <KLocalizedString>
 #include <QProgressBar>
@@ -10,9 +11,11 @@
 
 RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
                                              APIManager *apiManager,
+                                             SessionModel *sessionModel,
                                              QWidget *parent)
     : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()),
-      m_currentIndex(0), m_apiManager(apiManager), m_isFinished(false) {
+      m_currentIndex(0), m_apiManager(apiManager), m_sessionModel(sessionModel),
+      m_isFinished(false) {
   setWindowTitle(i18n("Refresh Progress"));
   resize(600, 400);
 
@@ -24,6 +27,9 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
   layout->addWidget(m_progressBar);
 
   m_textBrowser = new QTextBrowser(this);
+  m_textBrowser->setOpenLinks(false);
+  connect(m_textBrowser, &QTextBrowser::anchorClicked, this,
+          &RefreshProgressWindow::onAnchorClicked);
   layout->addWidget(m_textBrowser);
 
   m_closeButton = new QPushButton(i18n("Close"), this);
@@ -85,16 +91,36 @@ void RefreshProgressWindow::processNext() {
   }
 
   QString id = m_queue[m_currentIndex];
-  m_textBrowser->append(i18n("Refreshing session %1...", id));
+  QString link = getSessionLink(id);
+  m_textBrowser->append(i18n("Refreshing session %1...", link));
   m_apiManager->reloadSession(id);
+}
+
+void RefreshProgressWindow::onAnchorClicked(const QUrl &url) {
+  if (url.scheme() == QStringLiteral("session")) {
+    Q_EMIT openSessionRequested(url.path());
+  }
+}
+
+QString RefreshProgressWindow::getSessionLink(const QString &id) const {
+  if (!m_sessionModel)
+    return id;
+
+  QString name = m_sessionModel->getSessionName(id);
+  if (name.isEmpty()) {
+    return QStringLiteral("<a href=\"session:%1\">%1</a>").arg(id);
+  }
+  return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%1</a>")
+      .arg(id, name.toHtmlEscaped());
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
   QString id = session.value(QStringLiteral("id")).toString();
   // Verify it's the one we are waiting for just in case
   if (m_currentIndex < m_totalCount && id == m_queue[m_currentIndex]) {
+    QString link = getSessionLink(id);
     m_textBrowser->append(i18n(
-        "<font color='green'>Successfully reloaded session %1.</font>", id));
+        "<font color='green'>Successfully reloaded session %1.</font>", link));
     m_currentIndex++;
     m_progressBar->setValue(m_currentIndex);
     processNext();
@@ -103,8 +129,9 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
 
 void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
                                                   const QString &reason) {
+  QString link = getSessionLink(id);
   m_textBrowser->append(i18n(
-      "<font color='orange'>Session %1 auto-archived: %2</font>", id, reason));
+      "<font color='orange'>Session %1 auto-archived: %2</font>", link, reason));
 }
 
 void RefreshProgressWindow::onErrorOccurred(const QString &message) {
@@ -112,8 +139,9 @@ void RefreshProgressWindow::onErrorOccurred(const QString &message) {
   // current item being processed.
   if (m_currentIndex < m_totalCount) {
     QString id = m_queue[m_currentIndex];
+    QString link = getSessionLink(id);
     m_textBrowser->append(
-        i18n("<font color='red'>Failed to reload session %1: %2</font>", id,
+        i18n("<font color='red'>Failed to reload session %1: %2</font>", link,
              message));
     m_currentIndex++;
     m_progressBar->setValue(m_currentIndex);

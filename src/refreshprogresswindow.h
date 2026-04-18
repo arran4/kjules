@@ -4,11 +4,13 @@
 #include <QDialog>
 #include <QJsonObject>
 #include <QStringList>
+#include <QUrl>
 
 class QProgressBar;
 class QTextBrowser;
 class QPushButton;
 class APIManager;
+class SessionModel;
 
 class RefreshProgressWindow : public QDialog {
   Q_OBJECT
@@ -16,6 +18,7 @@ class RefreshProgressWindow : public QDialog {
 public:
   explicit RefreshProgressWindow(const QStringList &sessionIds,
                                  APIManager *apiManager,
+                                 SessionModel *sessionModel,
                                  QWidget *parent = nullptr);
   ~RefreshProgressWindow() override;
 
@@ -25,14 +28,18 @@ public:
 Q_SIGNALS:
   void progressUpdated(int current, int total);
   void progressFinished();
+  void openSessionRequested(const QString &id);
 
 private Q_SLOTS:
   void processNext();
+  void onAnchorClicked(const QUrl &url);
   void onSessionReloaded(const QJsonObject &session);
   void onErrorOccurred(const QString &message);
   void onSessionAutoArchived(const QString &id, const QString &reason);
 
 private:
+  QString getSessionLink(const QString &id) const;
+
   QProgressBar *m_progressBar;
   QTextBrowser *m_textBrowser;
   QPushButton *m_closeButton;
@@ -41,6 +48,7 @@ private:
   int m_totalCount;
   int m_currentIndex;
   APIManager *m_apiManager;
+  SessionModel *m_sessionModel;
   bool m_isFinished;
 };
 
