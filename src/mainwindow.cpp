@@ -83,7 +83,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_errorsModel(new ErrorsModel(this)), m_errorRetryTimer(new QTimer(this)),
       m_isRefreshingSources(false), m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
+      m_sessionRefreshTimer(new QTimer(this)),
+      m_followingRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
       m_queuePaused(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
@@ -92,6 +93,9 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_sessionRefreshTimer, &QTimer::timeout, this,
           &MainWindow::updateSessionStats);
   m_sessionRefreshTimer->start(60000); // 1 minute
+
+  connect(m_followingRefreshTimer, &QTimer::timeout, this,
+          &MainWindow::autoRefreshFollowing);
 
   connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
 
@@ -104,6 +108,7 @@ MainWindow::MainWindow(QWidget *parent)
   m_errorRetryTimer->start(60000); // 1 minute
 
   loadQueueSettings();
+  updateFollowingRefreshTimer();
   createActions();
   setupTrayIcon();
 
@@ -2619,6 +2624,7 @@ void MainWindow::showSettingsDialog() {
   SettingsDialog dialog(m_apiManager, this);
   if (dialog.exec() == QDialog::Accepted) {
     loadQueueSettings();
+    updateFollowingRefreshTimer();
   }
 }
 
@@ -2630,6 +2636,18 @@ void MainWindow::loadQueueSettings() {
 
   if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
     m_queueTimer->start();
+  }
+}
+
+void MainWindow::updateFollowingRefreshTimer() {
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
+  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+
+  if (seconds > 0) {
+    m_followingRefreshTimer->start(seconds * 1000);
+  } else {
+    m_followingRefreshTimer->stop();
   }
 }
 
@@ -3695,6 +3713,22 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
+}
+
+void MainWindow::autoRefreshFollowing() {
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QModelIndex index = m_sessionModel->index(i, 0);
+    QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
+    if (state == QStringLiteral("DONE") || state == QStringLiteral("CANCELED") || state == QStringLiteral("ERROR")) {
+      continue;
+    }
+    QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
+    if (!currentId.isEmpty()) {
+      m_apiManager->reloadSession(currentId);
+    }
+  }
+  m_lastSessionRefreshTime = QDateTime::currentDateTime();
+  updateSessionStats();
 }
 
 void MainWindow::backupData() {

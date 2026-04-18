@@ -108,7 +108,11 @@ private Q_SLOTS:
   void onRefreshProgressFinished();
   void onSessionRefreshProgressBarClicked();
 
+private Q_SLOTS:
+  void autoRefreshFollowing();
+
 private:
+  void updateFollowingRefreshTimer();
   void setupUi();
   void setupTrayIcon();
   void createActions();
@@ -182,6 +186,7 @@ private:
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
+  QTimer *m_followingRefreshTimer;
 
   QTimer *m_queueTimer;
   QTimer *m_countdownTimer;
