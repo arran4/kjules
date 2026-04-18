@@ -1328,6 +1328,7 @@ void MainWindow::setupUi() {
           QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
+          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered, [this]() {
@@ -1348,6 +1349,35 @@ void MainWindow::setupUi() {
               req[QStringLiteral("description")] = dlg.description();
               m_templatesModel->addTemplate(req);
               updateStatus(i18n("Template created from error item."));
+            }
+          });
+
+          connect(requeueAction, &QAction::triggered, [this]() {
+            QModelIndexList selectedRows =
+                m_errorsView->selectionModel()->selectedRows();
+            QList<int> rowsToRequeue;
+            for (const QModelIndex &idx : selectedRows) {
+              if (!rowsToRequeue.contains(idx.row())) {
+                rowsToRequeue.append(idx.row());
+              }
+            }
+            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(),
+                      std::greater<int>());
+
+            for (int row : rowsToRequeue) {
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req =
+                  errData.value(QStringLiteral("request")).toObject();
+              m_queueModel->enqueue(req);
+              m_errorsModel->removeError(row);
+            }
+            if (!rowsToRequeue.isEmpty()) {
+              updateStatus(i18np("Requeued 1 error item.",
+                                 "Requeued %1 error items.",
+                                 rowsToRequeue.size()));
+              if (!m_queuePaused && !m_queueTimer->isActive()) {
+                m_queueTimer->start();
+              }
             }
           });
 
@@ -1405,6 +1435,17 @@ void MainWindow::setupUi() {
                 m_errorsModel->removeError(row);
                 m_apiManager->createSessionAsync(req);
                 updateStatus(i18n("Sending error item immediately..."));
+              });
+              connect(window, &ErrorWindow::requeueRequested, [this](int row) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
+                m_errorsModel->removeError(row);
+                m_queueModel->enqueue(req);
+                updateStatus(i18n("Error item requeued."));
+                if (!m_queuePaused && !m_queueTimer->isActive()) {
+                  m_queueTimer->start();
+                }
               });
 
               window->setAttribute(Qt::WA_DeleteOnClose);
