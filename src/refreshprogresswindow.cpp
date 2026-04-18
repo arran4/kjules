@@ -111,11 +111,12 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
     m_activeTasks.remove(id);
 
     // Remove the id from the multimap
-    QMutableMapIterator<QString, QString> i(m_activeTasksPrUrls);
-    while (i.hasNext()) {
-      i.next();
-      if (i.value() == id) {
-        i.remove();
+    for (auto it = m_activeTasksPrUrls.begin();
+         it != m_activeTasksPrUrls.end();) {
+      if (it.value() == id) {
+        it = m_activeTasksPrUrls.erase(it);
+      } else {
+        ++it;
       }
     }
 
