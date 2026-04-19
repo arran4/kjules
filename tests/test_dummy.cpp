@@ -1,15 +1,11 @@
-#include <QTest>
 #include <QObject>
+#include <QTest>
 
-class DummyTest : public QObject
-{
-    Q_OBJECT
+class DummyTest : public QObject {
+  Q_OBJECT
 
 private Q_SLOTS:
-    void testDummy()
-    {
-        QVERIFY(true);
-    }
+  void testDummy() { QVERIFY(true); }
 };
 
 QTEST_MAIN(DummyTest)
