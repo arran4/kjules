@@ -119,6 +119,8 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::githubInfoReceived, this,
           &MainWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubBranchesReceived, this,
+          &MainWindow::onGithubBranchesReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
           &MainWindow::onGithubPullRequestInfoReceived);
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
@@ -648,14 +650,21 @@ void MainWindow::setupUi() {
                 if (m_refreshProgressWindow) {
                   m_refreshProgressWindow->deleteLater();
                 }
-                m_refreshProgressWindow =
-                    new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+                m_refreshProgressWindow = new RefreshProgressWindow(
+                    idsToRefresh, m_apiManager, m_sessionModel, this);
                 connect(m_refreshProgressWindow,
                         &RefreshProgressWindow::progressUpdated, this,
                         &MainWindow::onRefreshProgressUpdated);
                 connect(m_refreshProgressWindow,
                         &RefreshProgressWindow::progressFinished, this,
                         &MainWindow::onRefreshProgressFinished);
+                connect(m_refreshProgressWindow,
+                        &RefreshProgressWindow::openSessionRequested, this,
+                        [this](const QString &id) {
+                          m_apiManager->getSession(id);
+                          updateStatus(
+                              i18n("Fetching details for session %1...", id));
+                        });
 
                 m_sessionRefreshProgressBar->show();
                 m_refreshProgressWindow->show();
@@ -818,6 +827,10 @@ void MainWindow::setupUi() {
                     window->setInitialData(initData);
                     connect(window, &NewSessionDialog::refreshSourcesRequested,
                             this, &MainWindow::refreshSources);
+                    connect(this, &MainWindow::statusMessage, window,
+                            &NewSessionDialog::updateStatus);
+                    connect(window, &NewSessionDialog::refreshGithubRequested,
+                            this, &MainWindow::refreshGithubDataForSources);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -849,8 +862,12 @@ void MainWindow::setupUi() {
           menu.addSeparator();
         }
         menu.addAction(m_archiveMergedFollowingAction);
+        menu.addAction(m_archiveCompletedFollowingAction);
         menu.addAction(m_archivePausedFollowingAction);
+        menu.addAction(m_archiveCanceledFollowingAction);
         menu.addAction(m_archiveFailedFollowingAction);
+        menu.addAction(m_duplicatePausedToQueueAndArchiveAction);
+        menu.addAction(m_duplicateCanceledToQueueAndArchiveAction);
         menu.addAction(m_duplicateFailedToQueueAndArchiveAction);
 
         menu.exec(m_sessionView->viewport()->mapToGlobal(pos));
@@ -1429,9 +1446,9 @@ void MainWindow::setupUi() {
           QMenu menu;
           QAction *editAction = menu.addAction(i18n("Edit / Modify"));
           QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
+          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
-          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered, [this]() {
@@ -1549,6 +1566,24 @@ void MainWindow::setupUi() {
                 if (!m_queuePaused && !m_queueTimer->isActive()) {
                   m_queueTimer->start();
                 }
+              });
+
+              connect(window, &ErrorWindow::requeueRequested, [this](int row) {
+                QJsonObject errData = m_errorsModel->getError(row);
+                QJsonObject req =
+                    errData.value(QStringLiteral("request")).toObject();
+                QueueItem item;
+                item.requestData = req;
+                if (errData.contains(QStringLiteral("pastErrors"))) {
+                  item.pastErrors =
+                      errData.value(QStringLiteral("pastErrors")).toArray();
+                }
+                QJsonObject strippedError = errData;
+                strippedError.remove(QStringLiteral("pastErrors"));
+                item.pastErrors.append(strippedError);
+                m_queueModel->enqueueItem(item);
+                m_errorsModel->removeError(row);
+                updateStatus(i18n("Error requeued."));
               });
 
               window->setAttribute(Qt::WA_DeleteOnClose);
@@ -1807,7 +1842,10 @@ void MainWindow::setupTrayIcon() {
 
   m_trayMenu = new QMenu(this);
 
-  QAction *showHideAction = new QAction(i18n("Show/Hide"), this);
+  QAction *showHideAction =
+      new QAction(i18n("Show/Hide (Suggest %1)",
+                       QKeySequence(Qt::META | Qt::Key_J).toString()),
+                  this);
   connect(showHideAction, &QAction::triggered, this,
           &MainWindow::toggleWindowVisibility);
   m_trayMenu->addAction(showHideAction);
@@ -1985,14 +2023,20 @@ void MainWindow::createActions() {
         if (m_refreshProgressWindow) {
           m_refreshProgressWindow->deleteLater();
         }
-        m_refreshProgressWindow =
-            new RefreshProgressWindow(idsToRefresh, m_apiManager, this);
+        m_refreshProgressWindow = new RefreshProgressWindow(
+            idsToRefresh, m_apiManager, m_sessionModel, this);
         connect(m_refreshProgressWindow,
                 &RefreshProgressWindow::progressUpdated, this,
                 &MainWindow::onRefreshProgressUpdated);
         connect(m_refreshProgressWindow,
                 &RefreshProgressWindow::progressFinished, this,
                 &MainWindow::onRefreshProgressFinished);
+        connect(m_refreshProgressWindow,
+                &RefreshProgressWindow::openSessionRequested, this,
+                [this](const QString &id) {
+                  m_apiManager->getSession(id);
+                  updateStatus(i18n("Fetching details for session %1...", id));
+                });
 
         m_sessionRefreshProgressBar->show();
         m_refreshProgressWindow->show();
@@ -2053,10 +2097,9 @@ void MainWindow::createActions() {
           &MainWindow::toggleWindowVisibility);
   actionCollection()->addAction(QStringLiteral("toggle_window"),
                                 toggleWindowAction);
-  KGlobalAccel::setGlobalShortcut(toggleWindowAction,
-                                  QKeySequence(Qt::META | Qt::Key_J));
+  KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
   actionCollection()->setDefaultShortcut(toggleWindowAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_M));
+                                         QKeySequence(Qt::META | Qt::Key_J));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
@@ -2418,38 +2461,19 @@ void MainWindow::createActions() {
     }
   });
 
-  m_duplicateFailedToQueueAndArchiveAction =
-      new QAction(i18n("Duplicate all Following items that are in \"Failed\" "
-                       "state to queue and archive"),
-                  this);
-  actionCollection()->addAction(
-      QStringLiteral("duplicate_failed_to_queue_and_archive"),
-      m_duplicateFailedToQueueAndArchiveAction);
+  m_archiveCompletedFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Completed\" state"),
+      this);
+  actionCollection()->addAction(QStringLiteral("archive_completed_following"),
+                                m_archiveCompletedFollowingAction);
   connect(
-      m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
-      [this]() {
+      m_archiveCompletedFollowingAction, &QAction::triggered, this, [this]() {
         int count = 0;
         for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
           if (m_sessionModel
                   ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
-                  .toString() == QStringLiteral("ERROR")) {
+                  .toString() == QStringLiteral("DONE")) {
             QJsonObject session = m_sessionModel->getSession(i);
-
-            QJsonObject req;
-            req[QStringLiteral("source")] =
-                session.value(QStringLiteral("sourceContext"))
-                    .toObject()
-                    .value(QStringLiteral("source"))
-                    .toString();
-            req[QStringLiteral("prompt")] =
-                session.value(QStringLiteral("prompt")).toString();
-            if (session.contains(QStringLiteral("automationMode"))) {
-              req[QStringLiteral("automationMode")] =
-                  session.value(QStringLiteral("automationMode")).toString();
-            }
-
-            m_queueModel->enqueue(req);
-
             m_archiveModel->addSession(session);
             m_sessionModel->removeSession(i);
             count++;
@@ -2458,13 +2482,78 @@ void MainWindow::createActions() {
         if (count > 0) {
           m_archiveModel->saveSessions();
           m_sessionModel->saveSessions();
-          updateStatus(i18np("1 session duplicated to queue and archived.",
-                             "%1 sessions duplicated to queue and archived.",
-                             count));
+          updateStatus(
+              i18np("1 session archived.", "%1 sessions archived.", count));
         } else {
-          updateStatus(i18n("No sessions in \"Failed\" state found."));
+          updateStatus(i18n("No sessions in \"Completed\" state found."));
         }
       });
+
+  m_archiveCanceledFollowingAction = new QAction(
+      i18n("Archive all Following items that are in \"Canceled\" state"), this);
+  actionCollection()->addAction(QStringLiteral("archive_canceled_following"),
+                                m_archiveCanceledFollowingAction);
+  connect(
+      m_archiveCanceledFollowingAction, &QAction::triggered, this, [this]() {
+        int count = 0;
+        for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+          if (m_sessionModel
+                  ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+                  .toString() == QStringLiteral("CANCELED")) {
+            QJsonObject session = m_sessionModel->getSession(i);
+            m_archiveModel->addSession(session);
+            m_sessionModel->removeSession(i);
+            count++;
+          }
+        }
+        if (count > 0) {
+          m_archiveModel->saveSessions();
+          m_sessionModel->saveSessions();
+          updateStatus(
+              i18np("1 session archived.", "%1 sessions archived.", count));
+        } else {
+          updateStatus(i18n("No sessions in \"Canceled\" state found."));
+        }
+      });
+
+  m_duplicateFailedToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Failed\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_failed_to_queue_and_archive"),
+      m_duplicateFailedToQueueAndArchiveAction);
+  connect(m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("ERROR"),
+                                           i18n("Failed"));
+          });
+
+  m_duplicatePausedToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Paused\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_paused_to_queue_and_archive"),
+      m_duplicatePausedToQueueAndArchiveAction);
+  connect(m_duplicatePausedToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("PAUSED"),
+                                           i18n("Paused"));
+          });
+
+  m_duplicateCanceledToQueueAndArchiveAction =
+      new QAction(i18n("Duplicate all Following items that are in \"Canceled\" "
+                       "state to queue and archive"),
+                  this);
+  actionCollection()->addAction(
+      QStringLiteral("duplicate_canceled_to_queue_and_archive"),
+      m_duplicateCanceledToQueueAndArchiveAction);
+  connect(m_duplicateCanceledToQueueAndArchiveAction, &QAction::triggered, this,
+          [this]() {
+            duplicateFollowingItemsToQueue(QStringLiteral("CANCELED"),
+                                           i18n("Canceled"));
+          });
 
   m_purgeArchiveAction = new QAction(i18n("Purge archive"), this);
   actionCollection()->addAction(QStringLiteral("purge_archive"),
@@ -2544,6 +2633,7 @@ void MainWindow::createActions() {
                                actionCollection());
   KStandardAction::configureToolbars(this, &KXmlGuiWindow::configureToolbars,
                                      actionCollection());
+  KStandardAction::close(this, &QWidget::close, actionCollection());
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
 
   setStandardToolBarMenuEnabled(true);
@@ -2627,6 +2717,10 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2714,6 +2808,45 @@ void MainWindow::updateCountdownStatus() {
   }
 }
 
+void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState,
+                                                const QString &stateName) {
+  int count = 0;
+  for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
+    if (m_sessionModel
+            ->data(m_sessionModel->index(i, 0), SessionModel::StateRole)
+            .toString() == targetState) {
+      QJsonObject session = m_sessionModel->getSession(i);
+
+      QJsonObject req;
+      req[QStringLiteral("source")] =
+          session.value(QStringLiteral("sourceContext"))
+              .toObject()
+              .value(QStringLiteral("source"))
+              .toString();
+      req[QStringLiteral("prompt")] =
+          session.value(QStringLiteral("prompt")).toString();
+      if (session.contains(QStringLiteral("automationMode"))) {
+        req[QStringLiteral("automationMode")] =
+            session.value(QStringLiteral("automationMode")).toString();
+      }
+
+      m_queueModel->enqueue(req);
+
+      m_archiveModel->addSession(session);
+      m_sessionModel->removeSession(i);
+      count++;
+    }
+  }
+  if (count > 0) {
+    m_archiveModel->saveSessions();
+    m_sessionModel->saveSessions();
+    updateStatus(i18np("1 session duplicated to queue and archived.",
+                       "%1 sessions duplicated to queue and archived.", count));
+  } else {
+    updateStatus(i18n("No sessions in \"%1\" state found.", stateName));
+  }
+}
+
 void MainWindow::toggleQueueState() {
   m_queuePaused = !m_queuePaused;
   if (m_queuePaused) {
@@ -2765,10 +2898,6 @@ void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
 }
 
 void MainWindow::processErrorRetries() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
-
   QDateTime now = QDateTime::currentDateTimeUtc();
   QList<int> rowsToRetry;
 
@@ -2777,7 +2906,13 @@ void MainWindow::processErrorRetries() {
     QString timestampStr = error.value(QStringLiteral("timestamp")).toString();
     if (!timestampStr.isEmpty()) {
       QDateTime timestamp = QDateTime::fromString(timestampStr, Qt::ISODate);
-      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffMins * 60) {
+      int errorCount = 1;
+      if (error.contains(QStringLiteral("pastErrors"))) {
+        errorCount +=
+            error.value(QStringLiteral("pastErrors")).toArray().size();
+      }
+      qint64 backoffSecs = QueueModel::calculateBackoff(errorCount);
+      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffSecs) {
         rowsToRetry.append(i);
       }
     }
@@ -2922,13 +3057,13 @@ void MainWindow::onSessionCreatedResult(bool success,
       // The item remains at the front of the queue.
 
       // Apply a short backoff (e.g. 5 minutes)
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
                                QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      waitItem.waitSeconds = backoffMins * 60;
+      waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60,
+                                  QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else if (isResourceExhausted) {
@@ -2939,8 +3074,7 @@ void MainWindow::onSessionCreatedResult(bool success,
       // Prepend a wait item
       QueueItem waitItem;
       waitItem.isWaitItem = true;
-      int delayMins = 60; // default 1 hour
-      waitItem.waitSeconds = delayMins * 60;
+      waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {
@@ -2976,6 +3110,10 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3008,14 +3146,14 @@ void MainWindow::updateHoldingTabVisibility() {
     if (holdingIdx == -1) {
       int queueIdx = m_tabWidget->indexOf(m_queueView);
       if (queueIdx != -1) {
-        m_tabWidget->insertTab(queueIdx + 1, m_holdingView, i18n("Holding"));
+        holdingIdx = m_tabWidget->insertTab(queueIdx + 1, m_holdingView,
+                                            i18n("Holding"));
       } else {
-        m_tabWidget->addTab(m_holdingView, i18n("Holding"));
+        holdingIdx = m_tabWidget->addTab(m_holdingView, i18n("Holding"));
       }
-    } else {
-      m_tabWidget->setTabText(holdingIdx,
-                              i18n("Holding (%1)", m_holdingModel->size()));
     }
+    m_tabWidget->setTabText(holdingIdx,
+                            i18n("Holding (%1)", m_holdingModel->size()));
   }
 }
 
@@ -3031,15 +3169,42 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
   QModelIndex index = m_holdingView->indexAt(pos);
   if (!index.isValid())
     return;
+  if (!m_holdingView->selectionModel()->isSelected(index)) {
+    m_holdingView->selectionModel()->select(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_holdingView->setCurrentIndex(index);
+  }
+  int row = index.row();
 
   QMenu menu;
+  QAction *moveUpAction = nullptr;
+  QAction *moveDownAction = nullptr;
+
+  if (m_holdingView->selectionModel()->selectedRows().size() == 1) {
+    if (row > 0) {
+      moveUpAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")),
+                                    i18n("Move Up"));
+    }
+    if (row < m_holdingModel->rowCount() - 1) {
+      moveDownAction = menu.addAction(
+          QIcon::fromTheme(QStringLiteral("go-down")), i18n("Move Down"));
+    }
+    if (moveUpAction || moveDownAction) {
+      menu.addSeparator();
+    }
+  }
+
   QAction *requeueAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
   QAction *deleteAction = menu.addAction(
       QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
 
   QAction *selected = menu.exec(m_holdingView->viewport()->mapToGlobal(pos));
-  if (selected == requeueAction) {
+  if (moveUpAction && selected == moveUpAction) {
+    m_holdingModel->moveItem(row, row - 1);
+  } else if (moveDownAction && selected == moveDownAction) {
+    m_holdingModel->moveItem(row, row + 1);
+  } else if (selected == requeueAction) {
     QModelIndexList selectedRows =
         m_holdingView->selectionModel()->selectedRows();
     QList<int> rowsToRequeue;
@@ -3068,11 +3233,34 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   QModelIndex index = m_queueView->indexAt(pos);
   if (!index.isValid())
     return;
+  if (!m_queueView->selectionModel()->isSelected(index)) {
+    m_queueView->selectionModel()->select(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_queueView->setCurrentIndex(index);
+  }
   int row = index.row();
 
   QueueItem item = m_queueModel->getItem(row);
 
   QMenu menu;
+
+  QAction *moveUpAction = nullptr;
+  QAction *moveDownAction = nullptr;
+
+  if (m_queueView->selectionModel()->selectedRows().size() == 1) {
+    if (row > 0) {
+      moveUpAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")),
+                                    i18n("Move Up"));
+    }
+    if (row < m_queueModel->rowCount() - 1) {
+      moveDownAction = menu.addAction(
+          QIcon::fromTheme(QStringLiteral("go-down")), i18n("Move Down"));
+    }
+    if (moveUpAction || moveDownAction) {
+      menu.addSeparator();
+    }
+  }
+
   QAction *errorAction = nullptr;
   if (item.errorCount > 0) {
     errorAction =
@@ -3098,7 +3286,11 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
                      i18n("Move to Holding"));
 
   QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
-  if (errorAction && selected == errorAction) {
+  if (moveUpAction && selected == moveUpAction) {
+    m_queueModel->moveItem(row, row - 1);
+  } else if (moveDownAction && selected == moveDownAction) {
+    m_queueModel->moveItem(row, row + 1);
+  } else if (errorAction && selected == errorAction) {
     showErrorDetails(row, m_queueModel);
   } else if (selected == editAction) {
     editQueueItem(row);
@@ -3125,7 +3317,10 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     QList<int> rowsToHold;
     for (const QModelIndex &idx : selectedRows) {
       if (!rowsToHold.contains(idx.row())) {
-        rowsToHold.append(idx.row());
+        QueueItem checkItem = m_queueModel->getItem(idx.row());
+        if (!checkItem.isWaitItem) {
+          rowsToHold.append(idx.row());
+        }
       }
     }
     std::sort(rowsToHold.begin(), rowsToHold.end(), std::greater<int>());
@@ -3135,8 +3330,14 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
       holdItem.isWaitItem = false;
       m_holdingModel->enqueueItem(holdItem);
     }
-    updateStatus(i18np("Task moved to holding queue.",
-                       "%1 tasks moved to holding queue.", rowsToHold.size()));
+    if (rowsToHold.size() > 0) {
+      updateStatus(i18np("Task moved to holding queue.",
+                         "%1 tasks moved to holding queue.",
+                         rowsToHold.size()));
+    } else {
+      updateStatus(
+          i18n("No tangible tasks selected to move to holding queue."));
+    }
   }
 }
 
@@ -3155,6 +3356,21 @@ void MainWindow::sendQueueItemNow(int row) {
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
   m_apiManager->createSessionAsync(item.requestData);
+}
+
+void MainWindow::requeueError(int sourceRow) {
+  QJsonObject errData = m_errorsModel->getError(sourceRow);
+  QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+  QueueItem item;
+  item.requestData = req;
+  if (errData.contains(QStringLiteral("pastErrors"))) {
+    item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
+  }
+  QJsonObject strippedError = errData;
+  strippedError.remove(QStringLiteral("pastErrors"));
+  item.pastErrors.append(strippedError);
+  m_queueModel->enqueueItem(item);
+  m_errorsModel->removeError(sourceRow);
 }
 
 void MainWindow::showErrorDetails(int row, QueueModel *model) {
@@ -3206,6 +3422,10 @@ void MainWindow::editQueueItem(int row) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3350,6 +3570,10 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3383,6 +3607,10 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3436,11 +3664,24 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
           &MainWindow::onDraftSaved);
   window->show();
+}
+
+void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
@@ -3561,6 +3802,23 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
   m_trayIcon->setToolTip(message);
+  Q_EMIT statusMessage(message);
+}
+
+void MainWindow::refreshGithubDataForSources(const QStringList &sourceIds) {
+  updateStatus(i18n("Refreshing GitHub data for selected sources..."));
+  if (m_apiManager->githubToken().isEmpty()) {
+    updateStatus(i18n("Cannot refresh GitHub data: No GitHub token."));
+    return;
+  }
+  for (const QString &id : sourceIds) {
+    if (id.startsWith(QStringLiteral("sources/github/"))) {
+      m_apiManager->fetchGithubInfo(id);
+      m_apiManager->fetchGithubBranches(id);
+    }
+  }
+  updateStatus(
+      i18n("GitHub data refresh requested for %1 sources.", sourceIds.size()));
 }
 
 void MainWindow::onError(const QString &message) {
@@ -3647,6 +3905,33 @@ void MainWindow::onSourcesReceived(const QJsonArray &sources) {
                                       m_pagesLoadedCount));
   updateStatus(i18n("Loaded %1 sources, added %2 new.", m_sourcesLoadedCount,
                     m_sourcesAddedCount));
+}
+
+void MainWindow::onGithubBranchesReceived(const QString &sourceId,
+                                          const QJsonArray &branches) {
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex index = m_sourceModel->index(i, 0);
+    QString id = m_sourceModel->data(index, SourceModel::IdRole).toString();
+    if (id == sourceId) {
+      QJsonObject source =
+          m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
+      QJsonObject github = source.value(QStringLiteral("github")).toObject();
+
+      QJsonArray branchNames;
+      for (const QJsonValue &v : branches) {
+        QJsonObject branchObj = v.toObject();
+        if (branchObj.contains(QStringLiteral("name"))) {
+          branchNames.append(
+              branchObj.value(QStringLiteral("name")).toString());
+        }
+      }
+
+      github[QStringLiteral("branches")] = branchNames;
+      source[QStringLiteral("github")] = github;
+      m_sourceModel->updateSource(source);
+      break;
+    }
+  }
 }
 
 void MainWindow::onGithubInfoReceived(const QString &sourceId,

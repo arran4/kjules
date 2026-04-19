@@ -386,6 +386,15 @@ QJsonObject SessionModel::getSession(int row) const {
   return QJsonObject();
 }
 
+QString SessionModel::getSessionName(const QString &id) const {
+  const int index = m_idToIndex.value(id, -1);
+  if (index != -1) {
+    const SessionData &data = m_sessions[index];
+    return data.name.isEmpty() ? data.title : data.name;
+  }
+  return {};
+}
+
 QJsonArray SessionModel::getAllSessions() const {
   QJsonArray arr;
   for (const SessionData &data : m_sessions) {

@@ -1,13 +1,81 @@
 #include "queuemodel.h"
 #include <utility>
 
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRandomGenerator>
 #include <QStandardPaths>
+#include <limits>
+
+qint64 QueueModel::maxBackoffSeconds() {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  qint64 maxWait =
+      queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
+  if (maxWait < 0)
+    maxWait = 8 * 60 * 60; // Failsafe
+  return maxWait;
+}
+
+static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase,
+                                          int errorCount) {
+  int power = qMax(0, errorCount - 1);
+  if (power > 20)
+    power = 20; // Prevent huge shifts
+  qint64 multiplier = 1;
+  bool overflow = false;
+  for (int i = 0; i < power; ++i) {
+    if (multiplier > std::numeric_limits<qint64>::max() / expBase) {
+      overflow = true;
+      break;
+    }
+    multiplier *= expBase;
+  }
+
+  if (overflow ||
+      initialWait > std::numeric_limits<qint64>::max() / multiplier) {
+    return std::numeric_limits<qint64>::max();
+  }
+  return initialWait * multiplier;
+}
+
+static qint64 calculateRandomBackoff(KConfigGroup &queueConfig) {
+  int randMin = queueConfig.readEntry("BackoffRandomMin", 10) * 60;
+  int randMax = queueConfig.readEntry("BackoffRandomMax", 60) * 60;
+  if (randMax > randMin) {
+    return QRandomGenerator::global()->bounded(randMin, randMax + 1);
+  }
+  return randMin;
+}
+
+static qint64 calculateFixedBackoff(qint64 initialWait) { return initialWait; }
+
+qint64 QueueModel::calculateBackoff(int errorCount) {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+
+  QString type = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  qint64 initialWait =
+      queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
+  qint64 waitSeconds = initialWait;
+
+  if (type == QStringLiteral("exponential")) {
+    int expBase = queueConfig.readEntry("BackoffExpBase", 2);
+    waitSeconds = calculateExponentialBackoff(initialWait, expBase, errorCount);
+  } else if (type == QStringLiteral("random")) {
+    waitSeconds = calculateRandomBackoff(queueConfig);
+  } else {
+    waitSeconds = calculateFixedBackoff(initialWait);
+  }
+
+  return qMin(waitSeconds, maxBackoffSeconds());
+}
 
 QJsonObject QueueItem::toJson() const {
   QJsonObject obj;
@@ -316,14 +384,14 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 
   pruneRunTimestamps();
 
-  int waitTime = config.readEntry("WaitTime", 3600);
+  qint64 waitTime = config.readEntry("WaitTime", 3600);
 
   if (!m_isHolding) {
     if (m_jobsSinceLastWait >= jobsBeforeWait) {
       beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
       QueueItem waitItem;
       waitItem.isWaitItem = true;
-      waitItem.waitSeconds = waitTime;
+      waitItem.waitSeconds = qMin(waitTime, maxBackoffSeconds());
       m_items.append(waitItem);
       endInsertRows();
       m_jobsSinceLastWait = 0;
@@ -422,6 +490,27 @@ QueueItem QueueModel::getItem(int index) const {
   return QueueItem();
 }
 
+void QueueModel::moveItem(int from, int to) {
+  if (from < 0 || from >= m_items.size() || to < 0 || to >= m_items.size() ||
+      from == to) {
+    return;
+  }
+
+  int destinationChild = (to > from) ? to + 1 : to;
+
+  if (beginMoveRows(QModelIndex(), from, from, QModelIndex(),
+                    destinationChild)) {
+    if (from < to)
+      std::rotate(m_items.begin() + from, m_items.begin() + from + 1,
+                  m_items.begin() + to + 1);
+    else
+      std::rotate(m_items.begin() + to, m_items.begin() + from,
+                  m_items.begin() + from + 1);
+    endMoveRows();
+    save();
+  }
+}
+
 void QueueModel::refreshWaitItems() {
   int start = -1;
   for (int i = 0; i < m_items.size(); ++i) {
@@ -507,7 +596,7 @@ void QueueModel::checkAndPrependDailyLimitWait() {
         }
       }
 
-      waitItem.waitSeconds = secondsUntilNext;
+      waitItem.waitSeconds = qMin(secondsUntilNext, maxBackoffSeconds());
       prependWaitItem(waitItem);
     }
   }

@@ -8,6 +8,7 @@ class QLineEdit;
 class QCheckBox;
 class QSpinBox;
 class QComboBox;
+class QTabWidget;
 
 class SettingsDialog : public QDialog {
   Q_OBJECT
@@ -27,7 +28,12 @@ private:
   QCheckBox *m_autostartEdit;
   QCheckBox *m_autostartTrayEdit;
   QSpinBox *m_queueIntervalEdit;
+  QTabWidget *m_backoffTabWidget;
   QSpinBox *m_queueBackoffEdit;
+  QSpinBox *m_queueBackoffExpBaseEdit;
+  QSpinBox *m_queueBackoffRandomMinEdit;
+  QSpinBox *m_queueBackoffRandomMaxEdit;
+  QSpinBox *m_queueBackoffMaxEdit;
   QSpinBox *m_waitTimeEdit;
   QSpinBox *m_refreshWorkersEdit;
   QComboBox *m_tierComboBox;

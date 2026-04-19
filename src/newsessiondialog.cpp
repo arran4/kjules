@@ -2,6 +2,8 @@
 #include "savedialog.h"
 #include "templateselectiondialog.h"
 #include <KActionCollection>
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
@@ -16,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSet>
@@ -95,7 +98,13 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       m_templatesModel(templatesModel) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Create New Session"));
-  resize(700, 600);
+
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("NewSessionDialog"));
+  if (!restoreGeometry(
+          config.readEntry(QStringLiteral("Geometry"), QByteArray()))) {
+    resize(700, 600);
+  }
 
   QVBoxLayout *mainLayout = new QVBoxLayout();
 
@@ -108,7 +117,44 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   m_filterEdit = new QLineEdit(this);
   m_filterEdit->setPlaceholderText(tr("Filter sources..."));
-  sourceLayout->addWidget(m_filterEdit);
+
+  QPushButton *refreshSourcesBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                      tr("Refresh Sources"), this);
+  connect(refreshSourcesBtn, &QPushButton::clicked, this, [this]() {
+    statusBar()->showMessage(tr("Requested refresh of sources..."));
+    Q_EMIT refreshSourcesRequested();
+  });
+
+  QPushButton *refreshGithubBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("network-server")),
+                      tr("Refresh GitHub"), this);
+  connect(refreshGithubBtn, &QPushButton::clicked, this, [this]() {
+    statusBar()->showMessage(tr("Requested refresh of GitHub data..."));
+    QStringList ids;
+    for (const QString &name : m_selectedSources.keys()) {
+      QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0),
+                                                     SourceModel::NameRole,
+                                                     name, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        ids.append(matches.first().data(SourceModel::IdRole).toString());
+      }
+    }
+    if (ids.isEmpty()) {
+      for (int i = 0; i < m_unselectedProxy->rowCount() && i < 10; ++i) {
+        QModelIndex srcIdx =
+            m_unselectedProxy->mapToSource(m_unselectedProxy->index(i, 0));
+        ids.append(srcIdx.data(SourceModel::IdRole).toString());
+      }
+    }
+    Q_EMIT refreshGithubRequested(ids);
+  });
+
+  QHBoxLayout *filterLayout = new QHBoxLayout();
+  filterLayout->addWidget(m_filterEdit);
+  filterLayout->addWidget(refreshSourcesBtn);
+  filterLayout->addWidget(refreshGithubBtn);
+  sourceLayout->addLayout(filterLayout);
 
   QHBoxLayout *splitViewLayout = new QHBoxLayout();
 
@@ -125,6 +171,46 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
   m_unselectedView->setModel(m_unselectedProxy);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_unselectedView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(
+      m_unselectedView, &QListView::customContextMenuRequested, this,
+      [this](const QPoint &pos) {
+        QPoint viewportPos =
+            m_unselectedView->viewport()->mapFrom(m_unselectedView, pos);
+        QModelIndex proxyIdx = m_unselectedView->indexAt(viewportPos);
+        if (!proxyIdx.isValid())
+          return;
+
+        QModelIndex sourceIdx = m_unselectedProxy->mapToSource(proxyIdx);
+        QString name =
+            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+
+        QMenu menu(this);
+
+        QAction *selectAction = menu.addAction(tr("Select"));
+        connect(selectAction, &QAction::triggered, this, [this, proxyIdx]() {
+          QModelIndexList selected =
+              m_unselectedView->selectionModel()->selectedIndexes();
+          if (!selected.contains(proxyIdx))
+            selected = {proxyIdx};
+          for (const QModelIndex &idx : selected) {
+            QString name = idx.data(SourceModel::NameRole).toString();
+            QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+            m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
+          }
+          updateModels();
+        });
+
+        QAction *filterAction = menu.addAction(tr("Filter just this"));
+        connect(filterAction, &QAction::triggered, this, [this, name]() {
+          m_filterEdit->setText(name);
+          applyFilter();
+        });
+
+        addFavouriteAction(menu, sourceIdx);
+
+        menu.exec(m_unselectedView->mapToGlobal(pos));
+      });
 
   unselectedLayout->addWidget(m_unselectedView);
 
@@ -175,7 +261,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(
       m_selectedView, &QListView::customContextMenuRequested, this,
       [this](const QPoint &pos) {
-        QModelIndex proxyIdx = m_selectedView->indexAt(pos);
+        QPoint viewportPos =
+            m_selectedView->viewport()->mapFrom(m_selectedView, pos);
+        QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
         if (!proxyIdx.isValid())
           return;
 
@@ -186,15 +274,49 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
                 .toString();
 
-        QString currentBranch = m_selectedSources.value(name);
-        bool ok;
-        QString newBranch = QInputDialog::getText(
-            this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
-            QLineEdit::Normal, currentBranch, &ok);
-        if (ok && !newBranch.isEmpty()) {
-          m_selectedSources[name] = newBranch;
+        QMenu menu(this);
+
+        QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
+        connect(selectBranchAction, &QAction::triggered, this,
+                [this, name, displayName,
+                 persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
+                  QModelIndex sourceIdx = persistentSourceIdx;
+                  QString currentBranch = m_selectedSources.value(name);
+                  bool ok;
+                  QStringList branches = getAvailableBranches(sourceIdx);
+                  int currentIndex = branches.indexOf(currentBranch);
+                  if (currentIndex < 0) {
+                    if (!currentBranch.isEmpty()) {
+                      branches.prepend(currentBranch);
+                    }
+                    currentIndex = 0;
+                  }
+                  QString newBranch = QInputDialog::getItem(
+                      this, tr("Select Branch"),
+                      tr("Branch for %1:").arg(displayName), branches,
+                      currentIndex, true, &ok);
+                  if (ok && !newBranch.isEmpty()) {
+                    m_selectedSources[name] = newBranch;
+                    updateModels();
+                  }
+                });
+
+        QAction *unselectAction = menu.addAction(tr("Unselect"));
+        connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
+          QModelIndexList selected =
+              m_selectedView->selectionModel()->selectedIndexes();
+          if (!selected.contains(proxyIdx))
+            selected = {proxyIdx};
+          for (const QModelIndex &idx : selected) {
+            m_selectedSources.remove(
+                idx.data(SourceModel::NameRole).toString());
+          }
           updateModels();
-        }
+        });
+
+        addFavouriteAction(menu, sourceIdx);
+
+        menu.exec(m_selectedView->mapToGlobal(pos));
       });
 
   selectedLayout->addWidget(m_selectedView);
@@ -297,12 +419,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_createButton = new QPushButton(tr("Create Session"), this);
   m_createButton->setDefault(true);
 
-  auto onCtrlShiftEnter = [this]() {
-    m_keepOpenCheckBox->setChecked(true);
-    m_keepSourceCheckBox->setChecked(true);
-    onSubmitSession();
-  };
-
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
   buttonLayout->addWidget(draftButton);
@@ -370,23 +486,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(m_createButton, &QPushButton::clicked, createSessionAction,
           &QAction::trigger);
 
-  // We still keep the Ctrl+Shift+Enter shortcut for keeping the window open
-  QAction *createSessionKeepOpenAction =
-      actionCollection()->addAction(QStringLiteral("create_session_keep_open"));
-  createSessionKeepOpenAction->setText(tr("Create Session & Keep Open"));
-  actionCollection()->setDefaultShortcuts(
-      createSessionKeepOpenAction,
-      {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
-       QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
-  connect(createSessionKeepOpenAction, &QAction::triggered, this,
-          onCtrlShiftEnter);
-
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
     m_createButton->setToolTip(
         tr("An API key is required to create a session."));
     createSessionAction->setEnabled(false);
-    createSessionKeepOpenAction->setEnabled(false);
   }
 
   QAction *hideSelectedSourcesAction =
@@ -398,6 +502,14 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(
       hideSelectedSourcesAction, &QAction::toggled, this,
       [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
+
+  QAction *jumpToPromptAction =
+      actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
+  jumpToPromptAction->setText(tr("Jump to &Prompt"));
+  actionCollection()->setDefaultShortcut(jumpToPromptAction,
+                                         QKeySequence(Qt::ALT | Qt::Key_P));
+  connect(jumpToPromptAction, &QAction::triggered, m_promptEdit,
+          qOverload<>(&QWidget::setFocus));
 
   // Sync checkboxes with actions
   QAction *requirePlanApprovalAction =
@@ -427,17 +539,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   QAction *keepSourceAction =
       actionCollection()->addAction(QStringLiteral("keep_source_selected"));
-  keepSourceAction->setText(tr("Clear &source selection after saving"));
+  keepSourceAction->setText(tr("Keep &source selected after saving"));
   keepSourceAction->setCheckable(true);
-  keepSourceAction->setChecked(!m_keepSourceCheckBox->isChecked());
+  keepSourceAction->setChecked(m_keepSourceCheckBox->isChecked());
   actionCollection()->setDefaultShortcut(keepSourceAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_L));
-  connect(keepSourceAction, &QAction::toggled, this,
-          [this](bool checked) { m_keepSourceCheckBox->setChecked(!checked); });
-  connect(m_keepSourceCheckBox, &QCheckBox::toggled, this,
-          [keepSourceAction](bool checked) {
-            keepSourceAction->setChecked(!checked);
-          });
+  connect(keepSourceAction, &QAction::toggled, m_keepSourceCheckBox,
+          &QCheckBox::setChecked);
+  connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction,
+          &QAction::setChecked);
 
   QAction *refreshSourcesAction =
       actionCollection()->addAction(QStringLiteral("refresh_sources"));
@@ -516,6 +626,20 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
           m_selectedSources.insert(name, QStringLiteral("main"));
         }
       }
+    }
+  } else if (data.contains(QStringLiteral("sourceContext")) &&
+             data.value(QStringLiteral("sourceContext"))
+                 .toObject()
+                 .contains(QStringLiteral("sources"))) {
+    QJsonArray arr = data.value(QStringLiteral("sourceContext"))
+                         .toObject()
+                         .value(QStringLiteral("sources"))
+                         .toArray();
+    for (const auto &val : arr) {
+      QJsonObject sObj = val.toObject();
+      QString name = sObj.value(QStringLiteral("name")).toString();
+      QString branch = sObj.value(QStringLiteral("branch")).toString();
+      m_selectedSources.insert(name, branch);
     }
   } else if (data.contains(QStringLiteral("source"))) {
     QString name = data.value(QStringLiteral("source")).toString();
@@ -741,6 +865,13 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   }
 }
 
+void NewSessionDialog::hideEvent(QHideEvent *event) {
+  KXmlGuiWindow::hideEvent(event);
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("NewSessionDialog"));
+  config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
+}
+
 bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
@@ -796,4 +927,72 @@ QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
     return github.value(QStringLiteral("default_branch")).toString();
   }
   return QStringLiteral("main");
+}
+
+QStringList
+NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
+  QStringList branches;
+  QSet<QString> seen;
+  QJsonObject rawData =
+      m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+
+  auto addUnique = [&](const QJsonArray &arr) {
+    for (const QJsonValue &v : arr) {
+      QString b = v.toString();
+      if (!b.isEmpty() && !seen.contains(b)) {
+        branches.append(b);
+        seen.insert(b);
+      }
+    }
+  };
+
+  // Extract from github info if available
+  QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+  addUnique(github.value(QStringLiteral("branches")).toArray());
+
+  // Merge with possible API branches
+  addUnique(rawData.value(QStringLiteral("branches")).toArray());
+
+  // Determine default branch
+  QString defaultBranch = getDefaultBranch(sourceIdx);
+
+  // If no branches known, fallback to defaultBranch and some standard ones
+  if (branches.isEmpty()) {
+    if (!defaultBranch.isEmpty()) {
+      addUnique(QJsonArray{defaultBranch});
+    }
+    addUnique(QJsonArray{QStringLiteral("main"), QStringLiteral("master")});
+  }
+
+  // Ensure default branch is at the top
+  QString topBranch;
+  if (!defaultBranch.isEmpty() && seen.contains(defaultBranch)) {
+    topBranch = defaultBranch;
+  } else if (seen.contains(QStringLiteral("main"))) {
+    topBranch = QStringLiteral("main");
+  } else if (seen.contains(QStringLiteral("master"))) {
+    topBranch = QStringLiteral("master");
+  }
+
+  if (!topBranch.isEmpty()) {
+    branches.removeAll(topBranch);
+    branches.prepend(topBranch);
+  }
+
+  return branches;
+}
+
+void NewSessionDialog::updateStatus(const QString &message) {
+  statusBar()->showMessage(message);
+}
+
+void NewSessionDialog::addFavouriteAction(QMenu &menu,
+                                          const QModelIndex &sourceIdx) {
+  QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+  bool isFavourite =
+      m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toBool();
+  QAction *favouriteAction =
+      menu.addAction(isFavourite ? tr("Unfavourite") : tr("Favourite"));
+  connect(favouriteAction, &QAction::triggered, this,
+          [this, id]() { m_sourceModel->toggleFavourite(id); });
 }
