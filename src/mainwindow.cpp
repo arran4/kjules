@@ -2633,6 +2633,7 @@ void MainWindow::createActions() {
                                actionCollection());
   KStandardAction::configureToolbars(this, &KXmlGuiWindow::configureToolbars,
                                      actionCollection());
+  KStandardAction::close(this, &QWidget::close, actionCollection());
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
 
   setStandardToolBarMenuEnabled(true);
