@@ -1443,7 +1443,6 @@ void MainWindow::setupUi() {
           QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
-          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered, [this]() {
