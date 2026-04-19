@@ -278,7 +278,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
         connect(selectBranchAction, &QAction::triggered, this,
-                [this, name, displayName]() {
+                [this, name, displayName, sourceIdx]() {
                   QString currentBranch = m_selectedSources.value(name);
                   bool ok;
                   QStringList branches = getAvailableBranches(sourceIdx);
@@ -290,8 +290,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                     currentIndex = 0;
                   }
                   QString newBranch = QInputDialog::getItem(
-                      this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
-                      branches, currentIndex, true, &ok);
+                      this, tr("Select Branch"),
+                      tr("Branch for %1:").arg(displayName), branches,
+                      currentIndex, true, &ok);
                   if (ok && !newBranch.isEmpty()) {
                     m_selectedSources[name] = newBranch;
                     updateModels();
@@ -982,7 +983,7 @@ NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
 void NewSessionDialog::updateStatus(const QString &message) {
   statusBar()->showMessage(message);
 }
-    
+
 void NewSessionDialog::addFavouriteAction(QMenu &menu,
                                           const QModelIndex &sourceIdx) {
   QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
