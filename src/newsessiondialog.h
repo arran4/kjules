@@ -59,6 +59,7 @@ private Q_SLOTS:
   void applyFilter();
 
 protected:
+  void addFavouriteAction(QMenu &menu, const QModelIndex &sourceIdx);
   void showEvent(QShowEvent *event) override;
   void hideEvent(QHideEvent *event) override;
   bool eventFilter(QObject *obj, QEvent *event) override;
