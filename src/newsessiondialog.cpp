@@ -305,12 +305,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_createButton = new QPushButton(tr("Create Session"), this);
   m_createButton->setDefault(true);
 
-  auto onCtrlShiftEnter = [this]() {
-    m_keepOpenCheckBox->setChecked(true);
-    m_keepSourceCheckBox->setChecked(true);
-    onSubmitSession();
-  };
-
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
   buttonLayout->addWidget(draftButton);
@@ -378,23 +372,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(m_createButton, &QPushButton::clicked, createSessionAction,
           &QAction::trigger);
 
-  // We still keep the Ctrl+Shift+Enter shortcut for keeping the window open
-  QAction *createSessionKeepOpenAction =
-      actionCollection()->addAction(QStringLiteral("create_session_keep_open"));
-  createSessionKeepOpenAction->setText(tr("Create Session & Keep Open"));
-  actionCollection()->setDefaultShortcuts(
-      createSessionKeepOpenAction,
-      {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Enter),
-       QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)});
-  connect(createSessionKeepOpenAction, &QAction::triggered, this,
-          onCtrlShiftEnter);
-
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
     m_createButton->setToolTip(
         tr("An API key is required to create a session."));
     createSessionAction->setEnabled(false);
-    createSessionKeepOpenAction->setEnabled(false);
   }
 
   QAction *hideSelectedSourcesAction =
@@ -443,17 +425,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   QAction *keepSourceAction =
       actionCollection()->addAction(QStringLiteral("keep_source_selected"));
-  keepSourceAction->setText(tr("Clear &source selection after saving"));
+  keepSourceAction->setText(tr("Keep &source selected after saving"));
   keepSourceAction->setCheckable(true);
-  keepSourceAction->setChecked(!m_keepSourceCheckBox->isChecked());
+  keepSourceAction->setChecked(m_keepSourceCheckBox->isChecked());
   actionCollection()->setDefaultShortcut(keepSourceAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_L));
-  connect(keepSourceAction, &QAction::toggled, this,
-          [this](bool checked) { m_keepSourceCheckBox->setChecked(!checked); });
-  connect(m_keepSourceCheckBox, &QCheckBox::toggled, this,
-          [keepSourceAction](bool checked) {
-            keepSourceAction->setChecked(!checked);
-          });
+  connect(keepSourceAction, &QAction::toggled, m_keepSourceCheckBox,
+          &QCheckBox::setChecked);
+  connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction,
+          &QAction::setChecked);
 
   QAction *refreshSourcesAction =
       actionCollection()->addAction(QStringLiteral("refresh_sources"));
