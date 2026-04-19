@@ -772,7 +772,7 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
 }
 
 void NewSessionDialog::hideEvent(QHideEvent *event) {
-  QDialog::hideEvent(event);
+  KXmlGuiWindow::hideEvent(event);
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("NewSessionDialog"));
   config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
