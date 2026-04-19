@@ -58,17 +58,22 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueIntervalEdit->setValue(queueConfig.readEntry("TimerInterval", 1));
   formLayout->addRow(i18n("Queue processing interval:"), m_queueIntervalEdit);
 
-  m_backoffTabWidget = new QTabWidget(this);
-
-  // Fixed Tab
-  QWidget *fixedTab = new QWidget();
-  QFormLayout *fixedLayout = new QFormLayout(fixedTab);
   m_queueBackoffEdit = new QSpinBox(this);
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
   m_queueBackoffEdit->setSuffix(i18n(" minutes"));
   m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  fixedLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
-                      m_queueBackoffEdit);
+  formLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
+                     m_queueBackoffEdit);
+
+  m_backoffTabWidget = new QTabWidget(this);
+
+  // Fixed Tab
+  QWidget *fixedTab = new QWidget();
+  QVBoxLayout *fixedLayout = new QVBoxLayout(fixedTab);
+  QLabel *fixedLabel =
+      new QLabel(i18n("Uses the fixed/initial backoff setting above."));
+  fixedLayout->addWidget(fixedLabel);
+  fixedLayout->addStretch();
   m_backoffTabWidget->addTab(fixedTab, i18n("Fixed"));
 
   // Exponential Tab
