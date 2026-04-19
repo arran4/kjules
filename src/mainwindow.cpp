@@ -2902,10 +2902,6 @@ void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
 }
 
 void MainWindow::processErrorRetries() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  int backoffMins = queueConfig.readEntry("BackoffInterval", 30);
-
   QDateTime now = QDateTime::currentDateTimeUtc();
   QList<int> rowsToRetry;
 
@@ -2914,7 +2910,13 @@ void MainWindow::processErrorRetries() {
     QString timestampStr = error.value(QStringLiteral("timestamp")).toString();
     if (!timestampStr.isEmpty()) {
       QDateTime timestamp = QDateTime::fromString(timestampStr, Qt::ISODate);
-      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffMins * 60) {
+      int errorCount = 1;
+      if (error.contains(QStringLiteral("pastErrors"))) {
+        errorCount +=
+            error.value(QStringLiteral("pastErrors")).toArray().size();
+      }
+      qint64 backoffSecs = QueueModel::calculateBackoff(errorCount);
+      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffSecs) {
         rowsToRetry.append(i);
       }
     }
@@ -3059,13 +3061,13 @@ void MainWindow::onSessionCreatedResult(bool success,
       // The item remains at the front of the queue.
 
       // Apply a short backoff (e.g. 5 minutes)
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
                                QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      waitItem.waitSeconds = backoffMins * 60;
+      waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60,
+                                  QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else if (isResourceExhausted) {
@@ -3076,8 +3078,7 @@ void MainWindow::onSessionCreatedResult(bool success,
       // Prepend a wait item
       QueueItem waitItem;
       waitItem.isWaitItem = true;
-      int delayMins = 60; // default 1 hour
-      waitItem.waitSeconds = delayMins * 60;
+      waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {

@@ -14,6 +14,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QStandardPaths>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
@@ -61,7 +62,87 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
   m_queueBackoffEdit->setSuffix(i18n(" minutes"));
   m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  formLayout->addRow(i18n("Queue failure backoff:"), m_queueBackoffEdit);
+  formLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
+                     m_queueBackoffEdit);
+
+  m_backoffTabWidget = new QTabWidget(this);
+
+  // Fixed Tab
+  QWidget *fixedTab = new QWidget();
+  QVBoxLayout *fixedLayout = new QVBoxLayout(fixedTab);
+  QLabel *fixedLabel =
+      new QLabel(i18n("Uses the fixed/initial backoff setting above."));
+  fixedLayout->addWidget(fixedLabel);
+  fixedLayout->addStretch();
+  m_backoffTabWidget->addTab(fixedTab, i18n("Fixed"));
+
+  // Exponential Tab
+  QWidget *expTab = new QWidget();
+  QFormLayout *expLayout = new QFormLayout(expTab);
+  m_queueBackoffExpBaseEdit = new QSpinBox(this);
+  m_queueBackoffExpBaseEdit->setRange(1, 100);
+  m_queueBackoffExpBaseEdit->setValue(
+      queueConfig.readEntry("BackoffExpBase", 2));
+  expLayout->addRow(i18n("Queue failure exponential base:"),
+                    m_queueBackoffExpBaseEdit);
+  m_backoffTabWidget->addTab(expTab, i18n("Exponential"));
+
+  // Random Tab
+  QWidget *randomTab = new QWidget();
+  QFormLayout *randomLayout = new QFormLayout(randomTab);
+  m_queueBackoffRandomMinEdit = new QSpinBox(this);
+  m_queueBackoffRandomMinEdit->setRange(1, 10080);
+  m_queueBackoffRandomMinEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffRandomMinEdit->setValue(
+      queueConfig.readEntry("BackoffRandomMin", 10));
+  randomLayout->addRow(i18n("Queue failure random min:"),
+                       m_queueBackoffRandomMinEdit);
+
+  m_queueBackoffRandomMaxEdit = new QSpinBox(this);
+  m_queueBackoffRandomMaxEdit->setRange(1, 10080);
+  m_queueBackoffRandomMaxEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffRandomMaxEdit->setValue(
+      queueConfig.readEntry("BackoffRandomMax", 60));
+  randomLayout->addRow(i18n("Queue failure random max:"),
+                       m_queueBackoffRandomMaxEdit);
+  m_backoffTabWidget->addTab(randomTab, i18n("Random"));
+
+  // Determine current tab
+  QString currentBackoffType =
+      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  int backoffTypeIndex = 0;
+  if (currentBackoffType == QStringLiteral("exponential")) {
+    backoffTypeIndex = 1;
+  } else if (currentBackoffType == QStringLiteral("random")) {
+    backoffTypeIndex = 2;
+  }
+  m_backoffTabWidget->setCurrentIndex(backoffTypeIndex);
+
+  // Note: Qt doesn't directly support HTML bolding or setTabFont for individual
+  // tabs natively in all styles without custom painting, but appending a marker
+  // works.
+  auto updateTabTitles = [this](int index) {
+    for (int i = 0; i < m_backoffTabWidget->count(); ++i) {
+      QString text = m_backoffTabWidget->tabText(i);
+      text.remove(QStringLiteral(" (Selected)"));
+      if (i == index) {
+        text += QStringLiteral(" (Selected)");
+      }
+      m_backoffTabWidget->setTabText(i, text);
+    }
+  };
+  connect(m_backoffTabWidget, &QTabWidget::currentChanged, this,
+          updateTabTitles);
+  updateTabTitles(backoffTypeIndex);
+
+  formLayout->addRow(i18n("Backoff Strategy:"), m_backoffTabWidget);
+
+  m_queueBackoffMaxEdit = new QSpinBox(this);
+  m_queueBackoffMaxEdit->setRange(1, 10080); // Up to 1 week
+  m_queueBackoffMaxEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffMaxEdit->setValue(
+      queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
+  formLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
 
   m_waitTimeEdit = new QSpinBox(this);
   m_waitTimeEdit->setRange(1, 10080);
@@ -211,7 +292,20 @@ void SettingsDialog::onSave() {
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
+  QString backoffType = QStringLiteral("fixed");
+  if (m_backoffTabWidget->currentIndex() == 1) {
+    backoffType = QStringLiteral("exponential");
+  } else if (m_backoffTabWidget->currentIndex() == 2) {
+    backoffType = QStringLiteral("random");
+  }
+  queueConfig.writeEntry("BackoffType", backoffType);
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
+  queueConfig.writeEntry("BackoffExpBase", m_queueBackoffExpBaseEdit->value());
+  queueConfig.writeEntry("BackoffRandomMin",
+                         m_queueBackoffRandomMinEdit->value());
+  queueConfig.writeEntry("BackoffRandomMax",
+                         m_queueBackoffRandomMaxEdit->value());
+  queueConfig.writeEntry("BackoffMax", m_queueBackoffMaxEdit->value());
   queueConfig.sync();
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
