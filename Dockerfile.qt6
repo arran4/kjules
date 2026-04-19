@@ -1,0 +1,6 @@
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y cmake g++ extra-cmake-modules qt6-base-dev qt6-tools-dev libkf6coreaddons-dev libkf6i18n-dev libkf6wallet-dev libkf6notifications-dev libkf6xmlgui-dev libkf6config-dev libkf6widgetsaddons-dev libkf6globalaccel-dev libkf6archive-dev
+COPY . /src
+WORKDIR /src
+RUN rm -rf build && mkdir build && cd build && cmake .. && make

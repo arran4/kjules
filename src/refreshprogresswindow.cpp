@@ -111,13 +111,9 @@ void RefreshProgressWindow::finishCurrentTask(const QString &id) {
     m_activeTasks.remove(id);
 
     // Remove the id from the multimap
-    for (auto it = m_activeTasksPrUrls.begin();
-         it != m_activeTasksPrUrls.end();) {
-      if (it.value() == id) {
-        it = m_activeTasksPrUrls.erase(it);
-      } else {
-        ++it;
-      }
+    auto keys = m_activeTasksPrUrls.keys(id);
+    for (const QString &key : keys) {
+      m_activeTasksPrUrls.remove(key, id);
     }
 
     m_processedCount++;
