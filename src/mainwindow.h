@@ -13,6 +13,7 @@ class SessionModel;
 class SourceModel;
 class QTextBrowser;
 class SessionWindow;
+class NewSessionDialog;
 class DraftsModel;
 class TemplatesModel;
 class QueueModel;
