@@ -278,7 +278,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
         connect(selectBranchAction, &QAction::triggered, this,
-                [this, name, displayName]() {
+                [this, name, displayName, sourceIdx]() {
                   QString currentBranch = m_selectedSources.value(name);
                   bool ok;
                   QStringList branches = getAvailableBranches(sourceIdx);
