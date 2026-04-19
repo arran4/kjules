@@ -850,9 +850,8 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template created from session."));
             }
           });
+          menu.exec(m_sessionView->viewport()->mapToGlobal(pos));
         }
-
-        menu.exec(m_sessionView->viewport()->mapToGlobal(pos));
       });
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
@@ -1002,9 +1001,8 @@ void MainWindow::setupUi() {
               updateStatus(i18n("Template created from archived session."));
             }
           });
+          menu.exec(m_archiveView->viewport()->mapToGlobal(pos));
         }
-
-        menu.exec(m_archiveView->viewport()->mapToGlobal(pos));
       });
   connect(
       m_archiveView, &QTreeView::doubleClicked, this,
