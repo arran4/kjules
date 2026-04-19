@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSet>
@@ -133,6 +134,46 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
   m_unselectedView->setModel(m_unselectedProxy);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_unselectedView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(
+      m_unselectedView, &QListView::customContextMenuRequested, this,
+      [this](const QPoint &pos) {
+        QPoint viewportPos =
+            m_unselectedView->viewport()->mapFrom(m_unselectedView, pos);
+        QModelIndex proxyIdx = m_unselectedView->indexAt(viewportPos);
+        if (!proxyIdx.isValid())
+          return;
+
+        QModelIndex sourceIdx = m_unselectedProxy->mapToSource(proxyIdx);
+        QString name =
+            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+
+        QMenu menu(this);
+
+        QAction *selectAction = menu.addAction(tr("Select"));
+        connect(selectAction, &QAction::triggered, this, [this, proxyIdx]() {
+          QModelIndexList selected =
+              m_unselectedView->selectionModel()->selectedIndexes();
+          if (!selected.contains(proxyIdx))
+            selected = {proxyIdx};
+          for (const QModelIndex &idx : selected) {
+            QString name = idx.data(SourceModel::NameRole).toString();
+            QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+            m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
+          }
+          updateModels();
+        });
+
+        QAction *filterAction = menu.addAction(tr("Filter just this"));
+        connect(filterAction, &QAction::triggered, this, [this, name]() {
+          m_filterEdit->setText(name);
+          applyFilter();
+        });
+
+        addFavouriteAction(menu, sourceIdx);
+
+        menu.exec(m_unselectedView->mapToGlobal(pos));
+      });
 
   unselectedLayout->addWidget(m_unselectedView);
 
@@ -183,7 +224,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(
       m_selectedView, &QListView::customContextMenuRequested, this,
       [this](const QPoint &pos) {
-        QModelIndex proxyIdx = m_selectedView->indexAt(pos);
+        QPoint viewportPos =
+            m_selectedView->viewport()->mapFrom(m_selectedView, pos);
+        QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
         if (!proxyIdx.isValid())
           return;
 
@@ -194,15 +237,39 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
                 .toString();
 
-        QString currentBranch = m_selectedSources.value(name);
-        bool ok;
-        QString newBranch = QInputDialog::getText(
-            this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
-            QLineEdit::Normal, currentBranch, &ok);
-        if (ok && !newBranch.isEmpty()) {
-          m_selectedSources[name] = newBranch;
+        QMenu menu(this);
+
+        QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
+        connect(selectBranchAction, &QAction::triggered, this,
+                [this, name, displayName]() {
+                  QString currentBranch = m_selectedSources.value(name);
+                  bool ok;
+                  QString newBranch = QInputDialog::getText(
+                      this, tr("Select Branch"),
+                      tr("Branch for %1:").arg(displayName), QLineEdit::Normal,
+                      currentBranch, &ok);
+                  if (ok && !newBranch.isEmpty()) {
+                    m_selectedSources[name] = newBranch;
+                    updateModels();
+                  }
+                });
+
+        QAction *unselectAction = menu.addAction(tr("Unselect"));
+        connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
+          QModelIndexList selected =
+              m_selectedView->selectionModel()->selectedIndexes();
+          if (!selected.contains(proxyIdx))
+            selected = {proxyIdx};
+          for (const QModelIndex &idx : selected) {
+            m_selectedSources.remove(
+                idx.data(SourceModel::NameRole).toString());
+          }
           updateModels();
-        }
+        });
+
+        addFavouriteAction(menu, sourceIdx);
+
+        menu.exec(m_selectedView->mapToGlobal(pos));
       });
 
   selectedLayout->addWidget(m_selectedView);
@@ -813,4 +880,15 @@ QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
     return github.value(QStringLiteral("default_branch")).toString();
   }
   return QStringLiteral("main");
+}
+
+void NewSessionDialog::addFavouriteAction(QMenu &menu,
+                                          const QModelIndex &sourceIdx) {
+  QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+  bool isFavourite =
+      m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toBool();
+  QAction *favouriteAction =
+      menu.addAction(isFavourite ? tr("Unfavourite") : tr("Favourite"));
+  connect(favouriteAction, &QAction::triggered, this,
+          [this, id]() { m_sourceModel->toggleFavourite(id); });
 }
