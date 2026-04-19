@@ -16,8 +16,8 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
                                              SessionModel *sessionModel,
                                              QWidget *parent)
     : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()),
-      m_currentIndex(0), m_processedCount(0),m_apiManager(apiManager), m_sessionModel(sessionModel),
-      m_isFinished(false) {
+      m_currentIndex(0), m_processedCount(0), m_apiManager(apiManager),
+      m_sessionModel(sessionModel), m_isFinished(false) {
   setWindowTitle(i18n("Refresh Progress"));
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -140,7 +140,8 @@ QString RefreshProgressWindow::getSessionLink(const QString &id) const {
 
   const QString name = m_sessionModel->getSessionName(id);
   if (name.isEmpty()) {
-    return QStringLiteral("<a href=\"session:%1\">%2</a>").arg(escapedId, escapedId);
+    return QStringLiteral("<a href=\"session:%1\">%2</a>")
+        .arg(escapedId, escapedId);
   }
   return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>")
       .arg(escapedId, name.toHtmlEscaped(), escapedId);
@@ -174,8 +175,9 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
 void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
                                                   const QString &reason) {
   QString link = getSessionLink(id);
-  m_textBrowser->append(i18n(
-      "<font color='orange'>Session %1 auto-archived: %2</font>", link, reason));
+  m_textBrowser->append(
+      i18n("<font color='orange'>Session %1 auto-archived: %2</font>", link,
+           reason));
 }
 
 void RefreshProgressWindow::onGithubPullRequestInfoReceived(
