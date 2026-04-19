@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSet>
@@ -133,6 +134,44 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
   m_unselectedView->setModel(m_unselectedProxy);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_unselectedView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(
+      m_unselectedView, &QListView::customContextMenuRequested, this,
+      [this](const QPoint &pos) {
+        QModelIndex proxyIdx = m_unselectedView->indexAt(pos);
+        if (!proxyIdx.isValid())
+          return;
+
+        QModelIndex sourceIdx = m_unselectedProxy->mapToSource(proxyIdx);
+        QString name =
+            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+        QString id =
+            m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+        bool isFavourite =
+            m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toBool();
+
+        QMenu menu(this);
+
+        QAction *selectAction = menu.addAction(tr("Select"));
+        connect(selectAction, &QAction::triggered, this,
+                [this, name, sourceIdx]() {
+                  m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
+                  updateModels();
+                });
+
+        QAction *filterAction = menu.addAction(tr("Filter just this"));
+        connect(filterAction, &QAction::triggered, this, [this, name]() {
+          m_filterEdit->setText(name);
+          applyFilter();
+        });
+
+        QAction *favouriteAction =
+            menu.addAction(isFavourite ? tr("Unfavourite") : tr("Favourite"));
+        connect(favouriteAction, &QAction::triggered, this,
+                [this, id]() { m_sourceModel->toggleFavourite(id); });
+
+        menu.exec(m_unselectedView->viewport()->mapToGlobal(pos));
+      });
 
   unselectedLayout->addWidget(m_unselectedView);
 
@@ -193,16 +232,40 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QString displayName =
             m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
                 .toString();
+        QString id =
+            m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+        bool isFavourite =
+            m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toBool();
 
-        QString currentBranch = m_selectedSources.value(name);
-        bool ok;
-        QString newBranch = QInputDialog::getText(
-            this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
-            QLineEdit::Normal, currentBranch, &ok);
-        if (ok && !newBranch.isEmpty()) {
-          m_selectedSources[name] = newBranch;
+        QMenu menu(this);
+
+        QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
+        connect(selectBranchAction, &QAction::triggered, this,
+                [this, name, displayName]() {
+                  QString currentBranch = m_selectedSources.value(name);
+                  bool ok;
+                  QString newBranch = QInputDialog::getText(
+                      this, tr("Select Branch"),
+                      tr("Branch for %1:").arg(displayName), QLineEdit::Normal,
+                      currentBranch, &ok);
+                  if (ok && !newBranch.isEmpty()) {
+                    m_selectedSources[name] = newBranch;
+                    updateModels();
+                  }
+                });
+
+        QAction *unselectAction = menu.addAction(tr("Unselect"));
+        connect(unselectAction, &QAction::triggered, this, [this, name]() {
+          m_selectedSources.remove(name);
           updateModels();
-        }
+        });
+
+        QAction *favouriteAction =
+            menu.addAction(isFavourite ? tr("Unfavourite") : tr("Favourite"));
+        connect(favouriteAction, &QAction::triggered, this,
+                [this, id]() { m_sourceModel->toggleFavourite(id); });
+
+        menu.exec(m_selectedView->viewport()->mapToGlobal(pos));
       });
 
   selectedLayout->addWidget(m_selectedView);
