@@ -281,6 +281,7 @@ jobs:
               --base main \
               --head "$BRANCH" \
               --label "ci-autofix" || true
+            exit 1
           fi
 
   cleanup-autofix-prs:
