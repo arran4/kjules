@@ -852,18 +852,6 @@ void MainWindow::setupUi() {
           });
         }
 
-        if (!menu.actions().isEmpty()) {
-          menu.addSeparator();
-        }
-        menu.addAction(m_archiveMergedFollowingAction);
-        menu.addAction(m_archiveCompletedFollowingAction);
-        menu.addAction(m_archivePausedFollowingAction);
-        menu.addAction(m_archiveCanceledFollowingAction);
-        menu.addAction(m_archiveFailedFollowingAction);
-        menu.addAction(m_duplicatePausedToQueueAndArchiveAction);
-        menu.addAction(m_duplicateCanceledToQueueAndArchiveAction);
-        menu.addAction(m_duplicateFailedToQueueAndArchiveAction);
-
         menu.exec(m_sessionView->viewport()->mapToGlobal(pos));
       });
   connect(m_sessionView, &QTreeView::doubleClicked, this,
@@ -1015,11 +1003,6 @@ void MainWindow::setupUi() {
             }
           });
         }
-
-        if (!menu.actions().isEmpty()) {
-          menu.addSeparator();
-        }
-        menu.addAction(m_purgeArchiveAction);
 
         menu.exec(m_archiveView->viewport()->mapToGlobal(pos));
       });
