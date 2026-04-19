@@ -1453,23 +1453,6 @@ void MainWindow::setupUi() {
             }
           });
 
-          connect(requeueAction, &QAction::triggered, [this]() {
-            QModelIndexList selectedRows =
-                m_errorsView->selectionModel()->selectedRows();
-            QList<int> rowsToRequeue;
-            for (const QModelIndex &idx : selectedRows) {
-              if (!rowsToRequeue.contains(idx.row())) {
-                rowsToRequeue.append(idx.row());
-              }
-            }
-            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(),
-                      std::greater<int>());
-            for (int row : rowsToRequeue) {
-              requeueError(row);
-            }
-            updateStatus(i18n("Requeued selected errors."));
-          });
-
           connect(copyTemplateAction, &QAction::triggered, [this, index]() {
             SaveDialog dlg(QStringLiteral("Template"), this);
             if (dlg.exec() == QDialog::Accepted) {
