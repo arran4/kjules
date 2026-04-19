@@ -9,11 +9,10 @@
       <Separator/>
       <Action name="create_session"/>
       <Separator/>
-      <Menu name="actions"><text>&amp;Actions</text>
-        <Action name="refresh_sources"/>
-      </Menu>
-      <Separator/>
       <Action name="file_close"/>
+    </Menu>
+    <Menu name="actions"><text>&amp;Actions</text>
+      <Action name="refresh_sources"/>
     </Menu>
     <Menu name="view"><text>&amp;View</text>
       <Action name="hide_selected_sources"/>
