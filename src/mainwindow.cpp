@@ -648,8 +648,8 @@ void MainWindow::setupUi() {
                 if (m_refreshProgressWindow) {
                   m_refreshProgressWindow->deleteLater();
                 }
-                m_refreshProgressWindow =
-                    new RefreshProgressWindow(idsToRefresh, m_apiManager, m_sessionModel, this);
+                m_refreshProgressWindow = new RefreshProgressWindow(
+                    idsToRefresh, m_apiManager, m_sessionModel, this);
                 connect(m_refreshProgressWindow,
                         &RefreshProgressWindow::progressUpdated, this,
                         &MainWindow::onRefreshProgressUpdated);
@@ -1443,7 +1443,6 @@ void MainWindow::setupUi() {
           QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
-          QAction *requeueAction = menu.addAction(i18n("Requeue"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
 
           connect(editAction, &QAction::triggered, [this]() {
@@ -2032,8 +2031,8 @@ void MainWindow::createActions() {
         if (m_refreshProgressWindow) {
           m_refreshProgressWindow->deleteLater();
         }
-        m_refreshProgressWindow =
-            new RefreshProgressWindow(idsToRefresh, m_apiManager, m_sessionModel, this);
+        m_refreshProgressWindow = new RefreshProgressWindow(
+            idsToRefresh, m_apiManager, m_sessionModel, this);
         connect(m_refreshProgressWindow,
                 &RefreshProgressWindow::progressUpdated, this,
                 &MainWindow::onRefreshProgressUpdated);
@@ -2044,8 +2043,7 @@ void MainWindow::createActions() {
                 &RefreshProgressWindow::openSessionRequested, this,
                 [this](const QString &id) {
                   m_apiManager->getSession(id);
-                  updateStatus(
-                      i18n("Fetching details for session %1...", id));
+                  updateStatus(i18n("Fetching details for session %1...", id));
                 });
 
         m_sessionRefreshProgressBar->show();

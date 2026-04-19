@@ -172,32 +172,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  cpp-qt-lint:
+    name: Qt/C++ lint
+    needs: [route, discover]
+    if: ${{ needs.discover.outputs.has_qt_cpp == 'true' && needs.route.outputs.run_code_checks == 'true' }}
+    runs-on: ubuntu-latest
+    container:
+      image: opensuse/tumbleweed
+    steps:
+      - uses: actions/checkout@v4
+      - run: zypper ref
+      - run: zypper install -y clang-tools cppcheck
+      - name: Lint style and static checks
+        run: |
+          find src bench tests -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
+          cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --suppress=unknownMacro --suppress=virtualCallInConstructor --suppress=unreadVariable .
+
   cpp-qt-build-test:
     name: Qt/C++ build
     needs: [route, discover]
     if: ${{ needs.discover.outputs.has_qt_cpp == 'true' && needs.route.outputs.run_code_checks == 'true' }}
     runs-on: ubuntu-latest
+    container:
+      image: opensuse/tumbleweed
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: |
-          sudo apt-get install -y cmake ninja-build build-essential clang-format cppcheck clang-tidy \
-          extra-cmake-modules qtbase5-dev qttools5-dev qtdeclarative5-dev \
-          libkf5coreaddons-dev libkf5i18n-dev libkf5wallet-dev libkf5notifications-dev \
-          libkf5xmlgui-dev libkf5config-dev libkf5widgetsaddons-dev libkf5auth-dev libkf5archive-dev libkf5globalaccel-dev \
-          libkf5codecs-dev libkf5configwidgets-dev libkf5itemviews-dev libkf5iconthemes-dev
-      - name: Lint style and static checks
-        run: |
-          find src -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
-          cppcheck --enable=warning,style,performance,portability --error-exitcode=1 . || true
+      - run: zypper ref
+      - run: zypper install -y cmake ninja gcc-c++ clang-tools cppcheck extra-cmake-modules qt6-base-devel qt6-tools-devel qt6-declarative-devel kf6-kcoreaddons-devel kf6-ki18n-devel kf6-kwallet-devel kf6-knotifications-devel kf6-kxmlgui-devel kf6-kconfig-devel kf6-kwidgetsaddons-devel kf6-karchive-devel kf6-kglobalaccel-devel kf6-kcodecs-devel kf6-kconfigwidgets-devel kf6-kitemviews-devel kf6-kiconthemes-devel tar gzip
       - name: Configure CMake
-        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=5 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=6 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
       - name: Clang-Tidy
         run: run-clang-tidy -p build src || true
       - name: Build
         run: cmake --build build --parallel
       - name: Test
-        run: cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+        run: export QT_QPA_PLATFORM=offscreen && cd build && ctest --output-on-failure
       - name: Archive build
         if: ${{ needs.route.outputs.run_release == 'true' }}
         run: |
@@ -225,7 +234,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ needs.discover.outputs.has_qt_cpp }}" == "true" ]]; then
-            find src -name "*.h" -o -name "*.cpp" | xargs -r clang-format -i || true
+            find src bench tests -name "*.h" -o -name "*.cpp" | xargs -r clang-format -i
           fi
 
       - name: Create PR if changes exist
@@ -427,6 +436,7 @@ jobs:
     name: Publish draft release assets
     needs:
       - cpp-qt-build-test
+      - cpp-qt-lint
       - flatpak-build
       - route
       - prepare-release-tag
@@ -435,6 +445,7 @@ jobs:
       needs.route.outputs.run_release == 'true' &&
       (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
       (needs.cpp-qt-build-test.result == 'success' || needs.cpp-qt-build-test.result == 'skipped') &&
+      (needs.cpp-qt-lint.result == 'success' || needs.cpp-qt-lint.result == 'skipped') &&
       (needs.flatpak-build.result == 'success' || needs.flatpak-build.result == 'skipped')
     runs-on: ubuntu-latest
     steps:

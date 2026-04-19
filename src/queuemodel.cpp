@@ -505,13 +505,10 @@ void QueueModel::checkAndPrependDailyLimitWait() {
   }
 
   if (m_runTimestamps.size() >= dailyLimit) {
-    bool hasDailyLimitWait = false;
-    for (const QueueItem &existingItem : std::as_const(m_items)) {
-      if (existingItem.isWaitItem && existingItem.isDailyLimitWait) {
-        hasDailyLimitWait = true;
-        break;
-      }
-    }
+    bool hasDailyLimitWait = std::any_of(
+        m_items.begin(), m_items.end(), [](const QueueItem &existingItem) {
+          return existingItem.isWaitItem && existingItem.isDailyLimitWait;
+        });
 
     if (!hasDailyLimitWait) {
       QueueItem waitItem;
@@ -552,8 +549,8 @@ void QueueModel::load() {
     return;
   }
 
-  QByteArray data = file.readAll();
-  QJsonDocument doc(QJsonDocument::fromJson(data));
+  QByteArray fileData = file.readAll();
+  QJsonDocument doc(QJsonDocument::fromJson(fileData));
   QJsonArray arr;
 
   if (doc.isObject()) {

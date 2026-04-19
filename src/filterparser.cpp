@@ -66,7 +66,7 @@ class Parser {
   int m_pos;
 
 public:
-  Parser(const QList<Token> &tokens) : m_tokens(tokens), m_pos(0) {}
+  explicit Parser(const QList<Token> &tokens) : m_tokens(tokens), m_pos(0) {}
 
   QSharedPointer<ASTNode> parse() {
     if (m_tokens.isEmpty())
@@ -163,11 +163,10 @@ QSharedPointer<ASTNode> FilterParser::parse(const QString &query) {
 }
 
 bool AndNode::evaluate(const FilterDataAccessor &accessor) const {
-  for (const auto &child : m_children) {
-    if (!child->evaluate(accessor))
-      return false;
-  }
-  return true;
+  return std::all_of(m_children.begin(), m_children.end(),
+                     [&accessor](const QSharedPointer<ASTNode> &child) {
+                       return child->evaluate(accessor);
+                     });
 }
 QString AndNode::toString() const {
   QStringList parts;
@@ -178,11 +177,11 @@ QString AndNode::toString() const {
 }
 
 bool OrNode::evaluate(const FilterDataAccessor &accessor) const {
-  for (const auto &child : m_children) {
-    if (child->evaluate(accessor))
-      return true;
-  }
-  return m_children.isEmpty();
+  return std::any_of(m_children.begin(), m_children.end(),
+                     [&accessor](const QSharedPointer<ASTNode> &child) {
+                       return child->evaluate(accessor);
+                     }) ||
+         m_children.isEmpty();
 }
 QString OrNode::toString() const {
   QStringList parts;
@@ -201,11 +200,10 @@ QString NotNode::toString() const {
 
 bool InNode::evaluate(const FilterDataAccessor &accessor) const {
   QString val = accessor.getValue(m_key);
-  for (const QString &v : m_values) {
-    if (val.compare(v, Qt::CaseInsensitive) == 0)
-      return true;
-  }
-  return false;
+  return std::any_of(m_values.begin(), m_values.end(),
+                     [&val](const QString &v) {
+                       return val.compare(v, Qt::CaseInsensitive) == 0;
+                     });
 }
 QString InNode::toString() const {
   return m_key + QStringLiteral(" IN \"") + m_valuesStr + QStringLiteral("\"");
@@ -261,11 +259,9 @@ QString KeyValueNode::toString() const {
 
 bool KeywordNode::evaluate(const FilterDataAccessor &accessor) const {
   QList<QString> allVals = accessor.getAllValues();
-  for (const QString &v : allVals) {
-    if (v.contains(m_keyword, Qt::CaseInsensitive))
-      return true;
-  }
-  return false;
+  return std::any_of(allVals.begin(), allVals.end(), [this](const QString &v) {
+    return v.contains(m_keyword, Qt::CaseInsensitive);
+  });
 }
 QString KeywordNode::toString() const {
   if (m_keyword.contains(QLatin1Char(' ')))

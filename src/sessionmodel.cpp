@@ -13,9 +13,9 @@ SessionModel::SessionModel(const QString &cacheFileName, QObject *parent)
     : QAbstractTableModel(parent), m_cacheFileName(cacheFileName) {}
 
 SessionData parseSessionData(const QJsonObject &obj) {
-  SessionData data;
-  data.id = obj.value(QStringLiteral("id")).toString();
-  data.name = obj.value(QStringLiteral("name")).toString();
+  SessionData sd;
+  sd.id = obj.value(QStringLiteral("id")).toString();
+  sd.name = obj.value(QStringLiteral("name")).toString();
 
   QString title = obj.value(QStringLiteral("title")).toString();
   QString prompt = obj.value(QStringLiteral("prompt")).toString();
@@ -27,44 +27,44 @@ SessionData parseSessionData(const QJsonObject &obj) {
   if (title.length() > 50) {
     title = title.left(47) + QStringLiteral("...");
   }
-  data.title = title;
-  data.prompt = prompt;
+  sd.title = title;
+  sd.prompt = prompt;
 
-  data.source = obj.value(QStringLiteral("sourceContext"))
-                    .toObject()
-                    .value(QStringLiteral("source"))
-                    .toString();
+  sd.source = obj.value(QStringLiteral("sourceContext"))
+                  .toObject()
+                  .value(QStringLiteral("source"))
+                  .toString();
 
-  QStringList sourceParts = data.source.split(QLatin1Char('/'));
+  QStringList sourceParts = sd.source.split(QLatin1Char('/'));
   if (sourceParts.size() >= 4 && sourceParts[0] == QStringLiteral("sources")) {
-    data.provider = sourceParts[1];
-    data.owner = sourceParts[2];
-    data.repo = sourceParts[3];
+    sd.provider = sourceParts[1];
+    sd.owner = sourceParts[2];
+    sd.repo = sourceParts[3];
   }
 
-  data.state = obj.value(QStringLiteral("state")).toString();
-  data.updateTime = QDateTime::fromString(
+  sd.state = obj.value(QStringLiteral("state")).toString();
+  sd.updateTime = QDateTime::fromString(
       obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
-  data.createTime = QDateTime::fromString(
+  sd.createTime = QDateTime::fromString(
       obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
 
-  data.isFavourite = obj.value(QStringLiteral("local_favourite")).toBool();
+  sd.isFavourite = obj.value(QStringLiteral("local_favourite")).toBool();
 
-  data.hasChangeSet = false;
+  sd.hasChangeSet = false;
   QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
   for (int i = 0; i < outputs.size(); ++i) {
     QJsonObject outputObj = outputs[i].toObject();
     if (outputObj.contains(QStringLiteral("changeSet"))) {
-      data.hasChangeSet = true;
+      sd.hasChangeSet = true;
     }
     if (outputObj.contains(QStringLiteral("pullRequest"))) {
       QJsonObject prObj =
           outputObj.value(QStringLiteral("pullRequest")).toObject();
-      data.prUrl = prObj.value(QStringLiteral("url")).toString();
-      if (!data.prUrl.isEmpty()) {
-        int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
+      sd.prUrl = prObj.value(QStringLiteral("url")).toString();
+      if (!sd.prUrl.isEmpty()) {
+        int lastSlash = sd.prUrl.lastIndexOf(QLatin1Char('/'));
         if (lastSlash != -1) {
-          data.prNumber = QStringLiteral("#") + data.prUrl.mid(lastSlash + 1);
+          sd.prNumber = QStringLiteral("#") + sd.prUrl.mid(lastSlash + 1);
         }
       }
     }
@@ -72,20 +72,20 @@ SessionData parseSessionData(const QJsonObject &obj) {
 
   if (obj.contains(QStringLiteral("githubPrInfo"))) {
     QJsonObject prInfo = obj.value(QStringLiteral("githubPrInfo")).toObject();
-    data.prStatus = prInfo.value(QStringLiteral("state")).toString();
+    sd.prStatus = prInfo.value(QStringLiteral("state")).toString();
     if (prInfo.value(QStringLiteral("merged_at")).isString()) {
-      data.prStatus = QStringLiteral("merged");
+      sd.prStatus = QStringLiteral("merged");
     }
     QJsonArray labelsArr = prInfo.value(QStringLiteral("labels")).toArray();
     for (int i = 0; i < labelsArr.size(); ++i) {
-      data.prLabels.append(
+      sd.prLabels.append(
           labelsArr[i].toObject().value(QStringLiteral("name")).toString());
     }
   }
 
-  data.rawObject = obj;
-  data.hasUnreadChanges = false;
-  return data;
+  sd.rawObject = obj;
+  sd.hasUnreadChanges = false;
+  return sd;
 }
 
 int SessionModel::rowCount(const QModelIndex &parent) const {
@@ -252,9 +252,9 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
 void SessionModel::toggleFavourite(const QString &id) {
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
-    SessionData &data = m_sessions[i];
-    data.isFavourite = !data.isFavourite;
-    data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
+    SessionData &sd = m_sessions[i];
+    sd.isFavourite = !sd.isFavourite;
+    sd.rawObject[QStringLiteral("local_favourite")] = sd.isFavourite;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     saveSessions();
   }
@@ -267,9 +267,9 @@ void SessionModel::setSessions(const QJsonArray &sessions) {
   m_sessions.reserve(sessions.size());
   for (int i = 0; i < sessions.size(); ++i) {
     QJsonObject obj = sessions[i].toObject();
-    SessionData data = parseSessionData(obj);
-    m_sessions.append(data);
-    m_idToIndex[data.id] = i;
+    SessionData sd = parseSessionData(obj);
+    m_sessions.append(sd);
+    m_idToIndex[sd.id] = i;
   }
   endResetModel();
   Q_EMIT sessionsLoadedOrUpdated();
@@ -294,18 +294,17 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       QString oldTitle = m_sessions[row].title;
       bool oldHasChangeSet = m_sessions[row].hasChangeSet;
 
-      SessionData data = parseSessionData(obj);
-      data.isFavourite = isFav;
-      data.rawObject[QStringLiteral("local_favourite")] = isFav;
-      data.id = id; // Ensure ID matches
+      SessionData sd = parseSessionData(obj);
+      sd.isFavourite = isFav;
+      sd.rawObject[QStringLiteral("local_favourite")] = isFav;
+      sd.id = id; // Ensure ID matches
 
-      bool isUnread = wasUnread || (oldState != data.state) ||
-                      (oldPrStatus != data.prStatus) ||
-                      (oldTitle != data.title) ||
-                      (oldHasChangeSet != data.hasChangeSet);
-      data.hasUnreadChanges = isUnread;
+      bool isUnread = wasUnread || (oldState != sd.state) ||
+                      (oldPrStatus != sd.prStatus) || (oldTitle != sd.title) ||
+                      (oldHasChangeSet != sd.hasChangeSet);
+      sd.hasUnreadChanges = isUnread;
 
-      m_sessions[row] = data;
+      m_sessions[row] = sd;
       Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
     } else {
       newSessions.append(obj);
@@ -320,9 +319,9 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
                   m_sessions.size() + newSessions.size() - 1);
   for (int i = 0; i < newSessions.size(); ++i) {
     QJsonObject obj = newSessions[i];
-    SessionData data = parseSessionData(obj);
-    m_sessions.append(data);
-    m_idToIndex[data.id] = m_sessions.size() - 1;
+    SessionData sd = parseSessionData(obj);
+    m_sessions.append(sd);
+    m_idToIndex[sd.id] = m_sessions.size() - 1;
   }
   endInsertRows();
   return newSessions.size();
@@ -330,8 +329,8 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
 
 void SessionModel::addSession(const QJsonObject &session) {
   beginInsertRows(QModelIndex(), 0, 0);
-  SessionData data = parseSessionData(session);
-  m_sessions.insert(0, data);
+  SessionData sd = parseSessionData(session);
+  m_sessions.insert(0, sd);
   // Rebuild the index completely because inserting at 0 shifts all indices
   m_idToIndex.clear();
   for (int i = 0; i < m_sessions.size(); ++i) {
@@ -356,22 +355,22 @@ void SessionModel::updateSession(const QJsonObject &session) {
     QString oldTitle = m_sessions[i].title;
     bool oldHasChangeSet = m_sessions[i].hasChangeSet;
 
-    SessionData data = parseSessionData(sessionWithRefresh);
-    data.isFavourite = isFav;
-    data.rawObject[QStringLiteral("local_favourite")] = isFav;
-    data.id = id; // Ensure ID matches
+    SessionData sd = parseSessionData(sessionWithRefresh);
+    sd.isFavourite = isFav;
+    sd.rawObject[QStringLiteral("local_favourite")] = isFav;
+    sd.id = id; // Ensure ID matches
 
     bool isSubstantiallyChanged = false;
-    if (m_sessions[i].state != data.state ||
-        m_sessions[i].prStatus != data.prStatus ||
-        m_sessions[i].title != data.title ||
-        (oldHasChangeSet != data.hasChangeSet)) {
+    if (m_sessions[i].state != sd.state ||
+        m_sessions[i].prStatus != sd.prStatus ||
+        m_sessions[i].title != sd.title ||
+        (oldHasChangeSet != sd.hasChangeSet)) {
       isSubstantiallyChanged = true;
     }
 
-    data.hasUnreadChanges = wasUnread || isSubstantiallyChanged;
+    sd.hasUnreadChanges = wasUnread || isSubstantiallyChanged;
 
-    m_sessions[i] = data;
+    m_sessions[i] = sd;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     return;
   }
@@ -389,16 +388,16 @@ QJsonObject SessionModel::getSession(int row) const {
 QString SessionModel::getSessionName(const QString &id) const {
   const int index = m_idToIndex.value(id, -1);
   if (index != -1) {
-    const SessionData &data = m_sessions[index];
-    return data.name.isEmpty() ? data.title : data.name;
+    const SessionData &sd = m_sessions[index];
+    return sd.name.isEmpty() ? sd.title : sd.name;
   }
   return {};
 }
 
 QJsonArray SessionModel::getAllSessions() const {
   QJsonArray arr;
-  for (const SessionData &data : m_sessions) {
-    arr.append(data.rawObject);
+  for (const SessionData &sd : m_sessions) {
+    arr.append(sd.rawObject);
   }
   return arr;
 }
