@@ -825,6 +825,10 @@ void MainWindow::setupUi() {
                     window->setInitialData(initData);
                     connect(window, &NewSessionDialog::refreshSourcesRequested,
                             this, &MainWindow::refreshSources);
+                    connect(this, &MainWindow::statusMessage, window,
+                            &NewSessionDialog::updateStatus);
+                    connect(window, &NewSessionDialog::refreshGithubRequested,
+                            this, &MainWindow::refreshGithubDataForSources);
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2725,6 +2729,10 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3114,6 +3122,10 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3422,6 +3434,10 @@ void MainWindow::editQueueItem(int row) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3566,6 +3582,10 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3599,6 +3619,10 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3652,6 +3676,10 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 
   connect(window, &NewSessionDialog::refreshSourcesRequested, this,
           &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3777,6 +3805,23 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
   m_trayIcon->setToolTip(message);
+  Q_EMIT statusMessage(message);
+}
+
+void MainWindow::refreshGithubDataForSources() {
+  updateStatus(i18n("Refreshing GitHub data for all sources..."));
+  if (m_apiManager->githubToken().isEmpty()) {
+    updateStatus(i18n("Cannot refresh GitHub data: No GitHub token."));
+    return;
+  }
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex idx = m_sourceModel->index(i, 0);
+    QString id = idx.data(SourceModel::IdRole).toString();
+    if (id.startsWith(QStringLiteral("sources/github/"))) {
+      m_apiManager->fetchGithubInfo(id);
+    }
+  }
+  updateStatus(i18n("GitHub data refresh requested for all GitHub sources."));
 }
 
 void MainWindow::onError(const QString &message) {

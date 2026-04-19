@@ -39,6 +39,7 @@ public:
 
 Q_SIGNALS:
   void sessionAutoArchived(const QString &id, const QString &reason);
+  void statusMessage(const QString &message);
 
 protected:
   void closeEvent(QCloseEvent *event) override;
@@ -46,6 +47,7 @@ protected:
 private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
+  void refreshGithubDataForSources();
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
   void showSettingsDialog();
   void onSessionCreated(const QMap<QString, QString> &sources,

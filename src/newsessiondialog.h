@@ -5,6 +5,7 @@
 #include <KXmlGuiWindow>
 #include <QJsonObject>
 #include <QSet>
+#include <QStatusBar>
 
 class QLineEdit;
 class QTextEdit;
@@ -38,7 +39,10 @@ Q_SIGNALS:
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
   void refreshSourcesRequested();
+  void refreshGithubRequested();
 
+public Q_SLOTS:
+  void updateStatus(const QString &message);
 private Q_SLOTS:
   void onSubmit(const QString &automationMode);
   void onSubmitSession();
@@ -51,6 +55,7 @@ private Q_SLOTS:
   void onRemoveSelected();
   void updateModels();
   QString getDefaultBranch(const QModelIndex &sourceIdx);
+  QStringList getAvailableBranches(const QModelIndex &sourceIdx);
   void applyFilter();
 
 protected:

@@ -116,7 +116,28 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   m_filterEdit = new QLineEdit(this);
   m_filterEdit->setPlaceholderText(tr("Filter sources..."));
-  sourceLayout->addWidget(m_filterEdit);
+
+  QPushButton *refreshSourcesBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                      tr("Refresh Sources"), this);
+  connect(refreshSourcesBtn, &QPushButton::clicked, this, [this]() {
+    statusBar()->showMessage(tr("Requested refresh of sources..."));
+    Q_EMIT refreshSourcesRequested();
+  });
+
+  QPushButton *refreshGithubBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("network-server")),
+                      tr("Refresh GitHub"), this);
+  connect(refreshGithubBtn, &QPushButton::clicked, this, [this]() {
+    statusBar()->showMessage(tr("Requested refresh of GitHub data..."));
+    Q_EMIT refreshGithubRequested();
+  });
+
+  QHBoxLayout *filterLayout = new QHBoxLayout();
+  filterLayout->addWidget(m_filterEdit);
+  filterLayout->addWidget(refreshSourcesBtn);
+  filterLayout->addWidget(refreshGithubBtn);
+  sourceLayout->addLayout(filterLayout);
 
   QHBoxLayout *splitViewLayout = new QHBoxLayout();
 
@@ -196,9 +217,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QString currentBranch = m_selectedSources.value(name);
         bool ok;
-        QString newBranch = QInputDialog::getText(
+        QStringList branches = getAvailableBranches(sourceIdx);
+        int currentIndex = branches.indexOf(currentBranch);
+        if (currentIndex < 0) {
+          if (!currentBranch.isEmpty()) {
+            branches.prepend(currentBranch);
+          }
+          currentIndex = 0;
+        }
+        QString newBranch = QInputDialog::getItem(
             this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
-            QLineEdit::Normal, currentBranch, &ok);
+            branches, currentIndex, true, &ok);
         if (ok && !newBranch.isEmpty()) {
           m_selectedSources[name] = newBranch;
           updateModels();
@@ -833,4 +862,69 @@ QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
     return github.value(QStringLiteral("default_branch")).toString();
   }
   return QStringLiteral("main");
+}
+
+QStringList
+NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
+  QStringList branches;
+  QJsonObject rawData =
+      m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+
+  // Extract from github info if available
+  QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+  if (github.contains(QStringLiteral("branches"))) {
+    QJsonArray ghBranches = github.value(QStringLiteral("branches")).toArray();
+    for (const QJsonValue &v : ghBranches) {
+      QString b = v.toString();
+      if (!branches.contains(b)) {
+        branches.append(b);
+      }
+    }
+  }
+
+  // Merge with possible API branches
+  if (rawData.contains(QStringLiteral("branches"))) {
+    QJsonArray apiBranches =
+        rawData.value(QStringLiteral("branches")).toArray();
+    for (const QJsonValue &v : apiBranches) {
+      QString b = v.toString();
+      if (!branches.contains(b)) {
+        branches.append(b);
+      }
+    }
+  }
+
+  // Determine default branch
+  QString defaultBranch = getDefaultBranch(sourceIdx);
+
+  // If no branches known, fallback to defaultBranch and some standard ones
+  if (branches.isEmpty()) {
+    if (!defaultBranch.isEmpty()) {
+      branches.append(defaultBranch);
+    }
+    if (!branches.contains(QStringLiteral("main"))) {
+      branches.append(QStringLiteral("main"));
+    }
+    if (!branches.contains(QStringLiteral("master"))) {
+      branches.append(QStringLiteral("master"));
+    }
+  }
+
+  // Ensure default branch is at the top
+  if (!defaultBranch.isEmpty() && branches.contains(defaultBranch)) {
+    branches.removeAll(defaultBranch);
+    branches.prepend(defaultBranch);
+  } else if (branches.contains(QStringLiteral("main"))) {
+    branches.removeAll(QStringLiteral("main"));
+    branches.prepend(QStringLiteral("main"));
+  } else if (branches.contains(QStringLiteral("master"))) {
+    branches.removeAll(QStringLiteral("master"));
+    branches.prepend(QStringLiteral("master"));
+  }
+
+  return branches;
+}
+
+void NewSessionDialog::updateStatus(const QString &message) {
+  statusBar()->showMessage(message);
 }
