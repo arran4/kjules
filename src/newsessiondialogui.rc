@@ -8,12 +8,20 @@
       <Action name="save_draft"/>
       <Separator/>
       <Action name="create_session"/>
-      <Separator/>
-      <Menu name="actions"><text>&amp;Actions</text>
-        <Action name="refresh_sources"/>
-      </Menu>
+      <Action name="create_session_keep_open"/>
       <Separator/>
       <Action name="file_close"/>
+    </Menu>
+    <Menu name="actions"><text>&amp;Actions</text>
+      <Action name="refresh_sources"/>
+      <Separator/>
+      <Action name="load_template"/>
+      <Action name="save_template"/>
+      <Action name="save_draft"/>
+      <Separator/>
+      <Action name="require_plan_approval"/>
+      <Action name="keep_open_after_saving"/>
+      <Action name="keep_source_selected"/>
     </Menu>
     <Menu name="view"><text>&amp;View</text>
       <Action name="hide_selected_sources"/>
