@@ -1854,7 +1854,9 @@ void MainWindow::setupTrayIcon() {
   m_trayMenu = new QMenu(this);
 
   QAction *showHideAction =
-      new QAction(i18n("Show/Hide (Suggest Meta+J)"), this);
+      new QAction(i18n("Show/Hide (Suggest %1)",
+                       QKeySequence(Qt::META | Qt::Key_J).toString()),
+                  this);
   connect(showHideAction, &QAction::triggered, this,
           &MainWindow::toggleWindowVisibility);
   m_trayMenu->addAction(showHideAction);
@@ -2108,7 +2110,7 @@ void MainWindow::createActions() {
                                 toggleWindowAction);
   KGlobalAccel::setGlobalShortcut(toggleWindowAction, QKeySequence());
   actionCollection()->setDefaultShortcut(toggleWindowAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_M));
+                                         QKeySequence(Qt::META | Qt::Key_J));
 
   m_viewSessionsAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
