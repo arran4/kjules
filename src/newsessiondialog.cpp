@@ -130,7 +130,23 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                       tr("Refresh GitHub"), this);
   connect(refreshGithubBtn, &QPushButton::clicked, this, [this]() {
     statusBar()->showMessage(tr("Requested refresh of GitHub data..."));
-    Q_EMIT refreshGithubRequested();
+    QStringList ids;
+    for (const QString &name : m_selectedSources.keys()) {
+      QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0),
+                                                     SourceModel::NameRole,
+                                                     name, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        ids.append(matches.first().data(SourceModel::IdRole).toString());
+      }
+    }
+    if (ids.isEmpty()) {
+      for (int i = 0; i < m_unselectedProxy->rowCount() && i < 10; ++i) {
+        QModelIndex srcIdx =
+            m_unselectedProxy->mapToSource(m_unselectedProxy->index(i, 0));
+        ids.append(srcIdx.data(SourceModel::IdRole).toString());
+      }
+    }
+    Q_EMIT refreshGithubRequested(ids);
   });
 
   QHBoxLayout *filterLayout = new QHBoxLayout();
@@ -867,32 +883,26 @@ QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
 QStringList
 NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
   QStringList branches;
+  QSet<QString> seen;
   QJsonObject rawData =
       m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
 
+  auto addUnique = [&](const QJsonArray &arr) {
+    for (const QJsonValue &v : arr) {
+      QString b = v.toString();
+      if (!b.isEmpty() && !seen.contains(b)) {
+        branches.append(b);
+        seen.insert(b);
+      }
+    }
+  };
+
   // Extract from github info if available
   QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
-  if (github.contains(QStringLiteral("branches"))) {
-    QJsonArray ghBranches = github.value(QStringLiteral("branches")).toArray();
-    for (const QJsonValue &v : ghBranches) {
-      QString b = v.toString();
-      if (!branches.contains(b)) {
-        branches.append(b);
-      }
-    }
-  }
+  addUnique(github.value(QStringLiteral("branches")).toArray());
 
   // Merge with possible API branches
-  if (rawData.contains(QStringLiteral("branches"))) {
-    QJsonArray apiBranches =
-        rawData.value(QStringLiteral("branches")).toArray();
-    for (const QJsonValue &v : apiBranches) {
-      QString b = v.toString();
-      if (!branches.contains(b)) {
-        branches.append(b);
-      }
-    }
-  }
+  addUnique(rawData.value(QStringLiteral("branches")).toArray());
 
   // Determine default branch
   QString defaultBranch = getDefaultBranch(sourceIdx);
@@ -900,26 +910,24 @@ NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
   // If no branches known, fallback to defaultBranch and some standard ones
   if (branches.isEmpty()) {
     if (!defaultBranch.isEmpty()) {
-      branches.append(defaultBranch);
+      addUnique(QJsonArray{defaultBranch});
     }
-    if (!branches.contains(QStringLiteral("main"))) {
-      branches.append(QStringLiteral("main"));
-    }
-    if (!branches.contains(QStringLiteral("master"))) {
-      branches.append(QStringLiteral("master"));
-    }
+    addUnique(QJsonArray{QStringLiteral("main"), QStringLiteral("master")});
   }
 
   // Ensure default branch is at the top
-  if (!defaultBranch.isEmpty() && branches.contains(defaultBranch)) {
-    branches.removeAll(defaultBranch);
-    branches.prepend(defaultBranch);
-  } else if (branches.contains(QStringLiteral("main"))) {
-    branches.removeAll(QStringLiteral("main"));
-    branches.prepend(QStringLiteral("main"));
-  } else if (branches.contains(QStringLiteral("master"))) {
-    branches.removeAll(QStringLiteral("master"));
-    branches.prepend(QStringLiteral("master"));
+  QString topBranch;
+  if (!defaultBranch.isEmpty() && seen.contains(defaultBranch)) {
+    topBranch = defaultBranch;
+  } else if (seen.contains(QStringLiteral("main"))) {
+    topBranch = QStringLiteral("main");
+  } else if (seen.contains(QStringLiteral("master"))) {
+    topBranch = QStringLiteral("master");
+  }
+
+  if (!topBranch.isEmpty()) {
+    branches.removeAll(topBranch);
+    branches.prepend(topBranch);
   }
 
   return branches;

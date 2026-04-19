@@ -47,7 +47,7 @@ protected:
 private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
-  void refreshGithubDataForSources();
+  void refreshGithubDataForSources(const QStringList &sourceIds);
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
   void showSettingsDialog();
   void onSessionCreated(const QMap<QString, QString> &sources,
@@ -70,6 +70,7 @@ private Q_SLOTS:
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
   void connectSessionWindow(SessionWindow *window);
+  void connectNewSessionDialog(NewSessionDialog *window);
   void updateStatus(const QString &message);
   void onError(const QString &message);
   void toggleWindow();
@@ -77,6 +78,8 @@ private Q_SLOTS:
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
   void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
+  void onGithubBranchesReceived(const QString &sourceId,
+                                const QJsonArray &branches);
   void onGithubPullRequestInfoReceived(const QString &prUrl,
                                        const QJsonObject &info);
   void cancelSourcesRefresh();

@@ -119,6 +119,8 @@ MainWindow::MainWindow(QWidget *parent)
           &MainWindow::onSourcesRefreshFinished);
   connect(m_apiManager, &APIManager::githubInfoReceived, this,
           &MainWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubBranchesReceived, this,
+          &MainWindow::onGithubBranchesReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
           &MainWindow::onGithubPullRequestInfoReceived);
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
@@ -3687,6 +3689,15 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   window->show();
 }
 
+void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
+          &MainWindow::refreshSources);
+  connect(this, &MainWindow::statusMessage, window,
+          &NewSessionDialog::updateStatus);
+  connect(window, &NewSessionDialog::refreshGithubRequested, this,
+          &MainWindow::refreshGithubDataForSources);
+}
+
 void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::duplicateRequested, this,
           [this](const QJsonObject &sessionData) {
@@ -3808,20 +3819,20 @@ void MainWindow::updateStatus(const QString &message) {
   Q_EMIT statusMessage(message);
 }
 
-void MainWindow::refreshGithubDataForSources() {
-  updateStatus(i18n("Refreshing GitHub data for all sources..."));
+void MainWindow::refreshGithubDataForSources(const QStringList &sourceIds) {
+  updateStatus(i18n("Refreshing GitHub data for selected sources..."));
   if (m_apiManager->githubToken().isEmpty()) {
     updateStatus(i18n("Cannot refresh GitHub data: No GitHub token."));
     return;
   }
-  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
-    QModelIndex idx = m_sourceModel->index(i, 0);
-    QString id = idx.data(SourceModel::IdRole).toString();
+  for (const QString &id : sourceIds) {
     if (id.startsWith(QStringLiteral("sources/github/"))) {
       m_apiManager->fetchGithubInfo(id);
+      m_apiManager->fetchGithubBranches(id);
     }
   }
-  updateStatus(i18n("GitHub data refresh requested for all GitHub sources."));
+  updateStatus(
+      i18n("GitHub data refresh requested for %1 sources.", sourceIds.size()));
 }
 
 void MainWindow::onError(const QString &message) {
@@ -3908,6 +3919,33 @@ void MainWindow::onSourcesReceived(const QJsonArray &sources) {
                                       m_pagesLoadedCount));
   updateStatus(i18n("Loaded %1 sources, added %2 new.", m_sourcesLoadedCount,
                     m_sourcesAddedCount));
+}
+
+void MainWindow::onGithubBranchesReceived(const QString &sourceId,
+                                          const QJsonArray &branches) {
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex index = m_sourceModel->index(i, 0);
+    QString id = m_sourceModel->data(index, SourceModel::IdRole).toString();
+    if (id == sourceId) {
+      QJsonObject source =
+          m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
+      QJsonObject github = source.value(QStringLiteral("github")).toObject();
+
+      QJsonArray branchNames;
+      for (const QJsonValue &v : branches) {
+        QJsonObject branchObj = v.toObject();
+        if (branchObj.contains(QStringLiteral("name"))) {
+          branchNames.append(
+              branchObj.value(QStringLiteral("name")).toString());
+        }
+      }
+
+      github[QStringLiteral("branches")] = branchNames;
+      source[QStringLiteral("github")] = github;
+      m_sourceModel->updateSource(source);
+      break;
+    }
+  }
 }
 
 void MainWindow::onGithubInfoReceived(const QString &sourceId,

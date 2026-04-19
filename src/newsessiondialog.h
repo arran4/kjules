@@ -39,7 +39,7 @@ Q_SIGNALS:
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
   void refreshSourcesRequested();
-  void refreshGithubRequested();
+  void refreshGithubRequested(const QStringList &sourceIds);
 
 public Q_SLOTS:
   void updateStatus(const QString &message);
