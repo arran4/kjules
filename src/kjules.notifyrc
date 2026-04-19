@@ -26,3 +26,8 @@ Action=Popup
 Name=Following Session Completed
 Comment=A followed session has completed.
 Action=Popup
+
+[Event/sourcesRefreshFinished]
+Name=Sources Refresh Finished
+Comment=Source refresh completed.
+Action=Popup

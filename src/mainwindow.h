@@ -3,6 +3,7 @@
 
 #include <KXmlGuiWindow>
 #include <QDateTime>
+#include <QJsonObject>
 #include <QSystemTrayIcon>
 
 #include "sessionswindow.h"
@@ -45,7 +46,7 @@ protected:
 private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
-  void showNewSessionDialog();
+  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
   void showSettingsDialog();
   void onSessionCreated(const QMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
@@ -56,6 +57,8 @@ private Q_SLOTS:
   void onTemplateActivated(const QModelIndex &index);
   void onQueueActivated(const QModelIndex &index);
   void onQueueContextMenu(const QPoint &pos);
+  void onHoldingActivated(const QModelIndex &index);
+  void onHoldingContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
   void onSessionCreationFailed(const QJsonObject &request,
                                const QJsonObject &response,
@@ -79,6 +82,7 @@ private Q_SLOTS:
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
   void processQueue();
+  void updateHoldingTabVisibility();
   void processErrorRetries();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -86,7 +90,8 @@ private Q_SLOTS:
   void sendQueueItemNow(int row);
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
-  void showErrorDetails(int row);
+  void showErrorDetails(int row, QueueModel *model);
+  void requeueError(int sourceRow);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
   void restoreData();
@@ -94,6 +99,8 @@ private Q_SLOTS:
   void importTemplates();
   void copyTemplateToClipboard(const QModelIndex &index);
   void pasteTemplateFromClipboard();
+  void duplicateFollowingItemsToQueue(const QString &targetState,
+                                      const QString &stateName);
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
@@ -104,7 +111,13 @@ private Q_SLOTS:
   void onRefreshProgressFinished();
   void onSessionRefreshProgressBarClicked();
 
+private Q_SLOTS:
+  void autoRefreshFollowing();
+
 private:
+  QStringList getSelectedSessionIds() const;
+
+  void updateFollowingRefreshTimer();
   void setupUi();
   void setupTrayIcon();
   void createActions();
@@ -118,6 +131,7 @@ private:
   DraftsModel *m_draftsModel;
   TemplatesModel *m_templatesModel;
   QueueModel *m_queueModel;
+  QueueModel *m_holdingModel;
   ErrorsModel *m_errorsModel;
   QTimer *m_errorRetryTimer;
 
@@ -127,8 +141,10 @@ private:
   QListView *m_draftsView;
   QListView *m_templatesView;
   QListView *m_queueView;
+  QListView *m_holdingView;
   QListView *m_errorsView;
   std::function<void()> m_deleteQueueItemsLambda;
+  std::function<void()> m_deleteHoldingItemsLambda;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
@@ -161,6 +177,17 @@ private:
   QAction *m_importTemplatesAction;
   QAction *m_exportTemplatesAction;
   QAction *m_toggleQueueAction;
+  QAction *m_archiveMergedFollowingAction;
+  QAction *m_archivePausedFollowingAction;
+  QAction *m_archiveFailedFollowingAction;
+  QAction *m_archiveCompletedFollowingAction;
+  QAction *m_archiveCanceledFollowingAction;
+  QAction *m_duplicatePausedToQueueAndArchiveAction;
+  QAction *m_duplicateCanceledToQueueAndArchiveAction;
+  QAction *m_duplicateFailedToQueueAndArchiveAction;
+  QAction *m_purgeArchiveAction;
+  QAction *m_openJulesUrlAction;
+  QAction *m_openGithubUrlAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
@@ -168,6 +195,7 @@ private:
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
+  QTimer *m_followingRefreshTimer;
 
   QTimer *m_queueTimer;
   QTimer *m_countdownTimer;

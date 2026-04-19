@@ -150,6 +150,11 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
   formLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
 
+  m_refreshWorkersEdit = new QSpinBox(this);
+  m_refreshWorkersEdit->setRange(1, 100);
+  m_refreshWorkersEdit->setValue(config.readEntry("RefreshWorkers", 3));
+  formLayout->addRow(i18n("Concurrent refresh workers:"), m_refreshWorkersEdit);
+
   m_tierComboBox = new QComboBox(this);
   m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
   m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
@@ -174,6 +179,21 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
       sessionConfig.readEntry("AutoRefreshIndex", 0));
   formLayout->addRow(i18n("Default session auto-refresh:"),
                      m_globalAutoRefreshCombo);
+
+  m_followingAutoRefreshCombo = new QComboBox(this);
+  m_followingAutoRefreshCombo->addItem(i18n("Off"), 0);
+  m_followingAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
+  m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
+  m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
+  m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
+  int followingInterval =
+      sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
+  if (followingIndex >= 0) {
+    m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
+  }
+  formLayout->addRow(i18n("Following auto-refresh:"),
+                     m_followingAutoRefreshCombo);
 
   m_autoArchiveCheckbox = new QCheckBox(
       i18n("Automatically archive following managed sessions"), this);
@@ -242,6 +262,7 @@ void SettingsDialog::onSave() {
   config.writeEntry("AutostartTray", m_autostartTrayEdit->isChecked());
   config.writeEntry("Tier", m_tierComboBox->currentData().toString());
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
+  config.writeEntry("RefreshWorkers", m_refreshWorkersEdit->value());
   config.sync();
 
   QString autostartPath =
@@ -291,6 +312,8 @@ void SettingsDialog::onSave() {
                              QStringLiteral("SessionWindow"));
   sessionConfig.writeEntry("AutoRefreshIndex",
                            m_globalAutoRefreshCombo->currentIndex());
+  sessionConfig.writeEntry("FollowingAutoRefreshInterval",
+                           m_followingAutoRefreshCombo->currentData().toInt());
   sessionConfig.writeEntry("AutoArchiveEnabled",
                            m_autoArchiveCheckbox->isChecked());
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());

@@ -122,13 +122,171 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   return item;
 }
 
-QueueModel::QueueModel(QObject *parent) : QAbstractListModel(parent) { load(); }
+#include <QDataStream>
+#include <QMimeData>
+
+QueueModel::QueueModel(QObject *parent, const QString &filename, bool isHolding)
+    : QAbstractListModel(parent), m_filename(filename), m_isHolding(isHolding) {
+  load();
+}
 
 int QueueModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid()) {
     return 0;
   }
   return m_items.size();
+}
+
+Qt::ItemFlags QueueModel::flags(const QModelIndex &index) const {
+  Qt::ItemFlags defaultFlags = QAbstractListModel::flags(index);
+  if (index.isValid()) {
+    return defaultFlags | Qt::ItemIsDragEnabled;
+  }
+  return defaultFlags | Qt::ItemIsDropEnabled;
+}
+
+Qt::DropActions QueueModel::supportedDropActions() const {
+  return Qt::MoveAction;
+}
+
+QStringList QueueModel::mimeTypes() const {
+  return {QStringLiteral("application/x-kjules-queue-item")};
+}
+
+QMimeData *QueueModel::mimeData(const QModelIndexList &indexes) const {
+  QMimeData *mimeData = new QMimeData();
+  QByteArray encodedData;
+  QDataStream stream(&encodedData, QIODevice::WriteOnly);
+
+  QJsonArray itemsArray;
+  QList<int> sourceRows;
+  for (const QModelIndex &index : indexes) {
+    if (index.isValid()) {
+      itemsArray.append(m_items.at(index.row()).toJson());
+      sourceRows.append(index.row());
+    }
+  }
+
+  // Encode both the item data and original rows (useful for internal move
+  // detection)
+  stream << QJsonDocument(itemsArray).toJson(QJsonDocument::Compact);
+  // Also encode source model pointer to detect internal moves
+  stream << reinterpret_cast<quintptr>(this);
+  for (int r : std::as_const(sourceRows))
+    stream << r;
+
+  mimeData->setData(QStringLiteral("application/x-kjules-queue-item"),
+                    encodedData);
+  return mimeData;
+}
+
+bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
+                              int row, int column, const QModelIndex &parent) {
+  Q_UNUSED(column);
+  if (action == Qt::IgnoreAction)
+    return true;
+
+  if (!data->hasFormat(QStringLiteral("application/x-kjules-queue-item")))
+    return false;
+
+  int destRow;
+  if (row != -1)
+    destRow = row;
+  else if (parent.isValid())
+    destRow = parent.row();
+  else
+    destRow = rowCount(QModelIndex());
+
+  QByteArray encodedData =
+      data->data(QStringLiteral("application/x-kjules-queue-item"));
+  QDataStream stream(&encodedData, QIODevice::ReadOnly);
+
+  QByteArray jsonData;
+  stream >> jsonData;
+
+  quintptr sourceModelPtr = 0;
+  if (!stream.atEnd()) {
+    stream >> sourceModelPtr;
+  }
+
+  QJsonDocument doc = QJsonDocument::fromJson(jsonData);
+  if (!doc.isArray())
+    return false;
+
+  QJsonArray itemsArray = doc.array();
+
+  // Internal move handling
+  if (sourceModelPtr == reinterpret_cast<quintptr>(this)) {
+    QList<int> sourceRows;
+    while (!stream.atEnd()) {
+      int r;
+      stream >> r;
+      sourceRows.append(r);
+    }
+
+    // Process internal moves manually to avoid Qt ItemViews messing up the data
+    // structure. If we return true with MoveAction, Qt calls removeRows. So we
+    // return false and do the move manually.
+    std::sort(sourceRows.begin(), sourceRows.end());
+
+    // Edge case: moving to same place
+    if (sourceRows.size() == 1 &&
+        (destRow == sourceRows.first() || destRow == sourceRows.first() + 1)) {
+      return false;
+    }
+
+    QVector<QueueItem> newItems;
+    QVector<QueueItem> movingItems;
+    for (int i = 0; i < sourceRows.size(); ++i) {
+      movingItems.append(m_items.at(sourceRows[i]));
+    }
+
+    int adjustedDestRow = destRow;
+    for (int r : std::as_const(sourceRows)) {
+      if (r < destRow) {
+        adjustedDestRow--;
+      }
+    }
+
+    beginResetModel();
+    for (int i = 0; i < m_items.size(); ++i) {
+      if (!sourceRows.contains(i)) {
+        newItems.append(m_items[i]);
+      }
+    }
+    for (int i = 0; i < movingItems.size(); ++i) {
+      newItems.insert(adjustedDestRow + i, movingItems[i]);
+    }
+    m_items = newItems;
+    endResetModel();
+    save();
+    return false; // Return false so Qt doesn't delete the original rows
+  }
+
+  // External move handling
+  int currentDestRow = destRow;
+  if (currentDestRow < 0) {
+    currentDestRow = m_items.size();
+  }
+  for (int i = 0; i < itemsArray.size(); ++i) {
+    QueueItem newItem = QueueItem::fromJson(itemsArray[i].toObject());
+    newItem.isWaitItem = false;
+    insertItem(currentDestRow, newItem);
+    currentDestRow++;
+  }
+
+  return true;
+}
+
+bool QueueModel::removeRows(int row, int count, const QModelIndex &parent) {
+  if (row < 0 || row + count > m_items.size() || parent.isValid()) {
+    return false;
+  }
+  beginRemoveRows(parent, row, row + count - 1);
+  m_items.remove(row, count);
+  endRemoveRows();
+  save();
+  return true;
 }
 
 QVariant QueueModel::data(const QModelIndex &index, int role) const {
@@ -215,11 +373,6 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
 }
 
 void QueueModel::enqueueItem(const QueueItem &item) {
-  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-  m_items.append(item);
-  endInsertRows();
-  m_jobsSinceLastWait++;
-
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   QString tier = config.readEntry("Tier", QStringLiteral("free"));
   int jobsBeforeWait = 3;
@@ -233,15 +386,37 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 
   qint64 waitTime = config.readEntry("WaitTime", 3600);
 
-  if (m_jobsSinceLastWait >= jobsBeforeWait) {
-    beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-    QueueItem waitItem;
-    waitItem.isWaitItem = true;
-    waitItem.waitSeconds = qMin(waitTime, maxBackoffSeconds());
-    m_items.append(waitItem);
-    endInsertRows();
-    m_jobsSinceLastWait = 0;
+  if (!m_isHolding) {
+    if (m_jobsSinceLastWait >= jobsBeforeWait) {
+      beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      waitItem.waitSeconds = qMin(waitTime, maxBackoffSeconds());
+      m_items.append(waitItem);
+      endInsertRows();
+      m_jobsSinceLastWait = 0;
+    }
+    m_jobsSinceLastWait++;
   }
+
+  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+  m_items.append(item);
+  endInsertRows();
+
+  save();
+}
+
+void QueueModel::insertItem(int index, const QueueItem &item) {
+  if (index < 0) {
+    index = 0;
+  }
+  if (index > m_items.size()) {
+    index = m_items.size();
+  }
+
+  beginInsertRows(QModelIndex(), index, index);
+  m_items.insert(index, item);
+  endInsertRows();
 
   save();
 }
@@ -262,6 +437,7 @@ QueueItem QueueModel::dequeue() {
   beginRemoveRows(QModelIndex(), 0, 0);
   QueueItem item = m_items.takeFirst();
   endRemoveRows();
+  removeTrailingWaitItems();
   save();
   return item;
 }
@@ -302,6 +478,7 @@ void QueueModel::removeItem(int index) {
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
     endRemoveRows();
+    removeTrailingWaitItems();
     save();
   }
 }
@@ -311,6 +488,27 @@ QueueItem QueueModel::getItem(int index) const {
     return m_items.at(index);
   }
   return QueueItem();
+}
+
+void QueueModel::moveItem(int from, int to) {
+  if (from < 0 || from >= m_items.size() || to < 0 || to >= m_items.size() ||
+      from == to) {
+    return;
+  }
+
+  int destinationChild = (to > from) ? to + 1 : to;
+
+  if (beginMoveRows(QModelIndex(), from, from, QModelIndex(),
+                    destinationChild)) {
+    if (from < to)
+      std::rotate(m_items.begin() + from, m_items.begin() + from + 1,
+                  m_items.begin() + to + 1);
+    else
+      std::rotate(m_items.begin() + to, m_items.begin() + from,
+                  m_items.begin() + from + 1);
+    endMoveRows();
+    save();
+  }
 }
 
 void QueueModel::refreshWaitItems() {
@@ -356,6 +554,13 @@ void QueueModel::recordRun() {
 }
 
 void QueueModel::checkAndPrependDailyLimitWait() {
+  if (m_isHolding) {
+    return;
+  }
+  if (m_items.isEmpty()) {
+    return;
+  }
+
   pruneRunTimestamps();
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -409,7 +614,7 @@ void QueueModel::clear() {
 void QueueModel::load() {
   QString path =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-      QStringLiteral("/queue.json");
+      QStringLiteral("/") + m_filename;
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
     return;
@@ -444,7 +649,27 @@ void QueueModel::load() {
   for (int i = 0; i < arr.size(); ++i) {
     m_items.append(QueueItem::fromJson(arr[i].toObject()));
   }
+
+  // Clean up trailing wait items from loaded state
+  while (!m_items.isEmpty() && m_items.last().isWaitItem) {
+    m_items.removeLast();
+  }
+
   endResetModel();
+}
+
+void QueueModel::removeTrailingWaitItems() {
+  int firstWaitToRemove = m_items.size();
+  while (firstWaitToRemove > 0 &&
+         m_items.at(firstWaitToRemove - 1).isWaitItem) {
+    firstWaitToRemove--;
+  }
+
+  if (firstWaitToRemove < m_items.size()) {
+    beginRemoveRows(QModelIndex(), firstWaitToRemove, m_items.size() - 1);
+    m_items.remove(firstWaitToRemove, m_items.size() - firstWaitToRemove);
+    endRemoveRows();
+  }
 }
 
 void QueueModel::save() {
@@ -455,7 +680,7 @@ void QueueModel::save() {
     dir.mkpath(QStringLiteral("."));
   }
 
-  QString path = dirPath + QStringLiteral("/queue.json");
+  QString path = dirPath + QStringLiteral("/") + m_filename;
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly)) {
     qWarning() << "Failed to open queue.json for writing:"

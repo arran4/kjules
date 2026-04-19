@@ -35,8 +35,10 @@ private:
   QSpinBox *m_queueBackoffRandomMaxEdit;
   QSpinBox *m_queueBackoffMaxEdit;
   QSpinBox *m_waitTimeEdit;
+  QSpinBox *m_refreshWorkersEdit;
   QComboBox *m_tierComboBox;
   QComboBox *m_globalAutoRefreshCombo;
+  QComboBox *m_followingAutoRefreshCombo;
   QCheckBox *m_autoArchiveCheckbox;
   QSpinBox *m_autoArchiveDaysEdit;
   QCheckBox *m_prMergeArchiveCheckbox;

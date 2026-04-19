@@ -28,6 +28,7 @@ struct SessionData {
   QString prStatus;
   QStringList prLabels;
   QJsonObject rawObject;
+  bool hasUnreadChanges = false;
 };
 
 class SessionModel : public QAbstractTableModel {
@@ -47,7 +48,8 @@ public:
     LastRefreshedRole,
     PrStatusRole,
     PrLabelsRole,
-    FavouriteRole
+    FavouriteRole,
+    UnreadChangesRole
   };
 
   enum Columns {
@@ -86,14 +88,20 @@ public:
   void toggleFavourite(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
+  QString getSessionName(const QString &id) const;
   QJsonArray getAllSessions() const;
   void clear();
   void loadSessions();
   void saveSessions();
   void clearSessions();
+  void clearUnreadChanges();
+  void markAsRead(const QString &id);
   bool contains(const QString &id) const;
   void setNextPageToken(const QString &token);
   QString nextPageToken() const;
+
+  void clearAllUnreadChanges();
+  void clearUnreadChanges(const QString &id);
 
 Q_SIGNALS:
   void sessionsLoadedOrUpdated();

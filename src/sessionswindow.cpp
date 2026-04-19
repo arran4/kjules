@@ -296,7 +296,7 @@ void SessionsWindow::setupUi() {
                                            idx.row(), SessionModel::ColId))
                                        .toString();
                       QString urlStr =
-                          QStringLiteral("https://jules.google.com/sessions/") +
+                          QStringLiteral("https://jules.google.com/session/") +
                           id;
                       QDesktopServices::openUrl(QUrl(urlStr));
                     }
@@ -313,7 +313,7 @@ void SessionsWindow::setupUi() {
                                            idx.row(), SessionModel::ColId))
                                        .toString();
                       urls.append(
-                          QStringLiteral("https://jules.google.com/sessions/") +
+                          QStringLiteral("https://jules.google.com/session/") +
                           id);
                     }
                     QGuiApplication::clipboard()->setText(
