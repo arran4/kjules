@@ -705,3 +705,36 @@ void APIManager::getSession(const QString &sessionId) {
     reply->deleteLater();
   });
 }
+
+void APIManager::fetchGithubBranches(const QString &sourceId) {
+  if (m_githubToken.isEmpty()) {
+    return;
+  }
+
+  QString cleanId = sourceId;
+  if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
+    cleanId = cleanId.mid(15);
+  } else {
+    return; // Not a github source
+  }
+
+  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/repos/") +
+                               cleanId + QStringLiteral("/branches")));
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    QVariant(QStringLiteral("application/json")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
+    reply->deleteLater();
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      if (doc.isArray()) {
+        Q_EMIT githubBranchesReceived(sourceId, doc.array());
+      }
+    }
+  });
+}

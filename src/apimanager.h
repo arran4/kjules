@@ -54,10 +54,13 @@ public:
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
   void fetchGithubInfo(const QString &sourceId);
+  void fetchGithubBranches(const QString &sourceId);
   void fetchGithubPullRequest(const QString &prUrl);
 
 Q_SIGNALS:
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
+  void githubBranchesReceived(const QString &sourceId,
+                              const QJsonArray &branches);
   void githubPullRequestInfoReceived(const QString &prUrl,
                                      const QJsonObject &info);
   void githubPullRequestFailed(const QString &prUrl, const QString &message);

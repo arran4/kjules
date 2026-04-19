@@ -117,7 +117,44 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   m_filterEdit = new QLineEdit(this);
   m_filterEdit->setPlaceholderText(tr("Filter sources..."));
-  sourceLayout->addWidget(m_filterEdit);
+
+  QPushButton *refreshSourcesBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")),
+                      tr("Refresh Sources"), this);
+  connect(refreshSourcesBtn, &QPushButton::clicked, this, [this]() {
+    statusBar()->showMessage(tr("Requested refresh of sources..."));
+    Q_EMIT refreshSourcesRequested();
+  });
+
+  QPushButton *refreshGithubBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("network-server")),
+                      tr("Refresh GitHub"), this);
+  connect(refreshGithubBtn, &QPushButton::clicked, this, [this]() {
+    statusBar()->showMessage(tr("Requested refresh of GitHub data..."));
+    QStringList ids;
+    for (const QString &name : m_selectedSources.keys()) {
+      QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0),
+                                                     SourceModel::NameRole,
+                                                     name, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        ids.append(matches.first().data(SourceModel::IdRole).toString());
+      }
+    }
+    if (ids.isEmpty()) {
+      for (int i = 0; i < m_unselectedProxy->rowCount() && i < 10; ++i) {
+        QModelIndex srcIdx =
+            m_unselectedProxy->mapToSource(m_unselectedProxy->index(i, 0));
+        ids.append(srcIdx.data(SourceModel::IdRole).toString());
+      }
+    }
+    Q_EMIT refreshGithubRequested(ids);
+  });
+
+  QHBoxLayout *filterLayout = new QHBoxLayout();
+  filterLayout->addWidget(m_filterEdit);
+  filterLayout->addWidget(refreshSourcesBtn);
+  filterLayout->addWidget(refreshGithubBtn);
+  sourceLayout->addLayout(filterLayout);
 
   QHBoxLayout *splitViewLayout = new QHBoxLayout();
 
@@ -244,10 +281,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                 [this, name, displayName]() {
                   QString currentBranch = m_selectedSources.value(name);
                   bool ok;
-                  QString newBranch = QInputDialog::getText(
-                      this, tr("Select Branch"),
-                      tr("Branch for %1:").arg(displayName), QLineEdit::Normal,
-                      currentBranch, &ok);
+                  QStringList branches = getAvailableBranches(sourceIdx);
+                  int currentIndex = branches.indexOf(currentBranch);
+                  if (currentIndex < 0) {
+                    if (!currentBranch.isEmpty()) {
+                      branches.prepend(currentBranch);
+                    }
+                    currentIndex = 0;
+                  }
+                  QString newBranch = QInputDialog::getItem(
+                      this, tr("Select Branch"), tr("Branch for %1:").arg(displayName),
+                      branches, currentIndex, true, &ok);
                   if (ok && !newBranch.isEmpty()) {
                     m_selectedSources[name] = newBranch;
                     updateModels();
@@ -882,6 +926,63 @@ QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
   return QStringLiteral("main");
 }
 
+QStringList
+NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
+  QStringList branches;
+  QSet<QString> seen;
+  QJsonObject rawData =
+      m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+
+  auto addUnique = [&](const QJsonArray &arr) {
+    for (const QJsonValue &v : arr) {
+      QString b = v.toString();
+      if (!b.isEmpty() && !seen.contains(b)) {
+        branches.append(b);
+        seen.insert(b);
+      }
+    }
+  };
+
+  // Extract from github info if available
+  QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+  addUnique(github.value(QStringLiteral("branches")).toArray());
+
+  // Merge with possible API branches
+  addUnique(rawData.value(QStringLiteral("branches")).toArray());
+
+  // Determine default branch
+  QString defaultBranch = getDefaultBranch(sourceIdx);
+
+  // If no branches known, fallback to defaultBranch and some standard ones
+  if (branches.isEmpty()) {
+    if (!defaultBranch.isEmpty()) {
+      addUnique(QJsonArray{defaultBranch});
+    }
+    addUnique(QJsonArray{QStringLiteral("main"), QStringLiteral("master")});
+  }
+
+  // Ensure default branch is at the top
+  QString topBranch;
+  if (!defaultBranch.isEmpty() && seen.contains(defaultBranch)) {
+    topBranch = defaultBranch;
+  } else if (seen.contains(QStringLiteral("main"))) {
+    topBranch = QStringLiteral("main");
+  } else if (seen.contains(QStringLiteral("master"))) {
+    topBranch = QStringLiteral("master");
+  }
+
+  if (!topBranch.isEmpty()) {
+    branches.removeAll(topBranch);
+    branches.prepend(topBranch);
+  }
+
+  return branches;
+}
+
+void NewSessionDialog::updateStatus(const QString &message) {
+  statusBar()->showMessage(message);
+}
+    
 void NewSessionDialog::addFavouriteAction(QMenu &menu,
                                           const QModelIndex &sourceIdx) {
   QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
