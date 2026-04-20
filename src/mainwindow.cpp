@@ -394,7 +394,8 @@ void MainWindow::setupUi() {
           QMenu menu;
 
           bool isFav = false;
-          QVariant favData = m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole);
+          QVariant favData =
+              m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole);
           if (favData.typeId() == QMetaType::Bool) {
             isFav = favData.toBool();
           } else {
@@ -584,7 +585,8 @@ void MainWindow::setupUi() {
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           bool isFav = false;
-          QVariant favData = m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole);
+          QVariant favData =
+              m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole);
           if (favData.typeId() == QMetaType::Bool) {
             isFav = favData.toBool();
           } else {
@@ -991,7 +993,8 @@ void MainWindow::setupUi() {
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           bool isFav = false;
-          QVariant favData = m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole);
+          QVariant favData =
+              m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole);
           if (favData.typeId() == QMetaType::Bool) {
             isFav = favData.toBool();
           } else {

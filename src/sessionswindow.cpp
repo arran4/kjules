@@ -311,7 +311,8 @@ void SessionsWindow::setupUi() {
               m_proxyModel ? m_proxyModel->mapToSource(index) : index;
 
           bool isFav = false;
-          QVariant favData = m_model->data(sourceIndex, SessionModel::FavouriteRole);
+          QVariant favData =
+              m_model->data(sourceIndex, SessionModel::FavouriteRole);
           if (favData.typeId() == QMetaType::Bool) {
             isFav = favData.toBool();
           } else {
