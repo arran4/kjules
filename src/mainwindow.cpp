@@ -2727,8 +2727,29 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
           &MainWindow::onDraftSaved);
   connect(window, &NewSessionDialog::saveTemplateRequested, this,
           &MainWindow::onTemplateSaved);
-  if (!initialData.isEmpty()) {
-    window->setInitialData(initialData);
+
+  QJsonObject finalData = initialData;
+  if (finalData.isEmpty() && m_tabWidget && m_tabWidget->currentWidget() &&
+      m_tabWidget->currentWidget()->objectName() ==
+          QStringLiteral("sourcesTab")) {
+    QModelIndexList selection = m_sourceView->selectionModel()->selectedRows();
+    if (!selection.isEmpty()) {
+      QJsonArray sourcesArr;
+      const QSortFilterProxyModel *proxy =
+          qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+      for (const QModelIndex &selIndex : selection) {
+        QModelIndex mappedIndex =
+            proxy ? proxy->mapToSource(selIndex) : selIndex;
+        QString srcName =
+            m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
+        sourcesArr.append(srcName);
+      }
+      finalData[QStringLiteral("sources")] = sourcesArr;
+    }
+  }
+
+  if (!finalData.isEmpty()) {
+    window->setInitialData(finalData);
   }
   window->show();
 }
@@ -3643,7 +3664,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
   QJsonObject initData;
   QJsonArray sourcesArr;
 
-  QModelIndexList selection = m_sourceView->selectionModel()->selectedIndexes();
+  QModelIndexList selection = m_sourceView->selectionModel()->selectedRows();
   if (selection.isEmpty()) {
     selection.append(index);
   }
