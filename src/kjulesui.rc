@@ -46,6 +46,8 @@
             <Action name="open_url" />
             <Action name="copy_url" />
             <Separator />
+            <Action name="configure_concurrency_limit" />
+            <Separator />
             <Action name="recalculate_stats" />
         </Menu>
         <Menu name="view">

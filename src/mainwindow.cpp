@@ -3,6 +3,7 @@
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
+#include "blockedtreemodel.h"
 #include "clickableprogressbar.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
@@ -425,6 +426,34 @@ void MainWindow::setupUi() {
           menu.addAction(m_viewRawDataAction);
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
+
+          menu.addSeparator();
+          QAction *configLimitAction =
+              menu.addAction(i18n("Configure Concurrency Limit"));
+          connect(configLimitAction, &QAction::triggered, [this, id]() {
+            KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                      QStringLiteral("SourceConcurrency"));
+            int currentLimit =
+                sourceConfig.readEntry(id, -1); // -1 means defer to global
+
+            bool ok;
+            int newLimit = QInputDialog::getInt(
+                this, i18n("Concurrency Limit"),
+                i18n("Enter max active sessions for %1 (0 to disable limit, -1 "
+                     "to defer to global):",
+                     id),
+                currentLimit, -1, 1000, 1, &ok);
+            if (ok) {
+              if (newLimit == -1) {
+                sourceConfig.deleteEntry(id);
+              } else {
+                sourceConfig.writeEntry(id, newLimit);
+              }
+              sourceConfig.sync();
+              updateStatus(
+                  i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+            }
+          });
 
           QJsonObject rawData =
               m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
@@ -1385,6 +1414,22 @@ void MainWindow::setupUi() {
   connect(m_holdingModel, &QAbstractListModel::modelReset, this,
           &MainWindow::updateHoldingTabVisibility);
   updateHoldingTabVisibility();
+
+  // Blocked View
+  m_blockedTreeModel = new BlockedTreeModel(m_sourceModel, m_queueModel, this);
+  m_blockedView = new QTreeView(this);
+  m_blockedView->setModel(m_blockedTreeModel);
+  m_blockedView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_blockedView, &QTreeView::customContextMenuRequested, this,
+          &MainWindow::onBlockedContextMenu);
+
+  connect(m_blockedTreeModel, &QAbstractItemModel::rowsInserted, this,
+          &MainWindow::updateBlockedTabVisibility);
+  connect(m_blockedTreeModel, &QAbstractItemModel::rowsRemoved, this,
+          &MainWindow::updateBlockedTabVisibility);
+  connect(m_blockedTreeModel, &QAbstractItemModel::modelReset, this,
+          &MainWindow::updateBlockedTabVisibility);
+  updateBlockedTabVisibility();
 
   // Errors View
   QWidget *errTab = new QWidget(this);
@@ -2576,6 +2621,47 @@ void MainWindow::createActions() {
     }
   });
 
+  m_configureConcurrencyLimitAction =
+      new QAction(i18n("Configure Concurrency Limit..."), this);
+  actionCollection()->addAction(QStringLiteral("configure_concurrency_limit"),
+                                m_configureConcurrencyLimitAction);
+  connect(
+      m_configureConcurrencyLimitAction, &QAction::triggered, this, [this]() {
+        QModelIndexList selectedRows =
+            m_sourceView->selectionModel()->selectedRows();
+        if (selectedRows.isEmpty())
+          return;
+        const QSortFilterProxyModel *proxy =
+            qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+        QModelIndex mappedIdx = proxy ? proxy->mapToSource(selectedRows.first())
+                                      : selectedRows.first();
+        QString id =
+            m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
+
+        KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                  QStringLiteral("SourceConcurrency"));
+        int currentLimit = sourceConfig.readEntry(id, -1);
+
+        bool ok;
+        int newLimit =
+            QInputDialog::getInt(this, i18n("Concurrency Limit"),
+                                 i18n("Enter max active sessions for %1 (0 to "
+                                      "disable limit, -1 to defer to global):",
+                                      id),
+                                 currentLimit, -1, 1000, 1, &ok);
+        if (ok) {
+          if (newLimit == -1) {
+            sourceConfig.deleteEntry(id);
+          } else {
+            sourceConfig.writeEntry(id, newLimit);
+          }
+          sourceConfig.sync();
+          updateStatus(
+              i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+          QTimer::singleShot(0, this, &MainWindow::processQueue);
+        }
+      });
+
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
   connect(m_copyUrlAction, &QAction::triggered, this, [this]() {
@@ -2968,6 +3054,126 @@ void MainWindow::processQueue() {
     return;
   }
 
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  bool oneAtATimeMode = queueConfig.readEntry("OneAtATimeMode", false);
+  int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
+  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
+                                       QStringLiteral("SourceConcurrency"));
+
+  int processIndex = -1;
+  QHash<QString, int> activeCountCache;
+
+  for (int i = 0; i < m_queueModel->rowCount(); ++i) {
+    QueueItem item = m_queueModel->getItem(i);
+
+    if (item.isWaitItem) {
+      if (processIndex == -1) {
+        processIndex =
+            i; // We hit a wait item before any valid processable item
+      }
+      continue;
+    }
+
+    QString source = item.requestData.value(QStringLiteral("sourceContext"))
+                         .toObject()
+                         .value(QStringLiteral("source"))
+                         .toString();
+    if (source.isEmpty()) {
+      source = item.requestData.value(QStringLiteral("source")).toString();
+    }
+
+    int sourceLimit = sourceConcurrencyConfig.readEntry(source, -1);
+    bool checkLimit = (sourceLimit != 0) && (oneAtATimeMode || sourceLimit > 0);
+    int effectiveLimit =
+        (sourceLimit > 0) ? sourceLimit : globalOneAtATimeLimit;
+
+    if (item.blockMetadata.value(QStringLiteral("forced")).toBool()) {
+      checkLimit = false;
+    }
+
+    if (!checkLimit) {
+      if (item.isBlocked) {
+        item.isBlocked = false;
+        item.blockMetadata = QJsonObject();
+        m_queueModel->updateItem(i, item);
+      }
+      if (processIndex == -1) {
+        processIndex = i;
+      }
+      continue;
+    }
+
+    if (!activeCountCache.contains(source)) {
+      int count = 0;
+      // Count in session model
+      for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
+        QModelIndex idx = m_sessionModel->index(j, 0);
+        if (m_sessionModel->data(idx, SessionModel::SourceRole).toString() ==
+            source) {
+          QString state =
+              m_sessionModel->data(idx, SessionModel::StateRole).toString();
+          if (state == QStringLiteral("PENDING") ||
+              state == QStringLiteral("IN_PROGRESS")) {
+            count++;
+          }
+        }
+      }
+      // Count in queue (processed ahead of us or currently unblocked)
+      for (int j = 0; j < i; ++j) {
+        QueueItem aheadItem = m_queueModel->getItem(j);
+        if (!aheadItem.isWaitItem && !aheadItem.isBlocked) {
+          QString aheadSource =
+              aheadItem.requestData.value(QStringLiteral("sourceContext"))
+                  .toObject()
+                  .value(QStringLiteral("source"))
+                  .toString();
+          if (aheadSource.isEmpty()) {
+            aheadSource = aheadItem.requestData.value(QStringLiteral("source"))
+                              .toString();
+          }
+          if (aheadSource == source) {
+            count++;
+          }
+        }
+      }
+      activeCountCache[source] = count;
+    }
+
+    if (activeCountCache[source] >= effectiveLimit) {
+      if (!item.isBlocked) {
+        item.isBlocked = true;
+        QJsonObject meta;
+        meta[QStringLiteral("reason")] =
+            QStringLiteral("Concurrency limit reached");
+        meta[QStringLiteral("source")] = source;
+        item.blockMetadata = meta;
+        m_queueModel->updateItem(i, item);
+      }
+    } else {
+      if (item.isBlocked) {
+        item.isBlocked = false;
+        item.blockMetadata = QJsonObject();
+        m_queueModel->updateItem(i, item);
+      }
+      if (processIndex == -1) {
+        processIndex = i;
+      }
+      activeCountCache[source]++; // We consider this one active now, so
+                                  // subsequent items of this source are checked
+                                  // correctly against the limit
+    }
+  }
+
+  if (processIndex == -1) {
+    // Everything is blocked or queue is essentially empty
+    return;
+  }
+
+  if (processIndex != 0) {
+    m_queueModel->moveItem(processIndex, 0);
+  }
+
   QueueItem peekItem = m_queueModel->peek();
   if (peekItem.isWaitItem) {
     if (!peekItem.waitStartTime.isValid()) {
@@ -3157,12 +3363,106 @@ void MainWindow::updateHoldingTabVisibility() {
   }
 }
 
+void MainWindow::updateBlockedTabVisibility() {
+  int blockedIdx = m_tabWidget->indexOf(m_blockedView);
+  int blockedItems = 0;
+  for (int i = 0; i < m_queueModel->rowCount(); ++i) {
+    if (m_queueModel->getItem(i).isBlocked) {
+      blockedItems++;
+    }
+  }
+
+  int blockedSources = m_blockedTreeModel->blockedSourcesCount();
+
+  if (blockedItems == 0) {
+    if (blockedIdx != -1) {
+      m_tabWidget->removeTab(blockedIdx);
+    }
+  } else {
+    if (blockedIdx == -1) {
+      int holdingIdx = m_tabWidget->indexOf(m_holdingView);
+      if (holdingIdx != -1) {
+        blockedIdx = m_tabWidget->insertTab(holdingIdx + 1, m_blockedView,
+                                            i18n("Blocked"));
+      } else {
+        int queueIdx = m_tabWidget->indexOf(m_queueView);
+        if (queueIdx != -1) {
+          blockedIdx = m_tabWidget->insertTab(queueIdx + 1, m_blockedView,
+                                              i18n("Blocked"));
+        } else {
+          blockedIdx = m_tabWidget->addTab(m_blockedView, i18n("Blocked"));
+        }
+      }
+    }
+    m_tabWidget->setTabText(blockedIdx, i18n("Blocked (%1)", blockedSources));
+  }
+}
+
 void MainWindow::onHoldingActivated(const QModelIndex &index) {
   int row = index.row();
   QueueItem item = m_holdingModel->getItem(row);
   if (item.errorCount > 0) {
     showErrorDetails(row, m_holdingModel);
   }
+}
+
+void MainWindow::onBlockedContextMenu(const QPoint &pos) {
+  QModelIndex index = m_blockedView->indexAt(pos);
+  if (!index.isValid())
+    return;
+
+  bool isSource =
+      m_blockedTreeModel->data(index, BlockedTreeModel::IsSourceRole).toBool();
+  if (isSource)
+    return;
+
+  int queueIndex =
+      m_blockedTreeModel->data(index, BlockedTreeModel::QueueIndexRole).toInt();
+
+  QMenu menu(this);
+  if (isSource) {
+    QString id = m_blockedTreeModel->data(index, BlockedTreeModel::SourceIdRole)
+                     .toString();
+    QAction *configLimitAction =
+        menu.addAction(i18n("Configure Concurrency Limit"));
+    connect(configLimitAction, &QAction::triggered, [this, id]() {
+      KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                QStringLiteral("SourceConcurrency"));
+      int currentLimit = sourceConfig.readEntry(id, -1);
+
+      bool ok;
+      int newLimit =
+          QInputDialog::getInt(this, i18n("Concurrency Limit"),
+                               i18n("Enter max active sessions for %1 (0 to "
+                                    "disable limit, -1 to defer to global):",
+                                    id),
+                               currentLimit, -1, 1000, 1, &ok);
+      if (ok) {
+        if (newLimit == -1) {
+          sourceConfig.deleteEntry(id);
+        } else {
+          sourceConfig.writeEntry(id, newLimit);
+        }
+        sourceConfig.sync();
+        updateStatus(
+            i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+        QTimer::singleShot(0, this, &MainWindow::processQueue);
+      }
+    });
+  } else {
+    QAction *forceAction = menu.addAction(i18n("Force into queue (unblock)"));
+    connect(forceAction, &QAction::triggered, this, [this, queueIndex]() {
+      QueueItem item = m_queueModel->getItem(queueIndex);
+      item.isBlocked = false;
+      QJsonObject meta;
+      meta[QStringLiteral("forced")] = true;
+      item.blockMetadata = meta;
+      m_queueModel->updateItem(queueIndex, item);
+      m_queueModel->moveItem(queueIndex, 0);
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    });
+  }
+  menu.exec(m_blockedView->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::onHoldingContextMenu(const QPoint &pos) {

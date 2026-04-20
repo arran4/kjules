@@ -58,6 +58,17 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueIntervalEdit->setValue(queueConfig.readEntry("TimerInterval", 1));
   formLayout->addRow(i18n("Queue processing interval:"), m_queueIntervalEdit);
 
+  m_oneAtATimeEdit = new QCheckBox(
+      i18n("Enable \"One at a time\" source concurrency limit"), this);
+  m_oneAtATimeEdit->setChecked(queueConfig.readEntry("OneAtATimeMode", false));
+  formLayout->addRow(QString(), m_oneAtATimeEdit);
+
+  m_oneAtATimeLimitEdit = new QSpinBox(this);
+  m_oneAtATimeLimitEdit->setRange(1, 100);
+  m_oneAtATimeLimitEdit->setValue(queueConfig.readEntry("OneAtATimeLimit", 1));
+  formLayout->addRow(i18n("Max active sessions per source:"),
+                     m_oneAtATimeLimitEdit);
+
   m_queueBackoffEdit = new QSpinBox(this);
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
   m_queueBackoffEdit->setSuffix(i18n(" minutes"));
@@ -292,6 +303,8 @@ void SettingsDialog::onSave() {
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
+  queueConfig.writeEntry("OneAtATimeMode", m_oneAtATimeEdit->isChecked());
+  queueConfig.writeEntry("OneAtATimeLimit", m_oneAtATimeLimitEdit->value());
   QString backoffType = QStringLiteral("fixed");
   if (m_backoffTabWidget->currentIndex() == 1) {
     backoffType = QStringLiteral("exponential");

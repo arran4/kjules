@@ -19,6 +19,8 @@ struct QueueItem {
   bool isDailyLimitWait = false;
   int waitSeconds = 0;
   QDateTime waitStartTime;
+  bool isBlocked = false;
+  QJsonObject blockMetadata;
 
   QJsonObject toJson() const;
   static QueueItem fromJson(const QJsonObject &obj);
