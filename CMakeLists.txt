@@ -18,6 +18,24 @@ set(CMAKE_AUTOUIC ON)
 set(QT_VERSION_MAJOR ${QT_MAJOR_VERSION})
 set(KF_MAJOR_VERSION ${QT_MAJOR_VERSION})
 
+# Try to determine version from git
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(GIT_VERSION)
+        set(KJULES_VERSION_STRING "${GIT_VERSION}")
+    endif()
+endif()
+
+if(NOT KJULES_VERSION_STRING)
+    set(KJULES_VERSION_STRING "${PROJECT_VERSION}")
+endif()
+
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
@@ -82,7 +100,7 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
-target_compile_definitions(kjules PRIVATE KJULES_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(kjules PRIVATE KJULES_VERSION="${KJULES_VERSION_STRING}")
 
 if (QT_MAJOR_VERSION STREQUAL "6")
     target_link_libraries(kjules
