@@ -6,9 +6,9 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QStatusBar>
+#include <QTextEdit>
 
 class QLineEdit;
-class QTextEdit;
 class QListView;
 class QComboBox;
 class QSortFilterProxyModel;
@@ -18,6 +18,25 @@ class QPushButton;
 
 class SourceSelectionProxyModel;
 class TemplatesModel;
+
+class PromptTextEdit : public QTextEdit {
+  Q_OBJECT
+
+public:
+  enum Mode { WysiwygMarkdown = 0, RawMarkdown = 1 };
+
+  explicit PromptTextEdit(QWidget *parent = nullptr);
+  void setMarkdownMode(int mode);
+  Mode currentMode() const;
+  QString getPromptText() const;
+  void setPromptText(const QString &text);
+
+protected:
+  void insertFromMimeData(const QMimeData *source) override;
+
+private:
+  Mode m_mode;
+};
 
 class NewSessionDialog : public KXmlGuiWindow {
   Q_OBJECT
@@ -72,7 +91,8 @@ private:
   SourceSelectionProxyModel *m_unselectedProxy;
   SourceSelectionProxyModel *m_selectedProxy;
   QLineEdit *m_filterEdit;
-  QTextEdit *m_promptEdit;
+  PromptTextEdit *m_promptEdit;
+  QComboBox *m_markdownModeComboBox;
   QComboBox *m_automationModeComboBox;
   QCheckBox *m_requirePlanApprovalCheckBox;
   QCheckBox *m_keepOpenCheckBox;

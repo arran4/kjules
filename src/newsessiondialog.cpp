@@ -20,6 +20,7 @@
 #include <QListView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
@@ -27,6 +28,63 @@
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QVBoxLayout>
+
+PromptTextEdit::PromptTextEdit(QWidget *parent)
+    : QTextEdit(parent), m_mode(WysiwygMarkdown) {
+  setAcceptRichText(true);
+}
+
+void PromptTextEdit::setMarkdownMode(int modeInt) {
+  Mode mode = static_cast<Mode>(modeInt);
+  if (m_mode == mode)
+    return;
+
+  if (mode == RawMarkdown) {
+    QString md = toMarkdown();
+    clear();
+    setPlainText(md);
+    setAcceptRichText(false);
+  } else if (mode == WysiwygMarkdown) {
+    QString raw = toPlainText();
+    clear();
+    setMarkdown(raw);
+    setAcceptRichText(true);
+  }
+  m_mode = mode;
+}
+
+PromptTextEdit::Mode PromptTextEdit::currentMode() const { return m_mode; }
+
+QString PromptTextEdit::getPromptText() const {
+  if (m_mode == WysiwygMarkdown) {
+    return toMarkdown();
+  } else {
+    return toPlainText();
+  }
+}
+
+void PromptTextEdit::setPromptText(const QString &text) {
+  if (m_mode == WysiwygMarkdown) {
+    setMarkdown(text);
+  } else {
+    setPlainText(text);
+  }
+}
+
+void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
+  if (m_mode == RawMarkdown) {
+    if (source->hasHtml()) {
+      QTextEdit temp;
+      temp.setHtml(source->html());
+      insertPlainText(temp.toMarkdown());
+      return;
+    } else if (source->hasText()) {
+      insertPlainText(source->text());
+      return;
+    }
+  }
+  QTextEdit::insertFromMimeData(source);
+}
 
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
@@ -364,11 +422,32 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   formLayout->addRow(tr("Sources:"), m_sourceSelectionWidget);
 
   // Prompt
-  m_promptEdit = new QTextEdit(this);
+  m_promptEdit = new PromptTextEdit(this);
+
+  QHBoxLayout *promptHeaderLayout = new QHBoxLayout();
   m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
+  m_markdownModeComboBox = new QComboBox(this);
+  m_markdownModeComboBox->addItem(tr("WYSIWYG Markdown"));
+  m_markdownModeComboBox->addItem(tr("Raw Markdown"));
+
+  KConfigGroup configPrompt(KSharedConfig::openConfig(),
+                            QStringLiteral("NewSessionDialog"));
+  int markdownMode = configPrompt.readEntry(QStringLiteral("MarkdownMode"), 0);
+  if (markdownMode < 0 || markdownMode > 1) {
+    markdownMode = 0;
+  }
+  m_markdownModeComboBox->setCurrentIndex(markdownMode);
+  m_promptEdit->setMarkdownMode(markdownMode);
+  connect(m_markdownModeComboBox,
+          QOverload<int>::of(&QComboBox::currentIndexChanged), m_promptEdit,
+          &PromptTextEdit::setMarkdownMode);
+
+  promptHeaderLayout->addWidget(m_loadTemplateButton);
+  promptHeaderLayout->addStretch();
+  promptHeaderLayout->addWidget(m_markdownModeComboBox);
 
   QVBoxLayout *promptLayout = new QVBoxLayout();
-  promptLayout->addWidget(m_loadTemplateButton, 0, Qt::AlignLeft);
+  promptLayout->addLayout(promptHeaderLayout);
   promptLayout->addWidget(m_promptEdit);
 
   connect(m_promptEdit, &QTextEdit::textChanged, this, [this]() {
@@ -677,13 +756,13 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
     }
   }
 
-  m_promptEdit->setPlainText(prompt);
+  m_promptEdit->setPromptText(prompt);
   updateModels();
 }
 
 void NewSessionDialog::setTemplateData(const QJsonObject &data) {
   QString prompt = data.value(QStringLiteral("prompt")).toString();
-  m_promptEdit->setPlainText(prompt);
+  m_promptEdit->setPromptText(prompt);
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
     m_requirePlanApprovalCheckBox->setChecked(
@@ -763,7 +842,7 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 
   QMap<QString, QString> sources = m_selectedSources;
 
-  QString prompt = m_promptEdit->toPlainText();
+  QString prompt = m_promptEdit->getPromptText();
 
   if (prompt.isEmpty()) {
     QMessageBox::warning(this, tr("Missing Prompt"),
@@ -810,7 +889,7 @@ void NewSessionDialog::onSaveDraft() {
 
   QJsonObject draft;
   draft[QStringLiteral("sources")] = sourcesArr;
-  draft[QStringLiteral("prompt")] = prompt;
+  draft[QStringLiteral("prompt")] = m_promptEdit->getPromptText();
   draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
   draft[QStringLiteral("automationMode")] =
@@ -844,7 +923,7 @@ void NewSessionDialog::onSaveTemplate() {
   // session window" means we ignore sources when loading in an *existing*
   // window.
   tmpl[QStringLiteral("sources")] = sourcesArr;
-  tmpl[QStringLiteral("prompt")] = prompt;
+  tmpl[QStringLiteral("prompt")] = m_promptEdit->getPromptText();
   tmpl[QStringLiteral("name")] = dlg.nameOrComment();
   tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
@@ -870,6 +949,8 @@ void NewSessionDialog::hideEvent(QHideEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("NewSessionDialog"));
   config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
+  config.writeEntry(QStringLiteral("MarkdownMode"),
+                    m_markdownModeComboBox->currentIndex());
 }
 
 bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
