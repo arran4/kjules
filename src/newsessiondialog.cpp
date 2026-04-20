@@ -20,6 +20,7 @@
 #include <QListView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
@@ -27,6 +28,34 @@
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QVBoxLayout>
+
+PromptTextEdit::PromptTextEdit(QWidget *parent)
+    : QTextEdit(parent), m_isMarkdownMode(true) {
+  setAcceptRichText(false);
+}
+
+void PromptTextEdit::setMarkdownMode(bool enabled) {
+  m_isMarkdownMode = enabled;
+}
+
+bool PromptTextEdit::isMarkdownMode() const { return m_isMarkdownMode; }
+
+void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
+  if (m_isMarkdownMode) {
+    if (source->hasHtml()) {
+      QTextEdit temp;
+      temp.setHtml(source->html());
+      insertPlainText(temp.toMarkdown());
+      return;
+    }
+  } else {
+    if (source->hasText()) {
+      insertPlainText(source->text());
+      return;
+    }
+  }
+  QTextEdit::insertFromMimeData(source);
+}
 
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
@@ -364,11 +393,26 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   formLayout->addRow(tr("Sources:"), m_sourceSelectionWidget);
 
   // Prompt
-  m_promptEdit = new QTextEdit(this);
+  m_promptEdit = new PromptTextEdit(this);
+
+  QHBoxLayout *promptHeaderLayout = new QHBoxLayout();
   m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
+  m_markdownModeCheckBox = new QCheckBox(tr("Markdown Mode"), this);
+  KConfigGroup configPrompt(KSharedConfig::openConfig(),
+                            QStringLiteral("NewSessionDialog"));
+  bool isMarkdownMode =
+      configPrompt.readEntry(QStringLiteral("MarkdownMode"), true);
+  m_markdownModeCheckBox->setChecked(isMarkdownMode);
+  m_promptEdit->setMarkdownMode(isMarkdownMode);
+  connect(m_markdownModeCheckBox, &QCheckBox::toggled, m_promptEdit,
+          &PromptTextEdit::setMarkdownMode);
+
+  promptHeaderLayout->addWidget(m_loadTemplateButton);
+  promptHeaderLayout->addStretch();
+  promptHeaderLayout->addWidget(m_markdownModeCheckBox);
 
   QVBoxLayout *promptLayout = new QVBoxLayout();
-  promptLayout->addWidget(m_loadTemplateButton, 0, Qt::AlignLeft);
+  promptLayout->addLayout(promptHeaderLayout);
   promptLayout->addWidget(m_promptEdit);
 
   connect(m_promptEdit, &QTextEdit::textChanged, this, [this]() {
@@ -763,7 +807,7 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 
   QMap<QString, QString> sources = m_selectedSources;
 
-  QString prompt = m_promptEdit->toMarkdown();
+  QString prompt = m_promptEdit->toPlainText();
 
   if (prompt.isEmpty()) {
     QMessageBox::warning(this, tr("Missing Prompt"),
@@ -805,7 +849,7 @@ void NewSessionDialog::onSaveDraft() {
     sourcesArr.append(sObj);
   }
 
-  QString prompt = m_promptEdit->toMarkdown();
+  QString prompt = m_promptEdit->toPlainText();
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
   QJsonObject draft;
@@ -835,7 +879,7 @@ void NewSessionDialog::onSaveTemplate() {
     sourcesArr.append(sObj);
   }
 
-  QString prompt = m_promptEdit->toMarkdown();
+  QString prompt = m_promptEdit->toPlainText();
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
   QJsonObject tmpl;
@@ -870,6 +914,8 @@ void NewSessionDialog::hideEvent(QHideEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("NewSessionDialog"));
   config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
+  config.writeEntry(QStringLiteral("MarkdownMode"),
+                    m_markdownModeCheckBox->isChecked());
 }
 
 bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
