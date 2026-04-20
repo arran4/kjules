@@ -392,8 +392,16 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
-          if (m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole)
-                  .toInt() > 0) {
+
+          bool isFav = false;
+          QVariant favData = m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole);
+          if (favData.typeId() == QMetaType::Bool) {
+            isFav = favData.toBool();
+          } else {
+            isFav = favData.toInt() > 0;
+          }
+
+          if (isFav) {
             m_toggleFavouriteAction->setText(i18n("Unfavourite"));
             menu.addAction(m_toggleFavouriteAction);
             menu.addAction(m_moveFavouriteUpAction);
@@ -575,8 +583,14 @@ void MainWindow::setupUi() {
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-          if (m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole)
-                  .toInt() > 0) {
+          bool isFav = false;
+          QVariant favData = m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole);
+          if (favData.typeId() == QMetaType::Bool) {
+            isFav = favData.toBool();
+          } else {
+            isFav = favData.toInt() > 0;
+          }
+          if (isFav) {
             m_toggleFavouriteAction->setText(i18n("Unfavourite"));
             menu.addAction(m_toggleFavouriteAction);
             menu.addAction(m_moveFavouriteUpAction);
@@ -975,8 +989,15 @@ void MainWindow::setupUi() {
               qobject_cast<const QSortFilterProxyModel *>(
                   m_archiveView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
-          if (m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole)
-                  .toInt() > 0) {
+
+          bool isFav = false;
+          QVariant favData = m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole);
+          if (favData.typeId() == QMetaType::Bool) {
+            isFav = favData.toBool();
+          } else {
+            isFav = favData.toInt() > 0;
+          }
+          if (isFav) {
             m_toggleFavouriteAction->setText(i18n("Unfavourite"));
             menu.addAction(m_toggleFavouriteAction);
             menu.addAction(m_moveFavouriteUpAction);

@@ -989,10 +989,16 @@ void NewSessionDialog::updateStatus(const QString &message) {
 void NewSessionDialog::addFavouriteAction(QMenu &menu,
                                           const QModelIndex &sourceIdx) {
   QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
-  int isFavourite =
-      m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toInt();
 
-  if (isFavourite > 0) {
+  bool isFav = false;
+  QVariant favData = m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole);
+  if (favData.typeId() == QMetaType::Bool) {
+    isFav = favData.toBool();
+  } else {
+    isFav = favData.toInt() > 0;
+  }
+
+  if (isFav) {
     QAction *favouriteAction = menu.addAction(tr("Unfavourite"));
     connect(favouriteAction, &QAction::triggered, this,
             [this, id]() { m_sourceModel->toggleFavourite(id); });

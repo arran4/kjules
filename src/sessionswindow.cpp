@@ -309,8 +309,16 @@ void SessionsWindow::setupUi() {
 
           QModelIndex sourceIndex =
               m_proxyModel ? m_proxyModel->mapToSource(index) : index;
-          if (m_model->data(sourceIndex, SessionModel::FavouriteRole).toInt() >
-              0) {
+
+          bool isFav = false;
+          QVariant favData = m_model->data(sourceIndex, SessionModel::FavouriteRole);
+          if (favData.typeId() == QMetaType::Bool) {
+            isFav = favData.toBool();
+          } else {
+            isFav = favData.toInt() > 0;
+          }
+
+          if (isFav) {
             toggleFavAction->setText(i18n("Unfavourite"));
             menu.addAction(toggleFavAction);
             menu.addAction(moveFavouriteUpAction);
