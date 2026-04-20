@@ -123,6 +123,9 @@ private Q_SLOTS:
 private:
   QStringList getSelectedSessionIds() const;
 
+  void applyQuickFilter(FilterEditor *editor, const QString &type,
+                        const QString &value, bool isHide);
+
   void updateFollowingRefreshTimer();
   void setupUi();
   void setupTrayIcon();

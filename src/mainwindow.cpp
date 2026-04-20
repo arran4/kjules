@@ -280,6 +280,61 @@ void MainWindow::setMockApi(bool useMock) {
 
 MainWindow::~MainWindow() {}
 
+void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
+                                  const QString &value, bool isHide) {
+  QString current = editor->filterText().trimmed();
+  if (current.startsWith(QLatin1Char('='))) {
+    current = current.mid(1).trimmed();
+  }
+
+  QString newFilter;
+  if (isHide) {
+    if (current.isEmpty()) {
+      newFilter = QStringLiteral("NOT %1:%2").arg(type, value);
+    } else {
+      QRegularExpression reGroup(
+          QStringLiteral("NOT\\s*\\(([^)]*%1:[^)]+)\\)$").arg(type));
+      QRegularExpressionMatch matchGroup = reGroup.match(current);
+
+      QRegularExpression reSingle(
+          QStringLiteral("NOT\\s+%1:([^\\s\\(\\)]+)$").arg(type));
+      QRegularExpressionMatch matchSingle = reSingle.match(current);
+
+      if (matchGroup.hasMatch()) {
+        QString groupContent = matchGroup.captured(1);
+        int startPos = matchGroup.capturedStart(1);
+        int length = matchGroup.capturedLength(1);
+        newFilter = current;
+        newFilter.replace(startPos, length,
+                          groupContent +
+                              QStringLiteral(" OR %1:%2").arg(type, value));
+      } else if (matchSingle.hasMatch()) {
+        QString singleVal = matchSingle.captured(1);
+        int startPos = matchSingle.capturedStart(0);
+        int length = matchSingle.capturedLength(0);
+        newFilter = current;
+        newFilter.replace(
+            startPos, length,
+            QStringLiteral("NOT (%1:%2 OR %1:%3)").arg(type, singleVal, value));
+      } else {
+        newFilter = current + QStringLiteral(" AND NOT %1:%2").arg(type, value);
+      }
+    }
+  } else {
+    if (current.isEmpty()) {
+      newFilter = QStringLiteral("%1:%2").arg(type, value);
+    } else {
+      newFilter = current + QStringLiteral(" AND %1:%2").arg(type, value);
+    }
+  }
+
+  newFilter = newFilter.trimmed();
+  if (newFilter.startsWith(QStringLiteral("AND "))) {
+    newFilter = newFilter.mid(4).trimmed();
+  }
+  editor->setFilterText(QStringLiteral("=") + newFilter);
+}
+
 void MainWindow::closeEvent(QCloseEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   bool closeToTray = config.readEntry("CloseToTray", false);
@@ -585,6 +640,41 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
+
+          QString owner = m_sessionModel
+                              ->data(m_sessionModel->index(
+                                  sourceIndex.row(), SessionModel::ColOwner))
+                              .toString();
+          QString repo = m_sessionModel
+                             ->data(m_sessionModel->index(
+                                 sourceIndex.row(), SessionModel::ColRepo))
+                             .toString();
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
+            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
+            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
+            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
+                               repo, true);
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
+                               owner, true);
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
+                               repo, false);
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
+                               owner, false);
+            });
+
+            menu.addSeparator();
+          }
+
           QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -945,6 +1035,41 @@ void MainWindow::setupUi() {
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
+
+          QString owner = m_archiveModel
+                              ->data(m_archiveModel->index(
+                                  sourceIndex.row(), SessionModel::ColOwner))
+                              .toString();
+          QString repo = m_archiveModel
+                             ->data(m_archiveModel->index(
+                                 sourceIndex.row(), SessionModel::ColRepo))
+                             .toString();
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
+            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
+            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
+            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
+                               repo, true);
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
+                               owner, true);
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
+                               repo, false);
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
+                               owner, false);
+            });
+
+            menu.addSeparator();
+          }
+
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
 
