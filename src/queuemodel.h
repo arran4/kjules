@@ -80,8 +80,12 @@ public:
   QueueItem getItem(int index) const;
   void moveItem(int from, int to);
 
+  void beginBatchUpdate();
+  void endBatchUpdate();
+
 private:
   QVector<QueueItem> m_items;
+  bool m_batchUpdating = false;
   QVector<QDateTime> m_runTimestamps;
   void pruneRunTimestamps();
   int m_jobsSinceLastWait = 0;

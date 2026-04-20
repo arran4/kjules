@@ -683,7 +683,17 @@ void QueueModel::removeTrailingWaitItems() {
   }
 }
 
+void QueueModel::beginBatchUpdate() { m_batchUpdating = true; }
+
+void QueueModel::endBatchUpdate() {
+  m_batchUpdating = false;
+  save();
+}
+
 void QueueModel::save() {
+  if (m_batchUpdating)
+    return;
+
   QString dirPath =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(dirPath);

@@ -47,16 +47,6 @@ void BlockedTreeModel::rebuildTree() {
 
   QHash<QString, Node *> sourceNodes;
 
-  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
-    QModelIndex idx = m_sourceModel->index(i, 0);
-    QString id = m_sourceModel->data(idx, SourceModel::IdRole).toString();
-    QString name = m_sourceModel->data(idx, SourceModel::NameRole).toString();
-
-    Node *node = new Node{true, id, -1, name, {}, m_rootNode};
-    sourceNodes.insert(id, node);
-    m_rootNode->children.append(node);
-  }
-
   for (int i = 0; i < m_queueModel->rowCount(); ++i) {
     QueueItem item = m_queueModel->getItem(i);
     if (!item.isBlocked) {
@@ -72,7 +62,17 @@ void BlockedTreeModel::rebuildTree() {
     }
 
     if (!sourceNodes.contains(source)) {
-      Node *node = new Node{true, source, -1, source, {}, m_rootNode};
+      // Find friendly name in source model if possible
+      QString name = source;
+      for (int j = 0; j < m_sourceModel->rowCount(); ++j) {
+        QModelIndex idx = m_sourceModel->index(j, 0);
+        if (m_sourceModel->data(idx, SourceModel::IdRole).toString() ==
+            source) {
+          name = m_sourceModel->data(idx, SourceModel::NameRole).toString();
+          break;
+        }
+      }
+      Node *node = new Node{true, source, -1, name, {}, m_rootNode};
       sourceNodes.insert(source, node);
       m_rootNode->children.append(node);
     }
@@ -148,6 +148,14 @@ int BlockedTreeModel::blockedSourcesCount() const {
     if (!node->children.isEmpty()) {
       count++;
     }
+  }
+  return count;
+}
+
+int BlockedTreeModel::totalBlockedItemsCount() const {
+  int count = 0;
+  for (Node *node : m_rootNode->children) {
+    count += node->children.size();
   }
   return count;
 }

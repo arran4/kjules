@@ -3064,8 +3064,24 @@ void MainWindow::processQueue() {
   int processIndex = -1;
   QHash<QString, int> activeCountCache;
 
+  // Pre-calculate active session counts from m_sessionModel
+  for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
+    QModelIndex idx = m_sessionModel->index(j, 0);
+    QString state =
+        m_sessionModel->data(idx, SessionModel::StateRole).toString();
+    if (state == QStringLiteral("PENDING") ||
+        state == QStringLiteral("IN_PROGRESS")) {
+      QString source =
+          m_sessionModel->data(idx, SessionModel::SourceRole).toString();
+      activeCountCache[source]++;
+    }
+  }
+
+  m_queueModel->beginBatchUpdate();
+
   for (int i = 0; i < m_queueModel->rowCount(); ++i) {
     QueueItem item = m_queueModel->getItem(i);
+    bool needsUpdate = false;
 
     if (item.isWaitItem) {
       if (processIndex == -1) {
@@ -3096,48 +3112,15 @@ void MainWindow::processQueue() {
       if (item.isBlocked) {
         item.isBlocked = false;
         item.blockMetadata = QJsonObject();
-        m_queueModel->updateItem(i, item);
+        needsUpdate = true;
       }
       if (processIndex == -1) {
         processIndex = i;
       }
+      activeCountCache[source]++;
+      if (needsUpdate)
+        m_queueModel->updateItem(i, item);
       continue;
-    }
-
-    if (!activeCountCache.contains(source)) {
-      int count = 0;
-      // Count in session model
-      for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
-        QModelIndex idx = m_sessionModel->index(j, 0);
-        if (m_sessionModel->data(idx, SessionModel::SourceRole).toString() ==
-            source) {
-          QString state =
-              m_sessionModel->data(idx, SessionModel::StateRole).toString();
-          if (state == QStringLiteral("PENDING") ||
-              state == QStringLiteral("IN_PROGRESS")) {
-            count++;
-          }
-        }
-      }
-      // Count in queue (processed ahead of us or currently unblocked)
-      for (int j = 0; j < i; ++j) {
-        QueueItem aheadItem = m_queueModel->getItem(j);
-        if (!aheadItem.isWaitItem && !aheadItem.isBlocked) {
-          QString aheadSource =
-              aheadItem.requestData.value(QStringLiteral("sourceContext"))
-                  .toObject()
-                  .value(QStringLiteral("source"))
-                  .toString();
-          if (aheadSource.isEmpty()) {
-            aheadSource = aheadItem.requestData.value(QStringLiteral("source"))
-                              .toString();
-          }
-          if (aheadSource == source) {
-            count++;
-          }
-        }
-      }
-      activeCountCache[source] = count;
     }
 
     if (activeCountCache[source] >= effectiveLimit) {
@@ -3148,22 +3131,26 @@ void MainWindow::processQueue() {
             QStringLiteral("Concurrency limit reached");
         meta[QStringLiteral("source")] = source;
         item.blockMetadata = meta;
-        m_queueModel->updateItem(i, item);
+        needsUpdate = true;
       }
     } else {
       if (item.isBlocked) {
         item.isBlocked = false;
         item.blockMetadata = QJsonObject();
-        m_queueModel->updateItem(i, item);
+        needsUpdate = true;
       }
       if (processIndex == -1) {
         processIndex = i;
       }
-      activeCountCache[source]++; // We consider this one active now, so
-                                  // subsequent items of this source are checked
-                                  // correctly against the limit
+      activeCountCache[source]++; // We consider this one active now
+    }
+
+    if (needsUpdate) {
+      m_queueModel->updateItem(i, item);
     }
   }
+
+  m_queueModel->endBatchUpdate();
 
   if (processIndex == -1) {
     // Everything is blocked or queue is essentially empty
@@ -3365,13 +3352,7 @@ void MainWindow::updateHoldingTabVisibility() {
 
 void MainWindow::updateBlockedTabVisibility() {
   int blockedIdx = m_tabWidget->indexOf(m_blockedView);
-  int blockedItems = 0;
-  for (int i = 0; i < m_queueModel->rowCount(); ++i) {
-    if (m_queueModel->getItem(i).isBlocked) {
-      blockedItems++;
-    }
-  }
-
+  int blockedItems = m_blockedTreeModel->totalBlockedItemsCount();
   int blockedSources = m_blockedTreeModel->blockedSourcesCount();
 
   if (blockedItems == 0) {
@@ -3413,8 +3394,6 @@ void MainWindow::onBlockedContextMenu(const QPoint &pos) {
 
   bool isSource =
       m_blockedTreeModel->data(index, BlockedTreeModel::IsSourceRole).toBool();
-  if (isSource)
-    return;
 
   int queueIndex =
       m_blockedTreeModel->data(index, BlockedTreeModel::QueueIndexRole).toInt();
