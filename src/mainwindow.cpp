@@ -287,17 +287,22 @@ void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
     current = current.mid(1).trimmed();
   }
 
+  QString formattedValue = value;
+  if (formattedValue.contains(QLatin1Char(' '))) {
+    formattedValue = QStringLiteral("\"%1\"").arg(formattedValue);
+  }
+
   QString newFilter;
   if (isHide) {
     if (current.isEmpty()) {
-      newFilter = QStringLiteral("NOT %1:%2").arg(type, value);
+      newFilter = QStringLiteral("NOT %1:%2").arg(type, formattedValue);
     } else {
       QRegularExpression reGroup(
-          QStringLiteral("NOT\\s*\\(([^)]*%1:[^)]+)\\)$").arg(type));
+          QStringLiteral("NOT\\s*\\(([^)]*%1:[^)]+)\\)").arg(type));
       QRegularExpressionMatch matchGroup = reGroup.match(current);
 
       QRegularExpression reSingle(
-          QStringLiteral("NOT\\s+%1:([^\\s\\(\\)]+)$").arg(type));
+          QStringLiteral("NOT\\s+%1:(?:\"[^\"]+\"|[^\\s\\(\\)]+)").arg(type));
       QRegularExpressionMatch matchSingle = reSingle.match(current);
 
       if (matchGroup.hasMatch()) {
