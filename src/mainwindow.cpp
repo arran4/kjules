@@ -31,6 +31,7 @@
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
+#include <KXMLGUIFactory>
 #include <KZip>
 #include <QAction>
 #include <QClipboard>
@@ -51,7 +52,6 @@
 #include <QListView>
 #include <QMenu>
 #include <QMenuBar>
-#include <KXMLGUIFactory>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
@@ -4374,7 +4374,6 @@ void MainWindow::updateFavouritesMenu() {
 
   m_favouritesMenu->clear();
 
-
   for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
     QModelIndex idx = m_sourceModel->index(i, 0);
     if (m_sourceModel->data(idx, SourceModel::FavouriteRole).toBool()) {
@@ -4394,7 +4393,6 @@ void MainWindow::updateFavouritesMenu() {
                   showNewSessionDialog(initData);
                 }
               });
-
     }
   }
 
