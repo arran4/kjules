@@ -253,9 +253,87 @@ void SessionModel::toggleFavourite(const QString &id) {
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
     SessionData &data = m_sessions[i];
-    data.isFavourite = !data.isFavourite;
+
+    if (data.isFavourite > 0) {
+      data.isFavourite = 0;
+    } else {
+      int maxFav = 0;
+      for (const auto &s : m_sessions) {
+        if (s.isFavourite > maxFav) {
+          maxFav = s.isFavourite;
+        }
+      }
+      data.isFavourite = maxFav + 1;
+    }
+
     data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
+}
+
+void SessionModel::moveFavouriteUp(const QString &id) {
+  if (!m_idToIndex.contains(id))
+    return;
+  int i = m_idToIndex.value(id);
+  SessionData &data = m_sessions[i];
+  if (data.isFavourite <= 0)
+    return;
+
+  int targetRank = -1;
+  int targetIndex = -1;
+  for (int j = 0; j < m_sessions.size(); ++j) {
+    int fav = m_sessions[j].isFavourite;
+    if (fav > 0 && fav < data.isFavourite && fav > targetRank) {
+      targetRank = fav;
+      targetIndex = j;
+    }
+  }
+
+  if (targetIndex != -1) {
+    int temp = data.isFavourite;
+    data.isFavourite = m_sessions[targetIndex].isFavourite;
+    m_sessions[targetIndex].isFavourite = temp;
+
+    data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
+    m_sessions[targetIndex].rawObject[QStringLiteral("local_favourite")] =
+        m_sessions[targetIndex].isFavourite;
+
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    Q_EMIT dataChanged(index(targetIndex, 0), index(targetIndex, ColCount - 1));
+    saveSessions();
+  }
+}
+
+void SessionModel::moveFavouriteDown(const QString &id) {
+  if (!m_idToIndex.contains(id))
+    return;
+  int i = m_idToIndex.value(id);
+  SessionData &data = m_sessions[i];
+  if (data.isFavourite <= 0)
+    return;
+
+  int targetRank = INT_MAX;
+  int targetIndex = -1;
+  for (int j = 0; j < m_sessions.size(); ++j) {
+    int fav = m_sessions[j].isFavourite;
+    if (fav > data.isFavourite && fav < targetRank) {
+      targetRank = fav;
+      targetIndex = j;
+    }
+  }
+
+  if (targetIndex != -1) {
+    int temp = data.isFavourite;
+    data.isFavourite = m_sessions[targetIndex].isFavourite;
+    m_sessions[targetIndex].isFavourite = temp;
+
+    data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
+    m_sessions[targetIndex].rawObject[QStringLiteral("local_favourite")] =
+        m_sessions[targetIndex].isFavourite;
+
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    Q_EMIT dataChanged(index(targetIndex, 0), index(targetIndex, ColCount - 1));
     saveSessions();
   }
 }

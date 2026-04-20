@@ -86,6 +86,8 @@ public:
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
   void toggleFavourite(const QString &id);
+  void moveFavouriteUp(const QString &id);
+  void moveFavouriteDown(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QString getSessionName(const QString &id) const;

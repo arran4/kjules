@@ -151,6 +151,16 @@ SessionsWindow::SessionsWindow(const QString &filterSource,
 
 SessionsWindow::~SessionsWindow() {}
 
+void SessionsWindow::hideEvent(QHideEvent *event) {
+  KConfigGroup config(KSharedConfig::openConfig(),
+                      QStringLiteral("SessionsWindowUI"));
+  config.writeEntry("Geometry", saveGeometry());
+  if (m_listView && m_listView->header()) {
+    config.writeEntry("HeaderState", m_listView->header()->saveState());
+  }
+  KXmlGuiWindow::hideEvent(event);
+}
+
 void SessionsWindow::setupUi() {
   setAttribute(Qt::WA_DeleteOnClose);
   resize(800, 600);
@@ -217,6 +227,13 @@ void SessionsWindow::setupUi() {
   // Set default sorting to Favourites first
   m_listView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
 
+  KConfigGroup uiConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("SessionsWindowUI"));
+  if (uiConfig.hasKey("HeaderState")) {
+    m_listView->header()->restoreState(
+        uiConfig.readEntry("HeaderState", QByteArray()));
+  }
+
   connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int value) {
             if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
@@ -272,11 +289,36 @@ void SessionsWindow::setupUi() {
           }
 
           QMenu menu;
-          QAction *toggleFavAction = menu.addAction(
-              QIcon::fromTheme(QStringLiteral("emblem-favorite")),
-              i18n("Toggle Favourite"));
+          QAction *toggleFavAction =
+              new QAction(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                          i18n("Toggle Favourite"));
           connect(toggleFavAction, &QAction::triggered, this,
                   &SessionsWindow::toggleFavourite);
+
+          QAction *moveFavouriteUpAction =
+              new QAction(QIcon::fromTheme(QStringLiteral("go-up")),
+                          i18n("Move Favourite Up"));
+          connect(moveFavouriteUpAction, &QAction::triggered, this,
+                  &SessionsWindow::moveFavouriteUp);
+
+          QAction *moveFavouriteDownAction =
+              new QAction(QIcon::fromTheme(QStringLiteral("go-down")),
+                          i18n("Move Favourite Down"));
+          connect(moveFavouriteDownAction, &QAction::triggered, this,
+                  &SessionsWindow::moveFavouriteDown);
+
+          QModelIndex sourceIndex =
+              m_proxyModel ? m_proxyModel->mapToSource(index) : index;
+          if (m_model->data(sourceIndex, SessionModel::FavouriteRole).toInt() >
+              0) {
+            toggleFavAction->setText(i18n("Unfavourite"));
+            menu.addAction(toggleFavAction);
+            menu.addAction(moveFavouriteUpAction);
+            menu.addAction(moveFavouriteDownAction);
+          } else {
+            toggleFavAction->setText(i18n("Favourite"));
+            menu.addAction(toggleFavAction);
+          }
 
           QAction *openSessionUrlAction =
               menu.addAction(i18n("Open Session URL"));
@@ -718,6 +760,24 @@ void SessionsWindow::setupUi() {
   connect(m_cancelBtn, &QPushButton::clicked, this,
           &SessionsWindow::cancelRefresh);
   statusBar()->addPermanentWidget(m_cancelBtn);
+}
+
+void SessionsWindow::moveFavouriteUp() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    m_model->moveFavouriteUp(id);
+  }
+}
+
+void SessionsWindow::moveFavouriteDown() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    m_model->moveFavouriteDown(id);
+  }
 }
 
 void SessionsWindow::toggleFavourite() {

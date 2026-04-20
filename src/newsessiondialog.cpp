@@ -989,10 +989,26 @@ void NewSessionDialog::updateStatus(const QString &message) {
 void NewSessionDialog::addFavouriteAction(QMenu &menu,
                                           const QModelIndex &sourceIdx) {
   QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
-  bool isFavourite =
-      m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toBool();
-  QAction *favouriteAction =
-      menu.addAction(isFavourite ? tr("Unfavourite") : tr("Favourite"));
-  connect(favouriteAction, &QAction::triggered, this,
-          [this, id]() { m_sourceModel->toggleFavourite(id); });
+  int isFavourite =
+      m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toInt();
+
+  if (isFavourite > 0) {
+    QAction *favouriteAction = menu.addAction(tr("Unfavourite"));
+    connect(favouriteAction, &QAction::triggered, this,
+            [this, id]() { m_sourceModel->toggleFavourite(id); });
+
+    QAction *moveUpAction = menu.addAction(
+        QIcon::fromTheme(QStringLiteral("go-up")), tr("Move Favourite Up"));
+    connect(moveUpAction, &QAction::triggered, this,
+            [this, id]() { m_sourceModel->moveFavouriteUp(id); });
+
+    QAction *moveDownAction = menu.addAction(
+        QIcon::fromTheme(QStringLiteral("go-down")), tr("Move Favourite Down"));
+    connect(moveDownAction, &QAction::triggered, this,
+            [this, id]() { m_sourceModel->moveFavouriteDown(id); });
+  } else {
+    QAction *favouriteAction = menu.addAction(tr("Favourite"));
+    connect(favouriteAction, &QAction::triggered, this,
+            [this, id]() { m_sourceModel->toggleFavourite(id); });
+  }
 }

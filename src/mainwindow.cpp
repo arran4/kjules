@@ -283,6 +283,16 @@ MainWindow::~MainWindow() {}
 void MainWindow::closeEvent(QCloseEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   bool closeToTray = config.readEntry("CloseToTray", false);
+
+  KConfigGroup uiConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindowUI"));
+  uiConfig.writeEntry("SourceViewHeaderState",
+                      m_sourceView->header()->saveState());
+  uiConfig.writeEntry("SessionViewHeaderState",
+                      m_sessionView->header()->saveState());
+  uiConfig.writeEntry("ArchiveViewHeaderState",
+                      m_archiveView->header()->saveState());
+
   if (closeToTray) {
     hide();
     event->ignore();
@@ -333,12 +343,11 @@ void MainWindow::setupUi() {
   m_sourceView->setSortingEnabled(true);
   m_sourceView->header()->setSectionResizeMode(SourceModel::ColName,
                                                QHeaderView::Stretch);
-  m_sourceView->header()->setMinimumSectionSize(300);
+  m_sourceView->header()->setMinimumSectionSize(200);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
-  m_sourceView->header()->resizeSection(SourceModel::ColFavourite, 80);
 
-  // Set default sorting to Favourites first
-  m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Name
+  m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(false);
@@ -383,7 +392,16 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
-          menu.addAction(m_toggleFavouriteAction);
+          if (m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole)
+                  .toInt() > 0) {
+            m_toggleFavouriteAction->setText(i18n("Unfavourite"));
+            menu.addAction(m_toggleFavouriteAction);
+            menu.addAction(m_moveFavouriteUpAction);
+            menu.addAction(m_moveFavouriteDownAction);
+          } else {
+            m_toggleFavouriteAction->setText(i18n("Favourite"));
+            menu.addAction(m_toggleFavouriteAction);
+          }
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
                   [this, sourceIndex]() {
@@ -502,10 +520,12 @@ void MainWindow::setupUi() {
   m_sessionView->setSortingEnabled(true);
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_sessionView->header()->setMinimumSectionSize(100);
+  m_sessionView->header()->resizeSection(SessionModel::ColTitle, 400);
   m_sessionView->header()->setStretchLastSection(true);
 
-  // Set default sorting to Favourites first
-  m_sessionView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_sessionView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -555,7 +575,16 @@ void MainWindow::setupUi() {
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-          menu.addAction(m_toggleFavouriteAction);
+          if (m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole)
+                  .toInt() > 0) {
+            m_toggleFavouriteAction->setText(i18n("Unfavourite"));
+            menu.addAction(m_toggleFavouriteAction);
+            menu.addAction(m_moveFavouriteUpAction);
+            menu.addAction(m_moveFavouriteDownAction);
+          } else {
+            m_toggleFavouriteAction->setText(i18n("Favourite"));
+            menu.addAction(m_toggleFavouriteAction);
+          }
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
               menu.addAction(i18n("Open Sessions for source"));
@@ -891,10 +920,12 @@ void MainWindow::setupUi() {
   m_archiveView->setSortingEnabled(true);
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_archiveView->header()->setMinimumSectionSize(100);
+  m_archiveView->header()->resizeSection(SessionModel::ColTitle, 400);
   m_archiveView->header()->setStretchLastSection(true);
 
-  // Set default sorting to Favourites first
-  m_archiveView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_archiveView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -940,7 +971,20 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_archiveView->setCurrentIndex(index);
           }
-          menu.addAction(m_toggleFavouriteAction);
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_archiveView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+          if (m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole)
+                  .toInt() > 0) {
+            m_toggleFavouriteAction->setText(i18n("Unfavourite"));
+            menu.addAction(m_toggleFavouriteAction);
+            menu.addAction(m_moveFavouriteUpAction);
+            menu.addAction(m_moveFavouriteDownAction);
+          } else {
+            m_toggleFavouriteAction->setText(i18n("Favourite"));
+            menu.addAction(m_toggleFavouriteAction);
+          }
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -1603,6 +1647,21 @@ void MainWindow::setupUi() {
 
   mainLayout->addWidget(m_tabWidget);
 
+  KConfigGroup uiConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindowUI"));
+  if (uiConfig.hasKey("SourceViewHeaderState")) {
+    m_sourceView->header()->restoreState(
+        uiConfig.readEntry("SourceViewHeaderState", QByteArray()));
+  }
+  if (uiConfig.hasKey("SessionViewHeaderState")) {
+    m_sessionView->header()->restoreState(
+        uiConfig.readEntry("SessionViewHeaderState", QByteArray()));
+  }
+  if (uiConfig.hasKey("ArchiveViewHeaderState")) {
+    m_archiveView->header()->restoreState(
+        uiConfig.readEntry("ArchiveViewHeaderState", QByteArray()));
+  }
+
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
 
   // Status Bar
@@ -1910,6 +1969,18 @@ void MainWindow::createActions() {
                   i18n("Toggle Favourite"), this);
   connect(m_toggleFavouriteAction, &QAction::triggered, this,
           &MainWindow::toggleFavourite);
+
+  m_moveFavouriteUpAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("go-up")),
+                  i18n("Move Favourite Up"), this);
+  connect(m_moveFavouriteUpAction, &QAction::triggered, this,
+          &MainWindow::moveFavouriteUp);
+
+  m_moveFavouriteDownAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("go-down")),
+                  i18n("Move Favourite Down"), this);
+  connect(m_moveFavouriteDownAction, &QAction::triggered, this,
+          &MainWindow::moveFavouriteDown);
 
   m_showFullSessionListAction =
       new QAction(i18n("Show Full Session List"), this);
@@ -3827,6 +3898,98 @@ void MainWindow::onError(const QString &message) {
 }
 
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
+
+void MainWindow::moveFavouriteUp() {
+  if (m_tabWidget->currentWidget()->objectName() ==
+      QStringLiteral("sourcesTab")) {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+        m_sourceModel->moveFavouriteUp(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("followingTab")) {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_sessionModel->moveFavouriteUp(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("archiveTab")) {
+    QModelIndexList selectedRows =
+        m_archiveView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_archiveModel->moveFavouriteUp(id);
+      }
+    }
+  }
+}
+
+void MainWindow::moveFavouriteDown() {
+  if (m_tabWidget->currentWidget()->objectName() ==
+      QStringLiteral("sourcesTab")) {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
+        m_sourceModel->moveFavouriteDown(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("followingTab")) {
+    QModelIndexList selectedRows =
+        m_sessionView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_sessionModel->moveFavouriteDown(id);
+      }
+    }
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("archiveTab")) {
+    QModelIndexList selectedRows =
+        m_archiveView->selectionModel()->selectedRows();
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
+    if (proxy) {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = proxy->mapToSource(idx);
+        QString id =
+            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
+        m_archiveModel->moveFavouriteDown(id);
+      }
+    }
+  }
+}
 
 void MainWindow::toggleFavourite() {
   if (m_tabWidget->currentWidget()->objectName() ==

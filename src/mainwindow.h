@@ -87,6 +87,8 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
+  void moveFavouriteUp();
+  void moveFavouriteDown();
   void processQueue();
   void updateHoldingTabVisibility();
   void processErrorRetries();
@@ -172,6 +174,8 @@ private:
   QAction *m_showFullSessionListAction;
   QAction *m_followFromIdAction;
   QAction *m_toggleFavouriteAction;
+  QAction *m_moveFavouriteUpAction;
+  QAction *m_moveFavouriteDownAction;
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
   QAction *m_viewRawDataAction;

@@ -45,6 +45,9 @@ public:
                           QWidget *parent = nullptr);
   ~SessionsWindow();
 
+protected:
+  void hideEvent(QHideEvent *event) override;
+
 Q_SIGNALS:
   void watchRequested(const QJsonObject &sessionData);
   void archiveRequested(const QString &id);
@@ -60,6 +63,8 @@ private Q_SLOTS:
   void onSessionsRefreshFinished();
   void updateRepoFilterList();
   void toggleFavourite();
+  void moveFavouriteUp();
+  void moveFavouriteDown();
   void updateActionStates();
 
 private:

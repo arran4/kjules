@@ -47,6 +47,8 @@ public:
   void saveSources();
   void updateSource(const QJsonObject &sourceConst);
   void toggleFavourite(const QString &id);
+  void moveFavouriteUp(const QString &id);
+  void moveFavouriteDown(const QString &id);
   void clear();
   void recordSessionCreated(const QString &sourceId);
   void recalculateStatsFromSessions(const QJsonArray &allSessions);
