@@ -651,6 +651,7 @@ void SessionsWindow::setupUi() {
   m_autoFollowAction =
       new QAction(i18n("Auto-follow active states on refresh"), this);
   m_autoFollowAction->setCheckable(true);
+  m_autoFollowAction->setEnabled(m_managedModel != nullptr);
   bool autoFollow = config.readEntry("AutoFollowRefresh", false);
   m_autoFollowAction->setChecked(autoFollow);
   actionCollection()->addAction(QStringLiteral("auto_follow_refresh"),
@@ -838,15 +839,15 @@ void SessionsWindow::onSessionsReceived(const QJsonArray &sessions,
   m_statusLabel->setText(i18n("Loading page %1... Loaded %2 sessions total.",
                               m_pagesLoaded, m_sessionsLoaded));
 
-  if (m_autoFollowAction && m_autoFollowAction->isChecked()) {
-    for (int i = 0; i < sessions.size(); ++i) {
-      QJsonObject obj = sessions[i].toObject();
-      QString state = obj.value(QStringLiteral("state")).toString();
+  if (m_managedModel && m_autoFollowAction && m_autoFollowAction->isChecked()) {
+    for (const QJsonValue &sessionValue : sessions) {
+      const QJsonObject obj = sessionValue.toObject();
+      const QString state = obj.value(QStringLiteral("state")).toString();
       if (state == QStringLiteral("IN_PROGRESS") ||
           state == QStringLiteral("WAITING_FEEDBACK") ||
           state == QStringLiteral("WAITING_APPROVAL")) {
-        QString id = obj.value(QStringLiteral("id")).toString();
-        if (m_managedModel && !m_managedModel->contains(id)) {
+        const QString id = obj.value(QStringLiteral("id")).toString();
+        if (!m_managedModel->contains(id)) {
           Q_EMIT watchRequested(obj);
         }
       }
