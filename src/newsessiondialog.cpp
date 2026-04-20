@@ -763,7 +763,7 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 
   QMap<QString, QString> sources = m_selectedSources;
 
-  QString prompt = m_promptEdit->toPlainText();
+  QString prompt = m_promptEdit->toMarkdown();
 
   if (prompt.isEmpty()) {
     QMessageBox::warning(this, tr("Missing Prompt"),
@@ -805,7 +805,7 @@ void NewSessionDialog::onSaveDraft() {
     sourcesArr.append(sObj);
   }
 
-  QString prompt = m_promptEdit->toPlainText();
+  QString prompt = m_promptEdit->toMarkdown();
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
   QJsonObject draft;
@@ -835,7 +835,7 @@ void NewSessionDialog::onSaveTemplate() {
     sourcesArr.append(sObj);
   }
 
-  QString prompt = m_promptEdit->toPlainText();
+  QString prompt = m_promptEdit->toMarkdown();
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
   QJsonObject tmpl;
