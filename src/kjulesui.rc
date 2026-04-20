@@ -54,6 +54,9 @@
             <Separator />
             <Action name="show_activity_log" />
         </Menu>
+        <Menu name="favourites">
+            <text>Favourites</text>
+        </Menu>
         <Menu name="settings">
             <Action name="options_configure" />
             <Action name="options_configure_toolbars" />
