@@ -648,6 +648,22 @@ void SessionsWindow::setupUi() {
     config.sync();
   });
 
+  m_autoFollowAction =
+      new QAction(i18n("Auto-follow active states on refresh"), this);
+  m_autoFollowAction->setCheckable(true);
+  m_autoFollowAction->setEnabled(m_managedModel != nullptr);
+  bool autoFollow = config.readEntry("AutoFollowRefresh", false);
+  m_autoFollowAction->setChecked(autoFollow);
+  actionCollection()->addAction(QStringLiteral("auto_follow_refresh"),
+                                m_autoFollowAction);
+
+  connect(m_autoFollowAction, &QAction::toggled, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("SessionsWindow"));
+    config.writeEntry("AutoFollowRefresh", checked);
+    config.sync();
+  });
+
   auto addColumnToggle = [this, &config](const QString &label, int colIndex,
                                          const QString &actionName) {
     QAction *action = new QAction(label, this);
@@ -822,6 +838,21 @@ void SessionsWindow::onSessionsReceived(const QJsonArray &sessions,
   m_progressBar->setFormat(i18n("%1 sessions loaded", m_sessionsLoaded));
   m_statusLabel->setText(i18n("Loading page %1... Loaded %2 sessions total.",
                               m_pagesLoaded, m_sessionsLoaded));
+
+  if (m_managedModel && m_autoFollowAction && m_autoFollowAction->isChecked()) {
+    for (const QJsonValue &sessionValue : sessions) {
+      const QJsonObject obj = sessionValue.toObject();
+      const QString state = obj.value(QStringLiteral("state")).toString();
+      if (state == QStringLiteral("IN_PROGRESS") ||
+          state == QStringLiteral("WAITING_FEEDBACK") ||
+          state == QStringLiteral("WAITING_APPROVAL")) {
+        const QString id = obj.value(QStringLiteral("id")).toString();
+        if (!m_managedModel->contains(id)) {
+          Q_EMIT watchRequested(obj);
+        }
+      }
+    }
+  }
 }
 
 void SessionsWindow::updateRepoFilterList() {

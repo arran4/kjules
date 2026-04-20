@@ -20,6 +20,7 @@
         <Action name="auto_load_all"/>
         <Action name="auto_load_bottom"/>
       </Menu>
+      <Action name="auto_follow_refresh"/>
     </Menu>
     <Menu name="view"><text>&amp;View</text>
       <Menu name="columns_menu"><text>Columns</text>
