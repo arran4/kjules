@@ -992,7 +992,11 @@ void NewSessionDialog::addFavouriteAction(QMenu &menu,
 
   bool isFav = false;
   QVariant favData = m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
   if (favData.typeId() == QMetaType::Bool) {
+#else
+  if (favData.type() == QVariant::Bool) {
+#endif
     isFav = favData.toBool();
   } else {
     isFav = favData.toInt() > 0;

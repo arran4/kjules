@@ -313,7 +313,11 @@ void SessionsWindow::setupUi() {
           bool isFav = false;
           QVariant favData =
               m_model->data(sourceIndex, SessionModel::FavouriteRole);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
           if (favData.typeId() == QMetaType::Bool) {
+#else
+          if (favData.type() == QVariant::Bool) {
+#endif
             isFav = favData.toBool();
           } else {
             isFav = favData.toInt() > 0;
