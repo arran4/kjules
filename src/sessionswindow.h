@@ -83,6 +83,7 @@ private:
   QAction *m_resumeAction;
   QAction *m_loadRemainingAction;
   QActionGroup *m_autoLoadGroup;
+  QAction *m_autoFollowAction;
 };
 
 #endif // SESSIONSWINDOW_H
