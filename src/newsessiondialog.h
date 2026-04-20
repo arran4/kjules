@@ -23,15 +23,19 @@ class PromptTextEdit : public QTextEdit {
   Q_OBJECT
 
 public:
+  enum Mode { WysiwygMarkdown = 0, RawMarkdown = 1 };
+
   explicit PromptTextEdit(QWidget *parent = nullptr);
-  void setMarkdownMode(bool enabled);
-  bool isMarkdownMode() const;
+  void setMarkdownMode(int mode);
+  Mode currentMode() const;
+  QString getPromptText() const;
+  void setPromptText(const QString &text);
 
 protected:
   void insertFromMimeData(const QMimeData *source) override;
 
 private:
-  bool m_isMarkdownMode;
+  Mode m_mode;
 };
 
 class NewSessionDialog : public KXmlGuiWindow {
@@ -88,7 +92,7 @@ private:
   SourceSelectionProxyModel *m_selectedProxy;
   QLineEdit *m_filterEdit;
   PromptTextEdit *m_promptEdit;
-  QCheckBox *m_markdownModeCheckBox;
+  QComboBox *m_markdownModeComboBox;
   QComboBox *m_automationModeComboBox;
   QCheckBox *m_requirePlanApprovalCheckBox;
   QCheckBox *m_keepOpenCheckBox;
