@@ -18,6 +18,7 @@ class DraftsModel;
 class TemplatesModel;
 class QueueModel;
 class ErrorsModel;
+class BlockedTreeModel;
 class QListView;
 class QTreeView;
 class FilterEditor;
@@ -62,6 +63,7 @@ private Q_SLOTS:
   void onQueueContextMenu(const QPoint &pos);
   void onHoldingActivated(const QModelIndex &index);
   void onHoldingContextMenu(const QPoint &pos);
+  void onBlockedContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
   void onSessionCreationFailed(const QJsonObject &request,
                                const QJsonObject &response,
@@ -89,6 +91,7 @@ private Q_SLOTS:
   void toggleFavourite();
   void processQueue();
   void updateHoldingTabVisibility();
+  void updateBlockedTabVisibility();
   void processErrorRetries();
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
@@ -150,6 +153,8 @@ private:
   QListView *m_queueView;
   QListView *m_holdingView;
   QListView *m_errorsView;
+  QTreeView *m_blockedView;
+  BlockedTreeModel *m_blockedTreeModel;
   std::function<void()> m_deleteQueueItemsLambda;
   std::function<void()> m_deleteHoldingItemsLambda;
   QMenu *m_favouritesMenu = nullptr;
@@ -196,6 +201,7 @@ private:
   QAction *m_purgeArchiveAction;
   QAction *m_openJulesUrlAction;
   QAction *m_openGithubUrlAction;
+  QAction *m_configureConcurrencyLimitAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;

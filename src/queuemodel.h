@@ -19,6 +19,8 @@ struct QueueItem {
   bool isDailyLimitWait = false;
   int waitSeconds = 0;
   QDateTime waitStartTime;
+  bool isBlocked = false;
+  QJsonObject blockMetadata;
 
   QJsonObject toJson() const;
   static QueueItem fromJson(const QJsonObject &obj);
@@ -78,8 +80,12 @@ public:
   QueueItem getItem(int index) const;
   void moveItem(int from, int to);
 
+  void beginBatchUpdate();
+  void endBatchUpdate();
+
 private:
   QVector<QueueItem> m_items;
+  bool m_batchUpdating = false;
   QVector<QDateTime> m_runTimestamps;
   void pruneRunTimestamps();
   int m_jobsSinceLastWait = 0;
