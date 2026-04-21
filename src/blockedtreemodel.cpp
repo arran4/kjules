@@ -7,7 +7,7 @@ BlockedTreeModel::BlockedTreeModel(SourceModel *sourceModel,
                                    QueueModel *queueModel, QObject *parent)
     : QAbstractItemModel(parent), m_sourceModel(sourceModel),
       m_queueModel(queueModel),
-      m_rootNode(new Node{false, "", -1, "", {}, nullptr}) {
+      m_rootNode(new Node{false, QString(), -1, QString(), {}, nullptr}) {
 
   connect(m_sourceModel, &QAbstractTableModel::dataChanged, this,
           &BlockedTreeModel::onSourceModelChanged);
@@ -81,7 +81,7 @@ void BlockedTreeModel::rebuildTree() {
     QString prompt =
         item.requestData.value(QStringLiteral("prompt")).toString();
     if (prompt.length() > 50) {
-      prompt = prompt.left(50) + "...";
+      prompt = prompt.left(50) + QStringLiteral("...");
     }
     QString display = QStringLiteral("Blocked: ") + prompt;
     Node *childNode = new Node{false, source, i, display, {}, parentNode};
