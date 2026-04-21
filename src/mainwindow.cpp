@@ -10,6 +10,7 @@
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "filterparser.h"
 #include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
@@ -282,6 +283,125 @@ void MainWindow::setMockApi(bool useMock) {
 }
 
 MainWindow::~MainWindow() {}
+
+static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
+                                                  const QString &type,
+                                                  const QString &value,
+                                                  bool isHide, bool &merged) {
+  if (!node)
+    return QSharedPointer<ASTNode>();
+
+  if (isHide) {
+    if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+      auto child = notNode->child();
+      if (auto kvChild = qSharedPointerDynamicCast<KeyValueNode>(child)) {
+        if (kvChild->key() == type) {
+          QList<QSharedPointer<ASTNode>> orChildren;
+          orChildren.append(child);
+          orChildren.append(
+              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+          merged = true;
+          return QSharedPointer<ASTNode>(
+              new NotNode(QSharedPointer<ASTNode>(new OrNode(orChildren))));
+        }
+      } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
+        bool allSameType = true;
+        for (const auto &c : orChild->children()) {
+          auto kv = qSharedPointerDynamicCast<KeyValueNode>(c);
+          if (!kv || kv->key() != type) {
+            allSameType = false;
+            break;
+          }
+        }
+        if (allSameType) {
+          QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
+          newOrChildren.append(
+              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+          merged = true;
+          return QSharedPointer<ASTNode>(
+              new NotNode(QSharedPointer<ASTNode>(new OrNode(newOrChildren))));
+        }
+      }
+    }
+  } else {
+    // If not hiding, we could try to merge into an existing AndNode, but
+    // appending works fine. We only merge NOTs for neatness.
+  }
+
+  if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : andNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new AndNode(newChildren));
+  } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : orNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new OrNode(newChildren));
+  } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+    if (!merged) {
+      auto newChild =
+          mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
+      return QSharedPointer<ASTNode>(new NotNode(newChild));
+    }
+  }
+
+  return node;
+}
+
+void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
+                                  const QString &value, bool isHide) {
+  QString current = editor->filterText().trimmed();
+  if (current.startsWith(QLatin1Char('='))) {
+    current = current.mid(1).trimmed();
+  }
+
+  QSharedPointer<ASTNode> ast = FilterParser::parse(current);
+
+  if (!ast || current.isEmpty()) {
+    if (isHide) {
+      ast = QSharedPointer<ASTNode>(
+          new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
+    } else {
+      ast = QSharedPointer<ASTNode>(new KeyValueNode(type, value));
+    }
+  } else {
+    bool merged = false;
+    ast = mergeFilterIntoAST(ast, type, value, isHide, merged);
+
+    if (!merged) {
+      QList<QSharedPointer<ASTNode>> andChildren;
+      if (auto andNode = qSharedPointerDynamicCast<AndNode>(ast)) {
+        andChildren = andNode->children();
+      } else {
+        andChildren.append(ast);
+      }
+
+      if (isHide) {
+        andChildren.append(QSharedPointer<ASTNode>(new NotNode(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
+      } else {
+        andChildren.append(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+      }
+      ast = QSharedPointer<ASTNode>(new AndNode(andChildren));
+    }
+  }
+
+  editor->setFilterText(QStringLiteral("=") + ast->toString());
+}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -616,6 +736,41 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
+
+          QString owner = m_sessionModel
+                              ->data(m_sessionModel->index(
+                                  sourceIndex.row(), SessionModel::ColOwner))
+                              .toString();
+          QString repo = m_sessionModel
+                             ->data(m_sessionModel->index(
+                                 sourceIndex.row(), SessionModel::ColRepo))
+                             .toString();
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
+            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
+            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
+            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
+                               repo, true);
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
+                               owner, true);
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
+                               repo, false);
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
+                               owner, false);
+            });
+
+            menu.addSeparator();
+          }
+
           QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -958,11 +1113,51 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_archiveView->setCurrentIndex(index);
           }
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_archiveView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
+
+          QString owner = m_archiveModel
+                              ->data(m_archiveModel->index(
+                                  sourceIndex.row(), SessionModel::ColOwner))
+                              .toString();
+          QString repo = m_archiveModel
+                             ->data(m_archiveModel->index(
+                                 sourceIndex.row(), SessionModel::ColRepo))
+                             .toString();
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
+            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
+            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
+            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
+                               repo, true);
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
+                               owner, true);
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
+                               repo, false);
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
+                               owner, false);
+            });
+
+            menu.addSeparator();
+          }
+
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
 
