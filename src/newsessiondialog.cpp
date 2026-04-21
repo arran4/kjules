@@ -92,26 +92,28 @@ public:
                             bool showSelected, QObject *parent = nullptr)
       : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
         m_showSelected(showSelected), m_hideArchived(true), m_hideForks(false),
-        m_hidePrivate(false), m_hidePublic(false) {}
+        m_hidePrivate(false), m_hidePublic(false) {
+    setFilterKeyColumn(-1);
+  }
 
   void setHideArchived(bool hide) {
     m_hideArchived = hide;
-    invalidateFilter();
+    invalidate();
   }
 
   void setHideForks(bool hide) {
     m_hideForks = hide;
-    invalidateFilter();
+    invalidate();
   }
 
   void setHidePrivate(bool hide) {
     m_hidePrivate = hide;
-    invalidateFilter();
+    invalidate();
   }
 
   void setHidePublic(bool hide) {
     m_hidePublic = hide;
-    invalidateFilter();
+    invalidate();
   }
 
   void updateSelection() { invalidate(); }
@@ -198,20 +200,26 @@ protected:
 
       if (m_hidePrivate || m_hidePublic) {
         bool isPrivate = false;
+        bool hasPrivacyInfo = false;
+
         if (rawData.contains(QStringLiteral("github"))) {
           isPrivate = rawData.value(QStringLiteral("github"))
                           .toObject()
                           .value(QStringLiteral("private"))
                           .toBool();
+          hasPrivacyInfo = true;
         } else if (rawData.contains(QStringLiteral("isPrivate"))) {
           isPrivate = rawData.value(QStringLiteral("isPrivate")).toBool();
+          hasPrivacyInfo = true;
         }
 
-        if (m_hidePrivate && isPrivate) {
-          return false;
-        }
-        if (m_hidePublic && !isPrivate) {
-          return false;
+        if (hasPrivacyInfo) {
+          if (m_hidePrivate && isPrivate) {
+            return false;
+          }
+          if (m_hidePublic && !isPrivate) {
+            return false;
+          }
         }
       }
     }
