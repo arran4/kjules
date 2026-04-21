@@ -24,9 +24,6 @@ SessionData parseSessionData(const QJsonObject &obj) {
     title = prompt;
   }
   title.replace(QLatin1Char('\n'), QLatin1Char(' '));
-  if (title.length() > 50) {
-    title = title.left(47) + QStringLiteral("...");
-  }
   data.title = title;
   data.prompt = prompt;
 
@@ -257,13 +254,7 @@ void SessionModel::toggleFavourite(const QString &id) {
     if (data.isFavourite > 0) {
       data.isFavourite = 0;
     } else {
-      int maxFav = 0;
-      for (const auto &s : m_sessions) {
-        if (s.isFavourite > maxFav) {
-          maxFav = s.isFavourite;
-        }
-      }
-      data.isFavourite = maxFav + 1;
+      data.isFavourite = 1;
     }
 
     data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
@@ -279,13 +270,7 @@ void SessionModel::setFavourite(const QString &id, bool isFav) {
 
     if (isFav) {
       if (data.isFavourite <= 0) {
-        int maxFav = 0;
-        for (const auto &s : m_sessions) {
-          if (s.isFavourite > maxFav) {
-            maxFav = s.isFavourite;
-          }
-        }
-        data.isFavourite = maxFav + 1;
+        data.isFavourite = 1;
       }
     } else {
       data.isFavourite = 0;

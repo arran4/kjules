@@ -4038,11 +4038,16 @@ void MainWindow::toggleFavourite() {
       bool isTargetFav = false;
       if (!selectedRows.isEmpty()) {
         QModelIndex firstIdx = proxy->mapToSource(selectedRows.first());
-        QVariant favData = m_sourceModel->data(firstIdx, SourceModel::FavouriteRole);
+        QVariant favData =
+            m_sourceModel->data(firstIdx, SourceModel::FavouriteRole);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-        isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+        isTargetFav = (favData.typeId() == QMetaType::Bool)
+                          ? favData.toBool()
+                          : (favData.toInt() > 0);
 #else
-        isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+        isTargetFav = (favData.type() == QVariant::Bool)
+                          ? favData.toBool()
+                          : (favData.toInt() > 0);
 #endif
       }
 
@@ -4063,11 +4068,16 @@ void MainWindow::toggleFavourite() {
       bool isTargetFav = false;
       if (!selectedRows.isEmpty()) {
         QModelIndex firstIdx = proxy->mapToSource(selectedRows.first());
-        QVariant favData = m_sessionModel->data(firstIdx, SessionModel::FavouriteRole);
+        QVariant favData =
+            m_sessionModel->data(firstIdx, SessionModel::FavouriteRole);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-        isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+        isTargetFav = (favData.typeId() == QMetaType::Bool)
+                          ? favData.toBool()
+                          : (favData.toInt() > 0);
 #else
-        isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+        isTargetFav = (favData.type() == QVariant::Bool)
+                          ? favData.toBool()
+                          : (favData.toInt() > 0);
 #endif
       }
       for (const QModelIndex &idx : selectedRows) {
@@ -4087,11 +4097,16 @@ void MainWindow::toggleFavourite() {
       bool isTargetFav = false;
       if (!selectedRows.isEmpty()) {
         QModelIndex firstIdx = proxy->mapToSource(selectedRows.first());
-        QVariant favData = m_archiveModel->data(firstIdx, SessionModel::FavouriteRole);
+        QVariant favData =
+            m_archiveModel->data(firstIdx, SessionModel::FavouriteRole);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-        isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+        isTargetFav = (favData.typeId() == QMetaType::Bool)
+                          ? favData.toBool()
+                          : (favData.toInt() > 0);
 #else
-        isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+        isTargetFav = (favData.type() == QVariant::Bool)
+                          ? favData.toBool()
+                          : (favData.toInt() > 0);
 #endif
       }
       for (const QModelIndex &idx : selectedRows) {

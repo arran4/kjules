@@ -800,9 +800,11 @@ void SessionsWindow::toggleFavourite() {
     QModelIndex firstIdx = m_proxyModel->mapToSource(selectedRows.first());
     QVariant favData = m_model->data(firstIdx, SessionModel::FavouriteRole);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+    isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool()
+                                                        : (favData.toInt() > 0);
 #else
-    isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+    isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool()
+                                                     : (favData.toInt() > 0);
 #endif
   }
 

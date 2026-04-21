@@ -234,19 +234,7 @@ void SourceModel::toggleFavourite(const QString &id) {
       if (isFav > 0) {
         source[QStringLiteral("local_favourite")] = 0;
       } else {
-        int maxFav = 0;
-        for (int j = 0; j < m_sources.size(); ++j) {
-          QJsonObject s = m_sources[j].toObject();
-          int f =
-              s.value(QStringLiteral("local_favourite")).isBool()
-                  ? (s.value(QStringLiteral("local_favourite")).toBool() ? 1
-                                                                         : 0)
-                  : s.value(QStringLiteral("local_favourite")).toInt(0);
-          if (f > maxFav) {
-            maxFav = f;
-          }
-        }
-        source[QStringLiteral("local_favourite")] = maxFav + 1;
+        source[QStringLiteral("local_favourite")] = 1;
       }
 
       m_sources[i] = source;
@@ -276,19 +264,7 @@ void SourceModel::setFavourite(const QString &id, bool makeFav) {
 
       if (makeFav) {
         if (isFav <= 0) {
-          int maxFav = 0;
-          for (int j = 0; j < m_sources.size(); ++j) {
-            QJsonObject s = m_sources[j].toObject();
-            int f =
-                s.value(QStringLiteral("local_favourite")).isBool()
-                    ? (s.value(QStringLiteral("local_favourite")).toBool() ? 1
-                                                                           : 0)
-                    : s.value(QStringLiteral("local_favourite")).toInt(0);
-            if (f > maxFav) {
-              maxFav = f;
-            }
-          }
-          source[QStringLiteral("local_favourite")] = maxFav + 1;
+          source[QStringLiteral("local_favourite")] = 1;
         }
       } else {
         source[QStringLiteral("local_favourite")] = 0;
