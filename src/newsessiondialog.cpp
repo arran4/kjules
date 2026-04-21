@@ -297,40 +297,40 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                   layout.addWidget(
                       new QLabel(tr("Branch for %1:").arg(displayName)));
 
-                  QComboBox comboBox;
-                  comboBox.addItems(branches);
-                  comboBox.setCurrentIndex(currentIndex);
-                  comboBox.setEditable(true);
-                  layout.addWidget(&comboBox);
+                  QComboBox *comboBox = new QComboBox(&dialog);
+                  comboBox->addItems(branches);
+                  comboBox->setCurrentIndex(currentIndex);
+                  comboBox->setEditable(true);
+                  layout.addWidget(comboBox);
 
-                  QHBoxLayout btnLayout;
-                  QPushButton refreshJulesBtn(tr("Refresh Jules"));
-                  QPushButton refreshGithubBtn(tr("Refresh GitHub"));
-                  btnLayout.addWidget(&refreshJulesBtn);
-                  btnLayout.addWidget(&refreshGithubBtn);
-                  btnLayout.addStretch();
-                  layout.addLayout(&btnLayout);
+                  QHBoxLayout *btnLayout = new QHBoxLayout();
+                  QPushButton *refreshJulesBtn = new QPushButton(tr("Refresh Jules"), &dialog);
+                  QPushButton *refreshGithubBtn = new QPushButton(tr("Refresh GitHub"), &dialog);
+                  btnLayout->addWidget(refreshJulesBtn);
+                  btnLayout->addWidget(refreshGithubBtn);
+                  btnLayout->addStretch();
+                  layout.addLayout(btnLayout);
 
-                  QDialogButtonBox buttonBox(QDialogButtonBox::Ok |
-                                             QDialogButtonBox::Cancel);
-                  layout.addWidget(&buttonBox);
+                  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok |
+                                             QDialogButtonBox::Cancel, &dialog);
+                  layout.addWidget(buttonBox);
 
-                  connect(&buttonBox, &QDialogButtonBox::accepted, &dialog,
+                  connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
                           &QDialog::accept);
-                  connect(&buttonBox, &QDialogButtonBox::rejected, &dialog,
+                  connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
                           &QDialog::reject);
 
                   QString sourceId =
                       m_sourceModel->data(sourceIdx, SourceModel::IdRole)
                           .toString();
 
-                  connect(&refreshJulesBtn, &QPushButton::clicked, this,
+                  connect(refreshJulesBtn, &QPushButton::clicked, this,
                           [this, sourceId]() {
                             Q_EMIT refreshSourceRequested(sourceId);
                             updateStatus(
                                 tr("Requested Jules refresh for source..."));
                           });
-                  connect(&refreshGithubBtn, &QPushButton::clicked, this,
+                  connect(refreshGithubBtn, &QPushButton::clicked, this,
                           [this, sourceId]() {
                             Q_EMIT refreshGithubRequested(
                                 QStringList{sourceId});
@@ -339,7 +339,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                           });
 
                   if (dialog.exec() == QDialog::Accepted) {
-                    QString newBranch = comboBox.currentText();
+                    QString newBranch = comboBox->currentText();
                     if (!newBranch.isEmpty()) {
                       m_selectedSources[name] = newBranch;
                       updateModels();
