@@ -283,10 +283,17 @@ void SessionModel::moveFavouriteUp(const QString &id) {
   int targetRank = -1;
   int targetIndex = -1;
   for (int j = 0; j < m_sessions.size(); ++j) {
+    if (j == i)
+      continue; // Skip self
     int fav = m_sessions[j].isFavourite;
-    if (fav > 0 && fav < data.isFavourite && fav > targetRank) {
-      targetRank = fav;
-      targetIndex = j;
+    if (fav > 0 && fav <= data.isFavourite && fav > targetRank) {
+      // Prioritize strictly smaller items. If multiple items share the same
+      // rank, pick the one appearing first to maintain stability if they got
+      // the same int rank (e.g. from bool -> int conversion)
+      if (fav < data.isFavourite || (fav == data.isFavourite && j < i)) {
+        targetRank = fav;
+        targetIndex = j;
+      }
     }
   }
 
@@ -316,10 +323,17 @@ void SessionModel::moveFavouriteDown(const QString &id) {
   int targetRank = INT_MAX;
   int targetIndex = -1;
   for (int j = 0; j < m_sessions.size(); ++j) {
+    if (j == i)
+      continue; // Skip self
     int fav = m_sessions[j].isFavourite;
-    if (fav > data.isFavourite && fav < targetRank) {
-      targetRank = fav;
-      targetIndex = j;
+    if (fav >= data.isFavourite && fav < targetRank) {
+      // Prioritize strictly larger items. If multiple items share the same
+      // rank, pick the one appearing after to maintain stability if they got
+      // the same int rank (e.g. from bool -> int conversion)
+      if (fav > data.isFavourite || (fav == data.isFavourite && j > i)) {
+        targetRank = fav;
+        targetIndex = j;
+      }
     }
   }
 

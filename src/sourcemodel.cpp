@@ -287,15 +287,22 @@ void SourceModel::moveFavouriteUp(const QString &id) {
   int targetIndex = -1;
 
   for (int i = 0; i < m_sources.size(); ++i) {
+    if (i == sourceIndex)
+      continue; // Skip self
     QJsonObject source = m_sources[i].toObject();
     int fav =
         source.value(QStringLiteral("local_favourite")).isBool()
             ? (source.value(QStringLiteral("local_favourite")).toBool() ? 1 : 0)
             : source.value(QStringLiteral("local_favourite")).toInt(0);
 
-    if (fav > 0 && fav < currentFav && fav > targetRank) {
-      targetRank = fav;
-      targetIndex = i;
+    if (fav > 0 && fav <= currentFav && fav > targetRank) {
+      // Prioritize strictly smaller items. If multiple items share the same
+      // rank, pick the one appearing first to maintain stability if they got
+      // the same int rank (e.g. from bool -> int conversion)
+      if (fav < currentFav || (fav == currentFav && i < sourceIndex)) {
+        targetRank = fav;
+        targetIndex = i;
+      }
     }
   }
 
@@ -345,15 +352,22 @@ void SourceModel::moveFavouriteDown(const QString &id) {
   int targetIndex = -1;
 
   for (int i = 0; i < m_sources.size(); ++i) {
+    if (i == sourceIndex)
+      continue; // Skip self
     QJsonObject source = m_sources[i].toObject();
     int fav =
         source.value(QStringLiteral("local_favourite")).isBool()
             ? (source.value(QStringLiteral("local_favourite")).toBool() ? 1 : 0)
             : source.value(QStringLiteral("local_favourite")).toInt(0);
 
-    if (fav > currentFav && fav < targetRank) {
-      targetRank = fav;
-      targetIndex = i;
+    if (fav >= currentFav && fav < targetRank) {
+      // Prioritize strictly larger items. If multiple items share the same
+      // rank, pick the one appearing after to maintain stability if they got
+      // the same int rank (e.g. from bool -> int conversion)
+      if (fav > currentFav || (fav == currentFav && i > sourceIndex)) {
+        targetRank = fav;
+        targetIndex = i;
+      }
     }
   }
 
