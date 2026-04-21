@@ -3057,7 +3057,15 @@ void MainWindow::processQueue() {
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
-  bool oneAtATimeMode = queueConfig.readEntry("OneAtATimeMode", false);
+
+  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
+  if (currentQueueMode.isEmpty()) {
+    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
+                           ? QStringLiteral("one_at_a_time")
+                           : QStringLiteral("asap");
+  }
+  bool oneAtATimeMode = currentQueueMode == QStringLiteral("one_at_a_time");
+
   int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
   KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
                                        QStringLiteral("SourceConcurrency"));

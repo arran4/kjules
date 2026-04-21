@@ -28,7 +28,7 @@ private:
   QCheckBox *m_autostartEdit;
   QCheckBox *m_autostartTrayEdit;
   QSpinBox *m_queueIntervalEdit;
-  QCheckBox *m_oneAtATimeEdit;
+  QComboBox *m_queueModeCombo;
   QSpinBox *m_oneAtATimeLimitEdit;
   QTabWidget *m_backoffTabWidget;
   QSpinBox *m_queueBackoffEdit;

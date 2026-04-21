@@ -5,9 +5,9 @@
 
 BlockedTreeModel::BlockedTreeModel(SourceModel *sourceModel,
                                    QueueModel *queueModel, QObject *parent)
-    : QAbstractItemModel(parent), m_sourceModel(sourceModel),
-      m_queueModel(queueModel),
-      m_rootNode(new Node{false, QString(), -1, QString(), {}, nullptr}) {
+    : QAbstractItemModel(parent),
+      m_rootNode(new Node{false, QString(), -1, QString(), {}, nullptr}),
+      m_sourceModel(sourceModel), m_queueModel(queueModel) {
 
   connect(m_sourceModel, &QAbstractTableModel::dataChanged, this,
           &BlockedTreeModel::onSourceModelChanged);

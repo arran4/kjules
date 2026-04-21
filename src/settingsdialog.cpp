@@ -58,16 +58,48 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueIntervalEdit->setValue(queueConfig.readEntry("TimerInterval", 1));
   formLayout->addRow(i18n("Queue processing interval:"), m_queueIntervalEdit);
 
-  m_oneAtATimeEdit = new QCheckBox(
-      i18n("Enable \"One at a time\" source concurrency limit"), this);
-  m_oneAtATimeEdit->setChecked(queueConfig.readEntry("OneAtATimeMode", false));
-  formLayout->addRow(QString(), m_oneAtATimeEdit);
+  m_queueModeCombo = new QComboBox(this);
+  m_queueModeCombo->addItem(i18n("ASAP (Process all sequentially)"),
+                            QStringLiteral("asap"));
+  m_queueModeCombo->addItem(i18n("Per Source Concurrency"),
+                            QStringLiteral("one_at_a_time"));
+
+  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
+  if (currentQueueMode.isEmpty()) {
+    // Backwards compatibility
+    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
+                           ? QStringLiteral("one_at_a_time")
+                           : QStringLiteral("asap");
+  }
+
+  int modeIndex = m_queueModeCombo->findData(currentQueueMode);
+  if (modeIndex >= 0) {
+    m_queueModeCombo->setCurrentIndex(modeIndex);
+  }
+  formLayout->addRow(i18n("Queue Processing Mode:"), m_queueModeCombo);
 
   m_oneAtATimeLimitEdit = new QSpinBox(this);
   m_oneAtATimeLimitEdit->setRange(1, 100);
   m_oneAtATimeLimitEdit->setValue(queueConfig.readEntry("OneAtATimeLimit", 1));
-  formLayout->addRow(i18n("Max active sessions per source:"),
-                     m_oneAtATimeLimitEdit);
+
+  QWidget *limitContainer = new QWidget(this);
+  QHBoxLayout *limitLayout = new QHBoxLayout(limitContainer);
+  limitLayout->setContentsMargins(0, 0, 0, 0);
+  QLabel *limitLabel =
+      new QLabel(i18n("Max active sessions per source:"), limitContainer);
+  limitLayout->addWidget(limitLabel);
+  limitLayout->addWidget(m_oneAtATimeLimitEdit);
+  limitLayout->addStretch();
+  formLayout->addRow(QString(), limitContainer);
+
+  auto updateLimitVisibility = [this, limitContainer]() {
+    bool show = m_queueModeCombo->currentData().toString() ==
+                QStringLiteral("one_at_a_time");
+    limitContainer->setVisible(show);
+  };
+  connect(m_queueModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, updateLimitVisibility);
+  updateLimitVisibility();
 
   m_queueBackoffEdit = new QSpinBox(this);
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
@@ -303,7 +335,8 @@ void SettingsDialog::onSave() {
   KConfigGroup queueConfig(KSharedConfig::openConfig(),
                            QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
-  queueConfig.writeEntry("OneAtATimeMode", m_oneAtATimeEdit->isChecked());
+  queueConfig.writeEntry("QueueMode",
+                         m_queueModeCombo->currentData().toString());
   queueConfig.writeEntry("OneAtATimeLimit", m_oneAtATimeLimitEdit->value());
   QString backoffType = QStringLiteral("fixed");
   if (m_backoffTabWidget->currentIndex() == 1) {
