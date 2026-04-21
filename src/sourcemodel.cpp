@@ -63,10 +63,6 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return name;
 
       return id;
-    } else if (index.column() == ColFavourite) {
-      return source.value(QStringLiteral("local_favourite")).toBool()
-                 ? i18n("Yes")
-                 : i18n("No");
     } else if (index.column() == ColLastUsed) {
       QString valStr =
           source.value(QStringLiteral("local_lastUsed")).toString();
@@ -150,12 +146,11 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     return QVariant();
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColName) {
-      if (source.value(QStringLiteral("isPrivate")).toBool()) {
-        return QIcon::fromTheme(QStringLiteral("security-high"));
-      }
-    } else if (index.column() == ColFavourite) {
       if (source.value(QStringLiteral("local_favourite")).toBool()) {
         return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
+      }
+      if (source.value(QStringLiteral("isPrivate")).toBool()) {
+        return QIcon::fromTheme(QStringLiteral("security-high"));
       }
     }
     return QVariant();
@@ -181,8 +176,6 @@ QVariant SourceModel::headerData(int section, Qt::Orientation orientation,
 
   if (section == ColName) {
     return QStringLiteral("Name");
-  } else if (section == ColFavourite) {
-    return i18n("Favourite");
   } else if (section == ColLastUsed) {
     return QStringLiteral("Last Used");
   } else if (section == ColManagedSessions) {

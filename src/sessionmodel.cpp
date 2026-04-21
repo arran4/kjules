@@ -112,8 +112,6 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     switch (index.column()) {
     case ColTitle:
       return session.title;
-    case ColFavourite:
-      return session.isFavourite ? i18n("Yes") : i18n("No");
     case ColState:
       return session.state;
     case ColChangeSet:
@@ -144,7 +142,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return QColor(Qt::blue);
     }
   } else if (role == Qt::DecorationRole) {
-    if (index.column() == ColFavourite && session.isFavourite) {
+    if (index.column() == ColTitle && session.isFavourite) {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
@@ -207,8 +205,6 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
     switch (section) {
     case ColTitle:
       return i18n("Title");
-    case ColFavourite:
-      return i18n("Favourite");
     case ColState:
       return i18n("State");
     case ColChangeSet:

@@ -54,7 +54,6 @@ public:
 
   enum Columns {
     ColTitle = 0,
-    ColFavourite,
     ColState,
     ColChangeSet,
     ColPR,
