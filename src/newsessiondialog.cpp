@@ -88,11 +88,31 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
 
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
-public:
   SourceSelectionProxyModel(const QMap<QString, QString> *selectedSources,
                             bool showSelected, QObject *parent = nullptr)
       : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
-        m_showSelected(showSelected) {}
+        m_showSelected(showSelected), m_hideArchived(true), m_hideForks(false),
+        m_hidePrivate(false), m_hidePublic(false) {}
+
+  void setHideArchived(bool hide) {
+    m_hideArchived = hide;
+    invalidateFilter();
+  }
+
+  void setHideForks(bool hide) {
+    m_hideForks = hide;
+    invalidateFilter();
+  }
+
+  void setHidePrivate(bool hide) {
+    m_hidePrivate = hide;
+    invalidateFilter();
+  }
+
+  void setHidePublic(bool hide) {
+    m_hidePublic = hide;
+    invalidateFilter();
+  }
 
   void updateSelection() { invalidate(); }
 
@@ -141,12 +161,71 @@ protected:
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
     QString name = sourceModel()->data(idx, SourceModel::NameRole).toString();
     bool isSelected = m_selectedSources->contains(name);
-    return m_showSelected ? isSelected : !isSelected;
+
+    if (m_showSelected) {
+      return isSelected;
+    }
+
+    if (isSelected) {
+      return false;
+    }
+
+    if (m_hideArchived || m_hideForks || m_hidePrivate || m_hidePublic) {
+      QJsonObject rawData =
+          sourceModel()->data(idx, SourceModel::RawDataRole).toJsonObject();
+
+      if (m_hideArchived) {
+        if (rawData.contains(QStringLiteral("github"))) {
+          if (rawData.value(QStringLiteral("github"))
+                  .toObject()
+                  .value(QStringLiteral("archived"))
+                  .toBool()) {
+            return false;
+          }
+        }
+      }
+
+      if (m_hideForks) {
+        if (rawData.contains(QStringLiteral("github"))) {
+          if (rawData.value(QStringLiteral("github"))
+                  .toObject()
+                  .value(QStringLiteral("fork"))
+                  .toBool()) {
+            return false;
+          }
+        }
+      }
+
+      if (m_hidePrivate || m_hidePublic) {
+        bool isPrivate = false;
+        if (rawData.contains(QStringLiteral("github"))) {
+          isPrivate = rawData.value(QStringLiteral("github"))
+                          .toObject()
+                          .value(QStringLiteral("private"))
+                          .toBool();
+        } else if (rawData.contains(QStringLiteral("isPrivate"))) {
+          isPrivate = rawData.value(QStringLiteral("isPrivate")).toBool();
+        }
+
+        if (m_hidePrivate && isPrivate) {
+          return false;
+        }
+        if (m_hidePublic && !isPrivate) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
 private:
   const QMap<QString, QString> *m_selectedSources;
   bool m_showSelected;
+  bool m_hideArchived;
+  bool m_hideForks;
+  bool m_hidePrivate;
+  bool m_hidePublic;
 };
 
 NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
@@ -221,9 +300,18 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   unselectedLayout->addWidget(new QLabel(tr("Unselected Sources:"), this));
 
   m_unselectedView = new QListView(this);
+  bool hideArchived = config.readEntry(QStringLiteral("HideArchived"), true);
+  bool hideForks = config.readEntry(QStringLiteral("HideForks"), false);
+  bool hidePrivate = config.readEntry(QStringLiteral("HidePrivate"), false);
+  bool hidePublic = config.readEntry(QStringLiteral("HidePublic"), false);
+
   m_unselectedProxy =
       new SourceSelectionProxyModel(&m_selectedSources, false, this);
   m_unselectedProxy->setSourceModel(m_sourceModel);
+  m_unselectedProxy->setHideArchived(hideArchived);
+  m_unselectedProxy->setHideForks(hideForks);
+  m_unselectedProxy->setHidePrivate(hidePrivate);
+  m_unselectedProxy->setHidePublic(hidePublic);
   m_unselectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_unselectedProxy->setFilterRole(SourceModel::NameRole);
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
@@ -581,6 +669,54 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(
       hideSelectedSourcesAction, &QAction::toggled, this,
       [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
+
+  QAction *hideArchivedAction =
+      actionCollection()->addAction(QStringLiteral("hide_archived_repos"));
+  hideArchivedAction->setText(tr("Hide &Archived Repos"));
+  hideArchivedAction->setCheckable(true);
+  hideArchivedAction->setChecked(hideArchived);
+  connect(hideArchivedAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HideArchived"), checked);
+    m_unselectedProxy->setHideArchived(checked);
+  });
+
+  QAction *hideForksAction =
+      actionCollection()->addAction(QStringLiteral("hide_forks"));
+  hideForksAction->setText(tr("Hide &Forks"));
+  hideForksAction->setCheckable(true);
+  hideForksAction->setChecked(hideForks);
+  connect(hideForksAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HideForks"), checked);
+    m_unselectedProxy->setHideForks(checked);
+  });
+
+  QAction *hidePrivateAction =
+      actionCollection()->addAction(QStringLiteral("hide_private_repos"));
+  hidePrivateAction->setText(tr("Hide &Private Repos"));
+  hidePrivateAction->setCheckable(true);
+  hidePrivateAction->setChecked(hidePrivate);
+  connect(hidePrivateAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HidePrivate"), checked);
+    m_unselectedProxy->setHidePrivate(checked);
+  });
+
+  QAction *hidePublicAction =
+      actionCollection()->addAction(QStringLiteral("hide_public_repos"));
+  hidePublicAction->setText(tr("Hide P&ublic Repos"));
+  hidePublicAction->setCheckable(true);
+  hidePublicAction->setChecked(hidePublic);
+  connect(hidePublicAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HidePublic"), checked);
+    m_unselectedProxy->setHidePublic(checked);
+  });
 
   QAction *jumpToPromptAction =
       actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
