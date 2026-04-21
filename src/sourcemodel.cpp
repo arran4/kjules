@@ -483,7 +483,8 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
             existing[QStringLiteral("local_favourite")];
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
-      Q_EMIT dataChanged(index, index);
+      QModelIndex lastColIndex = createIndex(i, ColCount - 1);
+      Q_EMIT dataChanged(index, lastColIndex);
       saveSources();
       return;
     }

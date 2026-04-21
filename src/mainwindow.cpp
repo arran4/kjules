@@ -4492,6 +4492,7 @@ void MainWindow::onGithubInfoReceived(const QString &sourceId,
           info.value(QStringLiteral("private")).toBool();
       source[QStringLiteral("language")] =
           info.value(QStringLiteral("language")).toString();
+      source[QStringLiteral("github")] = info;
 
       m_sourceModel->updateSource(source);
       break;
