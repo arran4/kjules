@@ -362,15 +362,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                   layout.addWidget(comboBox);
 
                   QHBoxLayout *btnLayout = new QHBoxLayout();
-                  QPushButton *refreshJulesBtn = new QPushButton(tr("Refresh Jules"), &dialog);
-                  QPushButton *refreshGithubBtn = new QPushButton(tr("Refresh GitHub"), &dialog);
+                  QPushButton *refreshJulesBtn =
+                      new QPushButton(tr("Refresh Jules"), &dialog);
+                  QPushButton *refreshGithubBtn =
+                      new QPushButton(tr("Refresh GitHub"), &dialog);
                   btnLayout->addWidget(refreshJulesBtn);
                   btnLayout->addWidget(refreshGithubBtn);
                   btnLayout->addStretch();
                   layout.addLayout(btnLayout);
 
-                  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok |
-                                             QDialogButtonBox::Cancel, &dialog);
+                  QDialogButtonBox *buttonBox = new QDialogButtonBox(
+                      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
                   layout.addWidget(buttonBox);
 
                   connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
