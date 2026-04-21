@@ -95,6 +95,10 @@ QJsonObject QueueItem::toJson() const {
   if (waitStartTime.isValid()) {
     obj[QStringLiteral("waitStartTime")] = waitStartTime.toString(Qt::ISODate);
   }
+  obj[QStringLiteral("isBlocked")] = isBlocked;
+  if (!blockMetadata.isEmpty()) {
+    obj[QStringLiteral("blockMetadata")] = blockMetadata;
+  }
   return obj;
 }
 
@@ -118,6 +122,10 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   if (obj.contains(QStringLiteral("waitStartTime"))) {
     item.waitStartTime = QDateTime::fromString(
         obj.value(QStringLiteral("waitStartTime")).toString(), Qt::ISODate);
+  }
+  item.isBlocked = obj.value(QStringLiteral("isBlocked")).toBool();
+  if (obj.contains(QStringLiteral("blockMetadata"))) {
+    item.blockMetadata = obj.value(QStringLiteral("blockMetadata")).toObject();
   }
   return item;
 }
@@ -320,6 +328,9 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     return QStringLiteral("%1: %2").arg(source, prompt);
   }
   case StatusRole: {
+    if (item.isBlocked) {
+      return i18n("Blocked");
+    }
     if (item.isWaitItem) {
       if (item.waitStartTime.isValid()) {
         qint64 elapsed =
@@ -672,7 +683,17 @@ void QueueModel::removeTrailingWaitItems() {
   }
 }
 
+void QueueModel::beginBatchUpdate() { m_batchUpdating = true; }
+
+void QueueModel::endBatchUpdate() {
+  m_batchUpdating = false;
+  save();
+}
+
 void QueueModel::save() {
+  if (m_batchUpdating)
+    return;
+
   QString dirPath =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(dirPath);

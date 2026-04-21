@@ -3,12 +3,14 @@
 #include "advancedfilterproxymodel.h"
 #include "apimanager.h"
 #include "backupdialog.h"
+#include "blockedtreemodel.h"
 #include "clickableprogressbar.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "filterparser.h"
 #include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
@@ -31,6 +33,7 @@
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
+#include <KXMLGUIFactory>
 #include <KZip>
 #include <QAction>
 #include <QClipboard>
@@ -47,6 +50,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
+#include <QInputDialog>
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
@@ -280,6 +284,125 @@ void MainWindow::setMockApi(bool useMock) {
 
 MainWindow::~MainWindow() {}
 
+static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
+                                                  const QString &type,
+                                                  const QString &value,
+                                                  bool isHide, bool &merged) {
+  if (!node)
+    return QSharedPointer<ASTNode>();
+
+  if (isHide) {
+    if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+      auto child = notNode->child();
+      if (auto kvChild = qSharedPointerDynamicCast<KeyValueNode>(child)) {
+        if (kvChild->key() == type) {
+          QList<QSharedPointer<ASTNode>> orChildren;
+          orChildren.append(child);
+          orChildren.append(
+              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+          merged = true;
+          return QSharedPointer<ASTNode>(
+              new NotNode(QSharedPointer<ASTNode>(new OrNode(orChildren))));
+        }
+      } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
+        bool allSameType = true;
+        for (const auto &c : orChild->children()) {
+          auto kv = qSharedPointerDynamicCast<KeyValueNode>(c);
+          if (!kv || kv->key() != type) {
+            allSameType = false;
+            break;
+          }
+        }
+        if (allSameType) {
+          QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
+          newOrChildren.append(
+              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+          merged = true;
+          return QSharedPointer<ASTNode>(
+              new NotNode(QSharedPointer<ASTNode>(new OrNode(newOrChildren))));
+        }
+      }
+    }
+  } else {
+    // If not hiding, we could try to merge into an existing AndNode, but
+    // appending works fine. We only merge NOTs for neatness.
+  }
+
+  if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : andNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new AndNode(newChildren));
+  } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : orNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new OrNode(newChildren));
+  } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+    if (!merged) {
+      auto newChild =
+          mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
+      return QSharedPointer<ASTNode>(new NotNode(newChild));
+    }
+  }
+
+  return node;
+}
+
+void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
+                                  const QString &value, bool isHide) {
+  QString current = editor->filterText().trimmed();
+  if (current.startsWith(QLatin1Char('='))) {
+    current = current.mid(1).trimmed();
+  }
+
+  QSharedPointer<ASTNode> ast = FilterParser::parse(current);
+
+  if (!ast || current.isEmpty()) {
+    if (isHide) {
+      ast = QSharedPointer<ASTNode>(
+          new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
+    } else {
+      ast = QSharedPointer<ASTNode>(new KeyValueNode(type, value));
+    }
+  } else {
+    bool merged = false;
+    ast = mergeFilterIntoAST(ast, type, value, isHide, merged);
+
+    if (!merged) {
+      QList<QSharedPointer<ASTNode>> andChildren;
+      if (auto andNode = qSharedPointerDynamicCast<AndNode>(ast)) {
+        andChildren = andNode->children();
+      } else {
+        andChildren.append(ast);
+      }
+
+      if (isHide) {
+        andChildren.append(QSharedPointer<ASTNode>(new NotNode(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
+      } else {
+        andChildren.append(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+      }
+      ast = QSharedPointer<ASTNode>(new AndNode(andChildren));
+    }
+  }
+
+  editor->setFilterText(QStringLiteral("=") + ast->toString());
+}
+
 void MainWindow::closeEvent(QCloseEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   bool closeToTray = config.readEntry("CloseToTray", false);
@@ -423,8 +546,37 @@ void MainWindow::setupUi() {
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showFollowingNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
+          menu.addAction(m_sourceSettingsAction);
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
+
+          menu.addSeparator();
+          QAction *configLimitAction =
+              menu.addAction(i18n("Configure Concurrency Limit"));
+          connect(configLimitAction, &QAction::triggered, [this, id]() {
+            KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                      QStringLiteral("SourceConcurrency"));
+            int currentLimit =
+                sourceConfig.readEntry(id, -1); // -1 means defer to global
+
+            bool ok;
+            int newLimit = QInputDialog::getInt(
+                this, i18n("Concurrency Limit"),
+                i18n("Enter max active sessions for %1 (0 to disable limit, -1 "
+                     "to defer to global):",
+                     id),
+                currentLimit, -1, 1000, 1, &ok);
+            if (ok) {
+              if (newLimit == -1) {
+                sourceConfig.deleteEntry(id);
+              } else {
+                sourceConfig.writeEntry(id, newLimit);
+              }
+              sourceConfig.sync();
+              updateStatus(
+                  i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+            }
+          });
 
           QJsonObject rawData =
               m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
@@ -585,6 +737,41 @@ void MainWindow::setupUi() {
           }
 
           menu.addSeparator();
+
+          QString owner = m_sessionModel
+                              ->data(m_sessionModel->index(
+                                  sourceIndex.row(), SessionModel::ColOwner))
+                              .toString();
+          QString repo = m_sessionModel
+                             ->data(m_sessionModel->index(
+                                 sourceIndex.row(), SessionModel::ColRepo))
+                             .toString();
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
+            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
+            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
+            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
+                               repo, true);
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
+                               owner, true);
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
+                               repo, false);
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
+                               owner, false);
+            });
+
+            menu.addSeparator();
+          }
+
           QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
           QAction *archiveAction = menu.addAction(i18n("Archive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -831,6 +1018,10 @@ void MainWindow::setupUi() {
                             &NewSessionDialog::updateStatus);
                     connect(window, &NewSessionDialog::refreshGithubRequested,
                             this, &MainWindow::refreshGithubDataForSources);
+                    connect(window, &NewSessionDialog::refreshSourceRequested,
+                            this, [this](const QString &id) {
+                              m_apiManager->getSource(id);
+                            });
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -927,11 +1118,51 @@ void MainWindow::setupUi() {
                            QItemSelectionModel::Rows);
             m_archiveView->setCurrentIndex(index);
           }
+          const QSortFilterProxyModel *proxy =
+              qobject_cast<const QSortFilterProxyModel *>(
+                  m_archiveView->model());
+          QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
+
           menu.addAction(m_toggleFavouriteAction);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
           menu.addSeparator();
+
+          QString owner = m_archiveModel
+                              ->data(m_archiveModel->index(
+                                  sourceIndex.row(), SessionModel::ColOwner))
+                              .toString();
+          QString repo = m_archiveModel
+                             ->data(m_archiveModel->index(
+                                 sourceIndex.row(), SessionModel::ColRepo))
+                             .toString();
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
+            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
+            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
+            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
+                               repo, true);
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
+                               owner, true);
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
+                               repo, false);
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
+                               owner, false);
+            });
+
+            menu.addSeparator();
+          }
+
           QAction *copyTemplateAction =
               menu.addAction(i18n("Copy as Template"));
 
@@ -1366,6 +1597,22 @@ void MainWindow::setupUi() {
   connect(m_holdingModel, &QAbstractListModel::modelReset, this,
           &MainWindow::updateHoldingTabVisibility);
   updateHoldingTabVisibility();
+
+  // Blocked View
+  m_blockedTreeModel = new BlockedTreeModel(m_sourceModel, m_queueModel, this);
+  m_blockedView = new QTreeView(this);
+  m_blockedView->setModel(m_blockedTreeModel);
+  m_blockedView->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_blockedView, &QTreeView::customContextMenuRequested, this,
+          &MainWindow::onBlockedContextMenu);
+
+  connect(m_blockedTreeModel, &QAbstractItemModel::rowsInserted, this,
+          &MainWindow::updateBlockedTabVisibility);
+  connect(m_blockedTreeModel, &QAbstractItemModel::rowsRemoved, this,
+          &MainWindow::updateBlockedTabVisibility);
+  connect(m_blockedTreeModel, &QAbstractItemModel::modelReset, this,
+          &MainWindow::updateBlockedTabVisibility);
+  updateBlockedTabVisibility();
 
   // Errors View
   QWidget *errTab = new QWidget(this);
@@ -1950,6 +2197,75 @@ void MainWindow::createActions() {
           m_apiManager->getSession(id);
         }
       }
+    }
+  });
+
+  m_sourceSettingsAction = new QAction(i18n("Source Settings"), this);
+  actionCollection()->addAction(QStringLiteral("source_settings"),
+                                m_sourceSettingsAction);
+  connect(m_sourceSettingsAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+
+    if (selectedRows.size() > 0) {
+      QModelIndex idx = selectedRows.first();
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QMainWindow *settingsWindow = new QMainWindow(this);
+      settingsWindow->setObjectName(
+          QStringLiteral("SourceSettingsWindow_%1")
+              .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
+                       .toString()
+                       .replace(QLatin1Char('/'), QLatin1Char('_'))));
+      settingsWindow->setAttribute(Qt::WA_DeleteOnClose);
+      settingsWindow->setWindowTitle(i18n("Source Settings"));
+
+      QTextEdit *textEdit = new QTextEdit(settingsWindow);
+      QJsonObject rawData =
+          m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
+              .toJsonObject();
+      QJsonDocument doc(rawData);
+      textEdit->setPlainText(
+          QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+
+      QMenu *fileMenu = new QMenu(i18n("File"), settingsWindow);
+      QAction *saveAction =
+          new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
+                      i18n("Save"), settingsWindow);
+      saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+      connect(saveAction, &QAction::triggered, settingsWindow,
+              [this, textEdit, mappedIdx, settingsWindow]() {
+                QJsonParseError parseError;
+                QJsonDocument newDoc = QJsonDocument::fromJson(
+                    textEdit->toPlainText().toUtf8(), &parseError);
+                if (parseError.error != QJsonParseError::NoError) {
+                  QMessageBox::warning(settingsWindow, i18n("Invalid JSON"),
+                                       i18n("The JSON data is invalid: %1",
+                                            parseError.errorString()));
+                  return;
+                }
+                QJsonObject mergedData = newDoc.object();
+
+                m_sourceModel->updateSource(mergedData);
+                updateStatus(i18n("Source settings saved successfully."));
+              });
+      fileMenu->addAction(saveAction);
+
+      QAction *closeAction =
+          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                      i18n("Close"), settingsWindow);
+      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+      connect(closeAction, &QAction::triggered, settingsWindow,
+              &QMainWindow::close);
+      fileMenu->addAction(closeAction);
+      settingsWindow->menuBar()->addMenu(fileMenu);
+
+      settingsWindow->setCentralWidget(textEdit);
+      settingsWindow->resize(600, 400);
+      settingsWindow->show();
     }
   });
 
@@ -2557,6 +2873,47 @@ void MainWindow::createActions() {
     }
   });
 
+  m_configureConcurrencyLimitAction =
+      new QAction(i18n("Configure Concurrency Limit..."), this);
+  actionCollection()->addAction(QStringLiteral("configure_concurrency_limit"),
+                                m_configureConcurrencyLimitAction);
+  connect(
+      m_configureConcurrencyLimitAction, &QAction::triggered, this, [this]() {
+        QModelIndexList selectedRows =
+            m_sourceView->selectionModel()->selectedRows();
+        if (selectedRows.isEmpty())
+          return;
+        const QSortFilterProxyModel *proxy =
+            qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+        QModelIndex mappedIdx = proxy ? proxy->mapToSource(selectedRows.first())
+                                      : selectedRows.first();
+        QString id =
+            m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
+
+        KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                  QStringLiteral("SourceConcurrency"));
+        int currentLimit = sourceConfig.readEntry(id, -1);
+
+        bool ok;
+        int newLimit =
+            QInputDialog::getInt(this, i18n("Concurrency Limit"),
+                                 i18n("Enter max active sessions for %1 (0 to "
+                                      "disable limit, -1 to defer to global):",
+                                      id),
+                                 currentLimit, -1, 1000, 1, &ok);
+        if (ok) {
+          if (newLimit == -1) {
+            sourceConfig.deleteEntry(id);
+          } else {
+            sourceConfig.writeEntry(id, newLimit);
+          }
+          sourceConfig.sync();
+          updateStatus(
+              i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+          QTimer::singleShot(0, this, &MainWindow::processQueue);
+        }
+      });
+
   m_copyUrlAction = new QAction(i18n("Copy URL"), this);
   actionCollection()->addAction(QStringLiteral("copy_url"), m_copyUrlAction);
   connect(m_copyUrlAction, &QAction::triggered, this, [this]() {
@@ -2672,6 +3029,13 @@ void MainWindow::createActions() {
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
   }
+
+  m_favouritesMenu = qobject_cast<QMenu *>(
+      factory()->container(QStringLiteral("favourites"), this));
+  if (m_favouritesMenu) {
+    connect(m_favouritesMenu, &QMenu::aboutToShow, this,
+            &MainWindow::updateFavouritesMenu);
+  }
 }
 
 void MainWindow::refreshSources() {
@@ -2696,12 +3060,7 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
-  connect(this, &MainWindow::statusMessage, window,
-          &NewSessionDialog::updateStatus);
-  connect(window, &NewSessionDialog::refreshGithubRequested, this,
-          &MainWindow::refreshGithubDataForSources);
+  connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -2970,6 +3329,121 @@ void MainWindow::processQueue() {
     return;
   }
 
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+
+  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
+  if (currentQueueMode.isEmpty()) {
+    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
+                           ? QStringLiteral("one_at_a_time")
+                           : QStringLiteral("asap");
+  }
+  bool oneAtATimeMode = currentQueueMode == QStringLiteral("one_at_a_time");
+
+  int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
+  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
+                                       QStringLiteral("SourceConcurrency"));
+
+  int processIndex = -1;
+  QHash<QString, int> activeCountCache;
+
+  // Pre-calculate active session counts from m_sessionModel
+  for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
+    QModelIndex idx = m_sessionModel->index(j, 0);
+    QString state =
+        m_sessionModel->data(idx, SessionModel::StateRole).toString();
+    if (state == QStringLiteral("PENDING") ||
+        state == QStringLiteral("IN_PROGRESS")) {
+      QString source =
+          m_sessionModel->data(idx, SessionModel::SourceRole).toString();
+      activeCountCache[source]++;
+    }
+  }
+
+  m_queueModel->beginBatchUpdate();
+
+  for (int i = 0; i < m_queueModel->rowCount(); ++i) {
+    QueueItem item = m_queueModel->getItem(i);
+    bool needsUpdate = false;
+
+    if (item.isWaitItem) {
+      if (processIndex == -1) {
+        processIndex =
+            i; // We hit a wait item before any valid processable item
+      }
+      continue;
+    }
+
+    QString source = item.requestData.value(QStringLiteral("sourceContext"))
+                         .toObject()
+                         .value(QStringLiteral("source"))
+                         .toString();
+    if (source.isEmpty()) {
+      source = item.requestData.value(QStringLiteral("source")).toString();
+    }
+
+    int sourceLimit = sourceConcurrencyConfig.readEntry(source, -1);
+    bool checkLimit = (sourceLimit != 0) && (oneAtATimeMode || sourceLimit > 0);
+    int effectiveLimit =
+        (sourceLimit > 0) ? sourceLimit : globalOneAtATimeLimit;
+
+    if (item.blockMetadata.value(QStringLiteral("forced")).toBool()) {
+      checkLimit = false;
+    }
+
+    if (!checkLimit) {
+      if (item.isBlocked) {
+        item.isBlocked = false;
+        item.blockMetadata = QJsonObject();
+        needsUpdate = true;
+      }
+      if (processIndex == -1) {
+        processIndex = i;
+      }
+      activeCountCache[source]++;
+      if (needsUpdate)
+        m_queueModel->updateItem(i, item);
+      continue;
+    }
+
+    if (activeCountCache[source] >= effectiveLimit) {
+      if (!item.isBlocked) {
+        item.isBlocked = true;
+        QJsonObject meta;
+        meta[QStringLiteral("reason")] =
+            QStringLiteral("Concurrency limit reached");
+        meta[QStringLiteral("source")] = source;
+        item.blockMetadata = meta;
+        needsUpdate = true;
+      }
+    } else {
+      if (item.isBlocked) {
+        item.isBlocked = false;
+        item.blockMetadata = QJsonObject();
+        needsUpdate = true;
+      }
+      if (processIndex == -1) {
+        processIndex = i;
+      }
+      activeCountCache[source]++; // We consider this one active now
+    }
+
+    if (needsUpdate) {
+      m_queueModel->updateItem(i, item);
+    }
+  }
+
+  m_queueModel->endBatchUpdate();
+
+  if (processIndex == -1) {
+    // Everything is blocked or queue is essentially empty
+    return;
+  }
+
+  if (processIndex != 0) {
+    m_queueModel->moveItem(processIndex, 0);
+  }
+
   QueueItem peekItem = m_queueModel->peek();
   if (peekItem.isWaitItem) {
     if (!peekItem.waitStartTime.isValid()) {
@@ -3110,12 +3584,7 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(templateData);
 
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
-  connect(this, &MainWindow::statusMessage, window,
-          &NewSessionDialog::updateStatus);
-  connect(window, &NewSessionDialog::refreshGithubRequested, this,
-          &MainWindow::refreshGithubDataForSources);
+  connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3159,12 +3628,98 @@ void MainWindow::updateHoldingTabVisibility() {
   }
 }
 
+void MainWindow::updateBlockedTabVisibility() {
+  int blockedIdx = m_tabWidget->indexOf(m_blockedView);
+  int blockedItems = m_blockedTreeModel->totalBlockedItemsCount();
+  int blockedSources = m_blockedTreeModel->blockedSourcesCount();
+
+  if (blockedItems == 0) {
+    if (blockedIdx != -1) {
+      m_tabWidget->removeTab(blockedIdx);
+    }
+  } else {
+    if (blockedIdx == -1) {
+      int holdingIdx = m_tabWidget->indexOf(m_holdingView);
+      if (holdingIdx != -1) {
+        blockedIdx = m_tabWidget->insertTab(holdingIdx + 1, m_blockedView,
+                                            i18n("Blocked"));
+      } else {
+        int queueIdx = m_tabWidget->indexOf(m_queueView);
+        if (queueIdx != -1) {
+          blockedIdx = m_tabWidget->insertTab(queueIdx + 1, m_blockedView,
+                                              i18n("Blocked"));
+        } else {
+          blockedIdx = m_tabWidget->addTab(m_blockedView, i18n("Blocked"));
+        }
+      }
+    }
+    m_tabWidget->setTabText(blockedIdx, i18n("Blocked (%1)", blockedSources));
+  }
+}
+
 void MainWindow::onHoldingActivated(const QModelIndex &index) {
   int row = index.row();
   QueueItem item = m_holdingModel->getItem(row);
   if (item.errorCount > 0) {
     showErrorDetails(row, m_holdingModel);
   }
+}
+
+void MainWindow::onBlockedContextMenu(const QPoint &pos) {
+  QModelIndex index = m_blockedView->indexAt(pos);
+  if (!index.isValid())
+    return;
+
+  bool isSource =
+      m_blockedTreeModel->data(index, BlockedTreeModel::IsSourceRole).toBool();
+
+  int queueIndex =
+      m_blockedTreeModel->data(index, BlockedTreeModel::QueueIndexRole).toInt();
+
+  QMenu menu(this);
+  if (isSource) {
+    QString id = m_blockedTreeModel->data(index, BlockedTreeModel::SourceIdRole)
+                     .toString();
+    QAction *configLimitAction =
+        menu.addAction(i18n("Configure Concurrency Limit"));
+    connect(configLimitAction, &QAction::triggered, [this, id]() {
+      KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                QStringLiteral("SourceConcurrency"));
+      int currentLimit = sourceConfig.readEntry(id, -1);
+
+      bool ok;
+      int newLimit =
+          QInputDialog::getInt(this, i18n("Concurrency Limit"),
+                               i18n("Enter max active sessions for %1 (0 to "
+                                    "disable limit, -1 to defer to global):",
+                                    id),
+                               currentLimit, -1, 1000, 1, &ok);
+      if (ok) {
+        if (newLimit == -1) {
+          sourceConfig.deleteEntry(id);
+        } else {
+          sourceConfig.writeEntry(id, newLimit);
+        }
+        sourceConfig.sync();
+        updateStatus(
+            i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+        QTimer::singleShot(0, this, &MainWindow::processQueue);
+      }
+    });
+  } else {
+    QAction *forceAction = menu.addAction(i18n("Force into queue (unblock)"));
+    connect(forceAction, &QAction::triggered, this, [this, queueIndex]() {
+      QueueItem item = m_queueModel->getItem(queueIndex);
+      item.isBlocked = false;
+      QJsonObject meta;
+      meta[QStringLiteral("forced")] = true;
+      item.blockMetadata = meta;
+      m_queueModel->updateItem(queueIndex, item);
+      m_queueModel->moveItem(queueIndex, 0);
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    });
+  }
+  menu.exec(m_blockedView->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::onHoldingContextMenu(const QPoint &pos) {
@@ -3422,12 +3977,7 @@ void MainWindow::editQueueItem(int row) {
 
   QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
 
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
-  connect(this, &MainWindow::statusMessage, window,
-          &NewSessionDialog::updateStatus);
-  connect(window, &NewSessionDialog::refreshGithubRequested, this,
-          &MainWindow::refreshGithubDataForSources);
+  connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3570,12 +4120,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
-  connect(this, &MainWindow::statusMessage, window,
-          &NewSessionDialog::updateStatus);
-  connect(window, &NewSessionDialog::refreshGithubRequested, this,
-          &MainWindow::refreshGithubDataForSources);
+  connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3607,12 +4152,7 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   QPersistentModelIndex persistentIndex(index);
 
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
-  connect(this, &MainWindow::statusMessage, window,
-          &NewSessionDialog::updateStatus);
-  connect(window, &NewSessionDialog::refreshGithubRequested, this,
-          &MainWindow::refreshGithubDataForSources);
+  connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3664,12 +4204,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   window->setInitialData(initData);
 
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this,
-          &MainWindow::refreshSources);
-  connect(this, &MainWindow::statusMessage, window,
-          &NewSessionDialog::updateStatus);
-  connect(window, &NewSessionDialog::refreshGithubRequested, this,
-          &MainWindow::refreshGithubDataForSources);
+  connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3684,6 +4219,8 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
@@ -4370,5 +4907,91 @@ void MainWindow::pasteTemplateFromClipboard() {
         i18n("Imported %1 template(s) from clipboard.", importedCount));
   } else {
     updateStatus(i18n("No templates found in clipboard JSON."));
+  }
+}
+
+void MainWindow::updateFavouritesMenu() {
+  if (!m_favouritesMenu)
+    return;
+
+  m_favouritesMenu->clear();
+
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex idx = m_sourceModel->index(i, 0);
+    if (m_sourceModel->data(idx, SourceModel::FavouriteRole).toBool()) {
+      QString name = m_sourceModel->data(idx, Qt::DisplayRole).toString();
+      QAction *action = m_favouritesMenu->addAction(
+          QIcon::fromTheme(QStringLiteral("folder-bookmark")), name);
+      connect(action, &QAction::triggered, this,
+              [this, persistentIdx = QPersistentModelIndex(idx)]() {
+                if (persistentIdx.isValid()) {
+                  QJsonObject initData;
+                  QJsonArray sourcesArr;
+                  QString srcName =
+                      m_sourceModel->data(persistentIdx, SourceModel::NameRole)
+                          .toString();
+                  sourcesArr.append(srcName);
+                  initData[QStringLiteral("sources")] = sourcesArr;
+                  showNewSessionDialog(initData);
+                }
+              });
+    }
+  }
+
+  int sessionCount = 0;
+  auto processSessionModel = [this, &sessionCount](SessionModel *model) {
+    for (int i = 0; i < model->rowCount(); ++i) {
+      QModelIndex idx = model->index(i, 0);
+      if (model->data(idx, SessionModel::FavouriteRole).toBool()) {
+        if (sessionCount == 0 && !m_favouritesMenu->actions().isEmpty()) {
+          m_favouritesMenu->addSeparator();
+        }
+        QString id = model->data(idx, SessionModel::IdRole).toString();
+        QString name = model->getSessionName(id);
+        if (name.isEmpty())
+          name = id;
+        QAction *action = m_favouritesMenu->addAction(
+            QIcon::fromTheme(QStringLiteral("emblem-favorite")), name);
+        connect(action, &QAction::triggered, this, [this, id]() {
+          QJsonObject sessionData;
+          bool isManaged = false;
+          for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
+            if (m_sessionModel
+                    ->data(m_sessionModel->index(j, 0), SessionModel::IdRole)
+                    .toString() == id) {
+              sessionData = m_sessionModel->getSession(j);
+              isManaged = true;
+              break;
+            }
+          }
+          if (sessionData.isEmpty()) {
+            for (int j = 0; j < m_archiveModel->rowCount(); ++j) {
+              if (m_archiveModel
+                      ->data(m_archiveModel->index(j, 0), SessionModel::IdRole)
+                      .toString() == id) {
+                sessionData = m_archiveModel->getSession(j);
+                isManaged = true;
+                break;
+              }
+            }
+          }
+          if (!sessionData.isEmpty()) {
+            SessionWindow *window =
+                new SessionWindow(sessionData, m_apiManager, isManaged, this);
+            connectSessionWindow(window);
+            window->show();
+          }
+        });
+        sessionCount++;
+      }
+    }
+  };
+
+  processSessionModel(m_sessionModel);
+  processSessionModel(m_archiveModel);
+
+  if (m_favouritesMenu->actions().isEmpty()) {
+    QAction *emptyAction = m_favouritesMenu->addAction(i18n("No Favourites"));
+    emptyAction->setEnabled(false);
   }
 }
