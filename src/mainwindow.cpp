@@ -653,8 +653,9 @@ void MainWindow::setupUi() {
   m_sessionView->setSortingEnabled(true);
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_sessionView->header()->setMinimumSectionSize(100);
-  m_sessionView->header()->resizeSection(SessionModel::ColTitle, 400);
+  m_sessionView->header()->setMinimumSectionSize(80);
+  m_sessionView->header()->resizeSection(SessionModel::ColTitle,
+                                         SessionModel::DefaultTitleWidth);
   m_sessionView->header()->setStretchLastSection(true);
 
   // Set default sorting to Favourites first
@@ -1066,8 +1067,9 @@ void MainWindow::setupUi() {
   m_archiveView->setSortingEnabled(true);
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_archiveView->header()->setMinimumSectionSize(100);
-  m_archiveView->header()->resizeSection(SessionModel::ColTitle, 400);
+  m_archiveView->header()->setMinimumSectionSize(80);
+  m_archiveView->header()->resizeSection(SessionModel::ColTitle,
+                                         SessionModel::DefaultTitleWidth);
   m_archiveView->header()->setStretchLastSection(true);
 
   // Set default sorting to Favourites first
