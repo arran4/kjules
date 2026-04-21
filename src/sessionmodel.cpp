@@ -272,6 +272,31 @@ void SessionModel::toggleFavourite(const QString &id) {
   }
 }
 
+void SessionModel::setFavourite(const QString &id, bool isFav) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+
+    if (isFav) {
+      if (data.isFavourite <= 0) {
+        int maxFav = 0;
+        for (const auto &s : m_sessions) {
+          if (s.isFavourite > maxFav) {
+            maxFav = s.isFavourite;
+          }
+        }
+        data.isFavourite = maxFav + 1;
+      }
+    } else {
+      data.isFavourite = 0;
+    }
+
+    data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
+}
+
 void SessionModel::moveFavouriteUp(const QString &id) {
   if (!m_idToIndex.contains(id))
     return;

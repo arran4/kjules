@@ -47,6 +47,7 @@ public:
   void saveSources();
   void updateSource(const QJsonObject &sourceConst);
   void toggleFavourite(const QString &id);
+  void setFavourite(const QString &id, bool makeFav);
   void moveFavouriteUp(const QString &id);
   void moveFavouriteDown(const QString &id);
   void clear();

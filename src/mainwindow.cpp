@@ -4035,11 +4035,22 @@ void MainWindow::toggleFavourite() {
     const QSortFilterProxyModel *proxy =
         qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
     if (proxy) {
+      bool isTargetFav = false;
+      if (!selectedRows.isEmpty()) {
+        QModelIndex firstIdx = proxy->mapToSource(selectedRows.first());
+        QVariant favData = m_sourceModel->data(firstIdx, SourceModel::FavouriteRole);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+#else
+        isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+#endif
+      }
+
       for (const QModelIndex &idx : selectedRows) {
         QModelIndex sourceIndex = proxy->mapToSource(idx);
         QString id =
             m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->toggleFavourite(id);
+        m_sourceModel->setFavourite(id, !isTargetFav);
       }
     }
   } else if (m_tabWidget->currentWidget()->objectName() ==
@@ -4049,11 +4060,21 @@ void MainWindow::toggleFavourite() {
     const QSortFilterProxyModel *proxy =
         qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
     if (proxy) {
+      bool isTargetFav = false;
+      if (!selectedRows.isEmpty()) {
+        QModelIndex firstIdx = proxy->mapToSource(selectedRows.first());
+        QVariant favData = m_sessionModel->data(firstIdx, SessionModel::FavouriteRole);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+#else
+        isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+#endif
+      }
       for (const QModelIndex &idx : selectedRows) {
         QModelIndex sourceIndex = proxy->mapToSource(idx);
         QString id =
             m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->toggleFavourite(id);
+        m_sessionModel->setFavourite(id, !isTargetFav);
       }
     }
   } else if (m_tabWidget->currentWidget()->objectName() ==
@@ -4063,11 +4084,21 @@ void MainWindow::toggleFavourite() {
     const QSortFilterProxyModel *proxy =
         qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
     if (proxy) {
+      bool isTargetFav = false;
+      if (!selectedRows.isEmpty()) {
+        QModelIndex firstIdx = proxy->mapToSource(selectedRows.first());
+        QVariant favData = m_archiveModel->data(firstIdx, SessionModel::FavouriteRole);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        isTargetFav = (favData.typeId() == QMetaType::Bool) ? favData.toBool() : (favData.toInt() > 0);
+#else
+        isTargetFav = (favData.type() == QVariant::Bool) ? favData.toBool() : (favData.toInt() > 0);
+#endif
+      }
       for (const QModelIndex &idx : selectedRows) {
         QModelIndex sourceIndex = proxy->mapToSource(idx);
         QString id =
             m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->toggleFavourite(id);
+        m_archiveModel->setFavourite(id, !isTargetFav);
       }
     }
   }

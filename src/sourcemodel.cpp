@@ -259,6 +259,51 @@ void SourceModel::toggleFavourite(const QString &id) {
   }
 }
 
+void SourceModel::setFavourite(const QString &id, bool makeFav) {
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject source = m_sources[i].toObject();
+    QString currentId = source.value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId = source.value(QStringLiteral("name")).toString();
+    }
+
+    if (currentId == id) {
+      int isFav =
+          source.value(QStringLiteral("local_favourite")).isBool()
+              ? (source.value(QStringLiteral("local_favourite")).toBool() ? 1
+                                                                          : 0)
+              : source.value(QStringLiteral("local_favourite")).toInt(0);
+
+      if (makeFav) {
+        if (isFav <= 0) {
+          int maxFav = 0;
+          for (int j = 0; j < m_sources.size(); ++j) {
+            QJsonObject s = m_sources[j].toObject();
+            int f =
+                s.value(QStringLiteral("local_favourite")).isBool()
+                    ? (s.value(QStringLiteral("local_favourite")).toBool() ? 1
+                                                                           : 0)
+                    : s.value(QStringLiteral("local_favourite")).toInt(0);
+            if (f > maxFav) {
+              maxFav = f;
+            }
+          }
+          source[QStringLiteral("local_favourite")] = maxFav + 1;
+        }
+      } else {
+        source[QStringLiteral("local_favourite")] = 0;
+      }
+
+      m_sources[i] = source;
+      QModelIndex index = createIndex(i, 0);
+      QModelIndex lastColIndex = createIndex(i, ColCount - 1);
+      Q_EMIT dataChanged(index, lastColIndex);
+      saveSources();
+      return;
+    }
+  }
+}
+
 void SourceModel::moveFavouriteUp(const QString &id) {
   int sourceIndex = -1;
   int currentFav = 0;
