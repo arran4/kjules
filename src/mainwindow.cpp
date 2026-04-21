@@ -31,6 +31,7 @@
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
+#include <KXMLGUIFactory>
 #include <KZip>
 #include <QAction>
 #include <QClipboard>
@@ -2672,6 +2673,13 @@ void MainWindow::createActions() {
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
   }
+
+  m_favouritesMenu = qobject_cast<QMenu *>(
+      factory()->container(QStringLiteral("favourites"), this));
+  if (m_favouritesMenu) {
+    connect(m_favouritesMenu, &QMenu::aboutToShow, this,
+            &MainWindow::updateFavouritesMenu);
+  }
 }
 
 void MainWindow::refreshSources() {
@@ -4359,5 +4367,91 @@ void MainWindow::pasteTemplateFromClipboard() {
         i18n("Imported %1 template(s) from clipboard.", importedCount));
   } else {
     updateStatus(i18n("No templates found in clipboard JSON."));
+  }
+}
+
+void MainWindow::updateFavouritesMenu() {
+  if (!m_favouritesMenu)
+    return;
+
+  m_favouritesMenu->clear();
+
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex idx = m_sourceModel->index(i, 0);
+    if (m_sourceModel->data(idx, SourceModel::FavouriteRole).toBool()) {
+      QString name = m_sourceModel->data(idx, Qt::DisplayRole).toString();
+      QAction *action = m_favouritesMenu->addAction(
+          QIcon::fromTheme(QStringLiteral("folder-bookmark")), name);
+      connect(action, &QAction::triggered, this,
+              [this, persistentIdx = QPersistentModelIndex(idx)]() {
+                if (persistentIdx.isValid()) {
+                  QJsonObject initData;
+                  QJsonArray sourcesArr;
+                  QString srcName =
+                      m_sourceModel->data(persistentIdx, SourceModel::NameRole)
+                          .toString();
+                  sourcesArr.append(srcName);
+                  initData[QStringLiteral("sources")] = sourcesArr;
+                  showNewSessionDialog(initData);
+                }
+              });
+    }
+  }
+
+  int sessionCount = 0;
+  auto processSessionModel = [this, &sessionCount](SessionModel *model) {
+    for (int i = 0; i < model->rowCount(); ++i) {
+      QModelIndex idx = model->index(i, 0);
+      if (model->data(idx, SessionModel::FavouriteRole).toBool()) {
+        if (sessionCount == 0 && !m_favouritesMenu->actions().isEmpty()) {
+          m_favouritesMenu->addSeparator();
+        }
+        QString id = model->data(idx, SessionModel::IdRole).toString();
+        QString name = model->getSessionName(id);
+        if (name.isEmpty())
+          name = id;
+        QAction *action = m_favouritesMenu->addAction(
+            QIcon::fromTheme(QStringLiteral("emblem-favorite")), name);
+        connect(action, &QAction::triggered, this, [this, id]() {
+          QJsonObject sessionData;
+          bool isManaged = false;
+          for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
+            if (m_sessionModel
+                    ->data(m_sessionModel->index(j, 0), SessionModel::IdRole)
+                    .toString() == id) {
+              sessionData = m_sessionModel->getSession(j);
+              isManaged = true;
+              break;
+            }
+          }
+          if (sessionData.isEmpty()) {
+            for (int j = 0; j < m_archiveModel->rowCount(); ++j) {
+              if (m_archiveModel
+                      ->data(m_archiveModel->index(j, 0), SessionModel::IdRole)
+                      .toString() == id) {
+                sessionData = m_archiveModel->getSession(j);
+                isManaged = true;
+                break;
+              }
+            }
+          }
+          if (!sessionData.isEmpty()) {
+            SessionWindow *window =
+                new SessionWindow(sessionData, m_apiManager, isManaged, this);
+            connectSessionWindow(window);
+            window->show();
+          }
+        });
+        sessionCount++;
+      }
+    }
+  };
+
+  processSessionModel(m_sessionModel);
+  processSessionModel(m_archiveModel);
+
+  if (m_favouritesMenu->actions().isEmpty()) {
+    QAction *emptyAction = m_favouritesMenu->addAction(i18n("No Favourites"));
+    emptyAction->setEnabled(false);
   }
 }

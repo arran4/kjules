@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gui name="kjules"
-     version="1"
+     version="2"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0
@@ -53,6 +53,9 @@
             <Action name="toggle_window" />
             <Separator />
             <Action name="show_activity_log" />
+        </Menu>
+        <Menu name="favourites">
+            <text>Favourites</text>
         </Menu>
         <Menu name="settings">
             <Action name="options_configure" />

@@ -119,6 +119,7 @@ private Q_SLOTS:
 
 private Q_SLOTS:
   void autoRefreshFollowing();
+  void updateFavouritesMenu();
 
 private:
   QStringList getSelectedSessionIds() const;
@@ -151,6 +152,7 @@ private:
   QListView *m_errorsView;
   std::function<void()> m_deleteQueueItemsLambda;
   std::function<void()> m_deleteHoldingItemsLambda;
+  QMenu *m_favouritesMenu = nullptr;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
   FilterEditor *m_archiveFilterEditor;
