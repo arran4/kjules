@@ -175,6 +175,7 @@ private:
   QAction *m_viewSessionsAction;
   QAction *m_showFollowingNewSessionsAction;
   QAction *m_viewRawDataAction;
+  QAction *m_sourceSettingsAction;
   QAction *m_openUrlAction;
   QAction *m_copyUrlAction;
   QAction *m_showActivityLogAction;

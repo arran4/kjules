@@ -423,6 +423,7 @@ void MainWindow::setupUi() {
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showFollowingNewSessionsAction);
           menu.addAction(m_viewRawDataAction);
+          menu.addAction(m_sourceSettingsAction);
           menu.addAction(m_openUrlAction);
           menu.addAction(m_copyUrlAction);
 
@@ -831,6 +832,10 @@ void MainWindow::setupUi() {
                             &NewSessionDialog::updateStatus);
                     connect(window, &NewSessionDialog::refreshGithubRequested,
                             this, &MainWindow::refreshGithubDataForSources);
+                    connect(window, &NewSessionDialog::refreshSourceRequested,
+                            this, [this](const QString &id) {
+                              m_apiManager->getSource(id);
+                            });
                     connect(window, &NewSessionDialog::createSessionRequested,
                             this, &MainWindow::onSessionCreated);
                     connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -1953,6 +1958,78 @@ void MainWindow::createActions() {
     }
   });
 
+  m_sourceSettingsAction = new QAction(i18n("Source Settings"), this);
+  actionCollection()->addAction(QStringLiteral("source_settings"),
+                                m_sourceSettingsAction);
+  connect(m_sourceSettingsAction, &QAction::triggered, this, [this]() {
+    QModelIndexList selectedRows =
+        m_sourceView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
+      return;
+    const QSortFilterProxyModel *proxy =
+        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
+
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QJsonObject rawData =
+          m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
+              .toJsonObject();
+      QMainWindow *settingsWindow = new QMainWindow(this);
+      settingsWindow->setObjectName(
+          QStringLiteral("SourceSettingsWindow_%1")
+              .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
+                       .toString()
+                       .replace(QLatin1Char('/'), QLatin1Char('_'))));
+      settingsWindow->setAttribute(Qt::WA_DeleteOnClose);
+      settingsWindow->setWindowTitle(i18n("Source Settings"));
+
+      QTextEdit *textEdit = new QTextEdit(settingsWindow);
+      QJsonDocument doc(rawData);
+      textEdit->setPlainText(
+          QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+
+      QMenu *fileMenu = new QMenu(i18n("File"), settingsWindow);
+      QAction *saveAction =
+          new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
+                      i18n("Save"), settingsWindow);
+      saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+      connect(saveAction, &QAction::triggered, settingsWindow,
+              [this, textEdit, mappedIdx, rawData, settingsWindow]() {
+                QJsonParseError parseError;
+                QJsonDocument newDoc = QJsonDocument::fromJson(
+                    textEdit->toPlainText().toUtf8(), &parseError);
+                if (parseError.error != QJsonParseError::NoError) {
+                  QMessageBox::warning(settingsWindow, i18n("Invalid JSON"),
+                                       i18n("The JSON data is invalid: %1",
+                                            parseError.errorString()));
+                  return;
+                }
+                QJsonObject newData = newDoc.object();
+                QJsonObject mergedData = rawData;
+                for (auto it = newData.begin(); it != newData.end(); ++it) {
+                  mergedData.insert(it.key(), it.value());
+                }
+
+                m_sourceModel->updateSource(mergedData);
+                updateStatus(i18n("Source settings saved successfully."));
+              });
+      fileMenu->addAction(saveAction);
+
+      QAction *closeAction =
+          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                      i18n("Close"), settingsWindow);
+      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+      connect(closeAction, &QAction::triggered, settingsWindow,
+              &QMainWindow::close);
+      fileMenu->addAction(closeAction);
+      settingsWindow->menuBar()->addMenu(fileMenu);
+
+      settingsWindow->setCentralWidget(textEdit);
+      settingsWindow->resize(600, 400);
+      settingsWindow->show();
+    }
+  });
+
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
@@ -2702,6 +2779,8 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3116,6 +3195,8 @@ void MainWindow::onTemplateActivated(const QModelIndex &index) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3428,6 +3509,8 @@ void MainWindow::editQueueItem(int row) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3576,6 +3659,8 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3613,6 +3698,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
@@ -3670,6 +3757,8 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::createSessionRequested, this,
           &MainWindow::onSessionCreated);
   connect(window, &NewSessionDialog::saveDraftRequested, this,
@@ -3684,6 +3773,8 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
           &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this,
           &MainWindow::refreshGithubDataForSources);
+  connect(window, &NewSessionDialog::refreshSourceRequested, this,
+          [this](const QString &id) { m_apiManager->getSource(id); });
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
