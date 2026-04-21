@@ -9,6 +9,7 @@
 #include "errorsmodel.h"
 #include "errorwindow.h"
 #include "filtereditor.h"
+#include "filterparser.h"
 #include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
@@ -280,6 +281,83 @@ void MainWindow::setMockApi(bool useMock) {
 
 MainWindow::~MainWindow() {}
 
+static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
+                                                  const QString &type,
+                                                  const QString &value,
+                                                  bool isHide, bool &merged) {
+  if (!node)
+    return QSharedPointer<ASTNode>();
+
+  if (isHide) {
+    if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+      auto child = notNode->child();
+      if (auto kvChild = qSharedPointerDynamicCast<KeyValueNode>(child)) {
+        if (kvChild->key() == type) {
+          QList<QSharedPointer<ASTNode>> orChildren;
+          orChildren.append(child);
+          orChildren.append(
+              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+          merged = true;
+          return QSharedPointer<ASTNode>(
+              new NotNode(QSharedPointer<ASTNode>(new OrNode(orChildren))));
+        }
+      } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
+        bool allSameType = true;
+        for (const auto &c : orChild->children()) {
+          auto kv = qSharedPointerDynamicCast<KeyValueNode>(c);
+          if (!kv || kv->key() != type) {
+            allSameType = false;
+            break;
+          }
+        }
+        if (allSameType) {
+          QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
+          newOrChildren.append(
+              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+          merged = true;
+          return QSharedPointer<ASTNode>(
+              new NotNode(QSharedPointer<ASTNode>(new OrNode(newOrChildren))));
+        }
+      }
+    }
+  } else {
+    // If not hiding, we could try to merge into an existing AndNode, but
+    // appending works fine. We only merge NOTs for neatness.
+  }
+
+  if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : andNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new AndNode(newChildren));
+  } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : orNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new OrNode(newChildren));
+  } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+    if (!merged) {
+      auto newChild =
+          mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
+      return QSharedPointer<ASTNode>(new NotNode(newChild));
+    }
+  }
+
+  return node;
+}
+
 void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
                                   const QString &value, bool isHide) {
   QString current = editor->filterText().trimmed();
@@ -287,57 +365,39 @@ void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
     current = current.mid(1).trimmed();
   }
 
-  QString formattedValue = value;
-  if (formattedValue.contains(QLatin1Char(' '))) {
-    formattedValue = QStringLiteral("\"%1\"").arg(formattedValue);
-  }
+  QSharedPointer<ASTNode> ast = FilterParser::parse(current);
 
-  QString newFilter;
-  if (isHide) {
-    if (current.isEmpty()) {
-      newFilter = QStringLiteral("NOT %1:%2").arg(type, formattedValue);
+  if (!ast || current.isEmpty()) {
+    if (isHide) {
+      ast = QSharedPointer<ASTNode>(
+          new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
     } else {
-      QRegularExpression reGroup(
-          QStringLiteral("NOT\\s*\\(([^)]*%1:[^)]+)\\)").arg(type));
-      QRegularExpressionMatch matchGroup = reGroup.match(current);
-
-      QRegularExpression reSingle(
-          QStringLiteral("NOT\\s+%1:(\"[^\"]+\"|[^\\s\\(\\)]+)").arg(type));
-      QRegularExpressionMatch matchSingle = reSingle.match(current);
-
-      if (matchGroup.hasMatch()) {
-        QString groupContent = matchGroup.captured(1);
-        int startPos = matchGroup.capturedStart(1);
-        int length = matchGroup.capturedLength(1);
-        newFilter = current;
-        newFilter.replace(startPos, length,
-                          groupContent +
-                              QStringLiteral(" OR %1:%2").arg(type, value));
-      } else if (matchSingle.hasMatch()) {
-        QString singleVal = matchSingle.captured(1);
-        int startPos = matchSingle.capturedStart(0);
-        int length = matchSingle.capturedLength(0);
-        newFilter = current;
-        newFilter.replace(
-            startPos, length,
-            QStringLiteral("NOT (%1:%2 OR %1:%3)").arg(type, singleVal, value));
-      } else {
-        newFilter = current + QStringLiteral(" AND NOT %1:%2").arg(type, value);
-      }
+      ast = QSharedPointer<ASTNode>(new KeyValueNode(type, value));
     }
   } else {
-    if (current.isEmpty()) {
-      newFilter = QStringLiteral("%1:%2").arg(type, value);
-    } else {
-      newFilter = current + QStringLiteral(" AND %1:%2").arg(type, value);
+    bool merged = false;
+    ast = mergeFilterIntoAST(ast, type, value, isHide, merged);
+
+    if (!merged) {
+      QList<QSharedPointer<ASTNode>> andChildren;
+      if (auto andNode = qSharedPointerDynamicCast<AndNode>(ast)) {
+        andChildren = andNode->children();
+      } else {
+        andChildren.append(ast);
+      }
+
+      if (isHide) {
+        andChildren.append(QSharedPointer<ASTNode>(new NotNode(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
+      } else {
+        andChildren.append(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+      }
+      ast = QSharedPointer<ASTNode>(new AndNode(andChildren));
     }
   }
 
-  newFilter = newFilter.trimmed();
-  if (newFilter.startsWith(QStringLiteral("AND "))) {
-    newFilter = newFilter.mid(4).trimmed();
-  }
-  editor->setFilterText(QStringLiteral("=") + newFilter);
+  editor->setFilterText(QStringLiteral("=") + ast->toString());
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
