@@ -177,24 +177,24 @@ protected:
           sourceModel()->data(idx, SourceModel::RawDataRole).toJsonObject();
 
       if (m_hideArchived) {
-        if (rawData.contains(QStringLiteral("github"))) {
-          if (rawData.value(QStringLiteral("github"))
-                  .toObject()
-                  .value(QStringLiteral("archived"))
-                  .toBool()) {
-            return false;
-          }
+        if (rawData.value(QStringLiteral("isArchived")).toBool()) {
+          return false;
+        }
+        const QJsonObject github =
+            rawData.value(QStringLiteral("github")).toObject();
+        if (github.value(QStringLiteral("archived")).toBool()) {
+          return false;
         }
       }
 
       if (m_hideForks) {
-        if (rawData.contains(QStringLiteral("github"))) {
-          if (rawData.value(QStringLiteral("github"))
-                  .toObject()
-                  .value(QStringLiteral("fork"))
-                  .toBool()) {
-            return false;
-          }
+        if (rawData.value(QStringLiteral("isFork")).toBool()) {
+          return false;
+        }
+        const QJsonObject github =
+            rawData.value(QStringLiteral("github")).toObject();
+        if (github.value(QStringLiteral("fork")).toBool()) {
+          return false;
         }
       }
 
@@ -202,22 +202,20 @@ protected:
         bool isPrivate = false;
         bool hasPrivacyInfo = false;
 
-        if (rawData.contains(QStringLiteral("github"))) {
-          isPrivate = rawData.value(QStringLiteral("github"))
-                          .toObject()
-                          .value(QStringLiteral("private"))
-                          .toBool();
-          hasPrivacyInfo = true;
-        } else if (rawData.contains(QStringLiteral("isPrivate"))) {
+        if (rawData.contains(QStringLiteral("isPrivate"))) {
           isPrivate = rawData.value(QStringLiteral("isPrivate")).toBool();
           hasPrivacyInfo = true;
+        } else if (rawData.contains(QStringLiteral("github"))) {
+          const QJsonObject github =
+              rawData.value(QStringLiteral("github")).toObject();
+          if (github.contains(QStringLiteral("private"))) {
+            isPrivate = github.value(QStringLiteral("private")).toBool();
+            hasPrivacyInfo = true;
+          }
         }
 
         if (hasPrivacyInfo) {
-          if (m_hidePrivate && isPrivate) {
-            return false;
-          }
-          if (m_hidePublic && !isPrivate) {
+          if ((m_hidePrivate && isPrivate) || (m_hidePublic && !isPrivate)) {
             return false;
           }
         }

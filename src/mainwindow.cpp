@@ -3944,7 +3944,18 @@ void MainWindow::onGithubInfoReceived(const QString &sourceId,
     if (id == sourceId) {
       QJsonObject source =
           m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
-      source[QStringLiteral("github")] = info;
+
+      source[QStringLiteral("description")] =
+          info.value(QStringLiteral("description")).toString();
+      source[QStringLiteral("isArchived")] =
+          info.value(QStringLiteral("archived")).toBool();
+      source[QStringLiteral("isFork")] =
+          info.value(QStringLiteral("fork")).toBool();
+      source[QStringLiteral("isPrivate")] =
+          info.value(QStringLiteral("private")).toBool();
+      source[QStringLiteral("language")] =
+          info.value(QStringLiteral("language")).toString();
+
       m_sourceModel->updateSource(source);
       break;
     }

@@ -107,12 +107,18 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       }
       return QVariant();
     } else if (index.column() == ColDescription) {
+      if (source.contains(QStringLiteral("description"))) {
+        return source.value(QStringLiteral("description")).toString();
+      }
       return source.value(QStringLiteral("github"))
           .toObject()
           .value(QStringLiteral("description"))
           .toString();
     } else if (index.column() == ColArchived) {
-      if (source.contains(QStringLiteral("github"))) {
+      if (source.contains(QStringLiteral("isArchived"))) {
+        return source.value(QStringLiteral("isArchived")).toBool() ? i18n("Yes")
+                                                                   : i18n("No");
+      } else if (source.contains(QStringLiteral("github"))) {
         return source.value(QStringLiteral("github"))
                        .toObject()
                        .value(QStringLiteral("archived"))
@@ -121,7 +127,10 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
                    : i18n("No");
       }
     } else if (index.column() == ColFork) {
-      if (source.contains(QStringLiteral("github"))) {
+      if (source.contains(QStringLiteral("isFork"))) {
+        return source.value(QStringLiteral("isFork")).toBool() ? i18n("Yes")
+                                                               : i18n("No");
+      } else if (source.contains(QStringLiteral("github"))) {
         return source.value(QStringLiteral("github"))
                        .toObject()
                        .value(QStringLiteral("fork"))
@@ -130,18 +139,21 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
                    : i18n("No");
       }
     } else if (index.column() == ColPrivate) {
-      if (source.contains(QStringLiteral("github"))) {
+      if (source.contains(QStringLiteral("isPrivate"))) {
+        return source.value(QStringLiteral("isPrivate")).toBool() ? i18n("Yes")
+                                                                  : i18n("No");
+      } else if (source.contains(QStringLiteral("github"))) {
         return source.value(QStringLiteral("github"))
                        .toObject()
                        .value(QStringLiteral("private"))
                        .toBool()
                    ? i18n("Yes")
                    : i18n("No");
-      } else if (source.contains(QStringLiteral("isPrivate"))) {
-        return source.value(QStringLiteral("isPrivate")).toBool() ? i18n("Yes")
-                                                                  : i18n("No");
       }
     } else if (index.column() == ColLanguages) {
+      if (source.contains(QStringLiteral("language"))) {
+        return source.value(QStringLiteral("language")).toString();
+      }
       return source.value(QStringLiteral("github"))
           .toObject()
           .value(QStringLiteral("language"))
