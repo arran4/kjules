@@ -302,7 +302,7 @@ void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
       QRegularExpressionMatch matchGroup = reGroup.match(current);
 
       QRegularExpression reSingle(
-          QStringLiteral("NOT\\s+%1:(?:\"[^\"]+\"|[^\\s\\(\\)]+)").arg(type));
+          QStringLiteral("NOT\\s+%1:(\"[^\"]+\"|[^\\s\\(\\)]+)").arg(type));
       QRegularExpressionMatch matchSingle = reSingle.match(current);
 
       if (matchGroup.hasMatch()) {
