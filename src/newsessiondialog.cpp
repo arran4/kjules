@@ -392,21 +392,26 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
                       &QDialog::reject);
 
-              QString sourceId =
-                  m_sourceModel->data(sourceIdx, SourceModel::IdRole)
-                      .toString();
+              QStringList selectedIds;
+              for (const QModelIndex &idx : selected) {
+                selectedIds.append(idx.data(SourceModel::IdRole).toString());
+              }
 
               connect(refreshJulesBtn, &QPushButton::clicked, this,
-                      [this, sourceId]() {
-                        Q_EMIT refreshSourceRequested(sourceId);
+                      [this, selectedIds]() {
+                        for (const QString &id : selectedIds) {
+                          Q_EMIT refreshSourceRequested(id);
+                        }
                         updateStatus(
-                            tr("Requested Jules refresh for source..."));
+                            tr("Requested Jules refresh for %n source(s)...",
+                               "", selectedIds.size()));
                       });
               connect(refreshGithubBtn, &QPushButton::clicked, this,
-                      [this, sourceId]() {
-                        Q_EMIT refreshGithubRequested(QStringList{sourceId});
+                      [this, selectedIds]() {
+                        Q_EMIT refreshGithubRequested(selectedIds);
                         updateStatus(
-                            tr("Requested GitHub refresh for source..."));
+                            tr("Requested GitHub refresh for %n source(s)...",
+                               "", selectedIds.size()));
                       });
 
               if (dialog.exec() == QDialog::Accepted) {
