@@ -51,7 +51,8 @@ private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
-  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
+  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
+                            bool ignoreSelection = false);
   void showSettingsDialog();
   void onSessionCreated(const QMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,

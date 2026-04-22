@@ -3079,7 +3079,8 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
-void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
+void MainWindow::showNewSessionDialog(const QJsonObject &initialData,
+                                      bool ignoreSelection) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
@@ -3092,7 +3093,8 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
           &MainWindow::onTemplateSaved);
 
   QJsonObject finalData = initialData;
-  if (finalData.isEmpty() && m_tabWidget && m_tabWidget->currentWidget() &&
+  if (!ignoreSelection && finalData.isEmpty() && isActiveWindow() &&
+      m_tabWidget && m_tabWidget->currentWidget() &&
       m_tabWidget->currentWidget()->objectName() ==
           QStringLiteral("sourcesTab")) {
     QModelIndexList selection = m_sourceView->selectionModel()->selectedRows();
