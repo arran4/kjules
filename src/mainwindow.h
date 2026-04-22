@@ -45,12 +45,14 @@ Q_SIGNALS:
 
 protected:
   void closeEvent(QCloseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
 
 private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
-  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
+  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
+                            bool ignoreSelection = false);
   void showSettingsDialog();
   void onSessionCreated(const QMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
@@ -89,6 +91,9 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
+  void increaseFavouriteRank();
+  void decreaseFavouriteRank();
+  void setFavouriteRank();
   void processQueue();
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();

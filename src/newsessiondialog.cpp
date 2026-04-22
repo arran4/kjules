@@ -1144,10 +1144,27 @@ void NewSessionDialog::updateStatus(const QString &message) {
 void NewSessionDialog::addFavouriteAction(QMenu &menu,
                                           const QModelIndex &sourceIdx) {
   QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
-  bool isFavourite =
-      m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole).toBool();
-  QAction *favouriteAction =
-      menu.addAction(isFavourite ? tr("Unfavourite") : tr("Favourite"));
-  connect(favouriteAction, &QAction::triggered, this,
+  QMenu *favMenu = menu.addMenu(
+      QIcon::fromTheme(QStringLiteral("emblem-favorite")), tr("Favourite"));
+  QAction *toggleFavAction = favMenu->addAction(tr("Toggle Favourite"));
+  connect(toggleFavAction, &QAction::triggered, this,
           [this, id]() { m_sourceModel->toggleFavourite(id); });
+  QAction *incFavAction = favMenu->addAction(tr("Increase Rank"));
+  connect(incFavAction, &QAction::triggered, this,
+          [this, id]() { m_sourceModel->increaseFavouriteRank(id); });
+  QAction *decFavAction = favMenu->addAction(tr("Decrease Rank"));
+  connect(decFavAction, &QAction::triggered, this,
+          [this, id]() { m_sourceModel->decreaseFavouriteRank(id); });
+  QAction *setFavAction = favMenu->addAction(tr("Set Rank..."));
+  connect(setFavAction, &QAction::triggered, this, [this, id, sourceIdx]() {
+    bool ok;
+    QVariant currentRankVal =
+        m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole);
+    int initialRank = currentRankVal.isValid() ? currentRankVal.toInt() : 1;
+    int rank = QInputDialog::getInt(this, tr("Set Favourite Rank"), tr("Rank:"),
+                                    initialRank, 1, 10000, 1, &ok);
+    if (ok) {
+      m_sourceModel->setFavouriteRank(id, rank);
+    }
+  });
 }
