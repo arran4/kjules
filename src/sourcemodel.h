@@ -24,6 +24,7 @@ public:
     ColLastChanged,
     ColDescription,
     ColArchived,
+    ColFavourite,
     ColFork,
     ColPrivate,
     ColLanguages,
