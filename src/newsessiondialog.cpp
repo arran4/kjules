@@ -611,6 +611,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QAction *unselectAction = menu.addAction(tr("Unselect"));
         connect(unselectAction, &QAction::triggered, this,
                 [this, persistentProxyIdx = QPersistentModelIndex(proxyIdx)]() {
+                  if (!persistentProxyIdx.isValid())
+                    return;
                   QModelIndex proxyIdx = persistentProxyIdx;
                   QModelIndexList selected =
                       m_selectedView->selectionModel()->selectedIndexes();
