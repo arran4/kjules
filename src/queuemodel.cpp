@@ -70,6 +70,10 @@ qint64 QueueModel::calculateBackoff(int errorCount) {
     waitSeconds = calculateExponentialBackoff(initialWait, expBase, errorCount);
   } else if (type == QStringLiteral("random")) {
     waitSeconds = calculateRandomBackoff(queueConfig);
+  } else if (type == QStringLiteral("predict")) {
+    KConfigGroup generalConfig(KSharedConfig::openConfig(),
+                               QStringLiteral("General"));
+    waitSeconds = generalConfig.readEntry("WaitTime", 3600);
   } else {
     waitSeconds = calculateFixedBackoff(initialWait);
   }
