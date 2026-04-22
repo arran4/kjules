@@ -114,20 +114,52 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
           this, updateLimitVisibility);
   updateLimitVisibility();
 
-  m_queueBackoffEdit = new QSpinBox(this);
-  m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
-  m_queueBackoffEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  formLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
-                     m_queueBackoffEdit);
+  m_backoffTypeCombo = new QComboBox(this);
+  m_backoffTypeCombo->addItem(i18n("Fixed"), QStringLiteral("fixed"));
+  m_backoffTypeCombo->addItem(i18n("Exponential"),
+                              QStringLiteral("exponential"));
+  m_backoffTypeCombo->addItem(i18n("Random"), QStringLiteral("random"));
+  m_backoffTypeCombo->addItem(i18n("Predict"), QStringLiteral("predict"));
+
+  QString currentBackoffType =
+      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  int backoffTypeIndex = m_backoffTypeCombo->findData(currentBackoffType);
+  if (backoffTypeIndex >= 0) {
+    m_backoffTypeCombo->setCurrentIndex(backoffTypeIndex);
+  }
+  formLayout->addRow(i18n("Backoff Strategy:"), m_backoffTypeCombo);
 
   m_backoffTabWidget = new QTabWidget(this);
+
+  // Predict Tab
+  QWidget *predictTab = new QWidget();
+  QFormLayout *predictLayout = new QFormLayout(predictTab);
+
+  m_tierComboBox = new QComboBox(this);
+  m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
+  m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
+  m_tierComboBox->addItem(i18n("Max (30 jobs)"), QStringLiteral("max"));
+
+  QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
+  int tierIndex = m_tierComboBox->findData(currentTier);
+  if (tierIndex >= 0) {
+    m_tierComboBox->setCurrentIndex(tierIndex);
+  }
+  predictLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
+
+  m_waitTimeEdit = new QSpinBox(this);
+  m_waitTimeEdit->setRange(1, 10080);
+  m_waitTimeEdit->setSuffix(i18n(" minutes"));
+  m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
+  predictLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
+
+  m_backoffTabWidget->addTab(predictTab, i18n("Predict"));
 
   // Fixed Tab
   QWidget *fixedTab = new QWidget();
   QVBoxLayout *fixedLayout = new QVBoxLayout(fixedTab);
   QLabel *fixedLabel =
-      new QLabel(i18n("Uses the fixed/initial backoff setting above."));
+      new QLabel(i18n("No exclusive settings. See shared tabs."));
   fixedLayout->addWidget(fixedLabel);
   fixedLayout->addStretch();
   m_backoffTabWidget->addTab(fixedTab, i18n("Fixed"));
@@ -163,48 +195,30 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
                        m_queueBackoffRandomMaxEdit);
   m_backoffTabWidget->addTab(randomTab, i18n("Random"));
 
-  // Determine current tab
-  QString currentBackoffType =
-      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  int backoffTypeIndex = 0;
-  if (currentBackoffType == QStringLiteral("exponential")) {
-    backoffTypeIndex = 1;
-  } else if (currentBackoffType == QStringLiteral("random")) {
-    backoffTypeIndex = 2;
-  }
-  m_backoffTabWidget->setCurrentIndex(backoffTypeIndex);
+  // Fixed + Exponential Tab
+  QWidget *fixedExpTab = new QWidget();
+  QFormLayout *fixedExpLayout = new QFormLayout(fixedExpTab);
+  m_queueBackoffEdit = new QSpinBox(this);
+  m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
+  m_queueBackoffEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
+  fixedExpLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
+                         m_queueBackoffEdit);
+  m_backoffTabWidget->addTab(fixedExpTab, i18n("Fixed + Exponential"));
 
-  // Note: Qt doesn't directly support HTML bolding or setTabFont for individual
-  // tabs natively in all styles without custom painting, but appending a marker
-  // works.
-  auto updateTabTitles = [this](int index) {
-    for (int i = 0; i < m_backoffTabWidget->count(); ++i) {
-      QString text = m_backoffTabWidget->tabText(i);
-      text.remove(QStringLiteral(" (Selected)"));
-      if (i == index) {
-        text += QStringLiteral(" (Selected)");
-      }
-      m_backoffTabWidget->setTabText(i, text);
-    }
-  };
-  connect(m_backoffTabWidget, &QTabWidget::currentChanged, this,
-          updateTabTitles);
-  updateTabTitles(backoffTypeIndex);
-
-  formLayout->addRow(i18n("Backoff Strategy:"), m_backoffTabWidget);
-
+  // Fixed + Exponential + Random + Predict Tab
+  QWidget *allTab = new QWidget();
+  QFormLayout *allLayout = new QFormLayout(allTab);
   m_queueBackoffMaxEdit = new QSpinBox(this);
   m_queueBackoffMaxEdit->setRange(1, 10080); // Up to 1 week
   m_queueBackoffMaxEdit->setSuffix(i18n(" minutes"));
   m_queueBackoffMaxEdit->setValue(
       queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
-  formLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
+  allLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
+  m_backoffTabWidget->addTab(allTab,
+                             i18n("Fixed + Exponential + Random + Predict"));
 
-  m_waitTimeEdit = new QSpinBox(this);
-  m_waitTimeEdit->setRange(1, 10080);
-  m_waitTimeEdit->setSuffix(i18n(" minutes"));
-  m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
-  formLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
+  formLayout->addRow(i18n("Backoff Settings:"), m_backoffTabWidget);
 
   m_refreshWorkersEdit = new QSpinBox(this);
   m_refreshWorkersEdit->setRange(1, 100);
@@ -217,18 +231,6 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   KConfigGroup apiConfig(KSharedConfig::openConfig(), QStringLiteral("API"));
   m_pageSizeEdit->setValue(apiConfig.readEntry("PageSize", 30));
   formLayout->addRow(i18n("API page size:"), m_pageSizeEdit);
-
-  m_tierComboBox = new QComboBox(this);
-  m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
-  m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
-  m_tierComboBox->addItem(i18n("Max (30 jobs)"), QStringLiteral("max"));
-
-  QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
-  int index = m_tierComboBox->findData(currentTier);
-  if (index >= 0) {
-    m_tierComboBox->setCurrentIndex(index);
-  }
-  formLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
                              QStringLiteral("SessionWindow"));
@@ -368,12 +370,7 @@ void SettingsDialog::onSave() {
   queueConfig.writeEntry("QueueMode",
                          m_queueModeCombo->currentData().toString());
   queueConfig.writeEntry("OneAtATimeLimit", m_oneAtATimeLimitEdit->value());
-  QString backoffType = QStringLiteral("fixed");
-  if (m_backoffTabWidget->currentIndex() == 1) {
-    backoffType = QStringLiteral("exponential");
-  } else if (m_backoffTabWidget->currentIndex() == 2) {
-    backoffType = QStringLiteral("random");
-  }
+  QString backoffType = m_backoffTypeCombo->currentData().toString();
   queueConfig.writeEntry("BackoffType", backoffType);
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
   queueConfig.writeEntry("BackoffExpBase", m_queueBackoffExpBaseEdit->value());

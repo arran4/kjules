@@ -30,6 +30,7 @@ private:
   QSpinBox *m_queueIntervalEdit;
   QComboBox *m_queueModeCombo;
   QSpinBox *m_oneAtATimeLimitEdit;
+  QComboBox *m_backoffTypeCombo;
   QTabWidget *m_backoffTabWidget;
   QSpinBox *m_queueBackoffEdit;
   QSpinBox *m_queueBackoffExpBaseEdit;
