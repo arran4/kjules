@@ -103,6 +103,7 @@ set(kjules_SRCS
     src/filtereditor.cpp
     src/advancedfilterproxymodel.cpp
     src/refreshprogresswindow.cpp
+    src/sourcesrefreshprogresswindow.cpp
 )
 
 add_executable(kjules ${kjules_SRCS})

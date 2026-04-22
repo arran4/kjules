@@ -23,6 +23,7 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+#include "sourcesrefreshprogresswindow.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include <KActionCollection>
@@ -1164,6 +1165,8 @@ void MainWindow::setupUi() {
                   m_archiveView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
+          menu.addAction(m_toggleFavouriteAction);
+
           QMenu *favMenu =
               menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
                            i18n("Favourite"));
@@ -1891,10 +1894,16 @@ void MainWindow::setupUi() {
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
 
-  m_sourceProgressBar = new QProgressBar(this);
-  m_sourceProgressBar->setMinimum(0);
-  m_sourceProgressBar->setMaximum(0); // Indeterminate
+  m_sourcesRefreshProgressWindow = nullptr;
+  m_sourceProgressBar = new ClickableProgressBar(this);
   m_sourceProgressBar->hide();
+  connect(m_sourceProgressBar, &ClickableProgressBar::clicked, this, [this]() {
+    if (m_sourcesRefreshProgressWindow) {
+      m_sourcesRefreshProgressWindow->show();
+      m_sourcesRefreshProgressWindow->raise();
+      m_sourcesRefreshProgressWindow->activateWindow();
+    }
+  });
   statusBar()->addPermanentWidget(m_sourceProgressBar);
 
   m_sessionRefreshProgressBar = new ClickableProgressBar(this);
@@ -2564,10 +2573,22 @@ void MainWindow::createActions() {
                        .replace(QLatin1Char('/'), QLatin1Char('_'))));
       rawWindow->setAttribute(Qt::WA_DeleteOnClose);
       rawWindow->setWindowTitle(i18n("Raw Data for Source"));
-      QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+      QTabWidget *tabWidget = new QTabWidget(rawWindow);
+
+      QTextBrowser *sourceBrowser = new QTextBrowser(tabWidget);
       QJsonDocument doc(rawData);
-      textBrowser->setPlainText(
+      sourceBrowser->setPlainText(
           QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      tabWidget->addTab(sourceBrowser, i18n("Source Data"));
+
+      if (rawData.contains(QStringLiteral("github"))) {
+        QTextBrowser *githubBrowser = new QTextBrowser(tabWidget);
+        QJsonDocument githubDoc(
+            rawData.value(QStringLiteral("github")).toObject());
+        githubBrowser->setPlainText(
+            QString::fromUtf8(githubDoc.toJson(QJsonDocument::Indented)));
+        tabWidget->addTab(githubBrowser, i18n("GitHub API Data"));
+      }
 
       QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
       QAction *closeAction =
@@ -2578,7 +2599,7 @@ void MainWindow::createActions() {
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
-      rawWindow->setCentralWidget(textBrowser);
+      rawWindow->setCentralWidget(tabWidget);
       rawWindow->resize(600, 400);
       rawWindow->show();
     }
@@ -3101,6 +3122,15 @@ void MainWindow::refreshSources() {
   m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
   m_sourceProgressBar->show();
   m_cancelRefreshBtn->show();
+
+  if (!m_sourcesRefreshProgressWindow) {
+    m_sourcesRefreshProgressWindow =
+        new SourcesRefreshProgressWindow(m_apiManager, this);
+    connect(m_sourcesRefreshProgressWindow,
+            &SourcesRefreshProgressWindow::progressSummary, this,
+            &MainWindow::updateStatus);
+  }
+  m_sourcesRefreshProgressWindow->reset();
 
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();
@@ -4481,16 +4511,6 @@ void MainWindow::onSourcesReceived(const QJsonArray &sources) {
   m_sourcesAddedCount += added;
   m_pagesLoadedCount++;
 
-  if (!m_apiManager->githubToken().isEmpty()) {
-    for (int i = 0; i < sources.size(); ++i) {
-      QJsonObject source = sources[i].toObject();
-      QString id = source.value(QStringLiteral("id")).toString();
-      if (id.startsWith(QStringLiteral("sources/github/"))) {
-        m_apiManager->fetchGithubInfo(id);
-      }
-    }
-  }
-
   m_sourceProgressBar->setFormat(i18n("%1 sources loaded from %2 pages",
                                       m_sourcesLoadedCount,
                                       m_pagesLoadedCount));
@@ -4533,7 +4553,19 @@ void MainWindow::onGithubInfoReceived(const QString &sourceId,
     if (id == sourceId) {
       QJsonObject source =
           m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
+
+      source[QStringLiteral("description")] =
+          info.value(QStringLiteral("description")).toString();
+      source[QStringLiteral("isArchived")] =
+          info.value(QStringLiteral("archived")).toBool();
+      source[QStringLiteral("isFork")] =
+          info.value(QStringLiteral("fork")).toBool();
+      source[QStringLiteral("isPrivate")] =
+          info.value(QStringLiteral("private")).toBool();
+      source[QStringLiteral("language")] =
+          info.value(QStringLiteral("language")).toString();
       source[QStringLiteral("github")] = info;
+
       m_sourceModel->updateSource(source);
       break;
     }

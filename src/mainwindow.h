@@ -31,6 +31,8 @@ class QProgressBar;
 class QPushButton;
 class QAction;
 class RefreshProgressWindow;
+class SourcesRefreshProgressWindow;
+class ClickableProgressBar;
 class ClickableProgressBar;
 
 class MainWindow : public KXmlGuiWindow {
@@ -186,7 +188,8 @@ private:
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
-  QProgressBar *m_sourceProgressBar;
+  ClickableProgressBar *m_sourceProgressBar;
+  SourcesRefreshProgressWindow *m_sourcesRefreshProgressWindow;
   ClickableProgressBar *m_sessionRefreshProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;

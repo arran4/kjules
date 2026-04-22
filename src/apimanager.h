@@ -40,6 +40,7 @@ public:
 
   bool canConnect() const;
   void testConnection(const QString &apiKey = QString());
+  void testGithubConnection(const QString &token = QString());
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
@@ -59,6 +60,7 @@ public:
 
 Q_SIGNALS:
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
+  void githubInfoFailed(const QString &sourceId, const QString &message);
   void githubBranchesReceived(const QString &sourceId,
                               const QJsonArray &branches);
   void githubPullRequestInfoReceived(const QString &prUrl,
@@ -77,6 +79,7 @@ Q_SIGNALS:
   void activitiesReceived(const QString &sessionId,
                           const QJsonArray &activities);
   void connectionTested(bool success, const QString &message);
+  void githubConnectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,
                                  const QString &response);
@@ -96,8 +99,14 @@ private:
   QString m_baseUrl;
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;
+  bool m_githubTokenFailed;
+  qint64 m_githubRateLimitReset;
+  int m_githubRateLimitRemaining;
   QNetworkReply *m_listSourcesReply;
   QNetworkReply *m_listSessionsReply;
+
+  bool checkGithubRateLimit();
+  void updateGithubRateLimit(QNetworkReply *reply);
 
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());

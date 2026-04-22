@@ -90,11 +90,33 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
 
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
-public:
   SourceSelectionProxyModel(const QMultiMap<QString, QString> *selectedSources,
                             bool showSelected, QObject *parent = nullptr)
       : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
-        m_showSelected(showSelected) {}
+        m_showSelected(showSelected), m_hideArchived(true), m_hideForks(false),
+        m_hidePrivate(false), m_hidePublic(false) {
+    setFilterKeyColumn(-1);
+  }
+
+  void setHideArchived(bool hide) {
+    m_hideArchived = hide;
+    invalidate();
+  }
+
+  void setHideForks(bool hide) {
+    m_hideForks = hide;
+    invalidate();
+  }
+
+  void setHidePrivate(bool hide) {
+    m_hidePrivate = hide;
+    invalidate();
+  }
+
+  void setHidePublic(bool hide) {
+    m_hidePublic = hide;
+    invalidate();
+  }
 
   void updateSelection() { invalidate(); }
 
@@ -144,12 +166,75 @@ protected:
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
     QString name = sourceModel()->data(idx, SourceModel::NameRole).toString();
     bool isSelected = m_selectedSources->contains(name);
-    return m_showSelected ? isSelected : !isSelected;
+
+    if (m_showSelected) {
+      return isSelected;
+    }
+
+    if (isSelected) {
+      return false;
+    }
+
+    if (m_hideArchived || m_hideForks || m_hidePrivate || m_hidePublic) {
+      QJsonObject rawData =
+          sourceModel()->data(idx, SourceModel::RawDataRole).toJsonObject();
+
+      if (m_hideArchived) {
+        if (rawData.value(QStringLiteral("isArchived")).toBool()) {
+          return false;
+        }
+        const QJsonObject github =
+            rawData.value(QStringLiteral("github")).toObject();
+        if (github.value(QStringLiteral("archived")).toBool()) {
+          return false;
+        }
+      }
+
+      if (m_hideForks) {
+        if (rawData.value(QStringLiteral("isFork")).toBool()) {
+          return false;
+        }
+        const QJsonObject github =
+            rawData.value(QStringLiteral("github")).toObject();
+        if (github.value(QStringLiteral("fork")).toBool()) {
+          return false;
+        }
+      }
+
+      if (m_hidePrivate || m_hidePublic) {
+        bool isPrivate = false;
+        bool hasPrivacyInfo = false;
+
+        if (rawData.contains(QStringLiteral("isPrivate"))) {
+          isPrivate = rawData.value(QStringLiteral("isPrivate")).toBool();
+          hasPrivacyInfo = true;
+        } else if (rawData.contains(QStringLiteral("github"))) {
+          const QJsonObject github =
+              rawData.value(QStringLiteral("github")).toObject();
+          if (github.contains(QStringLiteral("private"))) {
+            isPrivate = github.value(QStringLiteral("private")).toBool();
+            hasPrivacyInfo = true;
+          }
+        }
+
+        if (hasPrivacyInfo) {
+          if ((m_hidePrivate && isPrivate) || (m_hidePublic && !isPrivate)) {
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
   }
 
 private:
   const QMultiMap<QString, QString> *m_selectedSources;
   bool m_showSelected;
+  bool m_hideArchived;
+  bool m_hideForks;
+  bool m_hidePrivate;
+  bool m_hidePublic;
 };
 
 NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
@@ -224,9 +309,18 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   unselectedLayout->addWidget(new QLabel(tr("Unselected Sources:"), this));
 
   m_unselectedView = new QListView(this);
+  bool hideArchived = config.readEntry(QStringLiteral("HideArchived"), true);
+  bool hideForks = config.readEntry(QStringLiteral("HideForks"), false);
+  bool hidePrivate = config.readEntry(QStringLiteral("HidePrivate"), false);
+  bool hidePublic = config.readEntry(QStringLiteral("HidePublic"), false);
+
   m_unselectedProxy =
       new SourceSelectionProxyModel(&m_selectedSources, false, this);
   m_unselectedProxy->setSourceModel(m_sourceModel);
+  m_unselectedProxy->setHideArchived(hideArchived);
+  m_unselectedProxy->setHideForks(hideForks);
+  m_unselectedProxy->setHidePrivate(hidePrivate);
+  m_unselectedProxy->setHidePublic(hidePublic);
   m_unselectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_unselectedProxy->setFilterRole(SourceModel::NameRole);
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
@@ -319,211 +413,217 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_selectedView->setModel(m_selectedProxy);
   m_selectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_selectedView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(
-      m_selectedView, &QListView::customContextMenuRequested, this,
-      [this](const QPoint &pos) {
-        QPoint viewportPos =
-            m_selectedView->viewport()->mapFrom(m_selectedView, pos);
-        QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
-        if (!proxyIdx.isValid())
-          return;
+connect(
+    m_selectedView, &QListView::customContextMenuRequested, this,
+    [this](const QPoint &pos) {
+      QPoint viewportPos =
+          m_selectedView->viewport()->mapFrom(m_selectedView, pos);
+      QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
+      if (!proxyIdx.isValid())
+        return;
 
-        QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
-        QString name =
-            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
-        QString displayName =
-            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
-                .toString();
+      QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
+      QString name =
+          m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+      QString displayName =
+          m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
+              .toString();
 
-        QMenu menu(this);
+      QMenu menu(this);
 
-        QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
-        connect(
-            selectBranchAction, &QAction::triggered, this,
-            [this, proxyIdx, name, displayName,
-             persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
-              QModelIndex sourceIdx = persistentSourceIdx;
-              QModelIndexList selected =
-                  m_selectedView->selectionModel()->selectedIndexes();
-              if (!selected.contains(proxyIdx))
-                selected = {proxyIdx};
+      QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
+      connect(
+          selectBranchAction, &QAction::triggered, this,
+          [this, proxyIdx, name, displayName,
+           persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
+            QModelIndex sourceIdx = persistentSourceIdx;
+            QModelIndexList selected =
+                m_selectedView->selectionModel()->selectedIndexes();
+            if (!selected.contains(proxyIdx))
+              selected = {proxyIdx};
 
-              QStringList currentBranches = m_selectedSources.values(name);
-              QStringList branches = getAvailableBranches(sourceIdx);
+            QStringList currentBranches = m_selectedSources.values(name);
+            QStringList branches = getAvailableBranches(sourceIdx);
 
-              QDialog dialog(this);
-              dialog.setWindowTitle(tr("Select Branch"));
-              QVBoxLayout layout(&dialog);
+            QDialog dialog(this);
+            dialog.setWindowTitle(tr("Select Branch"));
+            QVBoxLayout layout(&dialog);
 
-              if (selected.size() > 1) {
-                layout.addWidget(new QLabel(tr(
-                    "Branch for %n selected source(s):", "", selected.size())));
+            if (selected.size() > 1) {
+              layout.addWidget(new QLabel(
+                  tr("Branch for %n selected source(s):", "", selected.size())));
+            } else {
+              layout.addWidget(
+                  new QLabel(tr("Branch for %1:").arg(displayName)));
+            }
+
+            // Single mode
+            QWidget *singleModeWidget = new QWidget();
+            QHBoxLayout *singleLayout = new QHBoxLayout(singleModeWidget);
+            singleLayout->setContentsMargins(0, 0, 0, 0);
+
+            QComboBox *comboBox = new QComboBox(&dialog);
+            comboBox->addItems(branches);
+            if (!currentBranches.isEmpty()) {
+              int idx = branches.indexOf(currentBranches.first());
+              if (idx >= 0) {
+                comboBox->setCurrentIndex(idx);
               } else {
-                layout.addWidget(
-                    new QLabel(tr("Branch for %1:").arg(displayName)));
+                branches.prepend(currentBranches.first());
+                comboBox->clear();
+                comboBox->addItems(branches);
+                comboBox->setCurrentIndex(0);
               }
+            }
+            comboBox->setEditable(true);
 
-              // Single mode
-              QWidget *singleModeWidget = new QWidget();
-              QHBoxLayout *singleLayout = new QHBoxLayout(singleModeWidget);
-              singleLayout->setContentsMargins(0, 0, 0, 0);
-              QComboBox *comboBox = new QComboBox(&dialog);
-              comboBox->addItems(branches);
-              if (!currentBranches.isEmpty()) {
-                int idx = branches.indexOf(currentBranches.first());
-                if (idx >= 0)
-                  comboBox->setCurrentIndex(idx);
-                else {
-                  branches.prepend(currentBranches.first());
-                  comboBox->clear();
-                  comboBox->addItems(branches);
-                  comboBox->setCurrentIndex(0);
-                }
-              }
-              comboBox->setEditable(true);
+            QPushButton *plusBtn =
+                new QPushButton(QStringLiteral("+"), &dialog);
+            plusBtn->setToolTip(tr("Switch to multiple branch selection"));
+            plusBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
-              QPushButton *plusBtn =
-                  new QPushButton(QStringLiteral("+"), &dialog);
-              plusBtn->setToolTip(tr("Switch to multiple branch selection"));
-              plusBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-              singleLayout->addWidget(comboBox);
-              singleLayout->addWidget(plusBtn);
+            singleLayout->addWidget(comboBox);
+            singleLayout->addWidget(plusBtn);
 
-              // Multi mode
-              QWidget *multiModeWidget = new QWidget();
-              QVBoxLayout *multiLayout = new QVBoxLayout(multiModeWidget);
-              multiLayout->setContentsMargins(0, 0, 0, 0);
-              QListWidget *listWidget = new QListWidget(&dialog);
-              listWidget->addItems(currentBranches);
+            // Multi mode
+            QWidget *multiModeWidget = new QWidget();
+            QVBoxLayout *multiLayout = new QVBoxLayout(multiModeWidget);
+            multiLayout->setContentsMargins(0, 0, 0, 0);
 
-              QHBoxLayout *addRemoveLayout = new QHBoxLayout();
-              QComboBox *multiComboBox = new QComboBox(&dialog);
-              multiComboBox->addItems(branches);
-              multiComboBox->setEditable(true);
-              QPushButton *addBtn = new QPushButton(tr("Add"), &dialog);
-              QPushButton *removeBtn = new QPushButton(tr("Remove"), &dialog);
-              addRemoveLayout->addWidget(multiComboBox);
-              addRemoveLayout->addWidget(addBtn);
-              addRemoveLayout->addWidget(removeBtn);
-              multiLayout->addWidget(listWidget);
-              multiLayout->addLayout(addRemoveLayout);
+            QListWidget *listWidget = new QListWidget(&dialog);
+            listWidget->addItems(currentBranches);
 
-              layout.addWidget(singleModeWidget);
-              layout.addWidget(multiModeWidget);
+            QHBoxLayout *addRemoveLayout = new QHBoxLayout();
+            QComboBox *multiComboBox = new QComboBox(&dialog);
+            multiComboBox->addItems(branches);
+            multiComboBox->setEditable(true);
 
-              bool isMultiMode = currentBranches.size() > 1;
-              if (isMultiMode) {
-                singleModeWidget->hide();
-              } else {
-                multiModeWidget->hide();
-              }
+            QPushButton *addBtn = new QPushButton(tr("Add"), &dialog);
+            QPushButton *removeBtn = new QPushButton(tr("Remove"), &dialog);
 
-              connect(plusBtn, &QPushButton::clicked, [&]() {
-                isMultiMode = true;
-                singleModeWidget->hide();
-                multiModeWidget->show();
-                dialog.adjustSize();
-                if (listWidget->count() == 0 &&
-                    !comboBox->currentText().isEmpty()) {
-                  listWidget->addItem(comboBox->currentText());
-                }
-              });
+            addRemoveLayout->addWidget(multiComboBox);
+            addRemoveLayout->addWidget(addBtn);
+            addRemoveLayout->addWidget(removeBtn);
 
-              connect(addBtn, &QPushButton::clicked, [&]() {
-                QString t = multiComboBox->currentText();
-                if (!t.isEmpty() &&
-                    listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
-                  listWidget->addItem(t);
-                }
-              });
+            multiLayout->addWidget(listWidget);
+            multiLayout->addLayout(addRemoveLayout);
 
-              connect(removeBtn, &QPushButton::clicked,
-                      [&]() { qDeleteAll(listWidget->selectedItems()); });
+            layout.addWidget(singleModeWidget);
+            layout.addWidget(multiModeWidget);
 
-              QHBoxLayout *btnLayout = new QHBoxLayout();
-              QPushButton *refreshJulesBtn =
-                  new QPushButton(tr("Refresh Jules"), &dialog);
-              QPushButton *refreshGithubBtn =
-                  new QPushButton(tr("Refresh GitHub"), &dialog);
-              btnLayout->addWidget(refreshJulesBtn);
-              btnLayout->addWidget(refreshGithubBtn);
-              btnLayout->addStretch();
-              layout.addLayout(btnLayout);
+            bool isMultiMode = currentBranches.size() > 1;
+            if (isMultiMode) {
+              singleModeWidget->hide();
+            } else {
+              multiModeWidget->hide();
+            }
 
-              QDialogButtonBox *buttonBox = new QDialogButtonBox(
-                  QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-              layout.addWidget(buttonBox);
-
-              connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
-                      &QDialog::accept);
-              connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
-                      &QDialog::reject);
-
-              QStringList selectedIds;
-              for (const QModelIndex &idx : selected) {
-                selectedIds.append(idx.data(SourceModel::IdRole).toString());
-              }
-
-              connect(refreshJulesBtn, &QPushButton::clicked, this,
-                      [this, selectedIds]() {
-                        for (const QString &id : selectedIds) {
-                          Q_EMIT refreshSourceRequested(id);
-                        }
-                        updateStatus(
-                            tr("Requested Jules refresh for %n source(s)...",
-                               "", selectedIds.size()));
-                      });
-              connect(refreshGithubBtn, &QPushButton::clicked, this,
-                      [this, selectedIds]() {
-                        Q_EMIT refreshGithubRequested(selectedIds);
-                        updateStatus(
-                            tr("Requested GitHub refresh for %n source(s)...",
-                               "", selectedIds.size()));
-                      });
-
-              if (dialog.exec() == QDialog::Accepted) {
-                QStringList newBranches;
-                if (isMultiMode) {
-                  for (int i = 0; i < listWidget->count(); ++i) {
-                    newBranches.append(listWidget->item(i)->text());
-                  }
-                } else {
-                  QString t = comboBox->currentText();
-                  if (!t.isEmpty())
-                    newBranches.append(t);
-                }
-
-                if (!newBranches.isEmpty()) {
-                  for (const QModelIndex &idx : selected) {
-                    QString selName =
-                        idx.data(SourceModel::NameRole).toString();
-                    m_selectedSources.remove(selName);
-                    for (const QString &b : newBranches) {
-                      m_selectedSources.insert(selName, b);
-                    }
-                  }
-                  updateModels();
-                }
+            connect(plusBtn, &QPushButton::clicked, [&]() {
+              isMultiMode = true;
+              singleModeWidget->hide();
+              multiModeWidget->show();
+              dialog.adjustSize();
+              if (listWidget->count() == 0 && !comboBox->currentText().isEmpty()) {
+                listWidget->addItem(comboBox->currentText());
               }
             });
 
-        QAction *unselectAction = menu.addAction(tr("Unselect"));
-        connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
-          QModelIndexList selected =
-              m_selectedView->selectionModel()->selectedIndexes();
-          if (!selected.contains(proxyIdx))
-            selected = {proxyIdx};
-          for (const QModelIndex &idx : selected) {
-            m_selectedSources.remove(
-                idx.data(SourceModel::NameRole).toString());
-          }
-          updateModels();
-        });
+            connect(addBtn, &QPushButton::clicked, [&]() {
+              QString t = multiComboBox->currentText();
+              if (!t.isEmpty() &&
+                  listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
+                listWidget->addItem(t);
+              }
+            });
 
-        addFavouriteAction(menu, sourceIdx);
+            connect(removeBtn, &QPushButton::clicked,
+                    [&]() { qDeleteAll(listWidget->selectedItems()); });
 
-        menu.exec(m_selectedView->mapToGlobal(pos));
+            QHBoxLayout *btnLayout = new QHBoxLayout();
+            QPushButton *refreshJulesBtn =
+                new QPushButton(tr("Refresh Jules"), &dialog);
+            QPushButton *refreshGithubBtn =
+                new QPushButton(tr("Refresh GitHub"), &dialog);
+            btnLayout->addWidget(refreshJulesBtn);
+            btnLayout->addWidget(refreshGithubBtn);
+            btnLayout->addStretch();
+            layout.addLayout(btnLayout);
+
+            QDialogButtonBox *buttonBox = new QDialogButtonBox(
+                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+            layout.addWidget(buttonBox);
+
+            connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
+                    &QDialog::accept);
+            connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
+                    &QDialog::reject);
+
+            QStringList selectedIds;
+            for (const QModelIndex &idx : selected) {
+              selectedIds.append(idx.data(SourceModel::IdRole).toString());
+            }
+
+            connect(refreshJulesBtn, &QPushButton::clicked, this,
+                    [this, selectedIds]() {
+                      for (const QString &id : selectedIds) {
+                        Q_EMIT refreshSourceRequested(id);
+                      }
+                      updateStatus(
+                          tr("Requested Jules refresh for %n source(s)...", "",
+                             selectedIds.size()));
+                    });
+
+            connect(refreshGithubBtn, &QPushButton::clicked, this,
+                    [this, selectedIds]() {
+                      Q_EMIT refreshGithubRequested(selectedIds);
+                      updateStatus(
+                          tr("Requested GitHub refresh for %n source(s)...", "",
+                             selectedIds.size()));
+                    });
+
+            if (dialog.exec() == QDialog::Accepted) {
+              QStringList newBranches;
+              if (isMultiMode) {
+                for (int i = 0; i < listWidget->count(); ++i) {
+                  newBranches.append(listWidget->item(i)->text());
+                }
+              } else {
+                QString t = comboBox->currentText();
+                if (!t.isEmpty())
+                  newBranches.append(t);
+              }
+
+              if (!newBranches.isEmpty()) {
+                for (const QModelIndex &idx : selected) {
+                  QString selName =
+                      idx.data(SourceModel::NameRole).toString();
+                  m_selectedSources.remove(selName);
+                  for (const QString &b : newBranches) {
+                    m_selectedSources.insert(selName, b);
+                  }
+                }
+                updateModels();
+              }
+            }
+          });
+
+      QAction *unselectAction = menu.addAction(tr("Unselect"));
+      connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
+        QModelIndexList selected =
+            m_selectedView->selectionModel()->selectedIndexes();
+        if (!selected.contains(proxyIdx))
+          selected = {proxyIdx};
+        for (const QModelIndex &idx : selected) {
+          m_selectedSources.remove(
+              idx.data(SourceModel::NameRole).toString());
+        }
+        updateModels();
       });
+
+      addFavouriteAction(menu, sourceIdx);
+
+      menu.exec(m_selectedView->mapToGlobal(pos));
+    });
 
   selectedLayout->addWidget(m_selectedView);
 
@@ -729,6 +829,54 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(
       hideSelectedSourcesAction, &QAction::toggled, this,
       [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
+
+  QAction *hideArchivedAction =
+      actionCollection()->addAction(QStringLiteral("hide_archived_repos"));
+  hideArchivedAction->setText(tr("Hide &Archived Repos"));
+  hideArchivedAction->setCheckable(true);
+  hideArchivedAction->setChecked(hideArchived);
+  connect(hideArchivedAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HideArchived"), checked);
+    m_unselectedProxy->setHideArchived(checked);
+  });
+
+  QAction *hideForksAction =
+      actionCollection()->addAction(QStringLiteral("hide_forks"));
+  hideForksAction->setText(tr("Hide &Forks"));
+  hideForksAction->setCheckable(true);
+  hideForksAction->setChecked(hideForks);
+  connect(hideForksAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HideForks"), checked);
+    m_unselectedProxy->setHideForks(checked);
+  });
+
+  QAction *hidePrivateAction =
+      actionCollection()->addAction(QStringLiteral("hide_private_repos"));
+  hidePrivateAction->setText(tr("Hide &Private Repos"));
+  hidePrivateAction->setCheckable(true);
+  hidePrivateAction->setChecked(hidePrivate);
+  connect(hidePrivateAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HidePrivate"), checked);
+    m_unselectedProxy->setHidePrivate(checked);
+  });
+
+  QAction *hidePublicAction =
+      actionCollection()->addAction(QStringLiteral("hide_public_repos"));
+  hidePublicAction->setText(tr("Hide P&ublic Repos"));
+  hidePublicAction->setCheckable(true);
+  hidePublicAction->setChecked(hidePublic);
+  connect(hidePublicAction, &QAction::toggled, this, [this](bool checked) {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("HidePublic"), checked);
+    m_unselectedProxy->setHidePublic(checked);
+  });
 
   QAction *jumpToPromptAction =
       actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
