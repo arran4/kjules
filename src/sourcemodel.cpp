@@ -65,15 +65,6 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return name;
 
       return id;
-    } else if (index.column() ==
-               ColFavourite) { // TODO evaluate changed from column to icon
-      QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      if (favVal.isBool() && favVal.toBool()) {
-        return QStringLiteral("1");
-      } else if (favVal.isDouble() && favVal.toInt() > 0) {
-        return QString::number(favVal.toInt());
-      }
-      return QString();
     } else if (index.column() == ColLastUsed) {
       QString valStr =
           source.value(QStringLiteral("local_lastUsed")).toString();
@@ -114,12 +105,18 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       }
       return QVariant();
     } else if (index.column() == ColDescription) {
+      if (source.contains(QStringLiteral("description"))) {
+        return source.value(QStringLiteral("description")).toString();
+      }
       return source.value(QStringLiteral("github"))
           .toObject()
           .value(QStringLiteral("description"))
           .toString();
     } else if (index.column() == ColArchived) {
-      if (source.contains(QStringLiteral("github"))) {
+      if (source.contains(QStringLiteral("isArchived"))) {
+        return source.value(QStringLiteral("isArchived")).toBool() ? i18n("Yes")
+                                                                   : i18n("No");
+      } else if (source.contains(QStringLiteral("github"))) {
         return source.value(QStringLiteral("github"))
                        .toObject()
                        .value(QStringLiteral("archived"))
@@ -128,7 +125,10 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
                    : i18n("No");
       }
     } else if (index.column() == ColFork) {
-      if (source.contains(QStringLiteral("github"))) {
+      if (source.contains(QStringLiteral("isFork"))) {
+        return source.value(QStringLiteral("isFork")).toBool() ? i18n("Yes")
+                                                               : i18n("No");
+      } else if (source.contains(QStringLiteral("github"))) {
         return source.value(QStringLiteral("github"))
                        .toObject()
                        .value(QStringLiteral("fork"))
@@ -137,18 +137,21 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
                    : i18n("No");
       }
     } else if (index.column() == ColPrivate) {
-      if (source.contains(QStringLiteral("github"))) {
+      if (source.contains(QStringLiteral("isPrivate"))) {
+        return source.value(QStringLiteral("isPrivate")).toBool() ? i18n("Yes")
+                                                                  : i18n("No");
+      } else if (source.contains(QStringLiteral("github"))) {
         return source.value(QStringLiteral("github"))
                        .toObject()
                        .value(QStringLiteral("private"))
                        .toBool()
                    ? i18n("Yes")
                    : i18n("No");
-      } else if (source.contains(QStringLiteral("isPrivate"))) {
-        return source.value(QStringLiteral("isPrivate")).toBool() ? i18n("Yes")
-                                                                  : i18n("No");
       }
     } else if (index.column() == ColLanguages) {
+      if (source.contains(QStringLiteral("language"))) {
+        return source.value(QStringLiteral("language")).toString();
+      }
       return source.value(QStringLiteral("github"))
           .toObject()
           .value(QStringLiteral("language"))
@@ -157,7 +160,8 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     return QVariant();
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColName) {
-      bool isFav = source.value(QStringLiteral("local_favourite")).toBool();
+      QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
+      bool isFav = favVal.toBool() || (favVal.isDouble() && favVal.toInt() > 0);
       bool isPriv = source.value(QStringLiteral("isPrivate")).toBool();
 
       if (isFav && isPriv) {
@@ -589,7 +593,8 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
             existing[QStringLiteral("local_favourite")];
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
-      Q_EMIT dataChanged(index, index);
+      QModelIndex lastColIndex = createIndex(i, ColCount - 1);
+      Q_EMIT dataChanged(index, lastColIndex);
       saveSources();
       return;
     }

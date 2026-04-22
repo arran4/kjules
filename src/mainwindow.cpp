@@ -23,6 +23,7 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+#include "sourcesrefreshprogresswindow.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include <KActionCollection>
@@ -1164,6 +1165,8 @@ void MainWindow::setupUi() {
                   m_archiveView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
+          menu.addAction(m_toggleFavouriteAction);
+
           QMenu *favMenu =
               menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
                            i18n("Favourite"));
@@ -1891,10 +1894,16 @@ void MainWindow::setupUi() {
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
 
-  m_sourceProgressBar = new QProgressBar(this);
-  m_sourceProgressBar->setMinimum(0);
-  m_sourceProgressBar->setMaximum(0); // Indeterminate
+  m_sourcesRefreshProgressWindow = nullptr;
+  m_sourceProgressBar = new ClickableProgressBar(this);
   m_sourceProgressBar->hide();
+  connect(m_sourceProgressBar, &ClickableProgressBar::clicked, this, [this]() {
+    if (m_sourcesRefreshProgressWindow) {
+      m_sourcesRefreshProgressWindow->show();
+      m_sourcesRefreshProgressWindow->raise();
+      m_sourcesRefreshProgressWindow->activateWindow();
+    }
+  });
   statusBar()->addPermanentWidget(m_sourceProgressBar);
 
   m_sessionRefreshProgressBar = new ClickableProgressBar(this);
@@ -2564,10 +2573,22 @@ void MainWindow::createActions() {
                        .replace(QLatin1Char('/'), QLatin1Char('_'))));
       rawWindow->setAttribute(Qt::WA_DeleteOnClose);
       rawWindow->setWindowTitle(i18n("Raw Data for Source"));
-      QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+      QTabWidget *tabWidget = new QTabWidget(rawWindow);
+
+      QTextBrowser *sourceBrowser = new QTextBrowser(tabWidget);
       QJsonDocument doc(rawData);
-      textBrowser->setPlainText(
+      sourceBrowser->setPlainText(
           QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      tabWidget->addTab(sourceBrowser, i18n("Source Data"));
+
+      if (rawData.contains(QStringLiteral("github"))) {
+        QTextBrowser *githubBrowser = new QTextBrowser(tabWidget);
+        QJsonDocument githubDoc(
+            rawData.value(QStringLiteral("github")).toObject());
+        githubBrowser->setPlainText(
+            QString::fromUtf8(githubDoc.toJson(QJsonDocument::Indented)));
+        tabWidget->addTab(githubBrowser, i18n("GitHub API Data"));
+      }
 
       QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
       QAction *closeAction =
@@ -2578,7 +2599,7 @@ void MainWindow::createActions() {
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
-      rawWindow->setCentralWidget(textBrowser);
+      rawWindow->setCentralWidget(tabWidget);
       rawWindow->resize(600, 400);
       rawWindow->show();
     }
@@ -3102,6 +3123,15 @@ void MainWindow::refreshSources() {
   m_sourceProgressBar->show();
   m_cancelRefreshBtn->show();
 
+  if (!m_sourcesRefreshProgressWindow) {
+    m_sourcesRefreshProgressWindow =
+        new SourcesRefreshProgressWindow(m_apiManager, this);
+    connect(m_sourcesRefreshProgressWindow,
+            &SourcesRefreshProgressWindow::progressSummary, this,
+            &MainWindow::updateStatus);
+  }
+  m_sourcesRefreshProgressWindow->reset();
+
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();
 }
@@ -3281,7 +3311,7 @@ void MainWindow::toggleQueueState() {
   }
 }
 
-void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
+void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
                                   bool requirePlanApproval) {
@@ -4031,7 +4061,7 @@ void MainWindow::editQueueItem(int row) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             if (persistentIndex.isValid()) {
@@ -4174,7 +4204,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
@@ -4206,7 +4236,7 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
@@ -4481,16 +4511,6 @@ void MainWindow::onSourcesReceived(const QJsonArray &sources) {
   m_sourcesAddedCount += added;
   m_pagesLoadedCount++;
 
-  if (!m_apiManager->githubToken().isEmpty()) {
-    for (int i = 0; i < sources.size(); ++i) {
-      QJsonObject source = sources[i].toObject();
-      QString id = source.value(QStringLiteral("id")).toString();
-      if (id.startsWith(QStringLiteral("sources/github/"))) {
-        m_apiManager->fetchGithubInfo(id);
-      }
-    }
-  }
-
   m_sourceProgressBar->setFormat(i18n("%1 sources loaded from %2 pages",
                                       m_sourcesLoadedCount,
                                       m_pagesLoadedCount));
@@ -4533,7 +4553,19 @@ void MainWindow::onGithubInfoReceived(const QString &sourceId,
     if (id == sourceId) {
       QJsonObject source =
           m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject();
+
+      source[QStringLiteral("description")] =
+          info.value(QStringLiteral("description")).toString();
+      source[QStringLiteral("isArchived")] =
+          info.value(QStringLiteral("archived")).toBool();
+      source[QStringLiteral("isFork")] =
+          info.value(QStringLiteral("fork")).toBool();
+      source[QStringLiteral("isPrivate")] =
+          info.value(QStringLiteral("private")).toBool();
+      source[QStringLiteral("language")] =
+          info.value(QStringLiteral("language")).toString();
       source[QStringLiteral("github")] = info;
+
       m_sourceModel->updateSource(source);
       break;
     }
@@ -5037,114 +5069,92 @@ void MainWindow::updateFavouritesMenu() {
   }
 }
 
-void MainWindow::increaseFavouriteRank() {
+void MainWindow::applyFavouriteAction(
+    std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
+                       const QModelIndexList &, int)>
+        action) {
+  QAbstractItemView *view = nullptr;
+  QAbstractItemModel *model = nullptr;
+  int idRole = -1;
+
   if (m_tabWidget->currentWidget()->objectName() ==
       QStringLiteral("sourcesTab")) {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->increaseFavouriteRank(id);
-      }
-    }
+    view = m_sourceView;
+    model = m_sourceModel;
+    idRole = SourceModel::IdRole;
   } else if (m_tabWidget->currentWidget()->objectName() ==
              QStringLiteral("followingTab")) {
-    QModelIndexList selectedRows =
-        m_sessionView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->increaseFavouriteRank(id);
-      }
-    }
+    view = m_sessionView;
+    model = m_sessionModel;
+    idRole = SessionModel::IdRole;
   } else if (m_tabWidget->currentWidget()->objectName() ==
              QStringLiteral("archiveTab")) {
-    QModelIndexList selectedRows =
-        m_archiveView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->increaseFavouriteRank(id);
+    view = m_archiveView;
+    model = m_archiveModel;
+    idRole = SessionModel::IdRole;
+  }
+
+  if (!view || !model)
+    return;
+
+  QModelIndexList selectedRows = view->selectionModel()->selectedRows();
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+
+  if (proxy && !selectedRows.isEmpty()) {
+    action(proxy, model, selectedRows, idRole);
+  }
+}
+
+void MainWindow::increaseFavouriteRank() {
+  applyFavouriteAction([](const QSortFilterProxyModel *proxy,
+                          QAbstractItemModel *model,
+                          const QModelIndexList &selectedRows, int idRole) {
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = proxy->mapToSource(idx);
+      QString id = model->data(sourceIndex, idRole).toString();
+      if (sm) {
+        sm->increaseFavouriteRank(id);
+      } else if (sessionModel) {
+        sessionModel->increaseFavouriteRank(id);
       }
     }
-  }
+  });
 }
 
 void MainWindow::decreaseFavouriteRank() {
-  if (m_tabWidget->currentWidget()->objectName() ==
-      QStringLiteral("sourcesTab")) {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->decreaseFavouriteRank(id);
+  applyFavouriteAction([](const QSortFilterProxyModel *proxy,
+                          QAbstractItemModel *model,
+                          const QModelIndexList &selectedRows, int idRole) {
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = proxy->mapToSource(idx);
+      QString id = model->data(sourceIndex, idRole).toString();
+      if (sm) {
+        sm->decreaseFavouriteRank(id);
+      } else if (sessionModel) {
+        sessionModel->decreaseFavouriteRank(id);
       }
     }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("followingTab")) {
-    QModelIndexList selectedRows =
-        m_sessionView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->decreaseFavouriteRank(id);
-      }
-    }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("archiveTab")) {
-    QModelIndexList selectedRows =
-        m_archiveView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->decreaseFavouriteRank(id);
-      }
-    }
-  }
+  });
 }
 
 void MainWindow::setFavouriteRank() {
-  int initialRank = 1;
+  applyFavouriteAction([this](const QSortFilterProxyModel *proxy,
+                              QAbstractItemModel *model,
+                              const QModelIndexList &selectedRows, int idRole) {
+    int initialRank = 1;
+    QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
 
-  if (m_tabWidget->currentWidget()->objectName() ==
-      QStringLiteral("sourcesTab")) {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    if (proxy && !selectedRows.isEmpty()) {
-      QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
-      QVariant rankVal =
-          m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole);
-      if (rankVal.isValid())
-        initialRank = rankVal.toInt();
-    }
+    int favRole = (idRole == SourceModel::IdRole)
+                      ? static_cast<int>(SourceModel::FavouriteRole)
+                      : static_cast<int>(SessionModel::FavouriteRole);
+    QVariant rankVal = model->data(sourceIndex, favRole);
+    if (rankVal.isValid())
+      initialRank = rankVal.toInt();
 
     bool ok;
     int rank =
@@ -5153,71 +5163,16 @@ void MainWindow::setFavouriteRank() {
     if (!ok)
       return;
 
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->setFavouriteRank(id, rank);
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sIdx = proxy->mapToSource(idx);
+      QString id = model->data(sIdx, idRole).toString();
+      if (sm) {
+        sm->setFavouriteRank(id, rank);
+      } else if (sessionModel) {
+        sessionModel->setFavouriteRank(id, rank);
       }
     }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("followingTab")) {
-    QModelIndexList selectedRows =
-        m_sessionView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-    if (proxy && !selectedRows.isEmpty()) {
-      QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
-      QVariant rankVal =
-          m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole);
-      if (rankVal.isValid())
-        initialRank = rankVal.toInt();
-    }
-
-    bool ok;
-    int rank =
-        QInputDialog::getInt(this, i18n("Set Favourite Rank"), i18n("Rank:"),
-                             initialRank, 1, 10000, 1, &ok);
-    if (!ok)
-      return;
-
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->setFavouriteRank(id, rank);
-      }
-    }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("archiveTab")) {
-    QModelIndexList selectedRows =
-        m_archiveView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-    if (proxy && !selectedRows.isEmpty()) {
-      QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
-      QVariant rankVal =
-          m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole);
-      if (rankVal.isValid())
-        initialRank = rankVal.toInt();
-    }
-
-    bool ok;
-    int rank =
-        QInputDialog::getInt(this, i18n("Set Favourite Rank"), i18n("Rank:"),
-                             initialRank, 1, 10000, 1, &ok);
-    if (!ok)
-      return;
-
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->setFavouriteRank(id, rank);
-      }
-    }
-  }
+  });
 }

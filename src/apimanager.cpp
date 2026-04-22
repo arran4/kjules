@@ -1,5 +1,8 @@
 #include "apimanager.h"
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <KWallet>
+#include <QDateTime>
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -12,7 +15,9 @@ const QString DEFAULT_BASE_URL =
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
       m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr), m_tokenFailed(false),
-      m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
+      m_githubTokenFailed(false), m_githubRateLimitReset(0),
+      m_githubRateLimitRemaining(-1), m_listSourcesReply(nullptr),
+      m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -46,6 +51,7 @@ QString APIManager::baseUrl() const { return m_baseUrl; }
 
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
+  m_githubTokenFailed = false;
   saveGithubTokenToWallet(token);
 }
 
@@ -119,6 +125,57 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint,
 
 bool APIManager::canConnect() const {
   return !m_apiKey.isEmpty() && !m_tokenFailed;
+}
+
+void APIManager::testGithubConnection(const QString &token) {
+  QString tk = token.isEmpty() ? m_githubToken : token;
+  if (tk.isEmpty()) {
+    Q_EMIT githubConnectionTested(false,
+                                  QStringLiteral("No GitHub token provided."));
+    return;
+  }
+
+  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/user")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + tk;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, tk]() {
+    updateGithubRateLimit(reply);
+    if (reply->error() == QNetworkReply::NoError) {
+      QString scopes = QString::fromUtf8(reply->rawHeader("X-OAuth-Scopes"));
+      QString msg = QStringLiteral("GitHub API connected successfully.");
+      if (!scopes.isEmpty()) {
+        msg += QStringLiteral("\nToken scopes: ") + scopes;
+        if (!scopes.contains(QStringLiteral("repo"))) {
+          msg +=
+              QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
+                             "not be able to fetch private repositories.");
+        }
+      } else {
+        msg += QStringLiteral(
+            "\nWarning: No scopes detected. If this is a fine-grained token, "
+            "ensure repository read permissions are granted.");
+      }
+      Q_EMIT githubConnectionTested(true, msg);
+      if (tk == m_githubToken) {
+        m_githubTokenFailed = false;
+      }
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      Q_EMIT githubConnectionTested(
+          false,
+          QStringLiteral("GitHub connection failed: ") + reply->errorString());
+      if ((statusCode == 401 || statusCode == 403) && tk == m_githubToken) {
+        m_githubTokenFailed = true;
+      }
+    }
+    reply->deleteLater();
+  });
 }
 
 void APIManager::testConnection(const QString &apiKey) {
@@ -314,9 +371,12 @@ void APIManager::listSources(const QString &pageToken) {
     return;
   }
 
-  QString endpoint = QStringLiteral("/sources");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("API"));
+  int pageSize = config.readEntry("PageSize", 30);
+  QString endpoint =
+      QStringLiteral("/sources?pageSize=") + QString::number(pageSize);
   if (!pageToken.isEmpty()) {
-    endpoint += QStringLiteral("?pageToken=") + pageToken;
+    endpoint += QStringLiteral("&pageToken=") + pageToken;
   }
   QNetworkRequest request = createRequest(endpoint);
   m_listSourcesReply = m_nam->get(request);
@@ -389,7 +449,15 @@ void APIManager::createSession(const QString &source, const QString &prompt,
 }
 
 void APIManager::fetchGithubPullRequest(const QString &prUrl) {
-  if (m_githubToken.isEmpty()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
+    Q_EMIT githubPullRequestFailed(
+        prUrl,
+        QStringLiteral("GitHub token authentication failed previously."));
+    return;
+  }
+  if (!checkGithubRateLimit()) {
+    Q_EMIT githubPullRequestFailed(prUrl,
+                                   QStringLiteral("Rate limit exhausted"));
     return;
   }
 
@@ -411,6 +479,8 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   QNetworkRequest request((QUrl(apiUrl)));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -418,6 +488,7 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, prUrl]() {
     reply->deleteLater();
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -428,19 +499,66 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
                                        QStringLiteral("Invalid JSON response"));
       }
     } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                           "requests blocked until token is updated.")
+                .arg(statusCode));
+      }
       Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
     }
   });
 }
 
+bool APIManager::checkGithubRateLimit() {
+  if (m_githubRateLimitRemaining == 0) {
+    qint64 currentEpoch = QDateTime::currentSecsSinceEpoch();
+    if (currentEpoch < m_githubRateLimitReset) {
+      Q_EMIT logMessage(
+          QStringLiteral("GitHub API rate limit exhausted. Waiting until %1...")
+              .arg(m_githubRateLimitReset));
+      return false;
+    } else {
+      // Reset passed, allow requests to test and fetch new headers
+      m_githubRateLimitRemaining = -1;
+    }
+  }
+  return true;
+}
+
+void APIManager::updateGithubRateLimit(QNetworkReply *reply) {
+  if (reply->hasRawHeader("x-ratelimit-remaining")) {
+    m_githubRateLimitRemaining =
+        reply->rawHeader("x-ratelimit-remaining").toInt();
+  }
+  if (reply->hasRawHeader("x-ratelimit-reset")) {
+    m_githubRateLimitReset = reply->rawHeader("x-ratelimit-reset").toLongLong();
+  }
+}
+
 void APIManager::fetchGithubInfo(const QString &sourceId) {
-  if (m_githubToken.isEmpty()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
+    if (m_githubTokenFailed) {
+      Q_EMIT githubInfoFailed(
+          sourceId,
+          QStringLiteral("GitHub token authentication failed previously."));
+    }
+    return;
+  }
+
+  if (!checkGithubRateLimit()) {
+    Q_EMIT githubInfoFailed(sourceId, QStringLiteral("Rate limit exhausted"));
     return;
   }
 
   QString cleanId = sourceId;
   if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
     cleanId = cleanId.mid(15);
+  } else if (cleanId.startsWith(QStringLiteral("github/"))) {
+    cleanId = cleanId.mid(7);
   } else {
     return; // Not a github source
   }
@@ -449,6 +567,8 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
       QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -456,12 +576,27 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
     reply->deleteLater();
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isObject()) {
         Q_EMIT githubInfoReceived(sourceId, doc.object());
+      } else {
+        Q_EMIT githubInfoFailed(sourceId,
+                                QStringLiteral("Invalid JSON response"));
       }
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                           "requests blocked until token is updated.")
+                .arg(statusCode));
+      }
+      Q_EMIT githubInfoFailed(sourceId, reply->errorString());
     }
   });
 }
@@ -707,13 +842,16 @@ void APIManager::getSession(const QString &sessionId) {
 }
 
 void APIManager::fetchGithubBranches(const QString &sourceId) {
-  if (m_githubToken.isEmpty()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed ||
+      !checkGithubRateLimit()) {
     return;
   }
 
   QString cleanId = sourceId;
   if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
     cleanId = cleanId.mid(15);
+  } else if (cleanId.startsWith(QStringLiteral("github/"))) {
+    cleanId = cleanId.mid(7);
   } else {
     return; // Not a github source
   }
@@ -722,6 +860,8 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
                                cleanId + QStringLiteral("/branches")));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -729,11 +869,22 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
     reply->deleteLater();
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isArray()) {
         Q_EMIT githubBranchesReceived(sourceId, doc.array());
+      }
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                           "requests blocked until token is updated.")
+                .arg(statusCode));
       }
     }
   });

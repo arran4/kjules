@@ -1,9 +1,12 @@
+#include <functional>
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <KXmlGuiWindow>
 #include <QDateTime>
 #include <QJsonObject>
+#include <QMap>
+#include <QMultiMap>
 #include <QSystemTrayIcon>
 
 #include "sessionswindow.h"
@@ -28,6 +31,8 @@ class QProgressBar;
 class QPushButton;
 class QAction;
 class RefreshProgressWindow;
+class SourcesRefreshProgressWindow;
+class ClickableProgressBar;
 class ClickableProgressBar;
 
 class MainWindow : public KXmlGuiWindow {
@@ -54,7 +59,7 @@ private Q_SLOTS:
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
                             bool ignoreSelection = false);
   void showSettingsDialog();
-  void onSessionCreated(const QMap<QString, QString> &sources,
+  void onSessionCreated(const QMultiMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
                         bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
@@ -98,6 +103,7 @@ private Q_SLOTS:
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
+
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
@@ -130,6 +136,11 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
+  void applyFavouriteAction(
+      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
+                         const QModelIndexList &, int)>
+          action);
+
   QStringList getSelectedSessionIds() const;
 
   void applyQuickFilter(FilterEditor *editor, const QString &type,
@@ -177,7 +188,8 @@ private:
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
-  QProgressBar *m_sourceProgressBar;
+  ClickableProgressBar *m_sourceProgressBar;
+  SourcesRefreshProgressWindow *m_sourcesRefreshProgressWindow;
   ClickableProgressBar *m_sessionRefreshProgressBar;
   QPushButton *m_cancelRefreshBtn;
   QAction *m_refreshSourcesAction;
