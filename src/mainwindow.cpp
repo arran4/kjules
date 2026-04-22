@@ -5113,8 +5113,9 @@ void MainWindow::setFavouriteRank() {
     int initialRank = 1;
     QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
 
-    int favRole = (idRole == SourceModel::IdRole) ? SourceModel::FavouriteRole
-                                                  : SessionModel::FavouriteRole;
+    int favRole = (idRole == SourceModel::IdRole)
+                      ? static_cast<int>(SourceModel::FavouriteRole)
+                      : static_cast<int>(SessionModel::FavouriteRole);
     QVariant rankVal = model->data(sourceIndex, favRole);
     if (rankVal.isValid())
       initialRank = rankVal.toInt();
