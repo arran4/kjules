@@ -50,7 +50,7 @@ public:
   void setEditMode(bool isEdit);
 
 Q_SIGNALS:
-  void createSessionRequested(const QMap<QString, QString> &sources,
+  void createSessionRequested(const QMultiMap<QString, QString> &sources,
                               const QString &prompt,
                               const QString &automationMode,
                               bool requirePlanApproval);
@@ -101,7 +101,7 @@ private:
   QPushButton *m_createButton;
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;
-  QMap<QString, QString> m_selectedSources;
+  QMultiMap<QString, QString> m_selectedSources;
   QString m_draftComment;
 
   QWidget *m_sourceSelectionWidget;

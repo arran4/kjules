@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
@@ -25,6 +26,7 @@
 #include <QSet>
 #include <QShortcut>
 #include <QSortFilterProxyModel>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -89,7 +91,7 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
 class SourceSelectionProxyModel : public QSortFilterProxyModel {
 public:
 public:
-  SourceSelectionProxyModel(const QMap<QString, QString> *selectedSources,
+  SourceSelectionProxyModel(const QMultiMap<QString, QString> *selectedSources,
                             bool showSelected, QObject *parent = nullptr)
       : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
         m_showSelected(showSelected) {}
@@ -103,13 +105,14 @@ public:
       QString name =
           sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
       if (m_selectedSources->contains(name)) {
-        QString branch = m_selectedSources->value(name);
+        QStringList branches = m_selectedSources->values(name);
+        branches.sort();
         QString displayName =
             sourceModel()
                 ->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
                 .toString();
-        return displayName + QStringLiteral(" (") + branch +
-               QStringLiteral(")");
+        return displayName + QStringLiteral(" (") +
+               branches.join(QStringLiteral(", ")) + QStringLiteral(")");
       }
     }
     return QSortFilterProxyModel::data(index, role);
@@ -145,7 +148,7 @@ protected:
   }
 
 private:
-  const QMap<QString, QString> *m_selectedSources;
+  const QMultiMap<QString, QString> *m_selectedSources;
   bool m_showSelected;
 };
 
@@ -345,15 +348,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               if (!selected.contains(proxyIdx))
                 selected = {proxyIdx};
 
-              QString currentBranch = m_selectedSources.value(name);
+              QStringList currentBranches = m_selectedSources.values(name);
               QStringList branches = getAvailableBranches(sourceIdx);
-              int currentIndex = branches.indexOf(currentBranch);
-              if (currentIndex < 0) {
-                if (!currentBranch.isEmpty()) {
-                  branches.prepend(currentBranch);
-                }
-                currentIndex = 0;
-              }
 
               QDialog dialog(this);
               dialog.setWindowTitle(tr("Select Branch"));
@@ -367,11 +363,81 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                     new QLabel(tr("Branch for %1:").arg(displayName)));
               }
 
+              QStackedWidget *stackedWidget = new QStackedWidget(&dialog);
+              layout.addWidget(stackedWidget);
+
+              // Single mode
+              QWidget *singleModeWidget = new QWidget();
+              QHBoxLayout *singleLayout = new QHBoxLayout(singleModeWidget);
+              singleLayout->setContentsMargins(0, 0, 0, 0);
               QComboBox *comboBox = new QComboBox(&dialog);
               comboBox->addItems(branches);
-              comboBox->setCurrentIndex(currentIndex);
+              if (!currentBranches.isEmpty()) {
+                int idx = branches.indexOf(currentBranches.first());
+                if (idx >= 0)
+                  comboBox->setCurrentIndex(idx);
+                else {
+                  branches.prepend(currentBranches.first());
+                  comboBox->clear();
+                  comboBox->addItems(branches);
+                  comboBox->setCurrentIndex(0);
+                }
+              }
               comboBox->setEditable(true);
-              layout.addWidget(comboBox);
+
+              QPushButton *plusBtn = new QPushButton("+", &dialog);
+              plusBtn->setToolTip(tr("Switch to multiple branch selection"));
+              singleLayout->addWidget(comboBox);
+              singleLayout->addWidget(plusBtn);
+
+              // Multi mode
+              QWidget *multiModeWidget = new QWidget();
+              QVBoxLayout *multiLayout = new QVBoxLayout(multiModeWidget);
+              multiLayout->setContentsMargins(0, 0, 0, 0);
+              QListWidget *listWidget = new QListWidget(&dialog);
+              listWidget->addItems(currentBranches);
+
+              QHBoxLayout *addRemoveLayout = new QHBoxLayout();
+              QComboBox *multiComboBox = new QComboBox(&dialog);
+              multiComboBox->addItems(branches);
+              multiComboBox->setEditable(true);
+              QPushButton *addBtn = new QPushButton(tr("Add"), &dialog);
+              QPushButton *removeBtn = new QPushButton(tr("Remove"), &dialog);
+              addRemoveLayout->addWidget(multiComboBox);
+              addRemoveLayout->addWidget(addBtn);
+              addRemoveLayout->addWidget(removeBtn);
+              multiLayout->addWidget(listWidget);
+              multiLayout->addLayout(addRemoveLayout);
+
+              stackedWidget->addWidget(singleModeWidget);
+              stackedWidget->addWidget(multiModeWidget);
+
+              bool isMultiMode = currentBranches.size() > 1;
+              if (isMultiMode) {
+                stackedWidget->setCurrentWidget(multiModeWidget);
+              } else {
+                stackedWidget->setCurrentWidget(singleModeWidget);
+              }
+
+              connect(plusBtn, &QPushButton::clicked, [&]() {
+                isMultiMode = true;
+                stackedWidget->setCurrentWidget(multiModeWidget);
+                if (listWidget->count() == 0 &&
+                    !comboBox->currentText().isEmpty()) {
+                  listWidget->addItem(comboBox->currentText());
+                }
+              });
+
+              connect(addBtn, &QPushButton::clicked, [&]() {
+                QString t = multiComboBox->currentText();
+                if (!t.isEmpty() &&
+                    listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
+                  listWidget->addItem(t);
+                }
+              });
+
+              connect(removeBtn, &QPushButton::clicked,
+                      [&]() { qDeleteAll(listWidget->selectedItems()); });
 
               QHBoxLayout *btnLayout = new QHBoxLayout();
               QPushButton *refreshJulesBtn =
@@ -415,12 +481,25 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                       });
 
               if (dialog.exec() == QDialog::Accepted) {
-                QString newBranch = comboBox->currentText();
-                if (!newBranch.isEmpty()) {
+                QStringList newBranches;
+                if (isMultiMode) {
+                  for (int i = 0; i < listWidget->count(); ++i) {
+                    newBranches.append(listWidget->item(i)->text());
+                  }
+                } else {
+                  QString t = comboBox->currentText();
+                  if (!t.isEmpty())
+                    newBranches.append(t);
+                }
+
+                if (!newBranches.isEmpty()) {
                   for (const QModelIndex &idx : selected) {
                     QString selName =
                         idx.data(SourceModel::NameRole).toString();
-                    m_selectedSources[selName] = newBranch;
+                    m_selectedSources.remove(selName);
+                    for (const QString &b : newBranches) {
+                      m_selectedSources.insert(selName, b);
+                    }
                   }
                   updateModels();
                 }
@@ -908,7 +987,7 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
     return;
   }
 
-  QMap<QString, QString> sources = m_selectedSources;
+  QMultiMap<QString, QString> sources = m_selectedSources;
 
   QString prompt = m_promptEdit->getPromptText();
 

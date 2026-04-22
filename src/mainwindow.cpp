@@ -3254,7 +3254,7 @@ void MainWindow::toggleQueueState() {
   }
 }
 
-void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
+void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
                                   bool requirePlanApproval) {
@@ -4004,7 +4004,7 @@ void MainWindow::editQueueItem(int row) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             if (persistentIndex.isValid()) {
@@ -4147,7 +4147,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
@@ -4179,7 +4179,7 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
