@@ -3062,11 +3062,11 @@ void MainWindow::refreshSources() {
   if (!m_sourcesRefreshProgressWindow) {
     m_sourcesRefreshProgressWindow =
         new SourcesRefreshProgressWindow(m_apiManager, this);
+    connect(m_sourcesRefreshProgressWindow,
+            &SourcesRefreshProgressWindow::progressSummary, this,
+            &MainWindow::updateStatus);
   }
   m_sourcesRefreshProgressWindow->reset();
-  m_sourcesRefreshProgressWindow->show();
-  m_sourcesRefreshProgressWindow->raise();
-  m_sourcesRefreshProgressWindow->activateWindow();
 
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();

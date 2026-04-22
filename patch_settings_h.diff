@@ -1,0 +1,10 @@
+<<<<<<< SEARCH
+  QSpinBox *m_waitTimeEdit;
+  QSpinBox *m_refreshWorkersEdit;
+  QComboBox *m_tierComboBox;
+=======
+  QSpinBox *m_waitTimeEdit;
+  QSpinBox *m_refreshWorkersEdit;
+  QSpinBox *m_pageSizeEdit;
+  QComboBox *m_tierComboBox;
+>>>>>>> REPLACE

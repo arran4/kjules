@@ -1,0 +1,22 @@
+<<<<<<< SEARCH
+void SourcesRefreshProgressWindow::processNextGithub() {
+  if (m_githubQueue.isEmpty()) {
+    if (m_totalGithubRequests > 0 &&
+        m_finishedGithubRequests == m_totalGithubRequests) {
+      appendLog(tr("All GitHub API requests completed."));
+      setProgress(m_finishedGithubRequests, m_totalGithubRequests);
+    }
+    return;
+  }
+=======
+void SourcesRefreshProgressWindow::processNextGithub() {
+  if (m_githubQueue.isEmpty()) {
+    if (m_totalGithubRequests > 0 &&
+        m_finishedGithubRequests == m_totalGithubRequests) {
+      appendLog(tr("All GitHub API requests completed."));
+      setProgress(m_finishedGithubRequests, m_totalGithubRequests);
+      Q_EMIT progressSummary(tr("All %1 GitHub API requests completed.").arg(m_totalGithubRequests));
+    }
+    return;
+  }
+>>>>>>> REPLACE

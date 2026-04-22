@@ -314,9 +314,12 @@ void APIManager::listSources(const QString &pageToken) {
     return;
   }
 
-  QString endpoint = QStringLiteral("/sources");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("API"));
+  int pageSize = config.readEntry("PageSize", 30);
+  QString endpoint =
+      QStringLiteral("/sources?pageSize=") + QString::number(pageSize);
   if (!pageToken.isEmpty()) {
-    endpoint += QStringLiteral("?pageToken=") + pageToken;
+    endpoint += QStringLiteral("&pageToken=") + pageToken;
   }
   QNetworkRequest request = createRequest(endpoint);
   m_listSourcesReply = m_nam->get(request);

@@ -198,6 +198,13 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_refreshWorkersEdit->setValue(config.readEntry("RefreshWorkers", 3));
   formLayout->addRow(i18n("Concurrent refresh workers:"), m_refreshWorkersEdit);
 
+  m_pageSizeEdit = new QSpinBox(this);
+  m_pageSizeEdit->setRange(10, 100);
+  m_pageSizeEdit->setSingleStep(10);
+  KConfigGroup apiConfig(KSharedConfig::openConfig(), QStringLiteral("API"));
+  m_pageSizeEdit->setValue(apiConfig.readEntry("PageSize", 30));
+  formLayout->addRow(i18n("API page size:"), m_pageSizeEdit);
+
   m_tierComboBox = new QComboBox(this);
   m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
   m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
@@ -307,6 +314,10 @@ void SettingsDialog::onSave() {
   config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.writeEntry("RefreshWorkers", m_refreshWorkersEdit->value());
   config.sync();
+
+  KConfigGroup apiConfigOut(KSharedConfig::openConfig(), QStringLiteral("API"));
+  apiConfigOut.writeEntry("PageSize", m_pageSizeEdit->value());
+  apiConfigOut.sync();
 
   QString autostartPath =
       QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +

@@ -29,6 +29,9 @@ private Q_SLOTS:
   void onSourcesRefreshFinished();
   void processNextGithub();
 
+Q_SIGNALS:
+  void progressSummary(const QString &msg);
+
 private:
   QProgressBar *m_progressBar;
   QTextBrowser *m_textBrowser;

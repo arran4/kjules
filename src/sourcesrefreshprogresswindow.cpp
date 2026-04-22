@@ -91,6 +91,8 @@ void SourcesRefreshProgressWindow::processNextGithub() {
         m_finishedGithubRequests == m_totalGithubRequests) {
       appendLog(tr("All GitHub API requests completed."));
       setProgress(m_finishedGithubRequests, m_totalGithubRequests);
+      Q_EMIT progressSummary(tr("All %1 GitHub API requests completed.")
+                                 .arg(m_totalGithubRequests));
     }
     return;
   }
@@ -116,6 +118,11 @@ void SourcesRefreshProgressWindow::onGithubInfoReceived(
   m_activeWorkers--;
   appendLog(tr("Fetched GitHub info for %1 successfully.").arg(sourceId));
   setProgress(m_finishedGithubRequests, m_totalGithubRequests);
+  if (m_totalGithubRequests > 0 && m_finishedGithubRequests % 30 == 0) {
+    Q_EMIT progressSummary(tr("Fetched GitHub info for %1 of %2 sources.")
+                               .arg(m_finishedGithubRequests)
+                               .arg(m_totalGithubRequests));
+  }
   processNextGithub();
 }
 
@@ -126,6 +133,11 @@ void SourcesRefreshProgressWindow::onGithubInfoFailed(const QString &sourceId,
   appendLog(tr("ERROR: Failed to fetch GitHub info for %1: %2")
                 .arg(sourceId, message));
   setProgress(m_finishedGithubRequests, m_totalGithubRequests);
+  if (m_totalGithubRequests > 0 && m_finishedGithubRequests % 30 == 0) {
+    Q_EMIT progressSummary(tr("Fetched GitHub info for %1 of %2 sources.")
+                               .arg(m_finishedGithubRequests)
+                               .arg(m_totalGithubRequests));
+  }
   processNextGithub();
 }
 
