@@ -100,8 +100,13 @@ private:
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;
   bool m_githubTokenFailed;
+  qint64 m_githubRateLimitReset;
+  int m_githubRateLimitRemaining;
   QNetworkReply *m_listSourcesReply;
   QNetworkReply *m_listSessionsReply;
+
+  bool checkGithubRateLimit();
+  void updateGithubRateLimit(QNetworkReply *reply);
 
   QNetworkRequest createRequest(const QString &endpoint,
                                 const QString &overrideApiKey = QString());

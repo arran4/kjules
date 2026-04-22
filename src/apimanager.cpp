@@ -2,6 +2,7 @@
 #include <KConfigGroup>
 #include <KSharedConfig>
 #include <KWallet>
+#include <QDateTime>
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -14,7 +15,8 @@ const QString DEFAULT_BASE_URL =
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
       m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr), m_tokenFailed(false),
-      m_githubTokenFailed(false), m_listSourcesReply(nullptr),
+      m_githubTokenFailed(false), m_githubRateLimitReset(0),
+      m_githubRateLimitRemaining(-1), m_listSourcesReply(nullptr),
       m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
@@ -142,6 +144,7 @@ void APIManager::testGithubConnection(const QString &token) {
 
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, tk]() {
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QString scopes = QString::fromUtf8(reply->rawHeader("X-OAuth-Scopes"));
       QString msg = QStringLiteral("GitHub API connected successfully.");
@@ -452,6 +455,11 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
         QStringLiteral("GitHub token authentication failed previously."));
     return;
   }
+  if (!checkGithubRateLimit()) {
+    Q_EMIT githubPullRequestFailed(prUrl,
+                                   QStringLiteral("Rate limit exhausted"));
+    return;
+  }
 
   // prUrl format: https://github.com/owner/repo/pull/123
   if (!prUrl.startsWith(QStringLiteral("https://github.com/"))) {
@@ -480,6 +488,7 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, prUrl]() {
     reply->deleteLater();
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -504,6 +513,32 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   });
 }
 
+bool APIManager::checkGithubRateLimit() {
+  if (m_githubRateLimitRemaining == 0) {
+    qint64 currentEpoch = QDateTime::currentSecsSinceEpoch();
+    if (currentEpoch < m_githubRateLimitReset) {
+      Q_EMIT logMessage(
+          QStringLiteral("GitHub API rate limit exhausted. Waiting until %1...")
+              .arg(m_githubRateLimitReset));
+      return false;
+    } else {
+      // Reset passed, allow requests to test and fetch new headers
+      m_githubRateLimitRemaining = -1;
+    }
+  }
+  return true;
+}
+
+void APIManager::updateGithubRateLimit(QNetworkReply *reply) {
+  if (reply->hasRawHeader("x-ratelimit-remaining")) {
+    m_githubRateLimitRemaining =
+        reply->rawHeader("x-ratelimit-remaining").toInt();
+  }
+  if (reply->hasRawHeader("x-ratelimit-reset")) {
+    m_githubRateLimitReset = reply->rawHeader("x-ratelimit-reset").toLongLong();
+  }
+}
+
 void APIManager::fetchGithubInfo(const QString &sourceId) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     if (m_githubTokenFailed) {
@@ -511,6 +546,11 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
           sourceId,
           QStringLiteral("GitHub token authentication failed previously."));
     }
+    return;
+  }
+
+  if (!checkGithubRateLimit()) {
+    Q_EMIT githubInfoFailed(sourceId, QStringLiteral("Rate limit exhausted"));
     return;
   }
 
@@ -536,6 +576,7 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
     reply->deleteLater();
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -801,7 +842,8 @@ void APIManager::getSession(const QString &sessionId) {
 }
 
 void APIManager::fetchGithubBranches(const QString &sourceId) {
-  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed ||
+      !checkGithubRateLimit()) {
     return;
   }
 
@@ -827,6 +869,7 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
     reply->deleteLater();
+    updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
