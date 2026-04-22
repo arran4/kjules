@@ -120,10 +120,6 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     switch (index.column()) {
     case ColTitle:
       return session.title.simplified();
-    // case ColFavourite: TODO obsolete need an equiv
-    //   return session.favouriteRank.has_value()
-    //              ? QString::number(session.favouriteRank.value())
-    //              : QString();
     case ColState:
       return session.state;
     case ColChangeSet:
