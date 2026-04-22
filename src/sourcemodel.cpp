@@ -5,6 +5,8 @@
 #include <QFile>
 #include <QIcon>
 #include <QJsonDocument>
+#include <QPainter>
+#include <QPixmap>
 #include <QStandardPaths>
 #include <cmath>
 
@@ -146,10 +148,26 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     return QVariant();
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColName) {
-      if (source.value(QStringLiteral("local_favourite")).toBool()) {
+      bool isFav = source.value(QStringLiteral("local_favourite")).toBool();
+      bool isPriv = source.value(QStringLiteral("isPrivate")).toBool();
+
+      if (isFav && isPriv) {
+        QIcon favIcon = QIcon::fromTheme(QStringLiteral("emblem-favorite"));
+        QIcon privIcon = QIcon::fromTheme(QStringLiteral("security-high"));
+
+        int size = 16;
+        QPixmap combined(size * 2 + 2, size);
+        combined.fill(Qt::transparent);
+
+        QPainter p(&combined);
+        p.drawPixmap(0, 0, favIcon.pixmap(size, size));
+        p.drawPixmap(size + 2, 0, privIcon.pixmap(size, size));
+        p.end();
+
+        return QIcon(combined);
+      } else if (isFav) {
         return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
-      }
-      if (source.value(QStringLiteral("isPrivate")).toBool()) {
+      } else if (isPriv) {
         return QIcon::fromTheme(QStringLiteral("security-high"));
       }
     }
