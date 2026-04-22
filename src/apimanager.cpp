@@ -125,6 +125,43 @@ bool APIManager::canConnect() const {
   return !m_apiKey.isEmpty() && !m_tokenFailed;
 }
 
+void APIManager::testGithubConnection(const QString &token) {
+  QString tk = token.isEmpty() ? m_githubToken : token;
+  if (tk.isEmpty()) {
+    Q_EMIT githubConnectionTested(false,
+                                  QStringLiteral("No GitHub token provided."));
+    return;
+  }
+
+  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/user")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + tk;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, tk]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      Q_EMIT githubConnectionTested(
+          true, QStringLiteral("GitHub API connected successfully."));
+      if (tk == m_githubToken) {
+        m_githubTokenFailed = false;
+      }
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      Q_EMIT githubConnectionTested(
+          false,
+          QStringLiteral("GitHub connection failed: ") + reply->errorString());
+      if ((statusCode == 401 || statusCode == 403) && tk == m_githubToken) {
+        m_githubTokenFailed = true;
+      }
+    }
+    reply->deleteLater();
+  });
+}
+
 void APIManager::testConnection(const QString &apiKey) {
   // If apiKey is empty, we are using the stored key.
   if (apiKey.isEmpty() && !canConnect()) {

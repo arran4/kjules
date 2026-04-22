@@ -40,6 +40,7 @@ public:
 
   bool canConnect() const;
   void testConnection(const QString &apiKey = QString());
+  void testGithubConnection(const QString &token = QString());
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
   void createSession(const QString &source, const QString &prompt,
@@ -78,6 +79,7 @@ Q_SIGNALS:
   void activitiesReceived(const QString &sessionId,
                           const QJsonArray &activities);
   void connectionTested(bool success, const QString &message);
+  void githubConnectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message,
                                  const QString &response);

@@ -25,15 +25,28 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
   QFormLayout *formLayout = new QFormLayout();
 
+  QHBoxLayout *julesKeyLayout = new QHBoxLayout();
   m_apiKeyEdit = new QLineEdit(this);
   m_apiKeyEdit->setText(m_apiManager->apiKey());
   m_apiKeyEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
-  formLayout->addRow(i18n("Google Jules API Key:"), m_apiKeyEdit);
+  QPushButton *testJulesBtn = new QPushButton(i18n("Test API Key"), this);
+  connect(testJulesBtn, &QPushButton::clicked, this,
+          &SettingsDialog::onTestConnection);
+  julesKeyLayout->addWidget(m_apiKeyEdit);
+  julesKeyLayout->addWidget(testJulesBtn);
+  formLayout->addRow(i18n("Google Jules API Key:"), julesKeyLayout);
 
+  QHBoxLayout *githubTokenLayout = new QHBoxLayout();
   m_githubTokenEdit = new QLineEdit(this);
   m_githubTokenEdit->setText(m_apiManager->githubToken());
   m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
-  formLayout->addRow(i18n("GitHub Token (Optional):"), m_githubTokenEdit);
+  QPushButton *testGithubBtn = new QPushButton(i18n("Test Github Token"), this);
+  connect(testGithubBtn, &QPushButton::clicked, this, [this]() {
+    m_apiManager->testGithubConnection(m_githubTokenEdit->text());
+  });
+  githubTokenLayout->addWidget(m_githubTokenEdit);
+  githubTokenLayout->addWidget(testGithubBtn);
+  formLayout->addRow(i18n("GitHub Token (Optional):"), githubTokenLayout);
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   m_closeToTrayEdit = new QCheckBox(i18n("Close to Tray"), this);
@@ -270,10 +283,6 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-  QPushButton *testButton = new QPushButton(i18n("Test API Key"), this);
-  connect(testButton, &QPushButton::clicked, this,
-          &SettingsDialog::onTestConnection);
-
   QPushButton *saveButton = new QPushButton(i18n("Save"), this);
   saveButton->setDefault(true);
   connect(saveButton, &QPushButton::clicked, this, &SettingsDialog::onSave);
@@ -281,7 +290,6 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QPushButton *cancelButton = new QPushButton(i18n("Cancel"), this);
   connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
-  buttonLayout->addWidget(testButton);
   buttonLayout->addStretch();
   buttonLayout->addWidget(saveButton);
   buttonLayout->addWidget(cancelButton);
@@ -294,6 +302,17 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
               QMessageBox::information(this, i18n("Connection Test"), message);
             } else {
               QMessageBox::warning(this, i18n("Connection Test"), message);
+            }
+          });
+
+  connect(m_apiManager, &APIManager::githubConnectionTested, this,
+          [this](bool success, const QString &message) {
+            if (success) {
+              QMessageBox::information(this, i18n("GitHub Connection Test"),
+                                       message);
+            } else {
+              QMessageBox::warning(this, i18n("GitHub Connection Test"),
+                                   message);
             }
           });
 }
