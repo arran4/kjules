@@ -131,38 +131,9 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   m_backoffTabWidget = new QTabWidget(this);
 
-  // Predict Tab
-  QWidget *predictTab = new QWidget();
-  QFormLayout *predictLayout = new QFormLayout(predictTab);
-
-  m_tierComboBox = new QComboBox(this);
-  m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
-  m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
-  m_tierComboBox->addItem(i18n("Max (30 jobs)"), QStringLiteral("max"));
-
-  QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
-  int tierIndex = m_tierComboBox->findData(currentTier);
-  if (tierIndex >= 0) {
-    m_tierComboBox->setCurrentIndex(tierIndex);
-  }
-  predictLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
-
-  m_waitTimeEdit = new QSpinBox(this);
-  m_waitTimeEdit->setRange(1, 10080);
-  m_waitTimeEdit->setSuffix(i18n(" minutes"));
-  m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
-  predictLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
-
-  m_backoffTabWidget->addTab(predictTab, i18n("Predict"));
-
-  // Fixed Tab
-  QWidget *fixedTab = new QWidget();
-  QVBoxLayout *fixedLayout = new QVBoxLayout(fixedTab);
-  QLabel *fixedLabel =
-      new QLabel(i18n("No exclusive settings. See shared tabs."));
-  fixedLayout->addWidget(fixedLabel);
-  fixedLayout->addStretch();
-  m_backoffTabWidget->addTab(fixedTab, i18n("Fixed"));
+  // Note: Predict and Fixed backoff strategies have no exclusive error backoff
+  // settings. The 'Tier' and 'WaitTime' settings previously placed here apply
+  // to the global concurrency limiter.
 
   // Exponential Tab
   QWidget *expTab = new QWidget();
@@ -204,9 +175,9 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
   fixedExpLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
                          m_queueBackoffEdit);
-  m_backoffTabWidget->addTab(fixedExpTab, i18n("Fixed + Exponential"));
+  m_backoffTabWidget->addTab(fixedExpTab, i18n("Initial Interval"));
 
-  // Fixed + Exponential + Random + Predict Tab
+  // Global Limits Tab
   QWidget *allTab = new QWidget();
   QFormLayout *allLayout = new QFormLayout(allTab);
   m_queueBackoffMaxEdit = new QSpinBox(this);
@@ -215,10 +186,15 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffMaxEdit->setValue(
       queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
   allLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
-  m_backoffTabWidget->addTab(allTab,
-                             i18n("Fixed + Exponential + Random + Predict"));
+  m_backoffTabWidget->addTab(allTab, i18n("Global Limits"));
 
   formLayout->addRow(i18n("Backoff Settings:"), m_backoffTabWidget);
+
+  m_waitTimeEdit = new QSpinBox(this);
+  m_waitTimeEdit->setRange(1, 10080);
+  m_waitTimeEdit->setSuffix(i18n(" minutes"));
+  m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
+  formLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
 
   m_refreshWorkersEdit = new QSpinBox(this);
   m_refreshWorkersEdit->setRange(1, 100);
@@ -231,6 +207,18 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   KConfigGroup apiConfig(KSharedConfig::openConfig(), QStringLiteral("API"));
   m_pageSizeEdit->setValue(apiConfig.readEntry("PageSize", 30));
   formLayout->addRow(i18n("API page size:"), m_pageSizeEdit);
+
+  m_tierComboBox = new QComboBox(this);
+  m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
+  m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
+  m_tierComboBox->addItem(i18n("Max (30 jobs)"), QStringLiteral("max"));
+
+  QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
+  int index = m_tierComboBox->findData(currentTier);
+  if (index >= 0) {
+    m_tierComboBox->setCurrentIndex(index);
+  }
+  formLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
                              QStringLiteral("SessionWindow"));
