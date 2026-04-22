@@ -75,6 +75,9 @@ void SourcesRefreshProgressWindow::onSourcesReceived(
     for (int i = 0; i < sources.size(); ++i) {
       QJsonObject source = sources[i].toObject();
       QString id = source.value(QStringLiteral("id")).toString();
+      if (id.isEmpty()) {
+        id = source.value(QStringLiteral("name")).toString();
+      }
       if (id.startsWith(QStringLiteral("sources/github/"))) {
         m_totalGithubRequests++;
         m_githubQueue.append(id);

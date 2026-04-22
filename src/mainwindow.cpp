@@ -2521,10 +2521,22 @@ void MainWindow::createActions() {
                        .replace(QLatin1Char('/'), QLatin1Char('_'))));
       rawWindow->setAttribute(Qt::WA_DeleteOnClose);
       rawWindow->setWindowTitle(i18n("Raw Data for Source"));
-      QTextBrowser *textBrowser = new QTextBrowser(rawWindow);
+      QTabWidget *tabWidget = new QTabWidget(rawWindow);
+
+      QTextBrowser *sourceBrowser = new QTextBrowser(tabWidget);
       QJsonDocument doc(rawData);
-      textBrowser->setPlainText(
+      sourceBrowser->setPlainText(
           QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      tabWidget->addTab(sourceBrowser, i18n("Source Data"));
+
+      if (rawData.contains(QStringLiteral("github"))) {
+        QTextBrowser *githubBrowser = new QTextBrowser(tabWidget);
+        QJsonDocument githubDoc(
+            rawData.value(QStringLiteral("github")).toObject());
+        githubBrowser->setPlainText(
+            QString::fromUtf8(githubDoc.toJson(QJsonDocument::Indented)));
+        tabWidget->addTab(githubBrowser, i18n("GitHub API Data"));
+      }
 
       QMenu *fileMenu = new QMenu(i18n("File"), rawWindow);
       QAction *closeAction =
@@ -2535,7 +2547,7 @@ void MainWindow::createActions() {
       fileMenu->addAction(closeAction);
       rawWindow->menuBar()->addMenu(fileMenu);
 
-      rawWindow->setCentralWidget(textBrowser);
+      rawWindow->setCentralWidget(tabWidget);
       rawWindow->resize(600, 400);
       rawWindow->show();
     }

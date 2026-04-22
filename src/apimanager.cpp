@@ -143,8 +143,21 @@ void APIManager::testGithubConnection(const QString &token) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, tk]() {
     if (reply->error() == QNetworkReply::NoError) {
-      Q_EMIT githubConnectionTested(
-          true, QStringLiteral("GitHub API connected successfully."));
+      QString scopes = reply->rawHeader("X-OAuth-Scopes");
+      QString msg = QStringLiteral("GitHub API connected successfully.");
+      if (!scopes.isEmpty()) {
+        msg += QStringLiteral("\nToken scopes: ") + scopes;
+        if (!scopes.contains(QStringLiteral("repo"))) {
+          msg +=
+              QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
+                             "not be able to fetch private repositories.");
+        }
+      } else {
+        msg += QStringLiteral(
+            "\nWarning: No scopes detected. If this is a fine-grained token, "
+            "ensure repository read permissions are granted.");
+      }
+      Q_EMIT githubConnectionTested(true, msg);
       if (tk == m_githubToken) {
         m_githubTokenFailed = false;
       }
