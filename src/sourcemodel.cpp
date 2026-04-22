@@ -156,7 +156,8 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     return QVariant();
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColName) {
-      bool isFav = source.value(QStringLiteral("local_favourite")).toBool();
+      QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
+      bool isFav = favVal.toBool() || (favVal.isDouble() && favVal.toInt() > 0);
       bool isPriv = source.value(QStringLiteral("isPrivate")).toBool();
 
       if (isFav && isPriv) {
