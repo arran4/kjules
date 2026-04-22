@@ -1,9 +1,12 @@
+#include <functional>
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <KXmlGuiWindow>
 #include <QDateTime>
 #include <QJsonObject>
+#include <QMap>
+#include <QMultiMap>
 #include <QSystemTrayIcon>
 
 #include "sessionswindow.h"
@@ -47,14 +50,16 @@ Q_SIGNALS:
 
 protected:
   void closeEvent(QCloseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
 
 private Q_SLOTS:
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
-  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject());
+  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
+                            bool ignoreSelection = false);
   void showSettingsDialog();
-  void onSessionCreated(const QMap<QString, QString> &sources,
+  void onSessionCreated(const QMultiMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
                         bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
@@ -91,10 +96,14 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
+  void increaseFavouriteRank();
+  void decreaseFavouriteRank();
+  void setFavouriteRank();
   void processQueue();
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
+
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
@@ -127,6 +136,11 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
+  void applyFavouriteAction(
+      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
+                         const QModelIndexList &, int)>
+          action);
+
   QStringList getSelectedSessionIds() const;
 
   void applyQuickFilter(FilterEditor *editor, const QString &type,

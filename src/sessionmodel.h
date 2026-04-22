@@ -7,11 +7,12 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVector>
+#include <optional>
 
 struct SessionData {
   QString id;
   QString name;
-  bool isFavourite;
+  std::optional<int> favouriteRank;
   QString title;
   QString source;
   QString prompt;
@@ -54,7 +55,6 @@ public:
 
   enum Columns {
     ColTitle = 0,
-    ColFavourite,
     ColState,
     ColChangeSet,
     ColPR,
@@ -68,6 +68,8 @@ public:
     ColLastRefreshed,
     ColCount
   };
+
+  static constexpr int DefaultTitleWidth = 400;
 
   explicit SessionModel(
       const QString &cacheFileName = QStringLiteral("cached_all_sessions.json"),
@@ -86,6 +88,9 @@ public:
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
   void toggleFavourite(const QString &id);
+  void setFavouriteRank(const QString &id, int rank);
+  void increaseFavouriteRank(const QString &id);
+  void decreaseFavouriteRank(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QString getSessionName(const QString &id) const;

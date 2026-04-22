@@ -16,6 +16,7 @@
 #include <QDialog>
 #include <QGuiApplication>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
@@ -207,15 +208,16 @@ void SessionsWindow::setupUi() {
   m_listView->setRootIsDecorated(false);
 
   // Header configuration
-  m_listView->header()->setMinimumSectionSize(100);
-  m_listView->header()->resizeSection(SessionModel::ColTitle, 250);
+  m_listView->header()->setMinimumSectionSize(80);
+  m_listView->header()->resizeSection(SessionModel::ColTitle,
+                                      SessionModel::DefaultTitleWidth);
   m_listView->header()->resizeSection(SessionModel::ColState, 100);
   m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
   m_listView->header()->resizeSection(SessionModel::ColPR, 80);
   m_listView->header()->resizeSection(SessionModel::ColUpdatedAt, 150);
 
-  // Set default sorting to Favourites first
-  m_listView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_listView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int value) {
@@ -272,11 +274,22 @@ void SessionsWindow::setupUi() {
           }
 
           QMenu menu;
-          QAction *toggleFavAction = menu.addAction(
-              QIcon::fromTheme(QStringLiteral("emblem-favorite")),
-              i18n("Toggle Favourite"));
+          QMenu *favMenu =
+              menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                           i18n("Favourite"));
+          QAction *toggleFavAction =
+              favMenu->addAction(i18n("Toggle Favourite"));
           connect(toggleFavAction, &QAction::triggered, this,
                   &SessionsWindow::toggleFavourite);
+          QAction *incFavAction = favMenu->addAction(i18n("Increase Rank"));
+          connect(incFavAction, &QAction::triggered, this,
+                  &SessionsWindow::increaseFavouriteRank);
+          QAction *decFavAction = favMenu->addAction(i18n("Decrease Rank"));
+          connect(decFavAction, &QAction::triggered, this,
+                  &SessionsWindow::decreaseFavouriteRank);
+          QAction *setFavAction = favMenu->addAction(i18n("Set Rank..."));
+          connect(setFavAction, &QAction::triggered, this,
+                  &SessionsWindow::setFavouriteRank);
 
           QAction *openSessionUrlAction =
               menu.addAction(i18n("Open Session URL"));
@@ -909,4 +922,45 @@ void SessionsWindow::onSessionsRefreshFinished() {
           QStringLiteral("load_all")) {
     resumeRefresh();
   }
+}
+
+void SessionsWindow::applyFavouriteAction(
+    std::function<void(const QString &)> action) {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    action(id);
+  }
+}
+
+void SessionsWindow::increaseFavouriteRank() {
+  applyFavouriteAction(
+      [this](const QString &id) { m_model->increaseFavouriteRank(id); });
+}
+
+void SessionsWindow::decreaseFavouriteRank() {
+  applyFavouriteAction(
+      [this](const QString &id) { m_model->decreaseFavouriteRank(id); });
+}
+
+void SessionsWindow::setFavouriteRank() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
+
+  QModelIndex firstSourceIndex =
+      m_proxyModel->mapToSource(selectedRows.first());
+  QVariant currentRankVal =
+      m_model->data(firstSourceIndex, SessionModel::FavouriteRole);
+  int initialRank = currentRankVal.isValid() ? currentRankVal.toInt() : 1;
+
+  bool ok;
+  int rank = QInputDialog::getInt(this, i18n("Set Favourite Rank"),
+                                  i18n("Rank:"), initialRank, 1, 10000, 1, &ok);
+  if (!ok)
+    return;
+
+  applyFavouriteAction(
+      [this, rank](const QString &id) { m_model->setFavouriteRank(id, rank); });
 }

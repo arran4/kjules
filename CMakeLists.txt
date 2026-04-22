@@ -54,6 +54,7 @@ include(ECMInstallIcons)
 include(FeatureSummary)
 
 option(USE_MOCK_API "Build with mock API support" OFF)
+option(DEV_MODE "Enable development mode (stores data in project dir)" OFF)
 
 add_definitions(-DQT_NO_CAST_FROM_ASCII
                 -DQT_NO_CAST_TO_ASCII
@@ -62,6 +63,11 @@ add_definitions(-DQT_NO_CAST_FROM_ASCII
 
 if(USE_MOCK_API)
     add_definitions(-DUSE_MOCK_API)
+endif()
+
+if(DEV_MODE)
+    add_definitions(-DDEV_MODE)
+    add_definitions(-DKJULES_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\")
 endif()
 
 set(kjules_SRCS

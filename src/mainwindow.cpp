@@ -52,6 +52,7 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
@@ -415,6 +416,23 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   }
 }
 
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+  if (event->key() == Qt::Key_Escape && m_tabWidget) {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    if (currentWidget) {
+      if (QAbstractItemView *view =
+              qobject_cast<QAbstractItemView *>(currentWidget)) {
+        view->clearSelection();
+      }
+      const auto views = currentWidget->findChildren<QAbstractItemView *>();
+      for (QAbstractItemView *view : views) {
+        view->clearSelection();
+      }
+    }
+  }
+  KXmlGuiWindow::keyPressEvent(event);
+}
+
 QStringList MainWindow::getSelectedSessionIds() const {
   QModelIndexList selectedRows =
       m_sessionView->selectionModel()->selectedRows();
@@ -459,10 +477,9 @@ void MainWindow::setupUi() {
                                                QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
-  m_sourceView->header()->resizeSection(SourceModel::ColFavourite, 80);
 
   // Set default sorting to Favourites first
-  m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
+  m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(false);
@@ -507,7 +524,16 @@ void MainWindow::setupUi() {
           }
 
           QMenu menu;
-          menu.addAction(m_toggleFavouriteAction);
+          QMenu *favMenu =
+              menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                           i18n("Favourite"));
+          favMenu->addAction(m_toggleFavouriteAction);
+          favMenu->addAction(i18n("Increase Rank"), this,
+                             &MainWindow::increaseFavouriteRank);
+          favMenu->addAction(i18n("Decrease Rank"), this,
+                             &MainWindow::decreaseFavouriteRank);
+          favMenu->addAction(i18n("Set Rank..."), this,
+                             &MainWindow::setFavouriteRank);
           QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
           connect(newSessionActionLocal, &QAction::triggered,
                   [this, sourceIndex]() {
@@ -655,10 +681,13 @@ void MainWindow::setupUi() {
   m_sessionView->setSortingEnabled(true);
   m_sessionView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sessionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_sessionView->header()->setMinimumSectionSize(80);
+  m_sessionView->header()->resizeSection(SessionModel::ColTitle,
+                                         SessionModel::DefaultTitleWidth);
   m_sessionView->header()->setStretchLastSection(true);
 
-  // Set default sorting to Favourites first
-  m_sessionView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_sessionView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -708,7 +737,16 @@ void MainWindow::setupUi() {
                   m_sessionView->model());
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
-          menu.addAction(m_toggleFavouriteAction);
+          QMenu *favMenu =
+              menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                           i18n("Favourite"));
+          favMenu->addAction(m_toggleFavouriteAction);
+          favMenu->addAction(i18n("Increase Rank"), this,
+                             &MainWindow::increaseFavouriteRank);
+          favMenu->addAction(i18n("Decrease Rank"), this,
+                             &MainWindow::decreaseFavouriteRank);
+          favMenu->addAction(i18n("Set Rank..."), this,
+                             &MainWindow::setFavouriteRank);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *openSessionsForSourceAction =
               menu.addAction(i18n("Open Sessions for source"));
@@ -1070,10 +1108,13 @@ void MainWindow::setupUi() {
   m_archiveView->setSortingEnabled(true);
   m_archiveView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_archiveView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  m_archiveView->header()->setMinimumSectionSize(80);
+  m_archiveView->header()->resizeSection(SessionModel::ColTitle,
+                                         SessionModel::DefaultTitleWidth);
   m_archiveView->header()->setStretchLastSection(true);
 
-  // Set default sorting to Favourites first
-  m_archiveView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_archiveView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -1125,6 +1166,17 @@ void MainWindow::setupUi() {
           QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
 
           menu.addAction(m_toggleFavouriteAction);
+
+          QMenu *favMenu =
+              menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                           i18n("Favourite"));
+          favMenu->addAction(m_toggleFavouriteAction);
+          favMenu->addAction(i18n("Increase Rank"), this,
+                             &MainWindow::increaseFavouriteRank);
+          favMenu->addAction(i18n("Decrease Rank"), this,
+                             &MainWindow::decreaseFavouriteRank);
+          favMenu->addAction(i18n("Set Rank..."), this,
+                             &MainWindow::setFavouriteRank);
           QAction *openSessionAction = menu.addAction(i18n("Open Session"));
           QAction *unarchiveAction = menu.addAction(i18n("Unarchive"));
           QAction *deleteAction = menu.addAction(i18n("Delete"));
@@ -3084,7 +3136,8 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
-void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
+void MainWindow::showNewSessionDialog(const QJsonObject &initialData,
+                                      bool ignoreSelection) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
@@ -3097,7 +3150,8 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData) {
           &MainWindow::onTemplateSaved);
 
   QJsonObject finalData = initialData;
-  if (finalData.isEmpty() && m_tabWidget && m_tabWidget->currentWidget() &&
+  if (!ignoreSelection && finalData.isEmpty() && isActiveWindow() &&
+      m_tabWidget && m_tabWidget->currentWidget() &&
       m_tabWidget->currentWidget()->objectName() ==
           QStringLiteral("sourcesTab")) {
     QModelIndexList selection = m_sourceView->selectionModel()->selectedRows();
@@ -3257,7 +3311,7 @@ void MainWindow::toggleQueueState() {
   }
 }
 
-void MainWindow::onSessionCreated(const QMap<QString, QString> &sources,
+void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
                                   bool requirePlanApproval) {
@@ -4007,7 +4061,7 @@ void MainWindow::editQueueItem(int row) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             if (persistentIndex.isValid()) {
@@ -4150,7 +4204,7 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
@@ -4182,7 +4236,7 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMap<QString, QString> &sources,
+          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
                                   const QString &p, const QString &a,
                                   bool requirePlanApproval) {
             onSessionCreated(sources, p, a, requirePlanApproval);
@@ -5013,4 +5067,198 @@ void MainWindow::updateFavouritesMenu() {
     QAction *emptyAction = m_favouritesMenu->addAction(i18n("No Favourites"));
     emptyAction->setEnabled(false);
   }
+}
+
+void MainWindow::updateFavouritesMenu() {
+  if (!m_favouritesMenu)
+    return;
+
+  m_favouritesMenu->clear();
+
+  for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+    QModelIndex idx = m_sourceModel->index(i, 0);
+    if (m_sourceModel->data(idx, SourceModel::FavouriteRole).toBool()) {
+      QString name = m_sourceModel->data(idx, Qt::DisplayRole).toString();
+      QAction *action = m_favouritesMenu->addAction(
+          QIcon::fromTheme(QStringLiteral("folder-bookmark")), name);
+      connect(action, &QAction::triggered, this,
+              [this, persistentIdx = QPersistentModelIndex(idx)]() {
+                if (persistentIdx.isValid()) {
+                  QJsonObject initData;
+                  QJsonArray sourcesArr;
+                  QString srcName =
+                      m_sourceModel->data(persistentIdx, SourceModel::NameRole)
+                          .toString();
+                  sourcesArr.append(srcName);
+                  initData[QStringLiteral("sources")] = sourcesArr;
+                  showNewSessionDialog(initData);
+                }
+              });
+    }
+  }
+
+  int sessionCount = 0;
+  auto processSessionModel = [this, &sessionCount](SessionModel *model) {
+    for (int i = 0; i < model->rowCount(); ++i) {
+      QModelIndex idx = model->index(i, 0);
+      if (model->data(idx, SessionModel::FavouriteRole).toBool()) {
+        if (sessionCount == 0 && !m_favouritesMenu->actions().isEmpty()) {
+          m_favouritesMenu->addSeparator();
+        }
+        QString id = model->data(idx, SessionModel::IdRole).toString();
+        QString name = model->getSessionName(id);
+        if (name.isEmpty())
+          name = id;
+        QAction *action = m_favouritesMenu->addAction(
+            QIcon::fromTheme(QStringLiteral("emblem-favorite")), name);
+        connect(action, &QAction::triggered, this, [this, id]() {
+          QJsonObject sessionData;
+          bool isManaged = false;
+          for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
+            if (m_sessionModel
+                    ->data(m_sessionModel->index(j, 0), SessionModel::IdRole)
+                    .toString() == id) {
+              sessionData = m_sessionModel->getSession(j);
+              isManaged = true;
+              break;
+            }
+          }
+          if (sessionData.isEmpty()) {
+            for (int j = 0; j < m_archiveModel->rowCount(); ++j) {
+              if (m_archiveModel
+                      ->data(m_archiveModel->index(j, 0), SessionModel::IdRole)
+                      .toString() == id) {
+                sessionData = m_archiveModel->getSession(j);
+                isManaged = true;
+                break;
+              }
+            }
+          }
+          if (!sessionData.isEmpty()) {
+            SessionWindow *window =
+                new SessionWindow(sessionData, m_apiManager, isManaged, this);
+            connectSessionWindow(window);
+            window->show();
+          }
+        });
+        sessionCount++;
+      }
+    }
+  };
+
+  processSessionModel(m_sessionModel);
+  processSessionModel(m_archiveModel);
+
+  if (m_favouritesMenu->actions().isEmpty()) {
+    QAction *emptyAction = m_favouritesMenu->addAction(i18n("No Favourites"));
+    emptyAction->setEnabled(false);
+  }
+}
+
+void MainWindow::applyFavouriteAction(
+    std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
+                       const QModelIndexList &, int)>
+        action) {
+  QAbstractItemView *view = nullptr;
+  QAbstractItemModel *model = nullptr;
+  int idRole = -1;
+
+  if (m_tabWidget->currentWidget()->objectName() ==
+      QStringLiteral("sourcesTab")) {
+    view = m_sourceView;
+    model = m_sourceModel;
+    idRole = SourceModel::IdRole;
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("followingTab")) {
+    view = m_sessionView;
+    model = m_sessionModel;
+    idRole = SessionModel::IdRole;
+  } else if (m_tabWidget->currentWidget()->objectName() ==
+             QStringLiteral("archiveTab")) {
+    view = m_archiveView;
+    model = m_archiveModel;
+    idRole = SessionModel::IdRole;
+  }
+
+  if (!view || !model)
+    return;
+
+  QModelIndexList selectedRows = view->selectionModel()->selectedRows();
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+
+  if (proxy && !selectedRows.isEmpty()) {
+    action(proxy, model, selectedRows, idRole);
+  }
+}
+
+void MainWindow::increaseFavouriteRank() {
+  applyFavouriteAction([](const QSortFilterProxyModel *proxy,
+                          QAbstractItemModel *model,
+                          const QModelIndexList &selectedRows, int idRole) {
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = proxy->mapToSource(idx);
+      QString id = model->data(sourceIndex, idRole).toString();
+      if (sm) {
+        sm->increaseFavouriteRank(id);
+      } else if (sessionModel) {
+        sessionModel->increaseFavouriteRank(id);
+      }
+    }
+  });
+}
+
+void MainWindow::decreaseFavouriteRank() {
+  applyFavouriteAction([](const QSortFilterProxyModel *proxy,
+                          QAbstractItemModel *model,
+                          const QModelIndexList &selectedRows, int idRole) {
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = proxy->mapToSource(idx);
+      QString id = model->data(sourceIndex, idRole).toString();
+      if (sm) {
+        sm->decreaseFavouriteRank(id);
+      } else if (sessionModel) {
+        sessionModel->decreaseFavouriteRank(id);
+      }
+    }
+  });
+}
+
+void MainWindow::setFavouriteRank() {
+  applyFavouriteAction([this](const QSortFilterProxyModel *proxy,
+                              QAbstractItemModel *model,
+                              const QModelIndexList &selectedRows, int idRole) {
+    int initialRank = 1;
+    QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
+
+    int favRole = (idRole == SourceModel::IdRole)
+                      ? static_cast<int>(SourceModel::FavouriteRole)
+                      : static_cast<int>(SessionModel::FavouriteRole);
+    QVariant rankVal = model->data(sourceIndex, favRole);
+    if (rankVal.isValid())
+      initialRank = rankVal.toInt();
+
+    bool ok;
+    int rank =
+        QInputDialog::getInt(this, i18n("Set Favourite Rank"), i18n("Rank:"),
+                             initialRank, 1, 10000, 1, &ok);
+    if (!ok)
+      return;
+
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sIdx = proxy->mapToSource(idx);
+      QString id = model->data(sIdx, idRole).toString();
+      if (sm) {
+        sm->setFavouriteRank(id, rank);
+      } else if (sessionModel) {
+        sessionModel->setFavouriteRank(id, rank);
+      }
+    }
+  });
 }
