@@ -68,6 +68,8 @@ public:
     ColCount
   };
 
+  static constexpr int DefaultTitleWidth = 400;
+
   explicit SessionModel(
       const QString &cacheFileName = QStringLiteral("cached_all_sessions.json"),
       QObject *parent = nullptr);
