@@ -78,7 +78,8 @@ void SourcesRefreshProgressWindow::onSourcesReceived(
       if (id.isEmpty()) {
         id = source.value(QStringLiteral("name")).toString();
       }
-      if (id.startsWith(QStringLiteral("sources/github/"))) {
+      if (id.startsWith(QStringLiteral("sources/github/")) ||
+          id.startsWith(QStringLiteral("github/"))) {
         m_totalGithubRequests++;
         m_githubQueue.append(id);
       }

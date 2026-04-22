@@ -517,6 +517,8 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
   QString cleanId = sourceId;
   if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
     cleanId = cleanId.mid(15);
+  } else if (cleanId.startsWith(QStringLiteral("github/"))) {
+    cleanId = cleanId.mid(7);
   } else {
     return; // Not a github source
   }
@@ -806,6 +808,8 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
   QString cleanId = sourceId;
   if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
     cleanId = cleanId.mid(15);
+  } else if (cleanId.startsWith(QStringLiteral("github/"))) {
+    cleanId = cleanId.mid(7);
   } else {
     return; // Not a github source
   }
