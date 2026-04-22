@@ -118,16 +118,25 @@ public:
 protected:
   bool lessThan(const QModelIndex &source_left,
                 const QModelIndex &source_right) const override {
-    bool leftFav =
-        sourceModel()->data(source_left, SourceModel::FavouriteRole).toBool();
-    bool rightFav =
-        sourceModel()->data(source_right, SourceModel::FavouriteRole).toBool();
+    QVariant lVal =
+        sourceModel()->data(source_left, SourceModel::FavouriteRole);
+    QVariant rVal =
+        sourceModel()->data(source_right, SourceModel::FavouriteRole);
+    int leftFav = lVal.isValid() ? lVal.toInt() : -1;
+    int rightFav = rVal.isValid() ? rVal.toInt() : -1;
 
     if (leftFav != rightFav) {
+      // If one is not a favorite, it should always be at the bottom (greater)
+      if (leftFav == -1)
+        return sortOrder() == Qt::DescendingOrder;
+      if (rightFav == -1)
+        return sortOrder() == Qt::AscendingOrder;
+
+      // Both are favorites but different ranks. Standard numeric comparison.
       if (sortOrder() == Qt::AscendingOrder) {
-        return leftFav;
+        return leftFav < rightFav;
       } else {
-        return !leftFav;
+        return leftFav > rightFav;
       }
     }
     return QSortFilterProxyModel::lessThan(source_left, source_right);

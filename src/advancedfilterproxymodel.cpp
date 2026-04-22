@@ -122,11 +122,17 @@ bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left,
   }
 
   if (leftFav != rightFav) {
+    // If one is not a favorite, it should always be at the bottom (greater)
+    if (leftFav == -1)
+      return sortOrder() == Qt::DescendingOrder;
+    if (rightFav == -1)
+      return sortOrder() == Qt::AscendingOrder;
+
+    // Both are favorites but different ranks. Standard numeric comparison.
     if (sortOrder() == Qt::AscendingOrder) {
-      return leftFav > rightFav;
-    } else {
       return leftFav < rightFav;
-      // is 'greater' -> return false
+    } else {
+      return leftFav > rightFav;
     }
   }
 

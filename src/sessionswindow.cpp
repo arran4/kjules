@@ -92,14 +92,23 @@ bool SessionsProxyModel::lessThan(const QModelIndex &source_left,
                                   const QModelIndex &source_right) const {
   QAbstractItemModel *m = sourceModel();
   if (qobject_cast<SessionModel *>(m)) {
-    bool leftFav = m->data(source_left, SessionModel::FavouriteRole).toBool();
-    bool rightFav = m->data(source_right, SessionModel::FavouriteRole).toBool();
+    QVariant lVal = m->data(source_left, SessionModel::FavouriteRole);
+    QVariant rVal = m->data(source_right, SessionModel::FavouriteRole);
+    int leftFav = lVal.isValid() ? lVal.toInt() : -1;
+    int rightFav = rVal.isValid() ? rVal.toInt() : -1;
 
     if (leftFav != rightFav) {
+      // If one is not a favorite, it should always be at the bottom (greater)
+      if (leftFav == -1)
+        return sortOrder() == Qt::DescendingOrder;
+      if (rightFav == -1)
+        return sortOrder() == Qt::AscendingOrder;
+
+      // Both are favorites but different ranks. Standard numeric comparison.
       if (sortOrder() == Qt::AscendingOrder) {
-        return leftFav;
+        return leftFav < rightFav;
       } else {
-        return !leftFav;
+        return leftFav > rightFav;
       }
     }
   }
