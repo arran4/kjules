@@ -2116,7 +2116,7 @@ void MainWindow::createActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
                   i18n("New Session"), this);
   connect(newSessionAction, &QAction::triggered, this,
-          [this]() { showNewSessionDialog(QJsonObject(), true); });
+          [this]() { showNewSessionDialog(); });
   actionCollection()->addAction(QStringLiteral("new_session"),
                                 newSessionAction);
   KGlobalAccel::setGlobalShortcut(
@@ -3070,8 +3070,8 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData,
           &MainWindow::onTemplateSaved);
 
   QJsonObject finalData = initialData;
-  if (!ignoreSelection && finalData.isEmpty() && m_tabWidget &&
-      m_tabWidget->currentWidget() &&
+  if (!ignoreSelection && finalData.isEmpty() && isActiveWindow() &&
+      m_tabWidget && m_tabWidget->currentWidget() &&
       m_tabWidget->currentWidget()->objectName() ==
           QStringLiteral("sourcesTab")) {
     QModelIndexList selection = m_sourceView->selectionModel()->selectedRows();
