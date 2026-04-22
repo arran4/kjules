@@ -84,6 +84,8 @@ sudo apt-get update && sudo apt-get install -y extra-cmake-modules qt6-base-dev 
     cmake --build .
     ```
 
+    *Optional: If you are doing local development, you can use the `-DDEV_MODE=ON` flag (e.g., `cmake .. -DDEV_MODE=ON`). This will automatically sandbox the application's runtime data (XDG dirs, AppData) within the project directory as `.jules-dev-data/`, preventing it from interfering with your normal system-wide configuration. This is highly recommended for IDE usage.*
+
 4.  Run the application:
     ```bash
     ./kjules
