@@ -4445,16 +4445,6 @@ void MainWindow::onSourcesReceived(const QJsonArray &sources) {
   m_sourcesAddedCount += added;
   m_pagesLoadedCount++;
 
-  if (!m_apiManager->githubToken().isEmpty()) {
-    for (int i = 0; i < sources.size(); ++i) {
-      QJsonObject source = sources[i].toObject();
-      QString id = source.value(QStringLiteral("id")).toString();
-      if (id.startsWith(QStringLiteral("sources/github/"))) {
-        m_apiManager->fetchGithubInfo(id);
-      }
-    }
-  }
-
   m_sourceProgressBar->setFormat(i18n("%1 sources loaded from %2 pages",
                                       m_sourcesLoadedCount,
                                       m_pagesLoadedCount));

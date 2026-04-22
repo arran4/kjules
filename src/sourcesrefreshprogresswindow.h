@@ -27,6 +27,7 @@ private Q_SLOTS:
   void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void onGithubInfoFailed(const QString &sourceId, const QString &message);
   void onSourcesRefreshFinished();
+  void processNextGithub();
 
 private:
   QProgressBar *m_progressBar;
@@ -36,6 +37,8 @@ private:
   APIManager *m_apiManager;
   int m_totalGithubRequests;
   int m_finishedGithubRequests;
+  int m_activeWorkers;
+  QStringList m_githubQueue;
 };
 
 #endif // SOURCESREFRESHPROGRESSWINDOW_H
