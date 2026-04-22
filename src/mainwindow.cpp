@@ -458,10 +458,9 @@ void MainWindow::setupUi() {
                                                QHeaderView::Stretch);
   m_sourceView->header()->setMinimumSectionSize(300);
   m_sourceView->header()->resizeSection(SourceModel::ColName, 400);
-  m_sourceView->header()->resizeSection(SourceModel::ColFavourite, 80);
 
   // Set default sorting to Favourites first
-  m_sourceView->sortByColumn(SourceModel::ColFavourite, Qt::DescendingOrder);
+  m_sourceView->sortByColumn(SourceModel::ColName, Qt::AscendingOrder);
   m_sourceView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_sourceView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_sourceView->header()->setStretchLastSection(false);
@@ -659,8 +658,8 @@ void MainWindow::setupUi() {
                                          SessionModel::DefaultTitleWidth);
   m_sessionView->header()->setStretchLastSection(true);
 
-  // Set default sorting to Favourites first
-  m_sessionView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_sessionView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   m_sessionView->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -1077,8 +1076,8 @@ void MainWindow::setupUi() {
                                          SessionModel::DefaultTitleWidth);
   m_archiveView->header()->setStretchLastSection(true);
 
-  // Set default sorting to Favourites first
-  m_archiveView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_archiveView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   m_archiveView->setContextMenuPolicy(Qt::CustomContextMenu);
 
