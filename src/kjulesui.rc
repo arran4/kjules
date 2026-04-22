@@ -30,6 +30,7 @@
             <Action name="view_sessions" />
             <Action name="show_past_new_sessions" />
             <Action name="view_raw_data" />
+            <Action name="source_settings" />
             <Separator />
             <Action name="archive_merged_following" />
             <Action name="archive_completed_following" />

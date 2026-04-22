@@ -59,6 +59,7 @@ Q_SIGNALS:
   void loadTemplateRequested();
   void refreshSourcesRequested();
   void refreshGithubRequested(const QStringList &sourceIds);
+  void refreshSourceRequested(const QString &sourceId);
 
 public Q_SLOTS:
   void updateStatus(const QString &message);

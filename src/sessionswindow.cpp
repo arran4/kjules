@@ -208,15 +208,16 @@ void SessionsWindow::setupUi() {
   m_listView->setRootIsDecorated(false);
 
   // Header configuration
-  m_listView->header()->setMinimumSectionSize(100);
-  m_listView->header()->resizeSection(SessionModel::ColTitle, 250);
+  m_listView->header()->setMinimumSectionSize(80);
+  m_listView->header()->resizeSection(SessionModel::ColTitle,
+                                      SessionModel::DefaultTitleWidth);
   m_listView->header()->resizeSection(SessionModel::ColState, 100);
   m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
   m_listView->header()->resizeSection(SessionModel::ColPR, 80);
   m_listView->header()->resizeSection(SessionModel::ColUpdatedAt, 150);
 
-  // Set default sorting to Favourites first
-  m_listView->sortByColumn(SessionModel::ColFavourite, Qt::DescendingOrder);
+  // Set default sorting to Title
+  m_listView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this,
           [this](int value) {

@@ -24,7 +24,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
     title = prompt;
   }
   title.replace(QLatin1Char('\n'), QLatin1Char(' '));
-  if (title.length() > 50) {
+  if (title.length() > 1024) {
     title = title.left(47) + QStringLiteral("...");
   }
   data.title = title;
@@ -119,11 +119,11 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   if (role == Qt::DisplayRole) {
     switch (index.column()) {
     case ColTitle:
-      return session.title;
-    case ColFavourite:
-      return session.favouriteRank.has_value()
-                 ? QString::number(session.favouriteRank.value())
-                 : QString();
+      return session.title.simplified();
+    // case ColFavourite: TODO obsolete need an equiv
+    //   return session.favouriteRank.has_value()
+    //              ? QString::number(session.favouriteRank.value())
+    //              : QString();
     case ColState:
       return session.state;
     case ColChangeSet:
@@ -154,7 +154,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return QColor(Qt::blue);
     }
   } else if (role == Qt::DecorationRole) {
-    if (index.column() == ColFavourite && session.favouriteRank.has_value()) {
+    if (index.column() == ColTitle && session.favouriteRank.has_value()) {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
@@ -185,7 +185,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   case NameRole:
     return session.name;
   case TitleRole:
-    return session.title;
+    return session.title.simplified();
   case SourceRole:
     return session.source;
   case PromptRole:
@@ -219,8 +219,6 @@ QVariant SessionModel::headerData(int section, Qt::Orientation orientation,
     switch (section) {
     case ColTitle:
       return i18n("Title");
-    case ColFavourite:
-      return i18n("Favourite");
     case ColState:
       return i18n("State");
     case ColChangeSet:

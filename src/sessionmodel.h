@@ -55,7 +55,6 @@ public:
 
   enum Columns {
     ColTitle = 0,
-    ColFavourite,
     ColState,
     ColChangeSet,
     ColPR,
@@ -69,6 +68,8 @@ public:
     ColLastRefreshed,
     ColCount
   };
+
+  static constexpr int DefaultTitleWidth = 400;
 
   explicit SessionModel(
       const QString &cacheFileName = QStringLiteral("cached_all_sessions.json"),

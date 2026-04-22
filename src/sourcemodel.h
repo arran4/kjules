@@ -17,7 +17,6 @@ public:
   };
   enum Columns {
     ColName = 0,
-    ColFavourite,
     ColLastUsed,
     ColManagedSessions,
     ColHeat,

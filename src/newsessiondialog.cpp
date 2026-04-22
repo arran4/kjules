@@ -340,7 +340,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                  persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
                   QModelIndex sourceIdx = persistentSourceIdx;
                   QString currentBranch = m_selectedSources.value(name);
-                  bool ok;
                   QStringList branches = getAvailableBranches(sourceIdx);
                   int currentIndex = branches.indexOf(currentBranch);
                   if (currentIndex < 0) {
@@ -349,13 +348,62 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                     }
                     currentIndex = 0;
                   }
-                  QString newBranch = QInputDialog::getItem(
-                      this, tr("Select Branch"),
-                      tr("Branch for %1:").arg(displayName), branches,
-                      currentIndex, true, &ok);
-                  if (ok && !newBranch.isEmpty()) {
-                    m_selectedSources[name] = newBranch;
-                    updateModels();
+
+                  QDialog dialog(this);
+                  dialog.setWindowTitle(tr("Select Branch"));
+                  QVBoxLayout layout(&dialog);
+                  layout.addWidget(
+                      new QLabel(tr("Branch for %1:").arg(displayName)));
+
+                  QComboBox *comboBox = new QComboBox(&dialog);
+                  comboBox->addItems(branches);
+                  comboBox->setCurrentIndex(currentIndex);
+                  comboBox->setEditable(true);
+                  layout.addWidget(comboBox);
+
+                  QHBoxLayout *btnLayout = new QHBoxLayout();
+                  QPushButton *refreshJulesBtn =
+                      new QPushButton(tr("Refresh Jules"), &dialog);
+                  QPushButton *refreshGithubBtn =
+                      new QPushButton(tr("Refresh GitHub"), &dialog);
+                  btnLayout->addWidget(refreshJulesBtn);
+                  btnLayout->addWidget(refreshGithubBtn);
+                  btnLayout->addStretch();
+                  layout.addLayout(btnLayout);
+
+                  QDialogButtonBox *buttonBox = new QDialogButtonBox(
+                      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+                  layout.addWidget(buttonBox);
+
+                  connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
+                          &QDialog::accept);
+                  connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
+                          &QDialog::reject);
+
+                  QString sourceId =
+                      m_sourceModel->data(sourceIdx, SourceModel::IdRole)
+                          .toString();
+
+                  connect(refreshJulesBtn, &QPushButton::clicked, this,
+                          [this, sourceId]() {
+                            Q_EMIT refreshSourceRequested(sourceId);
+                            updateStatus(
+                                tr("Requested Jules refresh for source..."));
+                          });
+                  connect(refreshGithubBtn, &QPushButton::clicked, this,
+                          [this, sourceId]() {
+                            Q_EMIT refreshGithubRequested(
+                                QStringList{sourceId});
+                            updateStatus(
+                                tr("Requested GitHub refresh for source..."));
+                          });
+
+                  if (dialog.exec() == QDialog::Accepted) {
+                    QString newBranch = comboBox->currentText();
+                    if (!newBranch.isEmpty()) {
+                      m_selectedSources[name] = newBranch;
+                      updateModels();
+                    }
                   }
                 });
 
@@ -1000,6 +1048,17 @@ bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
 QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
   QJsonObject rawData =
       m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+
+  QJsonObject githubRepo =
+      rawData.value(QStringLiteral("githubRepo")).toObject();
+  if (githubRepo.contains(QStringLiteral("defaultBranch"))) {
+    QJsonObject db =
+        githubRepo.value(QStringLiteral("defaultBranch")).toObject();
+    if (db.contains(QStringLiteral("displayName"))) {
+      return db.value(QStringLiteral("displayName")).toString();
+    }
+  }
+
   if (rawData.contains(QStringLiteral("defaultBranch"))) {
     return rawData.value(QStringLiteral("defaultBranch")).toString();
   }
@@ -1026,6 +1085,21 @@ NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
       }
     }
   };
+
+  auto addUniqueObjs = [&](const QJsonArray &arr) {
+    for (const QJsonValue &v : arr) {
+      QJsonObject obj = v.toObject();
+      QString b = obj.value(QStringLiteral("displayName")).toString();
+      if (!b.isEmpty() && !seen.contains(b)) {
+        branches.append(b);
+        seen.insert(b);
+      }
+    }
+  };
+
+  QJsonObject githubRepo =
+      rawData.value(QStringLiteral("githubRepo")).toObject();
+  addUniqueObjs(githubRepo.value(QStringLiteral("branches")).toArray());
 
   // Extract from github info if available
   QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
