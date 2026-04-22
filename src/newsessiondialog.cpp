@@ -363,9 +363,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                     new QLabel(tr("Branch for %1:").arg(displayName)));
               }
 
-              QStackedWidget *stackedWidget = new QStackedWidget(&dialog);
-              layout.addWidget(stackedWidget);
-
               // Single mode
               QWidget *singleModeWidget = new QWidget();
               QHBoxLayout *singleLayout = new QHBoxLayout(singleModeWidget);
@@ -388,6 +385,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               QPushButton *plusBtn =
                   new QPushButton(QStringLiteral("+"), &dialog);
               plusBtn->setToolTip(tr("Switch to multiple branch selection"));
+              plusBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
               singleLayout->addWidget(comboBox);
               singleLayout->addWidget(plusBtn);
 
@@ -410,19 +408,21 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               multiLayout->addWidget(listWidget);
               multiLayout->addLayout(addRemoveLayout);
 
-              stackedWidget->addWidget(singleModeWidget);
-              stackedWidget->addWidget(multiModeWidget);
+              layout.addWidget(singleModeWidget);
+              layout.addWidget(multiModeWidget);
 
               bool isMultiMode = currentBranches.size() > 1;
               if (isMultiMode) {
-                stackedWidget->setCurrentWidget(multiModeWidget);
+                singleModeWidget->hide();
               } else {
-                stackedWidget->setCurrentWidget(singleModeWidget);
+                multiModeWidget->hide();
               }
 
               connect(plusBtn, &QPushButton::clicked, [&]() {
                 isMultiMode = true;
-                stackedWidget->setCurrentWidget(multiModeWidget);
+                singleModeWidget->hide();
+                multiModeWidget->show();
+                dialog.adjustSize();
                 if (listWidget->count() == 0 &&
                     !comboBox->currentText().isEmpty()) {
                   listWidget->addItem(comboBox->currentText());
