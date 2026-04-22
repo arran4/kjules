@@ -4,6 +4,8 @@
 #include "sourcemodel.h"
 #include <KXmlGuiWindow>
 #include <QJsonObject>
+#include <QMap>
+#include <QMultiMap>
 #include <QSet>
 #include <QStatusBar>
 #include <QTextEdit>

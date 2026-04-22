@@ -4,6 +4,8 @@
 #include <KXmlGuiWindow>
 #include <QDateTime>
 #include <QJsonObject>
+#include <QMap>
+#include <QMultiMap>
 #include <QSystemTrayIcon>
 
 #include "sessionswindow.h"

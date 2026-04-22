@@ -385,7 +385,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               }
               comboBox->setEditable(true);
 
-              QPushButton *plusBtn = new QPushButton("+", &dialog);
+              QPushButton *plusBtn =
+                  new QPushButton(QStringLiteral("+"), &dialog);
               plusBtn->setToolTip(tr("Switch to multiple branch selection"));
               singleLayout->addWidget(comboBox);
               singleLayout->addWidget(plusBtn);
