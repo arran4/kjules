@@ -5,6 +5,8 @@
 #include <KXmlGuiWindow>
 #include <QDateTime>
 #include <QJsonObject>
+#include <QMap>
+#include <QMultiMap>
 #include <QSystemTrayIcon>
 
 #include "sessionswindow.h"
@@ -55,7 +57,7 @@ private Q_SLOTS:
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
                             bool ignoreSelection = false);
   void showSettingsDialog();
-  void onSessionCreated(const QMap<QString, QString> &sources,
+  void onSessionCreated(const QMultiMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
                         bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
