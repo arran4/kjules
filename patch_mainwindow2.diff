@@ -1,0 +1,49 @@
+<<<<<<< SEARCH
+#include "templatesmodel.h"
+#include <KActionCollection>
+=======
+#include "templatesmodel.h"
+#include "clickableprogressbar.h"
+#include "sourcesrefreshprogresswindow.h"
+#include <KActionCollection>
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+  m_sourceProgressBar = new QProgressBar(this);
+  m_sourceProgressBar->setMinimum(0);
+  m_sourceProgressBar->setMaximum(0); // Indeterminate
+  m_sourceProgressBar->hide();
+  statusBar()->addPermanentWidget(m_sourceProgressBar);
+=======
+  m_sourcesRefreshProgressWindow = nullptr;
+  m_sourceProgressBar = new ClickableProgressBar(this);
+  m_sourceProgressBar->hide();
+  connect(m_sourceProgressBar, &ClickableProgressBar::clicked, this, [this]() {
+    if (m_sourcesRefreshProgressWindow) {
+      m_sourcesRefreshProgressWindow->show();
+      m_sourcesRefreshProgressWindow->raise();
+      m_sourcesRefreshProgressWindow->activateWindow();
+    }
+  });
+  statusBar()->addPermanentWidget(m_sourceProgressBar);
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+  m_sourceProgressBar->show();
+  m_cancelRefreshBtn->show();
+
+  updateStatus(i18n("Refreshing sources..."));
+  m_apiManager->listSources();
+=======
+  m_sourceProgressBar->show();
+  m_cancelRefreshBtn->show();
+
+  if (!m_sourcesRefreshProgressWindow) {
+    m_sourcesRefreshProgressWindow = new SourcesRefreshProgressWindow(m_apiManager, this);
+  }
+  m_sourcesRefreshProgressWindow->reset();
+  m_sourcesRefreshProgressWindow->show();
+  m_sourcesRefreshProgressWindow->raise();
+  m_sourcesRefreshProgressWindow->activateWindow();
+
+  updateStatus(i18n("Refreshing sources..."));
+  m_apiManager->listSources();
+>>>>>>> REPLACE

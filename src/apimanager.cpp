@@ -461,7 +461,12 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isObject()) {
         Q_EMIT githubInfoReceived(sourceId, doc.object());
+      } else {
+        Q_EMIT githubInfoFailed(sourceId,
+                                QStringLiteral("Invalid JSON response"));
       }
+    } else {
+      Q_EMIT githubInfoFailed(sourceId, reply->errorString());
     }
   });
 }

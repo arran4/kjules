@@ -23,6 +23,7 @@
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcemodel.h"
+#include "sourcesrefreshprogresswindow.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include <KActionCollection>
@@ -1841,10 +1842,16 @@ void MainWindow::setupUi() {
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
 
-  m_sourceProgressBar = new QProgressBar(this);
-  m_sourceProgressBar->setMinimum(0);
-  m_sourceProgressBar->setMaximum(0); // Indeterminate
+  m_sourcesRefreshProgressWindow = nullptr;
+  m_sourceProgressBar = new ClickableProgressBar(this);
   m_sourceProgressBar->hide();
+  connect(m_sourceProgressBar, &ClickableProgressBar::clicked, this, [this]() {
+    if (m_sourcesRefreshProgressWindow) {
+      m_sourcesRefreshProgressWindow->show();
+      m_sourcesRefreshProgressWindow->raise();
+      m_sourcesRefreshProgressWindow->activateWindow();
+    }
+  });
   statusBar()->addPermanentWidget(m_sourceProgressBar);
 
   m_sessionRefreshProgressBar = new ClickableProgressBar(this);
@@ -3051,6 +3058,15 @@ void MainWindow::refreshSources() {
   m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
   m_sourceProgressBar->show();
   m_cancelRefreshBtn->show();
+
+  if (!m_sourcesRefreshProgressWindow) {
+    m_sourcesRefreshProgressWindow =
+        new SourcesRefreshProgressWindow(m_apiManager, this);
+  }
+  m_sourcesRefreshProgressWindow->reset();
+  m_sourcesRefreshProgressWindow->show();
+  m_sourcesRefreshProgressWindow->raise();
+  m_sourcesRefreshProgressWindow->activateWindow();
 
   updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources();

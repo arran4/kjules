@@ -1,0 +1,13 @@
+<<<<<<< SEARCH
+class RefreshProgressWindow;
+=======
+class RefreshProgressWindow;
+class SourcesRefreshProgressWindow;
+class ClickableProgressBar;
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+  QProgressBar *m_sourceProgressBar;
+=======
+  ClickableProgressBar *m_sourceProgressBar;
+  SourcesRefreshProgressWindow *m_sourcesRefreshProgressWindow;
+>>>>>>> REPLACE

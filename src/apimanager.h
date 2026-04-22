@@ -59,6 +59,7 @@ public:
 
 Q_SIGNALS:
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
+  void githubInfoFailed(const QString &sourceId, const QString &message);
   void githubBranchesReceived(const QString &sourceId,
                               const QJsonArray &branches);
   void githubPullRequestInfoReceived(const QString &prUrl,
