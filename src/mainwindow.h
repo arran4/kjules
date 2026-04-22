@@ -45,6 +45,7 @@ Q_SIGNALS:
 
 protected:
   void closeEvent(QCloseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
 
 private Q_SLOTS:
   void updateCompletions();

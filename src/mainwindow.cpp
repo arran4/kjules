@@ -51,6 +51,7 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
@@ -412,6 +413,23 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   } else {
     KXmlGuiWindow::closeEvent(event);
   }
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+  if (event->key() == Qt::Key_Escape && m_tabWidget) {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    if (currentWidget) {
+      if (QAbstractItemView *view =
+              qobject_cast<QAbstractItemView *>(currentWidget)) {
+        view->clearSelection();
+      }
+      const auto views = currentWidget->findChildren<QAbstractItemView *>();
+      for (QAbstractItemView *view : views) {
+        view->clearSelection();
+      }
+    }
+  }
+  KXmlGuiWindow::keyPressEvent(event);
 }
 
 QStringList MainWindow::getSelectedSessionIds() const {
