@@ -416,6 +416,8 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   QNetworkRequest request((QUrl(apiUrl)));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -454,6 +456,8 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
       QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -732,6 +736,8 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
                                cleanId + QStringLiteral("/branches")));
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
