@@ -609,17 +609,19 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             });
 
         QAction *unselectAction = menu.addAction(tr("Unselect"));
-        connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
-          QModelIndexList selected =
-              m_selectedView->selectionModel()->selectedIndexes();
-          if (!selected.contains(proxyIdx))
-            selected = {proxyIdx};
-          for (const QModelIndex &idx : selected) {
-            m_selectedSources.remove(
-                idx.data(SourceModel::NameRole).toString());
-          }
-          updateModels();
-        });
+        connect(unselectAction, &QAction::triggered, this,
+                [this, persistentProxyIdx = QPersistentModelIndex(proxyIdx)]() {
+                  QModelIndex proxyIdx = persistentProxyIdx;
+                  QModelIndexList selected =
+                      m_selectedView->selectionModel()->selectedIndexes();
+                  if (!selected.contains(proxyIdx))
+                    selected = {proxyIdx};
+                  for (const QModelIndex &idx : selected) {
+                    m_selectedSources.remove(
+                        idx.data(SourceModel::NameRole).toString());
+                  }
+                  updateModels();
+                });
 
         addFavouriteAction(menu, sourceIdx);
 
