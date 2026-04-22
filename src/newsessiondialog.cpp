@@ -413,217 +413,218 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_selectedView->setModel(m_selectedProxy);
   m_selectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_selectedView->setContextMenuPolicy(Qt::CustomContextMenu);
-connect(
-    m_selectedView, &QListView::customContextMenuRequested, this,
-    [this](const QPoint &pos) {
-      QPoint viewportPos =
-          m_selectedView->viewport()->mapFrom(m_selectedView, pos);
-      QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
-      if (!proxyIdx.isValid())
-        return;
+  connect(
+      m_selectedView, &QListView::customContextMenuRequested, this,
+      [this](const QPoint &pos) {
+        QPoint viewportPos =
+            m_selectedView->viewport()->mapFrom(m_selectedView, pos);
+        QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
+        if (!proxyIdx.isValid())
+          return;
 
-      QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
-      QString name =
-          m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
-      QString displayName =
-          m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
-              .toString();
+        QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
+        QString name =
+            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+        QString displayName =
+            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
+                .toString();
 
-      QMenu menu(this);
+        QMenu menu(this);
 
-      QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
-      connect(
-          selectBranchAction, &QAction::triggered, this,
-          [this, proxyIdx, name, displayName,
-           persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
-            QModelIndex sourceIdx = persistentSourceIdx;
-            QModelIndexList selected =
-                m_selectedView->selectionModel()->selectedIndexes();
-            if (!selected.contains(proxyIdx))
-              selected = {proxyIdx};
+        QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
+        connect(
+            selectBranchAction, &QAction::triggered, this,
+            [this, proxyIdx, name, displayName,
+             persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
+              QModelIndex sourceIdx = persistentSourceIdx;
+              QModelIndexList selected =
+                  m_selectedView->selectionModel()->selectedIndexes();
+              if (!selected.contains(proxyIdx))
+                selected = {proxyIdx};
 
-            QStringList currentBranches = m_selectedSources.values(name);
-            QStringList branches = getAvailableBranches(sourceIdx);
+              QStringList currentBranches = m_selectedSources.values(name);
+              QStringList branches = getAvailableBranches(sourceIdx);
 
-            QDialog dialog(this);
-            dialog.setWindowTitle(tr("Select Branch"));
-            QVBoxLayout layout(&dialog);
+              QDialog dialog(this);
+              dialog.setWindowTitle(tr("Select Branch"));
+              QVBoxLayout layout(&dialog);
 
-            if (selected.size() > 1) {
-              layout.addWidget(new QLabel(
-                  tr("Branch for %n selected source(s):", "", selected.size())));
-            } else {
-              layout.addWidget(
-                  new QLabel(tr("Branch for %1:").arg(displayName)));
-            }
-
-            // Single mode
-            QWidget *singleModeWidget = new QWidget();
-            QHBoxLayout *singleLayout = new QHBoxLayout(singleModeWidget);
-            singleLayout->setContentsMargins(0, 0, 0, 0);
-
-            QComboBox *comboBox = new QComboBox(&dialog);
-            comboBox->addItems(branches);
-            if (!currentBranches.isEmpty()) {
-              int idx = branches.indexOf(currentBranches.first());
-              if (idx >= 0) {
-                comboBox->setCurrentIndex(idx);
+              if (selected.size() > 1) {
+                layout.addWidget(new QLabel(tr(
+                    "Branch for %n selected source(s):", "", selected.size())));
               } else {
-                branches.prepend(currentBranches.first());
-                comboBox->clear();
-                comboBox->addItems(branches);
-                comboBox->setCurrentIndex(0);
+                layout.addWidget(
+                    new QLabel(tr("Branch for %1:").arg(displayName)));
               }
-            }
-            comboBox->setEditable(true);
 
-            QPushButton *plusBtn =
-                new QPushButton(QStringLiteral("+"), &dialog);
-            plusBtn->setToolTip(tr("Switch to multiple branch selection"));
-            plusBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+              // Single mode
+              QWidget *singleModeWidget = new QWidget();
+              QHBoxLayout *singleLayout = new QHBoxLayout(singleModeWidget);
+              singleLayout->setContentsMargins(0, 0, 0, 0);
 
-            singleLayout->addWidget(comboBox);
-            singleLayout->addWidget(plusBtn);
-
-            // Multi mode
-            QWidget *multiModeWidget = new QWidget();
-            QVBoxLayout *multiLayout = new QVBoxLayout(multiModeWidget);
-            multiLayout->setContentsMargins(0, 0, 0, 0);
-
-            QListWidget *listWidget = new QListWidget(&dialog);
-            listWidget->addItems(currentBranches);
-
-            QHBoxLayout *addRemoveLayout = new QHBoxLayout();
-            QComboBox *multiComboBox = new QComboBox(&dialog);
-            multiComboBox->addItems(branches);
-            multiComboBox->setEditable(true);
-
-            QPushButton *addBtn = new QPushButton(tr("Add"), &dialog);
-            QPushButton *removeBtn = new QPushButton(tr("Remove"), &dialog);
-
-            addRemoveLayout->addWidget(multiComboBox);
-            addRemoveLayout->addWidget(addBtn);
-            addRemoveLayout->addWidget(removeBtn);
-
-            multiLayout->addWidget(listWidget);
-            multiLayout->addLayout(addRemoveLayout);
-
-            layout.addWidget(singleModeWidget);
-            layout.addWidget(multiModeWidget);
-
-            bool isMultiMode = currentBranches.size() > 1;
-            if (isMultiMode) {
-              singleModeWidget->hide();
-            } else {
-              multiModeWidget->hide();
-            }
-
-            connect(plusBtn, &QPushButton::clicked, [&]() {
-              isMultiMode = true;
-              singleModeWidget->hide();
-              multiModeWidget->show();
-              dialog.adjustSize();
-              if (listWidget->count() == 0 && !comboBox->currentText().isEmpty()) {
-                listWidget->addItem(comboBox->currentText());
+              QComboBox *comboBox = new QComboBox(&dialog);
+              comboBox->addItems(branches);
+              if (!currentBranches.isEmpty()) {
+                int idx = branches.indexOf(currentBranches.first());
+                if (idx >= 0) {
+                  comboBox->setCurrentIndex(idx);
+                } else {
+                  branches.prepend(currentBranches.first());
+                  comboBox->clear();
+                  comboBox->addItems(branches);
+                  comboBox->setCurrentIndex(0);
+                }
               }
-            });
+              comboBox->setEditable(true);
 
-            connect(addBtn, &QPushButton::clicked, [&]() {
-              QString t = multiComboBox->currentText();
-              if (!t.isEmpty() &&
-                  listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
-                listWidget->addItem(t);
-              }
-            });
+              QPushButton *plusBtn =
+                  new QPushButton(QStringLiteral("+"), &dialog);
+              plusBtn->setToolTip(tr("Switch to multiple branch selection"));
+              plusBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
-            connect(removeBtn, &QPushButton::clicked,
-                    [&]() { qDeleteAll(listWidget->selectedItems()); });
+              singleLayout->addWidget(comboBox);
+              singleLayout->addWidget(plusBtn);
 
-            QHBoxLayout *btnLayout = new QHBoxLayout();
-            QPushButton *refreshJulesBtn =
-                new QPushButton(tr("Refresh Jules"), &dialog);
-            QPushButton *refreshGithubBtn =
-                new QPushButton(tr("Refresh GitHub"), &dialog);
-            btnLayout->addWidget(refreshJulesBtn);
-            btnLayout->addWidget(refreshGithubBtn);
-            btnLayout->addStretch();
-            layout.addLayout(btnLayout);
+              // Multi mode
+              QWidget *multiModeWidget = new QWidget();
+              QVBoxLayout *multiLayout = new QVBoxLayout(multiModeWidget);
+              multiLayout->setContentsMargins(0, 0, 0, 0);
 
-            QDialogButtonBox *buttonBox = new QDialogButtonBox(
-                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-            layout.addWidget(buttonBox);
+              QListWidget *listWidget = new QListWidget(&dialog);
+              listWidget->addItems(currentBranches);
 
-            connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
-                    &QDialog::accept);
-            connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
-                    &QDialog::reject);
+              QHBoxLayout *addRemoveLayout = new QHBoxLayout();
+              QComboBox *multiComboBox = new QComboBox(&dialog);
+              multiComboBox->addItems(branches);
+              multiComboBox->setEditable(true);
 
-            QStringList selectedIds;
-            for (const QModelIndex &idx : selected) {
-              selectedIds.append(idx.data(SourceModel::IdRole).toString());
-            }
+              QPushButton *addBtn = new QPushButton(tr("Add"), &dialog);
+              QPushButton *removeBtn = new QPushButton(tr("Remove"), &dialog);
 
-            connect(refreshJulesBtn, &QPushButton::clicked, this,
-                    [this, selectedIds]() {
-                      for (const QString &id : selectedIds) {
-                        Q_EMIT refreshSourceRequested(id);
-                      }
-                      updateStatus(
-                          tr("Requested Jules refresh for %n source(s)...", "",
-                             selectedIds.size()));
-                    });
+              addRemoveLayout->addWidget(multiComboBox);
+              addRemoveLayout->addWidget(addBtn);
+              addRemoveLayout->addWidget(removeBtn);
 
-            connect(refreshGithubBtn, &QPushButton::clicked, this,
-                    [this, selectedIds]() {
-                      Q_EMIT refreshGithubRequested(selectedIds);
-                      updateStatus(
-                          tr("Requested GitHub refresh for %n source(s)...", "",
-                             selectedIds.size()));
-                    });
+              multiLayout->addWidget(listWidget);
+              multiLayout->addLayout(addRemoveLayout);
 
-            if (dialog.exec() == QDialog::Accepted) {
-              QStringList newBranches;
+              layout.addWidget(singleModeWidget);
+              layout.addWidget(multiModeWidget);
+
+              bool isMultiMode = currentBranches.size() > 1;
               if (isMultiMode) {
-                for (int i = 0; i < listWidget->count(); ++i) {
-                  newBranches.append(listWidget->item(i)->text());
-                }
+                singleModeWidget->hide();
               } else {
-                QString t = comboBox->currentText();
-                if (!t.isEmpty())
-                  newBranches.append(t);
+                multiModeWidget->hide();
               }
 
-              if (!newBranches.isEmpty()) {
-                for (const QModelIndex &idx : selected) {
-                  QString selName =
-                      idx.data(SourceModel::NameRole).toString();
-                  m_selectedSources.remove(selName);
-                  for (const QString &b : newBranches) {
-                    m_selectedSources.insert(selName, b);
-                  }
+              connect(plusBtn, &QPushButton::clicked, [&]() {
+                isMultiMode = true;
+                singleModeWidget->hide();
+                multiModeWidget->show();
+                dialog.adjustSize();
+                if (listWidget->count() == 0 &&
+                    !comboBox->currentText().isEmpty()) {
+                  listWidget->addItem(comboBox->currentText());
                 }
-                updateModels();
+              });
+
+              connect(addBtn, &QPushButton::clicked, [&]() {
+                QString t = multiComboBox->currentText();
+                if (!t.isEmpty() &&
+                    listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
+                  listWidget->addItem(t);
+                }
+              });
+
+              connect(removeBtn, &QPushButton::clicked,
+                      [&]() { qDeleteAll(listWidget->selectedItems()); });
+
+              QHBoxLayout *btnLayout = new QHBoxLayout();
+              QPushButton *refreshJulesBtn =
+                  new QPushButton(tr("Refresh Jules"), &dialog);
+              QPushButton *refreshGithubBtn =
+                  new QPushButton(tr("Refresh GitHub"), &dialog);
+              btnLayout->addWidget(refreshJulesBtn);
+              btnLayout->addWidget(refreshGithubBtn);
+              btnLayout->addStretch();
+              layout.addLayout(btnLayout);
+
+              QDialogButtonBox *buttonBox = new QDialogButtonBox(
+                  QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+              layout.addWidget(buttonBox);
+
+              connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
+                      &QDialog::accept);
+              connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
+                      &QDialog::reject);
+
+              QStringList selectedIds;
+              for (const QModelIndex &idx : selected) {
+                selectedIds.append(idx.data(SourceModel::IdRole).toString());
               }
-            }
-          });
 
-      QAction *unselectAction = menu.addAction(tr("Unselect"));
-      connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
-        QModelIndexList selected =
-            m_selectedView->selectionModel()->selectedIndexes();
-        if (!selected.contains(proxyIdx))
-          selected = {proxyIdx};
-        for (const QModelIndex &idx : selected) {
-          m_selectedSources.remove(
-              idx.data(SourceModel::NameRole).toString());
-        }
-        updateModels();
+              connect(refreshJulesBtn, &QPushButton::clicked, this,
+                      [this, selectedIds]() {
+                        for (const QString &id : selectedIds) {
+                          Q_EMIT refreshSourceRequested(id);
+                        }
+                        updateStatus(
+                            tr("Requested Jules refresh for %n source(s)...",
+                               "", selectedIds.size()));
+                      });
+
+              connect(refreshGithubBtn, &QPushButton::clicked, this,
+                      [this, selectedIds]() {
+                        Q_EMIT refreshGithubRequested(selectedIds);
+                        updateStatus(
+                            tr("Requested GitHub refresh for %n source(s)...",
+                               "", selectedIds.size()));
+                      });
+
+              if (dialog.exec() == QDialog::Accepted) {
+                QStringList newBranches;
+                if (isMultiMode) {
+                  for (int i = 0; i < listWidget->count(); ++i) {
+                    newBranches.append(listWidget->item(i)->text());
+                  }
+                } else {
+                  QString t = comboBox->currentText();
+                  if (!t.isEmpty())
+                    newBranches.append(t);
+                }
+
+                if (!newBranches.isEmpty()) {
+                  for (const QModelIndex &idx : selected) {
+                    QString selName =
+                        idx.data(SourceModel::NameRole).toString();
+                    m_selectedSources.remove(selName);
+                    for (const QString &b : newBranches) {
+                      m_selectedSources.insert(selName, b);
+                    }
+                  }
+                  updateModels();
+                }
+              }
+            });
+
+        QAction *unselectAction = menu.addAction(tr("Unselect"));
+        connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
+          QModelIndexList selected =
+              m_selectedView->selectionModel()->selectedIndexes();
+          if (!selected.contains(proxyIdx))
+            selected = {proxyIdx};
+          for (const QModelIndex &idx : selected) {
+            m_selectedSources.remove(
+                idx.data(SourceModel::NameRole).toString());
+          }
+          updateModels();
+        });
+
+        addFavouriteAction(menu, sourceIdx);
+
+        menu.exec(m_selectedView->mapToGlobal(pos));
       });
-
-      addFavouriteAction(menu, sourceIdx);
-
-      menu.exec(m_selectedView->mapToGlobal(pos));
-    });
 
   selectedLayout->addWidget(m_selectedView);
 
