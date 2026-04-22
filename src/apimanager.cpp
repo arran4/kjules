@@ -143,7 +143,7 @@ void APIManager::testGithubConnection(const QString &token) {
   QNetworkReply *reply = m_nam->get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, tk]() {
     if (reply->error() == QNetworkReply::NoError) {
-      QString scopes = reply->rawHeader("X-OAuth-Scopes");
+      QString scopes = QString::fromUtf8(reply->rawHeader("X-OAuth-Scopes"));
       QString msg = QStringLiteral("GitHub API connected successfully.");
       if (!scopes.isEmpty()) {
         msg += QStringLiteral("\nToken scopes: ") + scopes;
