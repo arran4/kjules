@@ -14,7 +14,8 @@ const QString DEFAULT_BASE_URL =
 APIManager::APIManager(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)),
       m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr), m_tokenFailed(false),
-      m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
+      m_githubTokenFailed(false), m_listSourcesReply(nullptr),
+      m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -48,6 +49,7 @@ QString APIManager::baseUrl() const { return m_baseUrl; }
 
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
+  m_githubTokenFailed = false;
   saveGithubTokenToWallet(token);
 }
 
@@ -394,7 +396,10 @@ void APIManager::createSession(const QString &source, const QString &prompt,
 }
 
 void APIManager::fetchGithubPullRequest(const QString &prUrl) {
-  if (m_githubToken.isEmpty()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
+    Q_EMIT githubPullRequestFailed(
+        prUrl,
+        QStringLiteral("GitHub token authentication failed previously."));
     return;
   }
 
@@ -435,13 +440,27 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
                                        QStringLiteral("Invalid JSON response"));
       }
     } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                           "requests blocked until token is updated.")
+                .arg(statusCode));
+      }
       Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
     }
   });
 }
 
 void APIManager::fetchGithubInfo(const QString &sourceId) {
-  if (m_githubToken.isEmpty()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
+    if (m_githubTokenFailed) {
+      Q_EMIT githubInfoFailed(
+          sourceId,
+          QStringLiteral("GitHub token authentication failed previously."));
+    }
     return;
   }
 
@@ -475,6 +494,15 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
                                 QStringLiteral("Invalid JSON response"));
       }
     } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                           "requests blocked until token is updated.")
+                .arg(statusCode));
+      }
       Q_EMIT githubInfoFailed(sourceId, reply->errorString());
     }
   });
@@ -721,7 +749,7 @@ void APIManager::getSession(const QString &sessionId) {
 }
 
 void APIManager::fetchGithubBranches(const QString &sourceId) {
-  if (m_githubToken.isEmpty()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     return;
   }
 
@@ -750,6 +778,16 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isArray()) {
         Q_EMIT githubBranchesReceived(sourceId, doc.array());
+      }
+    } else {
+      int statusCode =
+          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                           "requests blocked until token is updated.")
+                .arg(statusCode));
       }
     }
   });

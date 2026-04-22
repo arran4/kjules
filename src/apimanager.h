@@ -97,6 +97,7 @@ private:
   QString m_baseUrl;
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;
+  bool m_githubTokenFailed;
   QNetworkReply *m_listSourcesReply;
   QNetworkReply *m_listSessionsReply;
 
