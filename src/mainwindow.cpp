@@ -3389,8 +3389,6 @@ void MainWindow::processErrorRetries() {
 }
 
 void MainWindow::processQueue() {
-  if (m_isProcessingQueue || m_queuePaused)
-    return;
   if (m_queueModel->isEmpty()) {
     if (m_queueTimer->isActive()) {
       KNotification *notification = new KNotification(
@@ -3402,12 +3400,6 @@ void MainWindow::processQueue() {
       notification->sendEvent();
       m_queueTimer->stop();
     }
-    return;
-  }
-
-  if (m_queueBackoffUntil.isValid() &&
-      QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
-    // We are backing off
     return;
   }
 
@@ -3516,6 +3508,15 @@ void MainWindow::processQueue() {
   }
 
   m_queueModel->endBatchUpdate();
+
+  if (m_isProcessingQueue || m_queuePaused)
+    return;
+
+  if (m_queueBackoffUntil.isValid() &&
+      QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
+    // We are backing off
+    return;
+  }
 
   if (processIndex == -1) {
     // Everything is blocked or queue is essentially empty
