@@ -89,6 +89,9 @@ private Q_SLOTS:
   void updateSessionStats();
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
+  void increaseFavouriteRank();
+  void decreaseFavouriteRank();
+  void setFavouriteRank();
   void processQueue();
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();

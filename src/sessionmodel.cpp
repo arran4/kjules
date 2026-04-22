@@ -48,7 +48,15 @@ SessionData parseSessionData(const QJsonObject &obj) {
   data.createTime = QDateTime::fromString(
       obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
 
-  data.isFavourite = obj.value(QStringLiteral("local_favourite")).toBool();
+  QJsonValue favVal = obj.value(QStringLiteral("local_favourite"));
+  if (favVal.isBool()) {
+    qWarning() << "Deprecated boolean local_favourite found in session data";
+    data.favouriteRank = favVal.toBool() ? std::optional<int>(1) : std::nullopt;
+  } else if (favVal.isDouble()) {
+    data.favouriteRank = favVal.toInt();
+  } else {
+    data.favouriteRank = std::nullopt;
+  }
 
   data.hasChangeSet = false;
   QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
@@ -113,7 +121,9 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     case ColTitle:
       return session.title;
     case ColFavourite:
-      return session.isFavourite ? i18n("Yes") : i18n("No");
+      return session.favouriteRank.has_value()
+                 ? QString::number(session.favouriteRank.value())
+                 : QString();
     case ColState:
       return session.state;
     case ColChangeSet:
@@ -144,7 +154,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return QColor(Qt::blue);
     }
   } else if (role == Qt::DecorationRole) {
-    if (index.column() == ColFavourite && session.isFavourite) {
+    if (index.column() == ColFavourite && session.favouriteRank.has_value()) {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
   } else if (role == Qt::FontRole) {
@@ -193,7 +203,9 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   case PrLabelsRole:
     return session.prLabels;
   case FavouriteRole:
-    return session.isFavourite;
+    return session.favouriteRank.has_value()
+               ? QVariant(session.favouriteRank.value())
+               : QVariant();
   case UnreadChangesRole:
     return session.hasUnreadChanges;
   default:
@@ -253,8 +265,54 @@ void SessionModel::toggleFavourite(const QString &id) {
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
     SessionData &data = m_sessions[i];
-    data.isFavourite = !data.isFavourite;
-    data.rawObject[QStringLiteral("local_favourite")] = data.isFavourite;
+    if (data.favouriteRank.has_value() && data.favouriteRank.value() > 0) {
+      data.favouriteRank = std::nullopt;
+      data.rawObject.remove(QStringLiteral("local_favourite"));
+    } else {
+      data.favouriteRank = 1;
+      data.rawObject[QStringLiteral("local_favourite")] = 1;
+    }
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
+}
+
+void SessionModel::setFavouriteRank(const QString &id, int rank) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    data.favouriteRank = rank;
+    data.rawObject[QStringLiteral("local_favourite")] = rank;
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
+}
+
+void SessionModel::increaseFavouriteRank(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    int currentRank = data.favouriteRank.value_or(0);
+    data.favouriteRank = currentRank + 1;
+    data.rawObject[QStringLiteral("local_favourite")] = currentRank + 1;
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
+  }
+}
+
+void SessionModel::decreaseFavouriteRank(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    int currentRank = data.favouriteRank.value_or(0);
+    int newRank = currentRank - 1;
+    if (newRank <= 0) {
+      data.favouriteRank = std::nullopt;
+      data.rawObject.remove(QStringLiteral("local_favourite"));
+    } else {
+      data.favouriteRank = newRank;
+      data.rawObject[QStringLiteral("local_favourite")] = newRank;
+    }
     Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     saveSessions();
   }
@@ -287,7 +345,7 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
     if (m_idToIndex.contains(id)) {
       int row = m_idToIndex.value(id);
       // Preserve local_favourite
-      bool isFav = m_sessions[row].isFavourite;
+      std::optional<int> isFav = m_sessions[row].favouriteRank;
       bool wasUnread = m_sessions[row].hasUnreadChanges;
       QString oldState = m_sessions[row].state;
       QString oldPrStatus = m_sessions[row].prStatus;
@@ -295,8 +353,12 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       bool oldHasChangeSet = m_sessions[row].hasChangeSet;
 
       SessionData data = parseSessionData(obj);
-      data.isFavourite = isFav;
-      data.rawObject[QStringLiteral("local_favourite")] = isFav;
+      data.favouriteRank = isFav;
+      if (isFav.has_value()) {
+        data.rawObject[QStringLiteral("local_favourite")] = isFav.value();
+      } else {
+        data.rawObject.remove(QStringLiteral("local_favourite"));
+      }
       data.id = id; // Ensure ID matches
 
       bool isUnread = wasUnread || (oldState != data.state) ||
@@ -349,7 +411,7 @@ void SessionModel::updateSession(const QJsonObject &session) {
   if (m_idToIndex.contains(id)) {
     int i = m_idToIndex.value(id);
     // Preserve local_favourite
-    bool isFav = m_sessions[i].isFavourite;
+    std::optional<int> isFav = m_sessions[i].favouriteRank;
     bool wasUnread = m_sessions[i].hasUnreadChanges;
     QString oldState = m_sessions[i].state;
     QString oldPrStatus = m_sessions[i].prStatus;
@@ -357,8 +419,12 @@ void SessionModel::updateSession(const QJsonObject &session) {
     bool oldHasChangeSet = m_sessions[i].hasChangeSet;
 
     SessionData data = parseSessionData(sessionWithRefresh);
-    data.isFavourite = isFav;
-    data.rawObject[QStringLiteral("local_favourite")] = isFav;
+    data.favouriteRank = isFav;
+    if (isFav.has_value()) {
+      data.rawObject[QStringLiteral("local_favourite")] = isFav.value();
+    } else {
+      data.rawObject.remove(QStringLiteral("local_favourite"));
+    }
     data.id = id; // Ensure ID matches
 
     bool isSubstantiallyChanged = false;

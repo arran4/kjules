@@ -16,6 +16,7 @@
 #include <QDialog>
 #include <QGuiApplication>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
@@ -272,11 +273,22 @@ void SessionsWindow::setupUi() {
           }
 
           QMenu menu;
-          QAction *toggleFavAction = menu.addAction(
-              QIcon::fromTheme(QStringLiteral("emblem-favorite")),
-              i18n("Toggle Favourite"));
+          QMenu *favMenu =
+              menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
+                           i18n("Favourite"));
+          QAction *toggleFavAction =
+              favMenu->addAction(i18n("Toggle Favourite"));
           connect(toggleFavAction, &QAction::triggered, this,
                   &SessionsWindow::toggleFavourite);
+          QAction *incFavAction = favMenu->addAction(i18n("Increase Rank"));
+          connect(incFavAction, &QAction::triggered, this,
+                  &SessionsWindow::increaseFavouriteRank);
+          QAction *decFavAction = favMenu->addAction(i18n("Decrease Rank"));
+          connect(decFavAction, &QAction::triggered, this,
+                  &SessionsWindow::decreaseFavouriteRank);
+          QAction *setFavAction = favMenu->addAction(i18n("Set Rank..."));
+          connect(setFavAction, &QAction::triggered, this,
+                  &SessionsWindow::setFavouriteRank);
 
           QAction *openSessionUrlAction =
               menu.addAction(i18n("Open Session URL"));
@@ -908,5 +920,47 @@ void SessionsWindow::onSessionsRefreshFinished() {
       m_autoLoadGroup->checkedAction()->data().toString() ==
           QStringLiteral("load_all")) {
     resumeRefresh();
+  }
+}
+
+void SessionsWindow::increaseFavouriteRank() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    m_model->increaseFavouriteRank(id);
+  }
+}
+
+void SessionsWindow::decreaseFavouriteRank() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    m_model->decreaseFavouriteRank(id);
+  }
+}
+
+void SessionsWindow::setFavouriteRank() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
+
+  QModelIndex firstSourceIndex =
+      m_proxyModel->mapToSource(selectedRows.first());
+  QVariant currentRankVal =
+      m_model->data(firstSourceIndex, SessionModel::FavouriteRole);
+  int initialRank = currentRankVal.isValid() ? currentRankVal.toInt() : 1;
+
+  bool ok;
+  int rank = QInputDialog::getInt(this, i18n("Set Favourite Rank"),
+                                  i18n("Rank:"), initialRank, 1, 10000, 1, &ok);
+  if (!ok)
+    return;
+
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
+    m_model->setFavouriteRank(id, rank);
   }
 }
