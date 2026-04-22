@@ -1,3 +1,4 @@
+#include <functional>
 #ifndef SESSIONSWINDOW_H
 #define SESSIONSWINDOW_H
 
@@ -66,6 +67,8 @@ private Q_SLOTS:
   void updateActionStates();
 
 private:
+  void applyFavouriteAction(std::function<void(const QString &)> action);
+
   void setupUi();
 
   APIManager *m_apiManager;
