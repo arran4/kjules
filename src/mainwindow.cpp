@@ -5078,12 +5078,14 @@ void MainWindow::increaseFavouriteRank() {
   applyFavouriteAction([](const QSortFilterProxyModel *proxy,
                           QAbstractItemModel *model,
                           const QModelIndexList &selectedRows, int idRole) {
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
     for (const QModelIndex &idx : selectedRows) {
       QModelIndex sourceIndex = proxy->mapToSource(idx);
       QString id = model->data(sourceIndex, idRole).toString();
-      if (auto *sm = qobject_cast<SourceModel *>(model)) {
+      if (sm) {
         sm->increaseFavouriteRank(id);
-      } else if (auto *sessionModel = qobject_cast<SessionModel *>(model)) {
+      } else if (sessionModel) {
         sessionModel->increaseFavouriteRank(id);
       }
     }
@@ -5094,12 +5096,14 @@ void MainWindow::decreaseFavouriteRank() {
   applyFavouriteAction([](const QSortFilterProxyModel *proxy,
                           QAbstractItemModel *model,
                           const QModelIndexList &selectedRows, int idRole) {
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
     for (const QModelIndex &idx : selectedRows) {
       QModelIndex sourceIndex = proxy->mapToSource(idx);
       QString id = model->data(sourceIndex, idRole).toString();
-      if (auto *sm = qobject_cast<SourceModel *>(model)) {
+      if (sm) {
         sm->decreaseFavouriteRank(id);
-      } else if (auto *sessionModel = qobject_cast<SessionModel *>(model)) {
+      } else if (sessionModel) {
         sessionModel->decreaseFavouriteRank(id);
       }
     }
@@ -5127,12 +5131,14 @@ void MainWindow::setFavouriteRank() {
     if (!ok)
       return;
 
+    SourceModel *sm = qobject_cast<SourceModel *>(model);
+    SessionModel *sessionModel = qobject_cast<SessionModel *>(model);
     for (const QModelIndex &idx : selectedRows) {
       QModelIndex sIdx = proxy->mapToSource(idx);
       QString id = model->data(sIdx, idRole).toString();
-      if (auto *sm = qobject_cast<SourceModel *>(model)) {
+      if (sm) {
         sm->setFavouriteRank(id, rank);
-      } else if (auto *sessionModel = qobject_cast<SessionModel *>(model)) {
+      } else if (sessionModel) {
         sessionModel->setFavouriteRank(id, rank);
       }
     }
