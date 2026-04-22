@@ -66,6 +66,8 @@ private Q_SLOTS:
   void updateActionStates();
 
 private:
+  template <typename ActionFunc> void applyFavouriteAction(ActionFunc action);
+
   void setupUi();
 
   APIManager *m_apiManager;

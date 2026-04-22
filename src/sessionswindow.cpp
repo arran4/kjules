@@ -924,22 +924,24 @@ void SessionsWindow::onSessionsRefreshFinished() {
   }
 }
 
-void SessionsWindow::increaseFavouriteRank() {
+template <typename ActionFunc>
+void SessionsWindow::applyFavouriteAction(ActionFunc action) {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   for (const QModelIndex &idx : selectedRows) {
     QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
     QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
-    m_model->increaseFavouriteRank(id);
+    action(id);
   }
 }
 
+void SessionsWindow::increaseFavouriteRank() {
+  applyFavouriteAction(
+      [this](const QString &id) { m_model->increaseFavouriteRank(id); });
+}
+
 void SessionsWindow::decreaseFavouriteRank() {
-  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
-    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
-    m_model->decreaseFavouriteRank(id);
-  }
+  applyFavouriteAction(
+      [this](const QString &id) { m_model->decreaseFavouriteRank(id); });
 }
 
 void SessionsWindow::setFavouriteRank() {
@@ -959,9 +961,6 @@ void SessionsWindow::setFavouriteRank() {
   if (!ok)
     return;
 
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
-    QString id = m_model->data(sourceIndex, SessionModel::IdRole).toString();
-    m_model->setFavouriteRank(id, rank);
-  }
+  applyFavouriteAction(
+      [this, rank](const QString &id) { m_model->setFavouriteRank(id, rank); });
 }

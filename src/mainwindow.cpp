@@ -5037,114 +5037,85 @@ void MainWindow::updateFavouritesMenu() {
   }
 }
 
-void MainWindow::increaseFavouriteRank() {
+template <typename ActionFunc>
+void MainWindow::applyFavouriteAction(ActionFunc action) {
+  QAbstractItemView *view = nullptr;
+  QAbstractItemModel *model = nullptr;
+  int idRole = -1;
+
   if (m_tabWidget->currentWidget()->objectName() ==
       QStringLiteral("sourcesTab")) {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->increaseFavouriteRank(id);
-      }
-    }
+    view = m_sourceView;
+    model = m_sourceModel;
+    idRole = SourceModel::IdRole;
   } else if (m_tabWidget->currentWidget()->objectName() ==
              QStringLiteral("followingTab")) {
-    QModelIndexList selectedRows =
-        m_sessionView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->increaseFavouriteRank(id);
-      }
-    }
+    view = m_sessionView;
+    model = m_sessionModel;
+    idRole = SessionModel::IdRole;
   } else if (m_tabWidget->currentWidget()->objectName() ==
              QStringLiteral("archiveTab")) {
-    QModelIndexList selectedRows =
-        m_archiveView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->increaseFavouriteRank(id);
+    view = m_archiveView;
+    model = m_archiveModel;
+    idRole = SessionModel::IdRole;
+  }
+
+  if (!view || !model)
+    return;
+
+  QModelIndexList selectedRows = view->selectionModel()->selectedRows();
+  const QSortFilterProxyModel *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+
+  if (proxy && !selectedRows.isEmpty()) {
+    action(proxy, model, selectedRows, idRole);
+  }
+}
+
+void MainWindow::increaseFavouriteRank() {
+  applyFavouriteAction([](const QSortFilterProxyModel *proxy,
+                          QAbstractItemModel *model,
+                          const QModelIndexList &selectedRows, int idRole) {
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = proxy->mapToSource(idx);
+      QString id = model->data(sourceIndex, idRole).toString();
+      if (auto *sm = qobject_cast<SourceModel *>(model)) {
+        sm->increaseFavouriteRank(id);
+      } else if (auto *sessionModel = qobject_cast<SessionModel *>(model)) {
+        sessionModel->increaseFavouriteRank(id);
       }
     }
-  }
+  });
 }
 
 void MainWindow::decreaseFavouriteRank() {
-  if (m_tabWidget->currentWidget()->objectName() ==
-      QStringLiteral("sourcesTab")) {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->decreaseFavouriteRank(id);
+  applyFavouriteAction([](const QSortFilterProxyModel *proxy,
+                          QAbstractItemModel *model,
+                          const QModelIndexList &selectedRows, int idRole) {
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sourceIndex = proxy->mapToSource(idx);
+      QString id = model->data(sourceIndex, idRole).toString();
+      if (auto *sm = qobject_cast<SourceModel *>(model)) {
+        sm->decreaseFavouriteRank(id);
+      } else if (auto *sessionModel = qobject_cast<SessionModel *>(model)) {
+        sessionModel->decreaseFavouriteRank(id);
       }
     }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("followingTab")) {
-    QModelIndexList selectedRows =
-        m_sessionView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->decreaseFavouriteRank(id);
-      }
-    }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("archiveTab")) {
-    QModelIndexList selectedRows =
-        m_archiveView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->decreaseFavouriteRank(id);
-      }
-    }
-  }
+  });
 }
 
 void MainWindow::setFavouriteRank() {
-  int initialRank = 1;
+  applyFavouriteAction([this](const QSortFilterProxyModel *proxy,
+                              QAbstractItemModel *model,
+                              const QModelIndexList &selectedRows, int idRole) {
+    int initialRank = 1;
+    QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
 
-  if (m_tabWidget->currentWidget()->objectName() ==
-      QStringLiteral("sourcesTab")) {
-    QModelIndexList selectedRows =
-        m_sourceView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
-    if (proxy && !selectedRows.isEmpty()) {
-      QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
-      QVariant rankVal =
-          m_sourceModel->data(sourceIndex, SourceModel::FavouriteRole);
-      if (rankVal.isValid())
-        initialRank = rankVal.toInt();
-    }
+    int favRole = (idRole == SourceModel::IdRole) ? SourceModel::FavouriteRole
+                                                  : SessionModel::FavouriteRole;
+    QVariant rankVal = model->data(sourceIndex, favRole);
+    if (rankVal.isValid())
+      initialRank = rankVal.toInt();
 
     bool ok;
     int rank =
@@ -5153,71 +5124,14 @@ void MainWindow::setFavouriteRank() {
     if (!ok)
       return;
 
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-        m_sourceModel->setFavouriteRank(id, rank);
+    for (const QModelIndex &idx : selectedRows) {
+      QModelIndex sIdx = proxy->mapToSource(idx);
+      QString id = model->data(sIdx, idRole).toString();
+      if (auto *sm = qobject_cast<SourceModel *>(model)) {
+        sm->setFavouriteRank(id, rank);
+      } else if (auto *sessionModel = qobject_cast<SessionModel *>(model)) {
+        sessionModel->setFavouriteRank(id, rank);
       }
     }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("followingTab")) {
-    QModelIndexList selectedRows =
-        m_sessionView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-    if (proxy && !selectedRows.isEmpty()) {
-      QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
-      QVariant rankVal =
-          m_sessionModel->data(sourceIndex, SessionModel::FavouriteRole);
-      if (rankVal.isValid())
-        initialRank = rankVal.toInt();
-    }
-
-    bool ok;
-    int rank =
-        QInputDialog::getInt(this, i18n("Set Favourite Rank"), i18n("Rank:"),
-                             initialRank, 1, 10000, 1, &ok);
-    if (!ok)
-      return;
-
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_sessionModel->setFavouriteRank(id, rank);
-      }
-    }
-  } else if (m_tabWidget->currentWidget()->objectName() ==
-             QStringLiteral("archiveTab")) {
-    QModelIndexList selectedRows =
-        m_archiveView->selectionModel()->selectedRows();
-    const QSortFilterProxyModel *proxy =
-        qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-    if (proxy && !selectedRows.isEmpty()) {
-      QModelIndex sourceIndex = proxy->mapToSource(selectedRows.first());
-      QVariant rankVal =
-          m_archiveModel->data(sourceIndex, SessionModel::FavouriteRole);
-      if (rankVal.isValid())
-        initialRank = rankVal.toInt();
-    }
-
-    bool ok;
-    int rank =
-        QInputDialog::getInt(this, i18n("Set Favourite Rank"), i18n("Rank:"),
-                             initialRank, 1, 10000, 1, &ok);
-    if (!ok)
-      return;
-
-    if (proxy) {
-      for (const QModelIndex &idx : selectedRows) {
-        QModelIndex sourceIndex = proxy->mapToSource(idx);
-        QString id =
-            m_archiveModel->data(sourceIndex, SessionModel::IdRole).toString();
-        m_archiveModel->setFavouriteRank(id, rank);
-      }
-    }
-  }
+  });
 }

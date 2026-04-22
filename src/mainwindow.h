@@ -98,6 +98,9 @@ private Q_SLOTS:
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
+
+  template <typename ActionFunc> void applyFavouriteAction(ActionFunc action);
+
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
