@@ -1,4 +1,6 @@
 #include "apimanager.h"
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <KWallet>
 #include <QDebug>
 #include <QJsonArray>
