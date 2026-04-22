@@ -65,8 +65,7 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return name;
 
       return id;
-    } else if (index.column() ==
-               ColFavourite) { // TODO evaluate changed from column to icon
+    } else if (index.column() == ColFavourite) { // TODO evaluate changed from column to icon
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       if (favVal.isBool() && favVal.toBool()) {
         return QStringLiteral("1");
