@@ -7,11 +7,12 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVector>
+#include <optional>
 
 struct SessionData {
   QString id;
   QString name;
-  bool isFavourite;
+  std::optional<int> favouriteRank;
   QString title;
   QString source;
   QString prompt;
@@ -87,6 +88,9 @@ public:
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
   void toggleFavourite(const QString &id);
+  void setFavouriteRank(const QString &id, int rank);
+  void increaseFavouriteRank(const QString &id);
+  void decreaseFavouriteRank(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QString getSessionName(const QString &id) const;
