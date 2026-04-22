@@ -56,7 +56,8 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  // If mock API is used and DEV_MODE is not active, use a temporary dir for data
+  // If mock API is used and DEV_MODE is not active, use a temporary dir for
+  // data
   if (useMockApi) {
 #ifndef DEV_MODE
     QTemporaryDir *tempDir = new QTemporaryDir();
