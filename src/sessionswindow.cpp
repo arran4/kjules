@@ -207,8 +207,9 @@ void SessionsWindow::setupUi() {
   m_listView->setRootIsDecorated(false);
 
   // Header configuration
-  m_listView->header()->setMinimumSectionSize(100);
-  m_listView->header()->resizeSection(SessionModel::ColTitle, 250);
+  m_listView->header()->setMinimumSectionSize(80);
+  m_listView->header()->resizeSection(SessionModel::ColTitle,
+                                      SessionModel::DefaultTitleWidth);
   m_listView->header()->resizeSection(SessionModel::ColState, 100);
   m_listView->header()->resizeSection(SessionModel::ColChangeSet, 80);
   m_listView->header()->resizeSection(SessionModel::ColPR, 80);

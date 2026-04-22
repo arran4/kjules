@@ -23,10 +23,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
   if (title.isEmpty()) {
     title = prompt;
   }
-  title.replace(QLatin1Char('\n'), QLatin1Char(' '));
-  if (title.length() > 50) {
-    title = title.left(47) + QStringLiteral("...");
-  }
+
   data.title = title;
   data.prompt = prompt;
 
@@ -111,7 +108,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   if (role == Qt::DisplayRole) {
     switch (index.column()) {
     case ColTitle:
-      return session.title;
+      return session.title.simplified();
     case ColFavourite:
       return session.isFavourite ? i18n("Yes") : i18n("No");
     case ColState:
@@ -175,7 +172,7 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
   case NameRole:
     return session.name;
   case TitleRole:
-    return session.title;
+    return session.title.simplified();
   case SourceRole:
     return session.source;
   case PromptRole:
