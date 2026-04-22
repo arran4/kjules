@@ -1,3 +1,4 @@
+#include <functional>
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
@@ -99,8 +100,6 @@ private Q_SLOTS:
   void updateBlockedTabVisibility();
   void processErrorRetries();
 
-  template <typename ActionFunc> void applyFavouriteAction(ActionFunc action);
-
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
@@ -133,6 +132,11 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
+  void applyFavouriteAction(
+      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
+                         const QModelIndexList &, int)>
+          action);
+
   QStringList getSelectedSessionIds() const;
 
   void applyQuickFilter(FilterEditor *editor, const QString &type,

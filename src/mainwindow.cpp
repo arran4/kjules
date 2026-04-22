@@ -5037,8 +5037,10 @@ void MainWindow::updateFavouritesMenu() {
   }
 }
 
-template <typename ActionFunc>
-void MainWindow::applyFavouriteAction(ActionFunc action) {
+void MainWindow::applyFavouriteAction(
+    std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
+                       const QModelIndexList &, int)>
+        action) {
   QAbstractItemView *view = nullptr;
   QAbstractItemModel *model = nullptr;
   int idRole = -1;

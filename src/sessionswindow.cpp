@@ -924,8 +924,8 @@ void SessionsWindow::onSessionsRefreshFinished() {
   }
 }
 
-template <typename ActionFunc>
-void SessionsWindow::applyFavouriteAction(ActionFunc action) {
+void SessionsWindow::applyFavouriteAction(
+    std::function<void(const QString &)> action) {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   for (const QModelIndex &idx : selectedRows) {
     QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
