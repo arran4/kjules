@@ -106,24 +106,27 @@ bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left,
 
   // Try to cast to SourceModel or SessionModel to see if it supports
   // FavouriteRole
-  bool leftFav = false;
-  bool rightFav = false;
+  int leftFav = -1;
+  int rightFav = -1;
 
   if (qobject_cast<SourceModel *>(m)) {
-    leftFav = m->data(source_left, SourceModel::FavouriteRole).toBool();
-    rightFav = m->data(source_right, SourceModel::FavouriteRole).toBool();
+    QVariant lVal = m->data(source_left, SourceModel::FavouriteRole);
+    QVariant rVal = m->data(source_right, SourceModel::FavouriteRole);
+    leftFav = lVal.isValid() ? lVal.toInt() : -1;
+    rightFav = rVal.isValid() ? rVal.toInt() : -1;
   } else if (qobject_cast<SessionModel *>(m)) {
-    leftFav = m->data(source_left, SessionModel::FavouriteRole).toBool();
-    rightFav = m->data(source_right, SessionModel::FavouriteRole).toBool();
+    QVariant lVal = m->data(source_left, SessionModel::FavouriteRole);
+    QVariant rVal = m->data(source_right, SessionModel::FavouriteRole);
+    leftFav = lVal.isValid() ? lVal.toInt() : -1;
+    rightFav = rVal.isValid() ? rVal.toInt() : -1;
   }
 
   if (leftFav != rightFav) {
     if (sortOrder() == Qt::AscendingOrder) {
-      return leftFav; // if ascending, we want Fav (true) at the top -> true is
-                      // 'less' -> return true
+      return leftFav > rightFav;
     } else {
-      return !leftFav; // if descending, we want Fav (true) at the top -> true
-                       // is 'greater' -> return false
+      return leftFav < rightFav;
+      // is 'greater' -> return false
     }
   }
 

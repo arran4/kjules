@@ -10,6 +10,15 @@
 #include "mainwindow.h"
 
 int main(int argc, char *argv[]) {
+#ifdef DEV_MODE
+  QByteArray devDataDir = QByteArray(KJULES_SOURCE_DIR) + "/.jules-dev-data";
+  qputenv("XDG_DATA_HOME", devDataDir + "/data");
+  qputenv("XDG_CONFIG_HOME", devDataDir + "/config");
+  qputenv("XDG_CACHE_HOME", devDataDir + "/cache");
+  qputenv("LOCALAPPDATA", devDataDir + "/data");
+  qputenv("APPDATA", devDataDir + "/config");
+#endif
+
   QApplication app(argc, argv);
   KLocalizedString::setApplicationDomain("kjules");
 
@@ -47,11 +56,16 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
+  // If mock API is used and DEV_MODE is not active, use a temporary dir for
+  // data
   if (useMockApi) {
+#ifndef DEV_MODE
     QTemporaryDir *tempDir = new QTemporaryDir();
     if (tempDir->isValid()) {
       qputenv("XDG_DATA_HOME", tempDir->path().toUtf8());
+      qputenv("LOCALAPPDATA", tempDir->path().toUtf8());
     }
+#endif
   }
 
   MainWindow *window = new MainWindow();
