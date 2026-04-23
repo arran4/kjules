@@ -100,6 +100,9 @@ private Q_SLOTS:
   void decreaseFavouriteRank();
   void setFavouriteRank();
   void processQueue();
+  void onQueueTimerTimeout();
+  void refreshBeforeQueue();
+  void checkPendingRefreshBeforeQueue();
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
@@ -237,6 +240,8 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
+  int m_pendingRefreshCount;
+  bool m_isWaitingForRefreshBeforeQueue;
 
   RefreshProgressWindow *m_refreshProgressWindow;
 };

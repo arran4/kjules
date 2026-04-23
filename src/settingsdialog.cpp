@@ -248,6 +248,19 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   formLayout->addRow(i18n("Following auto-refresh:"),
                      m_followingAutoRefreshCombo);
 
+  m_mergeRefreshAndQueueCheckbox = new QCheckBox(
+      i18n("Sync mode: Refresh following right before processing queue"), this);
+  m_mergeRefreshAndQueueCheckbox->setChecked(
+      sessionConfig.readEntry("MergeRefreshAndQueue", false));
+  formLayout->addRow(QString(), m_mergeRefreshAndQueueCheckbox);
+
+  connect(m_mergeRefreshAndQueueCheckbox, &QCheckBox::toggled, this,
+          [this](bool checked) {
+            m_followingAutoRefreshCombo->setEnabled(!checked);
+          });
+  m_followingAutoRefreshCombo->setEnabled(
+      !m_mergeRefreshAndQueueCheckbox->isChecked());
+
   m_autoArchiveCheckbox = new QCheckBox(
       i18n("Automatically archive following managed sessions"), this);
   m_autoArchiveCheckbox->setChecked(
@@ -380,6 +393,8 @@ void SettingsDialog::onSave() {
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
   sessionConfig.writeEntry("PrMergeArchiveEnabled",
                            m_prMergeArchiveCheckbox->isChecked());
+  sessionConfig.writeEntry("MergeRefreshAndQueue",
+                           m_mergeRefreshAndQueueCheckbox->isChecked());
   sessionConfig.sync();
 
   accept();
