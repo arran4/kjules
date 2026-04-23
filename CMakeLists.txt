@@ -32,7 +32,7 @@ if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
     endif()
 endif()
 
-if(NOT KJULES_VERSION_STRING)
+if(NOT DEFINED KJULES_VERSION_STRING)
     set(KJULES_VERSION_STRING "${PROJECT_VERSION}")
 endif()
 
@@ -108,7 +108,7 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
-target_compile_definitions(kjules PRIVATE KJULES_VERSION="${KJULES_VERSION_STRING}")
+target_compile_definitions(kjules PRIVATE "KJULES_VERSION=\"${KJULES_VERSION_STRING}\"")
 
 if (QT_MAJOR_VERSION STREQUAL "6")
     target_link_libraries(kjules
