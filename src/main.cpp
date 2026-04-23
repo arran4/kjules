@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
 
   aboutData.addAuthor(i18n("Jules"), i18n("Developer"),
                       QStringLiteral("jules@kde.org"));
+  aboutData.setDesktopFileName(QStringLiteral("org.kde.kjules"));
   KAboutData::setApplicationData(aboutData);
 
   QCommandLineParser parser;
