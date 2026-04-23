@@ -3528,14 +3528,10 @@ void MainWindow::processQueue() {
   // Pre-calculate active session counts from m_sessionModel
   for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
     QModelIndex idx = m_sessionModel->index(j, 0);
-    QString state =
-        m_sessionModel->data(idx, SessionModel::StateRole).toString();
     QString prStatus =
         m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
-    if (state != QStringLiteral("DONE") &&
-        state != QStringLiteral("CANCELED") &&
-        state != QStringLiteral("ERROR") &&
-        prStatus != QStringLiteral("merged")) {
+    if (prStatus != QStringLiteral("merged") &&
+        prStatus != QStringLiteral("closed")) {
       QString source =
           m_sessionModel->data(idx, SessionModel::SourceRole).toString();
       activeCountCache[source]++;
