@@ -102,7 +102,8 @@ private Q_SLOTS:
   void processQueue();
   void onQueueTimerTimeout();
   void refreshBeforeQueue();
-  void checkPendingRefreshBeforeQueue();
+  void checkPendingRefreshBeforeQueue(const QString &id);
+  QStringList getActiveFollowingSessionIds() const;
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
@@ -240,7 +241,7 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
-  int m_pendingRefreshCount;
+  QSet<QString> m_pendingRefreshIds;
   bool m_isWaitingForRefreshBeforeQueue;
 
   RefreshProgressWindow *m_refreshProgressWindow;
