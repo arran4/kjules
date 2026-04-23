@@ -3193,7 +3193,6 @@ void MainWindow::loadQueueSettings() {
   if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
     m_queueTimer->start();
   }
-  updateBlockedTabVisibility();
 }
 
 void MainWindow::updateFollowingRefreshTimer() {
@@ -3716,6 +3715,10 @@ void MainWindow::updateBlockedTabVisibility() {
   int blockedItems = m_blockedTreeModel->totalBlockedItemsCount();
   int blockedSources = m_blockedTreeModel->blockedSourcesCount();
 
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
+
   if (blockedItems == 0) {
     if (blockedIdx != -1) {
       m_tabWidget->removeTab(blockedIdx);
@@ -3736,9 +3739,6 @@ void MainWindow::updateBlockedTabVisibility() {
         }
       }
     }
-    KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                             QStringLiteral("Queue"));
-    int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
     m_tabWidget->setTabText(blockedIdx,
                             i18n("Blocked (%1 / %2 / %3)", blockedSources,
                                  blockedItems, globalOneAtATimeLimit));
