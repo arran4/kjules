@@ -655,6 +655,12 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
         if (reply->error() == QNetworkReply::NoError) {
           QJsonDocument doc = QJsonDocument::fromJson(responseData);
           QJsonObject sessionObj = doc.object();
+
+          if (!sessionObj.contains(QStringLiteral("sourceContext"))) {
+            sessionObj[QStringLiteral("sourceContext")] =
+                json.value(QStringLiteral("sourceContext")).toObject();
+          }
+
           Q_EMIT sessionCreated(sessionObj);
           Q_EMIT logMessage(QStringLiteral("Session created successfully."));
 
