@@ -3210,13 +3210,19 @@ void MainWindow::updateFollowingRefreshTimer() {
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
                              QStringLiteral("SessionWindow"));
 
-  bool mergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (mergeRefresh) {
+  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+
+  // Backwards compatibility migration
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && seconds != -1) {
+    seconds = -1;
+  }
+
+  if (seconds == -1) {
     m_followingRefreshTimer->stop();
     return;
   }
-
-  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
 
   if (seconds > 0) {
     m_followingRefreshTimer->start(seconds * 1000);
@@ -3412,8 +3418,16 @@ void MainWindow::onQueueTimerTimeout() {
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
                              QStringLiteral("SessionWindow"));
-  bool mergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (mergeRefresh) {
+  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+
+  // Backwards compatibility migration
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && seconds != -1) {
+    seconds = -1;
+  }
+
+  if (seconds == -1) {
     refreshBeforeQueue();
   } else {
     processQueue();
