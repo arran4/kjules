@@ -3193,6 +3193,7 @@ void MainWindow::loadQueueSettings() {
   if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
     m_queueTimer->start();
   }
+  updateBlockedTabVisibility();
 }
 
 void MainWindow::updateFollowingRefreshTimer() {
@@ -3735,7 +3736,12 @@ void MainWindow::updateBlockedTabVisibility() {
         }
       }
     }
-    m_tabWidget->setTabText(blockedIdx, i18n("Blocked (%1)", blockedSources));
+    KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("Queue"));
+    int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
+    m_tabWidget->setTabText(blockedIdx,
+                            i18n("Blocked (%1 / %2 / %3)", blockedSources,
+                                 blockedItems, globalOneAtATimeLimit));
   }
 }
 
