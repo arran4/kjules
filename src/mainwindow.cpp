@@ -3530,9 +3530,12 @@ void MainWindow::processQueue() {
     QModelIndex idx = m_sessionModel->index(j, 0);
     QString state =
         m_sessionModel->data(idx, SessionModel::StateRole).toString();
+    QString prStatus =
+        m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
     if (state != QStringLiteral("DONE") &&
         state != QStringLiteral("CANCELED") &&
-        state != QStringLiteral("ERROR")) {
+        state != QStringLiteral("ERROR") &&
+        prStatus != QStringLiteral("merged")) {
       QString source =
           m_sessionModel->data(idx, SessionModel::SourceRole).toString();
       activeCountCache[source]++;
