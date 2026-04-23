@@ -235,12 +235,23 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   m_followingAutoRefreshCombo = new QComboBox(this);
   m_followingAutoRefreshCombo->addItem(i18n("Off"), 0);
+  m_followingAutoRefreshCombo->addItem(i18n("Sync with queue processing"), -1);
   m_followingAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
   m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
+
   int followingInterval =
       sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  // Migrate the legacy MergeRefreshAndQueue checkbox state to the new combo box
+  // item if applicable
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && followingInterval != -1) {
+    followingInterval = -1;
+    // We clean up the old setting on save.
+  }
+
   int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
   if (followingIndex >= 0) {
     m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
@@ -380,6 +391,7 @@ void SettingsDialog::onSave() {
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
   sessionConfig.writeEntry("PrMergeArchiveEnabled",
                            m_prMergeArchiveCheckbox->isChecked());
+  sessionConfig.deleteEntry("MergeRefreshAndQueue"); // Cleanup legacy option
   sessionConfig.sync();
 
   accept();
