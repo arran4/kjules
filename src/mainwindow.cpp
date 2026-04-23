@@ -3530,8 +3530,9 @@ void MainWindow::processQueue() {
     QModelIndex idx = m_sessionModel->index(j, 0);
     QString state =
         m_sessionModel->data(idx, SessionModel::StateRole).toString();
-    if (state == QStringLiteral("PENDING") ||
-        state == QStringLiteral("IN_PROGRESS")) {
+    if (state != QStringLiteral("DONE") &&
+        state != QStringLiteral("CANCELED") &&
+        state != QStringLiteral("ERROR")) {
       QString source =
           m_sessionModel->data(idx, SessionModel::SourceRole).toString();
       activeCountCache[source]++;
