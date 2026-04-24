@@ -53,6 +53,19 @@ protected:
   void keyPressEvent(QKeyEvent *event) override;
 
 private Q_SLOTS:
+  void deleteFollowingSessions();
+  void archiveSelectedSessions();
+  void deleteArchiveSessions();
+  void deleteDrafts();
+  void deleteTemplates();
+  void deleteErrors();
+  void processSessionModel(SessionModel *model, int &sessionCount);
+
+  void switchToFollowingTab();
+  void onSessionReloaded(const QJsonObject &session);
+  void addGithubLink(QMenu *githubMenu, const QString &urlStr,
+                     const QString &title, const QString &path);
+
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
