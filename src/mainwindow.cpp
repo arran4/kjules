@@ -470,23 +470,27 @@ void MainWindow::setupUi() {
 
             connect(hideRepoAction, &QAction::triggered, [this, repo]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("repo"),
-                               repo, true));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, true));
             });
             connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("owner"),
-                               owner, true));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, true));
             });
             connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("repo"),
-                               repo, false));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, false));
             });
             connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("owner"),
-                               owner, false));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, false));
             });
             menu.addSeparator();
           }
@@ -503,30 +507,39 @@ void MainWindow::setupUi() {
             bool isFork = github.value(QStringLiteral("fork")).toBool();
             bool isPrivate = github.value(QStringLiteral("private")).toBool();
 
-            QAction *archivedAction = menu.addAction(isArchived ? i18n("Filter out archived") : i18n("Filter only archived"));
+            QAction *archivedAction =
+                menu.addAction(isArchived ? i18n("Filter out archived")
+                                          : i18n("Filter only archived"));
             connect(archivedAction, &QAction::triggered, [this, isArchived]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("archived"),
-                               QStringLiteral("true"), isArchived));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("archived"), QStringLiteral("true"),
+                      isArchived));
             });
 
-            QAction *forkAction = menu.addAction(isFork ? i18n("Filter out forks") : i18n("Filter only forks"));
+            QAction *forkAction = menu.addAction(
+                isFork ? i18n("Filter out forks") : i18n("Filter only forks"));
             connect(forkAction, &QAction::triggered, [this, isFork]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("fork"),
-                               QStringLiteral("true"), isFork));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("fork"), QStringLiteral("true"), isFork));
             });
 
-            QAction *privateAction = menu.addAction(isPrivate ? i18n("Filter out private") : i18n("Filter only private"));
+            QAction *privateAction =
+                menu.addAction(isPrivate ? i18n("Filter out private")
+                                         : i18n("Filter only private"));
             connect(privateAction, &QAction::triggered, [this, isPrivate]() {
               m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_sourcesFilterEditor->filterText(), QStringLiteral("private"),
-                               QStringLiteral("true"), isPrivate));
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("private"), QStringLiteral("true"),
+                      isPrivate));
             });
 
             menu.addSeparator();
           }
-
 
           QAction *configLimitAction =
               menu.addAction(i18n("Configure Concurrency Limit"));
@@ -740,23 +753,27 @@ void MainWindow::setupUi() {
 
             connect(hideRepoAction, &QAction::triggered, [this, repo]() {
               m_followingFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_followingFilterEditor->filterText(), QStringLiteral("repo"),
-                               repo, true));
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, true));
             });
             connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
               m_followingFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_followingFilterEditor->filterText(), QStringLiteral("owner"),
-                               owner, true));
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, true));
             });
             connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
               m_followingFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_followingFilterEditor->filterText(), QStringLiteral("repo"),
-                               repo, false));
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, false));
             });
             connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
               m_followingFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_followingFilterEditor->filterText(), QStringLiteral("owner"),
-                               owner, false));
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, false));
             });
 
             menu.addSeparator();
@@ -1149,23 +1166,27 @@ void MainWindow::setupUi() {
 
             connect(hideRepoAction, &QAction::triggered, [this, repo]() {
               m_archiveFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_archiveFilterEditor->filterText(), QStringLiteral("repo"),
-                               repo, true));
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, true));
             });
             connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
               m_archiveFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_archiveFilterEditor->filterText(), QStringLiteral("owner"),
-                               owner, true));
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, true));
             });
             connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
               m_archiveFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_archiveFilterEditor->filterText(), QStringLiteral("repo"),
-                               repo, false));
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, false));
             });
             connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
               m_archiveFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(m_archiveFilterEditor->filterText(), QStringLiteral("owner"),
-                               owner, false));
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, false));
             });
 
             menu.addSeparator();

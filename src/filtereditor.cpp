@@ -126,8 +126,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
         if (kvChild->key() == type) {
           QList<QSharedPointer<ASTNode>> orChildren;
           orChildren.append(child);
-          orChildren.append(
-              QSharedPointer<KeyValueNode>::create(type, value));
+          orChildren.append(QSharedPointer<KeyValueNode>::create(type, value));
           merged = true;
           return QSharedPointer<NotNode>::create(
               QSharedPointer<OrNode>::create(orChildren));
