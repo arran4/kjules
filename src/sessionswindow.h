@@ -80,6 +80,7 @@ private:
   QProgressBar *m_progressBar;
   QPushButton *m_cancelBtn;
   QComboBox *m_repoCombo;
+  class QLineEdit;
   QLineEdit *m_searchEdit;
   QString m_filterSource;
   int m_sessionsLoaded;
