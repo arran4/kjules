@@ -57,6 +57,10 @@
             <Separator />
             <Action name="show_activity_log" />
             <Action name="focus_filter" />
+            <Separator />
+            <Action name="view_filter_archived" />
+            <Action name="view_filter_forks" />
+            <Action name="view_filter_private" />
         </Menu>
         <Menu name="favourites">
             <text>Favourites</text>

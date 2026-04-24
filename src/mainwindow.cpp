@@ -215,125 +215,6 @@ void MainWindow::setMockApi(bool useMock) {
 
 MainWindow::~MainWindow() {}
 
-static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
-                                                  const QString &type,
-                                                  const QString &value,
-                                                  bool isHide, bool &merged) {
-  if (!node)
-    return QSharedPointer<ASTNode>();
-
-  if (isHide) {
-    if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
-      auto child = notNode->child();
-      if (auto kvChild = qSharedPointerDynamicCast<KeyValueNode>(child)) {
-        if (kvChild->key() == type) {
-          QList<QSharedPointer<ASTNode>> orChildren;
-          orChildren.append(child);
-          orChildren.append(
-              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
-          merged = true;
-          return QSharedPointer<ASTNode>(
-              new NotNode(QSharedPointer<ASTNode>(new OrNode(orChildren))));
-        }
-      } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
-        bool allSameType = true;
-        for (const auto &c : orChild->children()) {
-          auto kv = qSharedPointerDynamicCast<KeyValueNode>(c);
-          if (!kv || kv->key() != type) {
-            allSameType = false;
-            break;
-          }
-        }
-        if (allSameType) {
-          QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
-          newOrChildren.append(
-              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
-          merged = true;
-          return QSharedPointer<ASTNode>(
-              new NotNode(QSharedPointer<ASTNode>(new OrNode(newOrChildren))));
-        }
-      }
-    }
-  } else {
-    // If not hiding, we could try to merge into an existing AndNode, but
-    // appending works fine. We only merge NOTs for neatness.
-  }
-
-  if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
-    QList<QSharedPointer<ASTNode>> newChildren;
-    for (const auto &child : andNode->children()) {
-      if (!merged) {
-        newChildren.append(
-            mergeFilterIntoAST(child, type, value, isHide, merged));
-      } else {
-        newChildren.append(child);
-      }
-    }
-    return QSharedPointer<ASTNode>(new AndNode(newChildren));
-  } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
-    QList<QSharedPointer<ASTNode>> newChildren;
-    for (const auto &child : orNode->children()) {
-      if (!merged) {
-        newChildren.append(
-            mergeFilterIntoAST(child, type, value, isHide, merged));
-      } else {
-        newChildren.append(child);
-      }
-    }
-    return QSharedPointer<ASTNode>(new OrNode(newChildren));
-  } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
-    if (!merged) {
-      auto newChild =
-          mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
-      return QSharedPointer<ASTNode>(new NotNode(newChild));
-    }
-  }
-
-  return node;
-}
-
-void MainWindow::applyQuickFilter(FilterEditor *editor, const QString &type,
-                                  const QString &value, bool isHide) {
-  QString current = editor->filterText().trimmed();
-  if (current.startsWith(QLatin1Char('='))) {
-    current = current.mid(1).trimmed();
-  }
-
-  QSharedPointer<ASTNode> ast = FilterParser::parse(current);
-
-  if (!ast || current.isEmpty()) {
-    if (isHide) {
-      ast = QSharedPointer<ASTNode>(
-          new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
-    } else {
-      ast = QSharedPointer<ASTNode>(new KeyValueNode(type, value));
-    }
-  } else {
-    bool merged = false;
-    ast = mergeFilterIntoAST(ast, type, value, isHide, merged);
-
-    if (!merged) {
-      QList<QSharedPointer<ASTNode>> andChildren;
-      if (auto andNode = qSharedPointerDynamicCast<AndNode>(ast)) {
-        andChildren = andNode->children();
-      } else {
-        andChildren.append(ast);
-      }
-
-      if (isHide) {
-        andChildren.append(QSharedPointer<ASTNode>(new NotNode(
-            QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
-      } else {
-        andChildren.append(
-            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
-      }
-      ast = QSharedPointer<ASTNode>(new AndNode(andChildren));
-    }
-  }
-
-  editor->setFilterText(QStringLiteral("=") + ast->toString());
-}
-
 void MainWindow::closeEvent(QCloseEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
   bool closeToTray = config.readEntry("CloseToTray", false);
@@ -430,10 +311,12 @@ void MainWindow::setupUi() {
               m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
           QString urlStr;
           QStringList parts = id.split(QLatin1Char('/'));
+          QString owner;
+          QString repo;
           if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
             QString provider = parts[1];
-            QString owner = parts[2];
-            QString repo = parts[3];
+            owner = parts[2];
+            repo = parts[3];
             if (provider == QStringLiteral("github")) {
               urlStr = QStringLiteral("https://github.com/") + owner +
                        QLatin1Char('/') + repo;
@@ -507,40 +390,112 @@ void MainWindow::setupUi() {
           menu.addAction(m_copyUrlAction);
 
           menu.addSeparator();
-          QAction *configLimitAction =
-              menu.addAction(i18n("Configure Concurrency Limit"));
-          connect(configLimitAction, &QAction::triggered, [this, id]() {
-            KConfigGroup sourceConfig(KSharedConfig::openConfig(),
-                                      QStringLiteral("SourceConcurrency"));
-            int currentLimit =
-                sourceConfig.readEntry(id, -1); // -1 means defer to global
 
-            bool ok;
-            int newLimit = QInputDialog::getInt(
-                this, i18n("Concurrency Limit"),
-                i18n("Enter max active sessions for %1 (0 to disable limit, -1 "
-                     "to defer to global):",
-                     id),
-                currentLimit, -1, 1000, 1, &ok);
-            if (ok) {
-              if (newLimit == -1) {
-                sourceConfig.deleteEntry(id);
-              } else {
-                sourceConfig.writeEntry(id, newLimit);
-              }
-              sourceConfig.sync();
-              updateStatus(
-                  i18n("Concurrency limit for %1 updated to %2", id, newLimit));
-            }
-          });
+          if (!owner.isEmpty() && !repo.isEmpty()) {
+            QAction *hideRepoAction =
+                menu.addAction(i18n("Filter out repo '%1'", repo));
+            QAction *onlyRepoAction =
+                menu.addAction(i18n("Filter only repo '%1'", repo));
+            QAction *hideOwnerAction =
+                menu.addAction(i18n("Filter out owner '%1'", owner));
+            QAction *onlyOwnerAction =
+                menu.addAction(i18n("Filter only owner '%1'", owner));
+
+            connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+              m_sourcesFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, true));
+            });
+            connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+              m_sourcesFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, false));
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              m_sourcesFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, true));
+            });
+            connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+              m_sourcesFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_sourcesFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, false));
+            });
+            menu.addSeparator();
+          }
 
           QJsonObject rawData =
               m_sourceModel->data(sourceIndex, SourceModel::RawDataRole)
                   .toJsonObject();
+
           if (rawData.contains(QStringLiteral("github"))) {
             QJsonObject github =
                 rawData.value(QStringLiteral("github")).toObject();
             QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
+
+            if (!owner.isEmpty()) {
+              QAction *hideOwnerAction =
+                  githubMenu->addAction(i18n("Filter out owner '%1'", owner));
+              QAction *onlyOwnerAction =
+                  githubMenu->addAction(i18n("Filter only owner '%1'", owner));
+              connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+                m_sourcesFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_sourcesFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, true));
+              });
+              connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+                m_sourcesFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_sourcesFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, false));
+              });
+              githubMenu->addSeparator();
+            }
+
+            QString language =
+                github.value(QStringLiteral("language")).toString();
+            if (!language.isEmpty()) {
+              QAction *hideLanguageAction = githubMenu->addAction(
+                  i18n("Filter out language '%1'", language));
+              QAction *onlyLanguageAction = githubMenu->addAction(
+                  i18n("Filter only language '%1'", language));
+              connect(hideLanguageAction, &QAction::triggered,
+                      [this, language]() {
+                        m_sourcesFilterEditor->setFilterText(
+                            FilterEditor::applyQuickFilter(
+                                m_sourcesFilterEditor->filterText(),
+                                QStringLiteral("language"), language, true));
+                      });
+              connect(onlyLanguageAction, &QAction::triggered,
+                      [this, language]() {
+                        m_sourcesFilterEditor->setFilterText(
+                            FilterEditor::applyQuickFilter(
+                                m_sourcesFilterEditor->filterText(),
+                                QStringLiteral("language"), language, false));
+                      });
+              githubMenu->addSeparator();
+            }
+
+            auto addGithubLink = [this, githubMenu,
+                                  urlStr](const QString &title,
+                                          const QString &path) {
+              QAction *openAction =
+                  githubMenu->addAction(i18n("Open %1", title));
+              connect(openAction, &QAction::triggered, [urlStr, path]() {
+                QDesktopServices::openUrl(QUrl(urlStr + path));
+              });
+              QAction *copyAction =
+                  githubMenu->addAction(i18n("Copy %1 URL", title));
+              connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
+                QGuiApplication::clipboard()->setText(urlStr + path);
+                updateStatus(i18n("URL copied to clipboard."));
+              });
+            };
 
             if (github.value(QStringLiteral("has_wiki")).toBool()) {
               this->addGithubLink(githubMenu, urlStr, QStringLiteral("Wiki"),
@@ -571,6 +526,33 @@ void MainWindow::setupUi() {
               });
             }
           }
+
+          QAction *configLimitAction =
+              menu.addAction(i18n("Configure Concurrency Limit"));
+          connect(configLimitAction, &QAction::triggered, [this, id]() {
+            KConfigGroup sourceConfig(KSharedConfig::openConfig(),
+                                      QStringLiteral("SourceConcurrency"));
+            int currentLimit =
+                sourceConfig.readEntry(id, -1); // -1 means defer to global
+
+            bool ok;
+            int newLimit = QInputDialog::getInt(
+                this, i18n("Concurrency Limit"),
+                i18n("Enter max active sessions for %1 (0 to disable limit, -1 "
+                     "to defer to global):",
+                     id),
+                currentLimit, -1, 1000, 1, &ok);
+            if (ok) {
+              if (newLimit == -1) {
+                sourceConfig.deleteEntry(id);
+              } else {
+                sourceConfig.writeEntry(id, newLimit);
+              }
+              sourceConfig.sync();
+              updateStatus(
+                  i18n("Concurrency limit for %1 updated to %2", id, newLimit));
+            }
+          });
 
           menu.exec(m_sourceView->mapToGlobal(pos));
         }
@@ -679,29 +661,94 @@ void MainWindow::setupUi() {
                                  sourceIndex.row(), SessionModel::ColRepo))
                              .toString();
           if (!owner.isEmpty() && !repo.isEmpty()) {
-            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
-            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
-            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
-            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+            QAction *hideRepoAction =
+                menu.addAction(i18n("Filter out repo '%1'", repo));
+            QAction *onlyRepoAction =
+                menu.addAction(i18n("Filter only repo '%1'", repo));
+            QAction *hideOwnerAction =
+                menu.addAction(i18n("Filter out owner '%1'", owner));
+            QAction *onlyOwnerAction =
+                menu.addAction(i18n("Filter only owner '%1'", owner));
 
             connect(hideRepoAction, &QAction::triggered, [this, repo]() {
-              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
-                               repo, true);
-            });
-            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
-              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
-                               owner, true);
+              m_followingFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, true));
             });
             connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
-              applyQuickFilter(m_followingFilterEditor, QStringLiteral("repo"),
-                               repo, false);
+              m_followingFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, false));
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              m_followingFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, true));
             });
             connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
-              applyQuickFilter(m_followingFilterEditor, QStringLiteral("owner"),
-                               owner, false);
+              m_followingFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_followingFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, false));
             });
 
             menu.addSeparator();
+          }
+
+          QJsonObject rawData =
+              m_sessionModel->data(sourceIndex, SourceModel::RawDataRole)
+                  .toJsonObject();
+
+          if (rawData.contains(QStringLiteral("github"))) {
+            QJsonObject github =
+                rawData.value(QStringLiteral("github")).toObject();
+            QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
+
+            if (!owner.isEmpty()) {
+              QAction *hideOwnerAction =
+                  githubMenu->addAction(i18n("Filter out owner '%1'", owner));
+              QAction *onlyOwnerAction =
+                  githubMenu->addAction(i18n("Filter only owner '%1'", owner));
+              connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+                m_followingFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_followingFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, true));
+              });
+              connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+                m_followingFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_followingFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, false));
+              });
+              githubMenu->addSeparator();
+            }
+
+            QString language =
+                github.value(QStringLiteral("language")).toString();
+            if (!language.isEmpty()) {
+              QAction *hideLanguageAction = githubMenu->addAction(
+                  i18n("Filter out language '%1'", language));
+              QAction *onlyLanguageAction = githubMenu->addAction(
+                  i18n("Filter only language '%1'", language));
+              connect(hideLanguageAction, &QAction::triggered,
+                      [this, language]() {
+                        m_followingFilterEditor->setFilterText(
+                            FilterEditor::applyQuickFilter(
+                                m_followingFilterEditor->filterText(),
+                                QStringLiteral("language"), language, true));
+                      });
+              connect(onlyLanguageAction, &QAction::triggered,
+                      [this, language]() {
+                        m_followingFilterEditor->setFilterText(
+                            FilterEditor::applyQuickFilter(
+                                m_followingFilterEditor->filterText(),
+                                QStringLiteral("language"), language, false));
+                      });
+            }
           }
 
           QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
@@ -1038,29 +1085,94 @@ void MainWindow::setupUi() {
                                  sourceIndex.row(), SessionModel::ColRepo))
                              .toString();
           if (!owner.isEmpty() && !repo.isEmpty()) {
-            QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
-            QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
-            QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
-            QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+            QAction *hideRepoAction =
+                menu.addAction(i18n("Filter out repo '%1'", repo));
+            QAction *onlyRepoAction =
+                menu.addAction(i18n("Filter only repo '%1'", repo));
+            QAction *hideOwnerAction =
+                menu.addAction(i18n("Filter out owner '%1'", owner));
+            QAction *onlyOwnerAction =
+                menu.addAction(i18n("Filter only owner '%1'", owner));
 
             connect(hideRepoAction, &QAction::triggered, [this, repo]() {
-              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
-                               repo, true);
-            });
-            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
-              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
-                               owner, true);
+              m_archiveFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, true));
             });
             connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
-              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("repo"),
-                               repo, false);
+              m_archiveFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("repo"), repo, false));
+            });
+            connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+              m_archiveFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, true));
             });
             connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
-              applyQuickFilter(m_archiveFilterEditor, QStringLiteral("owner"),
-                               owner, false);
+              m_archiveFilterEditor->setFilterText(
+                  FilterEditor::applyQuickFilter(
+                      m_archiveFilterEditor->filterText(),
+                      QStringLiteral("owner"), owner, false));
             });
 
             menu.addSeparator();
+          }
+
+          QJsonObject rawData =
+              m_archiveModel->data(sourceIndex, SourceModel::RawDataRole)
+                  .toJsonObject();
+
+          if (rawData.contains(QStringLiteral("github"))) {
+            QJsonObject github =
+                rawData.value(QStringLiteral("github")).toObject();
+            QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
+
+            if (!owner.isEmpty()) {
+              QAction *hideOwnerAction =
+                  githubMenu->addAction(i18n("Filter out owner '%1'", owner));
+              QAction *onlyOwnerAction =
+                  githubMenu->addAction(i18n("Filter only owner '%1'", owner));
+              connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+                m_archiveFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_archiveFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, true));
+              });
+              connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+                m_archiveFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_archiveFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, false));
+              });
+              githubMenu->addSeparator();
+            }
+
+            QString language =
+                github.value(QStringLiteral("language")).toString();
+            if (!language.isEmpty()) {
+              QAction *hideLanguageAction = githubMenu->addAction(
+                  i18n("Filter out language '%1'", language));
+              QAction *onlyLanguageAction = githubMenu->addAction(
+                  i18n("Filter only language '%1'", language));
+              connect(hideLanguageAction, &QAction::triggered,
+                      [this, language]() {
+                        m_archiveFilterEditor->setFilterText(
+                            FilterEditor::applyQuickFilter(
+                                m_archiveFilterEditor->filterText(),
+                                QStringLiteral("language"), language, true));
+                      });
+              connect(onlyLanguageAction, &QAction::triggered,
+                      [this, language]() {
+                        m_archiveFilterEditor->setFilterText(
+                            FilterEditor::applyQuickFilter(
+                                m_archiveFilterEditor->filterText(),
+                                QStringLiteral("language"), language, false));
+                      });
+            }
           }
 
           QAction *copyTemplateAction =
@@ -2744,6 +2856,66 @@ void MainWindow::createActions() {
       new QAction(i18n("Configure Concurrency Limit..."), this);
   actionCollection()->addAction(QStringLiteral("configure_concurrency_limit"),
                                 m_configureConcurrencyLimitAction);
+
+  m_viewFilterArchivedAction = new QAction(i18n("Filter out archived"), this);
+  actionCollection()->addAction(QStringLiteral("view_filter_archived"),
+                                m_viewFilterArchivedAction);
+  connect(m_viewFilterArchivedAction, &QAction::triggered, this, [this]() {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    FilterEditor *editor = nullptr;
+    if (currentWidget->objectName() == QStringLiteral("sourcesTab")) {
+      editor = m_sourcesFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("followingTab")) {
+      editor = m_followingFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("archiveTab")) {
+      editor = m_archiveFilterEditor;
+    }
+    if (editor) {
+      editor->setFilterText(FilterEditor::applyQuickFilter(
+          editor->filterText(), QStringLiteral("archived"),
+          QStringLiteral("true"), true));
+    }
+  });
+
+  m_viewFilterForksAction = new QAction(i18n("Filter out forks"), this);
+  actionCollection()->addAction(QStringLiteral("view_filter_forks"),
+                                m_viewFilterForksAction);
+  connect(m_viewFilterForksAction, &QAction::triggered, this, [this]() {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    FilterEditor *editor = nullptr;
+    if (currentWidget->objectName() == QStringLiteral("sourcesTab")) {
+      editor = m_sourcesFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("followingTab")) {
+      editor = m_followingFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("archiveTab")) {
+      editor = m_archiveFilterEditor;
+    }
+    if (editor) {
+      editor->setFilterText(FilterEditor::applyQuickFilter(
+          editor->filterText(), QStringLiteral("fork"), QStringLiteral("true"),
+          true));
+    }
+  });
+
+  m_viewFilterPrivateAction = new QAction(i18n("Filter out private"), this);
+  actionCollection()->addAction(QStringLiteral("view_filter_private"),
+                                m_viewFilterPrivateAction);
+  connect(m_viewFilterPrivateAction, &QAction::triggered, this, [this]() {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    FilterEditor *editor = nullptr;
+    if (currentWidget->objectName() == QStringLiteral("sourcesTab")) {
+      editor = m_sourcesFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("followingTab")) {
+      editor = m_followingFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("archiveTab")) {
+      editor = m_archiveFilterEditor;
+    }
+    if (editor) {
+      editor->setFilterText(FilterEditor::applyQuickFilter(
+          editor->filterText(), QStringLiteral("private"),
+          QStringLiteral("true"), true));
+    }
+  });
   connect(
       m_configureConcurrencyLimitAction, &QAction::triggered, this, [this]() {
         QModelIndexList selectedRows =
@@ -2891,7 +3063,7 @@ void MainWindow::createActions() {
             }
           });
 
-  setupGUI(Default, QStringLiteral("kjulesui.rc"));
+  setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/kjulesui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();

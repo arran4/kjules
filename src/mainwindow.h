@@ -160,9 +160,6 @@ private:
 
   QStringList getSelectedSessionIds() const;
 
-  void applyQuickFilter(FilterEditor *editor, const QString &type,
-                        const QString &value, bool isHide);
-
   void updateFollowingRefreshTimer();
   void setupUi();
   void setupTrayIcon();
@@ -240,6 +237,9 @@ private:
   QAction *m_openJulesUrlAction;
   QAction *m_openGithubUrlAction;
   QAction *m_configureConcurrencyLimitAction;
+  QAction *m_viewFilterArchivedAction;
+  QAction *m_viewFilterForksAction;
+  QAction *m_viewFilterPrivateAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;

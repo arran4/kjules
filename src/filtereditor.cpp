@@ -112,6 +112,150 @@ enum FilterItemRoles {
 
 enum NodeType { TypeAnd, TypeOr, TypeNot, TypeIn, TypeKV, TypeKeyword };
 
+static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
+                                                  const QString &type,
+                                                  const QString &value,
+                                                  bool isHide, bool &merged) {
+  if (!node)
+    return QSharedPointer<ASTNode>();
+
+  if (isHide) {
+    if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+      auto child = notNode->child();
+      if (auto kvChild = qSharedPointerDynamicCast<KeyValueNode>(child)) {
+        if (kvChild->key() == type) {
+          QList<QSharedPointer<ASTNode>> orChildren;
+          orChildren.append(child);
+          orChildren.append(QSharedPointer<KeyValueNode>::create(type, value));
+          merged = true;
+          return QSharedPointer<NotNode>::create(
+              QSharedPointer<OrNode>::create(orChildren));
+        }
+      } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
+        bool allSameType = true;
+        for (const auto &c : orChild->children()) {
+          auto kv = qSharedPointerDynamicCast<KeyValueNode>(c);
+          if (!kv || kv->key() != type) {
+            allSameType = false;
+            break;
+          }
+        }
+        if (allSameType) {
+          QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
+          newOrChildren.append(
+              QSharedPointer<KeyValueNode>::create(type, value));
+          merged = true;
+          return QSharedPointer<NotNode>::create(
+              QSharedPointer<OrNode>::create(newOrChildren));
+        }
+      }
+    }
+  } else {
+    // Merge into OR if same key
+    if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
+      bool allSameType = true;
+      for (const auto &c : orNode->children()) {
+        auto kv = qSharedPointerDynamicCast<KeyValueNode>(c);
+        if (!kv || kv->key() != type) {
+          allSameType = false;
+          break;
+        }
+      }
+      if (allSameType) {
+        QList<QSharedPointer<ASTNode>> newOrChildren = orNode->children();
+        newOrChildren.append(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+        merged = true;
+        return QSharedPointer<ASTNode>(new OrNode(newOrChildren));
+      }
+    } else if (auto kvNode = qSharedPointerDynamicCast<KeyValueNode>(node)) {
+      if (kvNode->key() == type) {
+        QList<QSharedPointer<ASTNode>> orChildren;
+        orChildren.append(node);
+        orChildren.append(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+        merged = true;
+        return QSharedPointer<ASTNode>(new OrNode(orChildren));
+      }
+    }
+  }
+
+  if (auto andNode = qSharedPointerDynamicCast<AndNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : andNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new AndNode(newChildren));
+  } else if (auto orNode = qSharedPointerDynamicCast<OrNode>(node)) {
+    QList<QSharedPointer<ASTNode>> newChildren;
+    for (const auto &child : orNode->children()) {
+      if (!merged) {
+        newChildren.append(
+            mergeFilterIntoAST(child, type, value, isHide, merged));
+      } else {
+        newChildren.append(child);
+      }
+    }
+    return QSharedPointer<ASTNode>(new OrNode(newChildren));
+  } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
+    if (!merged) {
+      auto newChild =
+          mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
+      return QSharedPointer<ASTNode>(new NotNode(newChild));
+    }
+  }
+
+  return node;
+}
+
+QString FilterEditor::applyQuickFilter(const QString &currentFilter,
+                                       const QString &type,
+                                       const QString &value, bool isHide) {
+  QString current = currentFilter.trimmed();
+  if (current.startsWith(QLatin1Char('='))) {
+    current = current.mid(1).trimmed();
+  }
+
+  QSharedPointer<ASTNode> ast = FilterParser::parse(current);
+
+  if (!ast || current.isEmpty()) {
+    if (isHide) {
+      ast = QSharedPointer<ASTNode>(
+          new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
+    } else {
+      ast = QSharedPointer<ASTNode>(new KeyValueNode(type, value));
+    }
+  } else {
+    bool merged = false;
+    ast = mergeFilterIntoAST(ast, type, value, isHide, merged);
+
+    if (!merged) {
+      QList<QSharedPointer<ASTNode>> andChildren;
+      if (auto andNode = qSharedPointerDynamicCast<AndNode>(ast)) {
+        andChildren = andNode->children();
+      } else {
+        andChildren.append(ast);
+      }
+
+      if (isHide) {
+        andChildren.append(QSharedPointer<ASTNode>(new NotNode(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
+      } else {
+        andChildren.append(
+            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+      }
+      ast = QSharedPointer<ASTNode>(new AndNode(andChildren));
+    }
+  }
+
+  return QStringLiteral("=") + ast->toString();
+}
+
 FilterEditor::FilterEditor(QWidget *parent)
     : QWidget(parent), m_updating(false) {
   QVBoxLayout *layout = new QVBoxLayout(this);
@@ -145,7 +289,9 @@ FilterEditor::FilterEditor(QWidget *parent)
       QStringLiteral("AND"),           QStringLiteral("OR"),
       QStringLiteral("NOT"),           QStringLiteral("IN"),
       QStringLiteral("state:"),        QStringLiteral("repo:"),
-      QStringLiteral("owner:"),        QStringLiteral("created-before:"),
+      QStringLiteral("owner:"),        QStringLiteral("language:"),
+      QStringLiteral("archived:"),     QStringLiteral("fork:"),
+      QStringLiteral("private:"),      QStringLiteral("created-before:"),
       QStringLiteral("updated-after:")};
   for (const QString &itemText : paletteItems) {
     QListWidgetItem *item = new QListWidgetItem(itemText, m_paletteList);
@@ -504,15 +650,18 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
 void FilterEditor::setSimplifiedMode(bool simplified) {
   if (simplified) {
     m_paletteList->clear();
-    m_paletteList->addItems(
-        QStringList{QStringLiteral("OR"), QStringLiteral("AND"),
-                    QStringLiteral("NOT"), QStringLiteral("IN"),
-                    QStringLiteral("repo:"), QStringLiteral("owner:")});
+    m_paletteList->addItems(QStringList{
+        QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+        QStringLiteral("language:"), QStringLiteral("archived:"),
+        QStringLiteral("fork:"), QStringLiteral("private:")});
   } else {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{
         QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
         QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+        QStringLiteral("language:"), QStringLiteral("archived:"),
+        QStringLiteral("fork:"), QStringLiteral("private:"),
         QStringLiteral("state:"), QStringLiteral("title:"),
         QStringLiteral("created-before:"), QStringLiteral("created-after:"),
         QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
