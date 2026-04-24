@@ -370,6 +370,8 @@ FilterEditor::FilterEditor(QWidget *parent)
 
 QString FilterEditor::filterText() const { return m_lineEdit->text(); }
 
+void FilterEditor::focusInput() { m_lineEdit->setFocus(); }
+
 void FilterEditor::setCompletions(
     const QMap<QString, QStringList> &completions) {
   m_completions = completions;

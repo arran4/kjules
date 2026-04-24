@@ -14,6 +14,7 @@ class QProgressBar;
 class QPushButton;
 class QJsonArray;
 class QComboBox;
+class QLineEdit;
 
 class SessionsProxyModel : public QSortFilterProxyModel {
   Q_OBJECT
@@ -76,6 +77,7 @@ private:
   SessionModel *m_managedModel;
   SessionsProxyModel *m_proxyModel;
   QTreeView *m_listView;
+  QLineEdit *m_searchEdit;
   QLabel *m_statusLabel;
   QProgressBar *m_progressBar;
   QPushButton *m_cancelBtn;

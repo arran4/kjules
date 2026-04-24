@@ -53,6 +53,19 @@ protected:
   void keyPressEvent(QKeyEvent *event) override;
 
 private Q_SLOTS:
+  void deleteFollowingSessions();
+  void archiveSelectedSessions();
+  void deleteArchiveSessions();
+  void deleteDrafts();
+  void deleteTemplates();
+  void deleteErrors();
+  void processSessionModel(SessionModel *model, int &sessionCount);
+
+  void switchToFollowingTab();
+  void onSessionReloaded(const QJsonObject &session);
+  void addGithubLink(QMenu *githubMenu, const QString &urlStr,
+                     const QString &title, const QString &path);
+
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
@@ -100,6 +113,10 @@ private Q_SLOTS:
   void decreaseFavouriteRank();
   void setFavouriteRank();
   void processQueue();
+  void onQueueTimerTimeout();
+  void refreshBeforeQueue();
+  void checkPendingRefreshBeforeQueue(const QString &id);
+  QStringList getActiveFollowingSessionIds() const;
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
@@ -237,6 +254,8 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
+  QSet<QString> m_pendingRefreshIds;
+  bool m_isWaitingForRefreshBeforeQueue;
 
   RefreshProgressWindow *m_refreshProgressWindow;
 };

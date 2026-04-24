@@ -26,6 +26,9 @@ public:
                                   const QString &type, const QString &value,
                                   bool isHide);
 
+public Q_SLOTS:
+  void focusInput();
+
 Q_SIGNALS:
   void filterChanged(const QString &text);
 
