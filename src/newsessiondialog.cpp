@@ -493,13 +493,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             m_sourceModel->data(sourceIdx, SourceModel::RawDataRole)
                 .toJsonObject();
         if (rawData.contains(QStringLiteral("github"))) {
-          QJsonObject github =
-              rawData.value(QStringLiteral("github")).toObject();
-
-          bool isArchived = github.value(QStringLiteral("archived")).toBool();
-          bool isFork = github.value(QStringLiteral("fork")).toBool();
-          bool isPrivate = github.value(QStringLiteral("private")).toBool();
-
           QAction *archivedActionOut =
               menu.addAction(tr("Filter out archived"));
           connect(archivedActionOut, &QAction::triggered, [this]() {
@@ -852,13 +845,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             m_sourceModel->data(sourceIdx, SourceModel::RawDataRole)
                 .toJsonObject();
         if (rawData.contains(QStringLiteral("github"))) {
-          QJsonObject github =
-              rawData.value(QStringLiteral("github")).toObject();
-
-          bool isArchived = github.value(QStringLiteral("archived")).toBool();
-          bool isFork = github.value(QStringLiteral("fork")).toBool();
-          bool isPrivate = github.value(QStringLiteral("private")).toBool();
-
           QAction *archivedActionOut =
               menu.addAction(tr("Filter out archived"));
           connect(archivedActionOut, &QAction::triggered, [this]() {
@@ -1224,7 +1210,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     Q_EMIT refreshSourcesRequested();
   });
 
-  setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
+  setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/newsessiondialogui.rc"));
 }
 
 void NewSessionDialog::onSubmitSession() {

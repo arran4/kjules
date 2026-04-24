@@ -500,13 +500,6 @@ void MainWindow::setupUi() {
                   .toJsonObject();
 
           if (rawData.contains(QStringLiteral("github"))) {
-            QJsonObject github =
-                rawData.value(QStringLiteral("github")).toObject();
-
-            bool isArchived = github.value(QStringLiteral("archived")).toBool();
-            bool isFork = github.value(QStringLiteral("fork")).toBool();
-            bool isPrivate = github.value(QStringLiteral("private")).toBool();
-
             QAction *archivedActionOut =
                 menu.addAction(i18n("Filter out archived"));
             connect(archivedActionOut, &QAction::triggered, [this]() {
@@ -3095,7 +3088,7 @@ void MainWindow::createActions() {
             }
           });
 
-  setupGUI(Default, QStringLiteral("kjulesui.rc"));
+  setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/kjulesui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
