@@ -4,6 +4,7 @@
 
 #include <KXmlGuiWindow>
 #include <QSortFilterProxyModel>
+class QLineEdit;
 
 class APIManager;
 class QActionGroup;
@@ -80,7 +81,6 @@ private:
   QProgressBar *m_progressBar;
   QPushButton *m_cancelBtn;
   QComboBox *m_repoCombo;
-  class QLineEdit;
   QLineEdit *m_searchEdit;
   QString m_filterSource;
   int m_sessionsLoaded;
