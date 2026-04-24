@@ -127,10 +127,10 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
           QList<QSharedPointer<ASTNode>> orChildren;
           orChildren.append(child);
           orChildren.append(
-              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+              QSharedPointer<KeyValueNode>::create(type, value));
           merged = true;
-          return QSharedPointer<ASTNode>(
-              new NotNode(QSharedPointer<ASTNode>(new OrNode(orChildren))));
+          return QSharedPointer<NotNode>::create(
+              QSharedPointer<OrNode>::create(orChildren));
         }
       } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
         bool allSameType = true;
@@ -144,10 +144,10 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
         if (allSameType) {
           QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
           newOrChildren.append(
-              QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+              QSharedPointer<KeyValueNode>::create(type, value));
           merged = true;
-          return QSharedPointer<ASTNode>(
-              new NotNode(QSharedPointer<ASTNode>(new OrNode(newOrChildren))));
+          return QSharedPointer<NotNode>::create(
+              QSharedPointer<OrNode>::create(newOrChildren));
         }
       }
     }

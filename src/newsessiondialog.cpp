@@ -188,10 +188,19 @@ protected:
       QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
 
       if (k == QStringLiteral("archived") || k == QStringLiteral("isarchived")) {
+        if (rawData.contains(QStringLiteral("isArchived"))) {
+          return rawData.value(QStringLiteral("isArchived")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        }
         return github.value(QStringLiteral("archived")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
       } else if (k == QStringLiteral("fork") || k == QStringLiteral("isfork")) {
+        if (rawData.contains(QStringLiteral("isFork"))) {
+          return rawData.value(QStringLiteral("isFork")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        }
         return github.value(QStringLiteral("fork")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
       } else if (k == QStringLiteral("private") || k == QStringLiteral("isprivate")) {
+        if (rawData.contains(QStringLiteral("isPrivate"))) {
+          return rawData.value(QStringLiteral("isPrivate")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        }
         return github.value(QStringLiteral("private")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
       }
 
@@ -1265,28 +1274,21 @@ void NewSessionDialog::updateModels() {
 
 void NewSessionDialog::applyFilter() {
   QString text = m_filterEdit->text();
+  QSharedPointer<ASTNode> ast;
+  QString filterString;
+
   if (text.startsWith(QStringLiteral("="))) {
-    QSharedPointer<ASTNode> ast = FilterParser::parse(text.mid(1));
-    m_unselectedProxy->setFilterAST(ast);
-    m_unselectedProxy->setFilterFixedString(QString());
-    if (m_selectedSources.size() < 10) {
-      m_selectedProxy->setFilterAST(QSharedPointer<ASTNode>());
-      m_selectedProxy->setFilterFixedString(QStringLiteral(""));
-    } else {
-      m_selectedProxy->setFilterAST(ast);
-      m_selectedProxy->setFilterFixedString(QString());
-    }
+    ast = FilterParser::parse(text.mid(1));
   } else {
-    m_unselectedProxy->setFilterAST(QSharedPointer<ASTNode>());
-    m_unselectedProxy->setFilterFixedString(text);
-    if (m_selectedSources.size() < 10) {
-      m_selectedProxy->setFilterAST(QSharedPointer<ASTNode>());
-      m_selectedProxy->setFilterFixedString(QStringLiteral(""));
-    } else {
-      m_selectedProxy->setFilterAST(QSharedPointer<ASTNode>());
-      m_selectedProxy->setFilterFixedString(text);
-    }
+    filterString = text;
   }
+
+  m_unselectedProxy->setFilterAST(ast);
+  m_unselectedProxy->setFilterFixedString(filterString);
+
+  bool applyToSelected = m_selectedSources.size() >= 10;
+  m_selectedProxy->setFilterAST(applyToSelected ? ast : QSharedPointer<ASTNode>());
+  m_selectedProxy->setFilterFixedString(applyToSelected ? filterString : QStringLiteral(""));
 }
 
 void NewSessionDialog::onAddSelected() {
