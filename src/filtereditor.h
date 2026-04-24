@@ -22,6 +22,9 @@ public:
   void setCompletions(const QMap<QString, QStringList> &completions);
   void setSimplifiedMode(bool simplified);
 
+public Q_SLOTS:
+  void focusInput();
+
 Q_SIGNALS:
   void filterChanged(const QString &text);
 
