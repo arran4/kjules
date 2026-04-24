@@ -1950,6 +1950,23 @@ void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
 }
 
 void MainWindow::createActions() {
+  QAction *focusFilterAction = new QAction(i18n("Focus Filter"), this);
+  actionCollection()->addAction(QStringLiteral("focus_filter"),
+                                focusFilterAction);
+  actionCollection()->setDefaultShortcut(
+      focusFilterAction, QKeySequence(Qt::AltModifier | Qt::Key_K));
+  connect(focusFilterAction, &QAction::triggered, this, [this]() {
+    QWidget *currentTab = m_tabWidget->currentWidget();
+    if (!currentTab)
+      return;
+
+    if (FilterEditor *editor = currentTab->findChild<FilterEditor *>()) {
+      editor->focusInput();
+    } else if (QLineEdit *lineEdit = currentTab->findChild<QLineEdit *>()) {
+      lineEdit->setFocus();
+    }
+  });
+
   QAction *newSessionAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")),
                   i18n("New Session"), this);
