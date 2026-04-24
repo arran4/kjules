@@ -285,12 +285,18 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_paletteList->setDropIndicatorShown(false);
   m_paletteList->setDefaultDropAction(Qt::CopyAction);
 
-  QStringList paletteItems = {
-      QStringLiteral("AND"),           QStringLiteral("OR"),
-      QStringLiteral("NOT"),           QStringLiteral("IN"),
-      QStringLiteral("state:"),        QStringLiteral("repo:"),
-      QStringLiteral("owner:"),        QStringLiteral("created-before:"),
-      QStringLiteral("updated-after:")};
+  QStringList paletteItems = {QStringLiteral("AND"),
+                              QStringLiteral("OR"),
+                              QStringLiteral("NOT"),
+                              QStringLiteral("IN"),
+                              QStringLiteral("state:"),
+                              QStringLiteral("repo:"),
+                              QStringLiteral("owner:"),
+                              QStringLiteral("archived:"),
+                              QStringLiteral("fork:"),
+                              QStringLiteral("private:"),
+                              QStringLiteral("created-before:"),
+                              QStringLiteral("updated-after:")};
   for (const QString &itemText : paletteItems) {
     QListWidgetItem *item = new QListWidgetItem(itemText, m_paletteList);
     item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsDragEnabled |
@@ -646,17 +652,20 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
 void FilterEditor::setSimplifiedMode(bool simplified) {
   if (simplified) {
     m_paletteList->clear();
-    m_paletteList->addItems(
-        QStringList{QStringLiteral("OR"), QStringLiteral("AND"),
-                    QStringLiteral("NOT"), QStringLiteral("IN"),
-                    QStringLiteral("repo:"), QStringLiteral("owner:")});
+    m_paletteList->addItems(QStringList{
+        QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+        QStringLiteral("archived:"), QStringLiteral("fork:"),
+        QStringLiteral("private:")});
   } else {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{
         QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
         QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
-        QStringLiteral("state:"), QStringLiteral("title:"),
-        QStringLiteral("created-before:"), QStringLiteral("created-after:"),
-        QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
+        QStringLiteral("archived:"), QStringLiteral("fork:"),
+        QStringLiteral("private:"), QStringLiteral("state:"),
+        QStringLiteral("title:"), QStringLiteral("created-before:"),
+        QStringLiteral("created-after:"), QStringLiteral("updated-before:"),
+        QStringLiteral("updated-after:")});
   }
 }

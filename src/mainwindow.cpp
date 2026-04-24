@@ -500,62 +500,52 @@ void MainWindow::setupUi() {
                   .toJsonObject();
 
           if (rawData.contains(QStringLiteral("github"))) {
-            QAction *archivedActionOut =
-                menu.addAction(i18n("Filter out archived"));
-            connect(archivedActionOut, &QAction::triggered, [this]() {
-              m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(
-                      m_sourcesFilterEditor->filterText(),
-                      QStringLiteral("archived"), QStringLiteral("true"),
-                      true));
-            });
+            QJsonObject github =
+                rawData.value(QStringLiteral("github")).toObject();
+            QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
 
-            QAction *archivedActionIn =
-                menu.addAction(i18n("Filter only archived"));
-            connect(archivedActionIn, &QAction::triggered, [this]() {
-              m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(
-                      m_sourcesFilterEditor->filterText(),
-                      QStringLiteral("archived"), QStringLiteral("true"),
-                      false));
-            });
+            auto addGithubLink = [this, githubMenu,
+                                  urlStr](const QString &title,
+                                          const QString &path) {
+              QAction *openAction =
+                  githubMenu->addAction(i18n("Open %1", title));
+              connect(openAction, &QAction::triggered, [urlStr, path]() {
+                QDesktopServices::openUrl(QUrl(urlStr + path));
+              });
+              QAction *copyAction =
+                  githubMenu->addAction(i18n("Copy %1 URL", title));
+              connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
+                QGuiApplication::clipboard()->setText(urlStr + path);
+                updateStatus(i18n("URL copied to clipboard."));
+              });
+            };
 
-            QAction *forkActionOut = menu.addAction(i18n("Filter out forks"));
-            connect(forkActionOut, &QAction::triggered, [this]() {
-              m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(
-                      m_sourcesFilterEditor->filterText(),
-                      QStringLiteral("fork"), QStringLiteral("true"), true));
-            });
+            if (github.value(QStringLiteral("has_wiki")).toBool()) {
+              addGithubLink(QStringLiteral("Wiki"), QStringLiteral("/wiki"));
+            }
+            if (github.value(QStringLiteral("has_discussions")).toBool()) {
+              addGithubLink(QStringLiteral("Discussions"),
+                            QStringLiteral("/discussions"));
+            }
+            if (github.value(QStringLiteral("has_issues")).toBool()) {
+              addGithubLink(QStringLiteral("Issues"),
+                            QStringLiteral("/issues"));
+            }
 
-            QAction *forkActionIn = menu.addAction(i18n("Filter only forks"));
-            connect(forkActionIn, &QAction::triggered, [this]() {
-              m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(
-                      m_sourcesFilterEditor->filterText(),
-                      QStringLiteral("fork"), QStringLiteral("true"), false));
-            });
-
-            QAction *privateActionOut =
-                menu.addAction(i18n("Filter out private"));
-            connect(privateActionOut, &QAction::triggered, [this]() {
-              m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(
-                      m_sourcesFilterEditor->filterText(),
-                      QStringLiteral("private"), QStringLiteral("true"), true));
-            });
-
-            QAction *privateActionIn =
-                menu.addAction(i18n("Filter only private"));
-            connect(privateActionIn, &QAction::triggered, [this]() {
-              m_sourcesFilterEditor->setFilterText(
-                  FilterEditor::applyQuickFilter(
-                      m_sourcesFilterEditor->filterText(),
-                      QStringLiteral("private"), QStringLiteral("true"),
-                      false));
-            });
-
-            menu.addSeparator();
+            QString homepage =
+                github.value(QStringLiteral("homepage")).toString();
+            if (!homepage.isEmpty()) {
+              QAction *openAction = githubMenu->addAction(i18n("Open Website"));
+              connect(openAction, &QAction::triggered, [homepage]() {
+                QDesktopServices::openUrl(QUrl(homepage));
+              });
+              QAction *copyAction =
+                  githubMenu->addAction(i18n("Copy Website URL"));
+              connect(copyAction, &QAction::triggered, [this, homepage]() {
+                QGuiApplication::clipboard()->setText(homepage);
+                updateStatus(i18n("URL copied to clipboard."));
+              });
+            }
           }
 
           QAction *configLimitAction =
@@ -2941,6 +2931,66 @@ void MainWindow::createActions() {
       new QAction(i18n("Configure Concurrency Limit..."), this);
   actionCollection()->addAction(QStringLiteral("configure_concurrency_limit"),
                                 m_configureConcurrencyLimitAction);
+
+  m_viewFilterArchivedAction = new QAction(i18n("Filter out archived"), this);
+  actionCollection()->addAction(QStringLiteral("view_filter_archived"),
+                                m_viewFilterArchivedAction);
+  connect(m_viewFilterArchivedAction, &QAction::triggered, this, [this]() {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    FilterEditor *editor = nullptr;
+    if (currentWidget->objectName() == QStringLiteral("sourcesTab")) {
+      editor = m_sourcesFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("followingTab")) {
+      editor = m_followingFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("archiveTab")) {
+      editor = m_archiveFilterEditor;
+    }
+    if (editor) {
+      editor->setFilterText(FilterEditor::applyQuickFilter(
+          editor->filterText(), QStringLiteral("archived"),
+          QStringLiteral("true"), true));
+    }
+  });
+
+  m_viewFilterForksAction = new QAction(i18n("Filter out forks"), this);
+  actionCollection()->addAction(QStringLiteral("view_filter_forks"),
+                                m_viewFilterForksAction);
+  connect(m_viewFilterForksAction, &QAction::triggered, this, [this]() {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    FilterEditor *editor = nullptr;
+    if (currentWidget->objectName() == QStringLiteral("sourcesTab")) {
+      editor = m_sourcesFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("followingTab")) {
+      editor = m_followingFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("archiveTab")) {
+      editor = m_archiveFilterEditor;
+    }
+    if (editor) {
+      editor->setFilterText(FilterEditor::applyQuickFilter(
+          editor->filterText(), QStringLiteral("fork"), QStringLiteral("true"),
+          true));
+    }
+  });
+
+  m_viewFilterPrivateAction = new QAction(i18n("Filter out private"), this);
+  actionCollection()->addAction(QStringLiteral("view_filter_private"),
+                                m_viewFilterPrivateAction);
+  connect(m_viewFilterPrivateAction, &QAction::triggered, this, [this]() {
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    FilterEditor *editor = nullptr;
+    if (currentWidget->objectName() == QStringLiteral("sourcesTab")) {
+      editor = m_sourcesFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("followingTab")) {
+      editor = m_followingFilterEditor;
+    } else if (currentWidget->objectName() == QStringLiteral("archiveTab")) {
+      editor = m_archiveFilterEditor;
+    }
+    if (editor) {
+      editor->setFilterText(FilterEditor::applyQuickFilter(
+          editor->filterText(), QStringLiteral("private"),
+          QStringLiteral("true"), true));
+    }
+  });
   connect(
       m_configureConcurrencyLimitAction, &QAction::triggered, this, [this]() {
         QModelIndexList selectedRows =

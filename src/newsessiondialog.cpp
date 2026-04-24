@@ -489,61 +489,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           });
         }
 
-        QJsonObject rawData =
-            m_sourceModel->data(sourceIdx, SourceModel::RawDataRole)
-                .toJsonObject();
-        if (rawData.contains(QStringLiteral("github"))) {
-          QAction *archivedActionOut =
-              menu.addAction(tr("Filter out archived"));
-          connect(archivedActionOut, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("archived"),
-                QStringLiteral("true"), true));
-            applyFilter();
-          });
-
-          QAction *archivedActionIn =
-              menu.addAction(tr("Filter only archived"));
-          connect(archivedActionIn, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("archived"),
-                QStringLiteral("true"), false));
-            applyFilter();
-          });
-
-          QAction *forkActionOut = menu.addAction(tr("Filter out forks"));
-          connect(forkActionOut, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("fork"),
-                QStringLiteral("true"), true));
-            applyFilter();
-          });
-
-          QAction *forkActionIn = menu.addAction(tr("Filter only forks"));
-          connect(forkActionIn, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("fork"),
-                QStringLiteral("true"), false));
-            applyFilter();
-          });
-
-          QAction *privateActionOut = menu.addAction(tr("Filter out private"));
-          connect(privateActionOut, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("private"),
-                QStringLiteral("true"), true));
-            applyFilter();
-          });
-
-          QAction *privateActionIn = menu.addAction(tr("Filter only private"));
-          connect(privateActionIn, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("private"),
-                QStringLiteral("true"), false));
-            applyFilter();
-          });
-        }
-
         addFavouriteAction(menu, sourceIdx);
 
         menu.exec(m_unselectedView->mapToGlobal(pos));
@@ -837,61 +782,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("owner"), owner, false));
-            applyFilter();
-          });
-        }
-
-        QJsonObject rawData =
-            m_sourceModel->data(sourceIdx, SourceModel::RawDataRole)
-                .toJsonObject();
-        if (rawData.contains(QStringLiteral("github"))) {
-          QAction *archivedActionOut =
-              menu.addAction(tr("Filter out archived"));
-          connect(archivedActionOut, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("archived"),
-                QStringLiteral("true"), true));
-            applyFilter();
-          });
-
-          QAction *archivedActionIn =
-              menu.addAction(tr("Filter only archived"));
-          connect(archivedActionIn, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("archived"),
-                QStringLiteral("true"), false));
-            applyFilter();
-          });
-
-          QAction *forkActionOut = menu.addAction(tr("Filter out forks"));
-          connect(forkActionOut, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("fork"),
-                QStringLiteral("true"), true));
-            applyFilter();
-          });
-
-          QAction *forkActionIn = menu.addAction(tr("Filter only forks"));
-          connect(forkActionIn, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("fork"),
-                QStringLiteral("true"), false));
-            applyFilter();
-          });
-
-          QAction *privateActionOut = menu.addAction(tr("Filter out private"));
-          connect(privateActionOut, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("private"),
-                QStringLiteral("true"), true));
-            applyFilter();
-          });
-
-          QAction *privateActionIn = menu.addAction(tr("Filter only private"));
-          connect(privateActionIn, &QAction::triggered, [this]() {
-            m_filterEdit->setText(FilterEditor::applyQuickFilter(
-                m_filterEdit->text(), QStringLiteral("private"),
-                QStringLiteral("true"), false));
             applyFilter();
           });
         }
