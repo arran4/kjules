@@ -504,6 +504,26 @@ void MainWindow::setupUi() {
                 rawData.value(QStringLiteral("github")).toObject();
             QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
 
+            if (!owner.isEmpty()) {
+              QAction *hideOwnerAction =
+                  githubMenu->addAction(i18n("Hide this owner"));
+              QAction *onlyOwnerAction =
+                  githubMenu->addAction(i18n("Only this owner"));
+              connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+                m_sourcesFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_sourcesFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, true));
+              });
+              connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+                m_sourcesFilterEditor->setFilterText(
+                    FilterEditor::applyQuickFilter(
+                        m_sourcesFilterEditor->filterText(),
+                        QStringLiteral("owner"), owner, false));
+              });
+              githubMenu->addSeparator();
+            }
+
             auto addGithubLink = [this, githubMenu,
                                   urlStr](const QString &title,
                                           const QString &path) {
@@ -574,55 +594,6 @@ void MainWindow::setupUi() {
                   i18n("Concurrency limit for %1 updated to %2", id, newLimit));
             }
           });
-
-          if (rawData.contains(QStringLiteral("github"))) {
-            QJsonObject github =
-                rawData.value(QStringLiteral("github")).toObject();
-            QMenu *githubMenu = menu.addMenu(i18n("GitHub"));
-
-            auto addGithubLink = [this, githubMenu,
-                                  urlStr](const QString &title,
-                                          const QString &path) {
-              QAction *openAction =
-                  githubMenu->addAction(i18n("Open %1", title));
-              connect(openAction, &QAction::triggered, [urlStr, path]() {
-                QDesktopServices::openUrl(QUrl(urlStr + path));
-              });
-              QAction *copyAction =
-                  githubMenu->addAction(i18n("Copy %1 URL", title));
-              connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
-                QGuiApplication::clipboard()->setText(urlStr + path);
-                updateStatus(i18n("URL copied to clipboard."));
-              });
-            };
-
-            if (github.value(QStringLiteral("has_wiki")).toBool()) {
-              addGithubLink(QStringLiteral("Wiki"), QStringLiteral("/wiki"));
-            }
-            if (github.value(QStringLiteral("has_discussions")).toBool()) {
-              addGithubLink(QStringLiteral("Discussions"),
-                            QStringLiteral("/discussions"));
-            }
-            if (github.value(QStringLiteral("has_issues")).toBool()) {
-              addGithubLink(QStringLiteral("Issues"),
-                            QStringLiteral("/issues"));
-            }
-
-            QString homepage =
-                github.value(QStringLiteral("homepage")).toString();
-            if (!homepage.isEmpty()) {
-              QAction *openAction = githubMenu->addAction(i18n("Open Website"));
-              connect(openAction, &QAction::triggered, [homepage]() {
-                QDesktopServices::openUrl(QUrl(homepage));
-              });
-              QAction *copyAction =
-                  githubMenu->addAction(i18n("Copy Website URL"));
-              connect(copyAction, &QAction::triggered, [this, homepage]() {
-                QGuiApplication::clipboard()->setText(homepage);
-                updateStatus(i18n("URL copied to clipboard."));
-              });
-            }
-          }
 
           menu.exec(m_sourceView->mapToGlobal(pos));
         }
