@@ -92,7 +92,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_sessionRefreshTimer(new QTimer(this)),
       m_followingRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
-      m_queuePaused(false), m_refreshProgressWindow(nullptr) {
+      m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false),
+      m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
@@ -103,7 +104,8 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_followingRefreshTimer, &QTimer::timeout, this,
           &MainWindow::autoRefreshFollowing);
 
-  connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::processQueue);
+  connect(m_queueTimer, &QTimer::timeout, this,
+          &MainWindow::onQueueTimerTimeout);
 
   connect(m_countdownTimer, &QTimer::timeout, this,
           &MainWindow::updateCountdownStatus);
@@ -137,6 +139,15 @@ MainWindow::MainWindow(QWidget *parent)
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
+  connect(m_apiManager, &APIManager::sessionReloaded, this,
+          [this](const QJsonObject &session) {
+            checkPendingRefreshBeforeQueue(
+                session.value(QStringLiteral("id")).toString());
+          });
+  connect(m_apiManager, &APIManager::sessionReloadFailed, this,
+          [this](const QString &sessionId, const QString &) {
+            checkPendingRefreshBeforeQueue(sessionId);
+          });
   connect(m_apiManager, &APIManager::sessionReloaded, this,
           &MainWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this,
@@ -2961,12 +2972,26 @@ void MainWindow::loadQueueSettings() {
   if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
     m_queueTimer->start();
   }
+  updateBlockedTabVisibility();
 }
 
 void MainWindow::updateFollowingRefreshTimer() {
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
                              QStringLiteral("SessionWindow"));
+
   int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+
+  // Backwards compatibility migration
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && seconds != -1) {
+    seconds = -1;
+  }
+
+  if (seconds == -1) {
+    m_followingRefreshTimer->stop();
+    return;
+  }
 
   if (seconds > 0) {
     m_followingRefreshTimer->start(seconds * 1000);
@@ -3156,8 +3181,79 @@ void MainWindow::processErrorRetries() {
   }
 }
 
+void MainWindow::onQueueTimerTimeout() {
+  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
+    return;
+
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("SessionWindow"));
+  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+
+  // Backwards compatibility migration
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && seconds != -1) {
+    seconds = -1;
+  }
+
+  if (seconds == -1) {
+    refreshBeforeQueue();
+  } else {
+    processQueue();
+  }
+}
+
+QStringList MainWindow::getActiveFollowingSessionIds() const {
+  QStringList activeIds;
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QModelIndex index = m_sessionModel->index(i, 0);
+    QString state =
+        m_sessionModel->data(index, SessionModel::StateRole).toString();
+    if (state == QStringLiteral("DONE") ||
+        state == QStringLiteral("CANCELED") || state == QStringLiteral("ERROR"))
+      continue;
+    QString currentId =
+        m_sessionModel->data(index, SessionModel::IdRole).toString();
+    if (!currentId.isEmpty()) {
+      activeIds.append(currentId);
+    }
+  }
+  return activeIds;
+}
+
+void MainWindow::refreshBeforeQueue() {
+  QStringList sessionsToReload = getActiveFollowingSessionIds();
+
+  if (sessionsToReload.isEmpty()) {
+    processQueue();
+    return;
+  }
+
+  m_pendingRefreshIds =
+      QSet<QString>(sessionsToReload.begin(), sessionsToReload.end());
+  m_isWaitingForRefreshBeforeQueue = true;
+  updateStatus(
+      i18np("Refreshing 1 following session before processing queue...",
+            "Refreshing %1 following sessions before processing queue...",
+            m_pendingRefreshIds.size()));
+
+  for (const QString &id : sessionsToReload) {
+    m_apiManager->reloadSession(id);
+  }
+}
+
+void MainWindow::checkPendingRefreshBeforeQueue(const QString &id) {
+  if (m_isWaitingForRefreshBeforeQueue && m_pendingRefreshIds.contains(id)) {
+    m_pendingRefreshIds.remove(id);
+    if (m_pendingRefreshIds.isEmpty()) {
+      m_isWaitingForRefreshBeforeQueue = false;
+      processQueue();
+    }
+  }
+}
+
 void MainWindow::processQueue() {
-  if (m_isProcessingQueue || m_queuePaused)
+  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
     return;
   if (m_queueModel->isEmpty()) {
     if (m_queueTimer->isActive()) {
@@ -3200,10 +3296,10 @@ void MainWindow::processQueue() {
   // Pre-calculate active session counts from m_sessionModel
   for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
     QModelIndex idx = m_sessionModel->index(j, 0);
-    QString state =
-        m_sessionModel->data(idx, SessionModel::StateRole).toString();
-    if (state == QStringLiteral("PENDING") ||
-        state == QStringLiteral("IN_PROGRESS")) {
+    QString prStatus =
+        m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
+    if (prStatus != QStringLiteral("merged") &&
+        prStatus != QStringLiteral("closed")) {
       QString source =
           m_sessionModel->data(idx, SessionModel::SourceRole).toString();
       activeCountCache[source]++;
@@ -3503,7 +3599,12 @@ void MainWindow::updateBlockedTabVisibility() {
         }
       }
     }
-    m_tabWidget->setTabText(blockedIdx, i18n("Blocked (%1)", blockedSources));
+    KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                             QStringLiteral("Queue"));
+    int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
+    m_tabWidget->setTabText(blockedIdx,
+                            i18n("Blocked (%1 / %2 / %3)", blockedSources,
+                                 blockedItems, globalOneAtATimeLimit));
   }
 }
 
@@ -4413,20 +4514,9 @@ void MainWindow::updateSessionStats() {
 }
 
 void MainWindow::autoRefreshFollowing() {
-  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-    QModelIndex index = m_sessionModel->index(i, 0);
-    QString state =
-        m_sessionModel->data(index, SessionModel::StateRole).toString();
-    if (state == QStringLiteral("DONE") ||
-        state == QStringLiteral("CANCELED") ||
-        state == QStringLiteral("ERROR")) {
-      continue;
-    }
-    QString currentId =
-        m_sessionModel->data(index, SessionModel::IdRole).toString();
-    if (!currentId.isEmpty()) {
-      m_apiManager->reloadSession(currentId);
-    }
+  QStringList activeIds = getActiveFollowingSessionIds();
+  for (const QString &id : activeIds) {
+    m_apiManager->reloadSession(id);
   }
   m_lastSessionRefreshTime = QDateTime::currentDateTime();
   updateSessionStats();

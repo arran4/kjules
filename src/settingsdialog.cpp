@@ -114,23 +114,26 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
           this, updateLimitVisibility);
   updateLimitVisibility();
 
-  m_queueBackoffEdit = new QSpinBox(this);
-  m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
-  m_queueBackoffEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  formLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
-                     m_queueBackoffEdit);
+  m_backoffTypeCombo = new QComboBox(this);
+  m_backoffTypeCombo->addItem(i18n("Fixed"), QStringLiteral("fixed"));
+  m_backoffTypeCombo->addItem(i18n("Exponential"),
+                              QStringLiteral("exponential"));
+  m_backoffTypeCombo->addItem(i18n("Random"), QStringLiteral("random"));
+  m_backoffTypeCombo->addItem(i18n("Predict"), QStringLiteral("predict"));
+
+  QString currentBackoffType =
+      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  int backoffTypeIndex = m_backoffTypeCombo->findData(currentBackoffType);
+  if (backoffTypeIndex >= 0) {
+    m_backoffTypeCombo->setCurrentIndex(backoffTypeIndex);
+  }
+  formLayout->addRow(i18n("Backoff Strategy:"), m_backoffTypeCombo);
 
   m_backoffTabWidget = new QTabWidget(this);
 
-  // Fixed Tab
-  QWidget *fixedTab = new QWidget();
-  QVBoxLayout *fixedLayout = new QVBoxLayout(fixedTab);
-  QLabel *fixedLabel =
-      new QLabel(i18n("Uses the fixed/initial backoff setting above."));
-  fixedLayout->addWidget(fixedLabel);
-  fixedLayout->addStretch();
-  m_backoffTabWidget->addTab(fixedTab, i18n("Fixed"));
+  // Note: Predict and Fixed backoff strategies have no exclusive error backoff
+  // settings. The 'Tier' and 'WaitTime' settings previously placed here apply
+  // to the global concurrency limiter.
 
   // Exponential Tab
   QWidget *expTab = new QWidget();
@@ -163,42 +166,29 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
                        m_queueBackoffRandomMaxEdit);
   m_backoffTabWidget->addTab(randomTab, i18n("Random"));
 
-  // Determine current tab
-  QString currentBackoffType =
-      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  int backoffTypeIndex = 0;
-  if (currentBackoffType == QStringLiteral("exponential")) {
-    backoffTypeIndex = 1;
-  } else if (currentBackoffType == QStringLiteral("random")) {
-    backoffTypeIndex = 2;
-  }
-  m_backoffTabWidget->setCurrentIndex(backoffTypeIndex);
+  // Fixed + Exponential Tab
+  QWidget *fixedExpTab = new QWidget();
+  QFormLayout *fixedExpLayout = new QFormLayout(fixedExpTab);
+  m_queueBackoffEdit = new QSpinBox(this);
+  m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
+  m_queueBackoffEdit->setSuffix(i18n(" minutes"));
+  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
+  fixedExpLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
+                         m_queueBackoffEdit);
+  m_backoffTabWidget->addTab(fixedExpTab, i18n("Initial Interval"));
 
-  // Note: Qt doesn't directly support HTML bolding or setTabFont for individual
-  // tabs natively in all styles without custom painting, but appending a marker
-  // works.
-  auto updateTabTitles = [this](int index) {
-    for (int i = 0; i < m_backoffTabWidget->count(); ++i) {
-      QString text = m_backoffTabWidget->tabText(i);
-      text.remove(QStringLiteral(" (Selected)"));
-      if (i == index) {
-        text += QStringLiteral(" (Selected)");
-      }
-      m_backoffTabWidget->setTabText(i, text);
-    }
-  };
-  connect(m_backoffTabWidget, &QTabWidget::currentChanged, this,
-          updateTabTitles);
-  updateTabTitles(backoffTypeIndex);
-
-  formLayout->addRow(i18n("Backoff Strategy:"), m_backoffTabWidget);
-
+  // Global Limits Tab
+  QWidget *allTab = new QWidget();
+  QFormLayout *allLayout = new QFormLayout(allTab);
   m_queueBackoffMaxEdit = new QSpinBox(this);
   m_queueBackoffMaxEdit->setRange(1, 10080); // Up to 1 week
   m_queueBackoffMaxEdit->setSuffix(i18n(" minutes"));
   m_queueBackoffMaxEdit->setValue(
       queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
-  formLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
+  allLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
+  m_backoffTabWidget->addTab(allTab, i18n("Global Limits"));
+
+  formLayout->addRow(i18n("Backoff Settings:"), m_backoffTabWidget);
 
   m_waitTimeEdit = new QSpinBox(this);
   m_waitTimeEdit->setRange(1, 10080);
@@ -245,12 +235,23 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   m_followingAutoRefreshCombo = new QComboBox(this);
   m_followingAutoRefreshCombo->addItem(i18n("Off"), 0);
+  m_followingAutoRefreshCombo->addItem(i18n("Sync with queue processing"), -1);
   m_followingAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
   m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
+
   int followingInterval =
       sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  // Migrate the legacy MergeRefreshAndQueue checkbox state to the new combo box
+  // item if applicable
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && followingInterval != -1) {
+    followingInterval = -1;
+    // We clean up the old setting on save.
+  }
+
   int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
   if (followingIndex >= 0) {
     m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
@@ -368,12 +369,7 @@ void SettingsDialog::onSave() {
   queueConfig.writeEntry("QueueMode",
                          m_queueModeCombo->currentData().toString());
   queueConfig.writeEntry("OneAtATimeLimit", m_oneAtATimeLimitEdit->value());
-  QString backoffType = QStringLiteral("fixed");
-  if (m_backoffTabWidget->currentIndex() == 1) {
-    backoffType = QStringLiteral("exponential");
-  } else if (m_backoffTabWidget->currentIndex() == 2) {
-    backoffType = QStringLiteral("random");
-  }
+  QString backoffType = m_backoffTypeCombo->currentData().toString();
   queueConfig.writeEntry("BackoffType", backoffType);
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
   queueConfig.writeEntry("BackoffExpBase", m_queueBackoffExpBaseEdit->value());
@@ -395,6 +391,7 @@ void SettingsDialog::onSave() {
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
   sessionConfig.writeEntry("PrMergeArchiveEnabled",
                            m_prMergeArchiveCheckbox->isChecked());
+  sessionConfig.deleteEntry("MergeRefreshAndQueue"); // Cleanup legacy option
   sessionConfig.sync();
 
   accept();

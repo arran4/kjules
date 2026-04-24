@@ -23,7 +23,8 @@ int main(int argc, char *argv[]) {
   KLocalizedString::setApplicationDomain("kjules");
 
   KAboutData aboutData(
-      QStringLiteral("kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
+      QStringLiteral("org.kde.kjules"), i18n("kJules"),
+      QStringLiteral(KJULES_VERSION),
       i18n(
           "A KDE native desktop client for tracking and managing GitHub tasks"),
       KAboutLicense::GPL, i18n("(c) 2024"),
@@ -32,6 +33,7 @@ int main(int argc, char *argv[]) {
 
   aboutData.addAuthor(i18n("Jules"), i18n("Developer"),
                       QStringLiteral("jules@kde.org"));
+  aboutData.setDesktopFileName(QStringLiteral("org.kde.kjules"));
   KAboutData::setApplicationData(aboutData);
 
   QCommandLineParser parser;

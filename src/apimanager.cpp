@@ -280,6 +280,10 @@ void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
         "Cannot reload session details: No token or previous failure."));
+    Q_EMIT sessionReloadFailed(
+        sessionId,
+        QStringLiteral(
+            "Cannot reload session details: No token or previous failure."));
     return;
   }
 
@@ -288,6 +292,8 @@ void APIManager::reloadSession(const QString &sessionId) {
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    Q_EMIT sessionReloadFailed(sessionId,
+                               QStringLiteral("Invalid session ID."));
     return;
   }
 
@@ -655,6 +661,12 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
         if (reply->error() == QNetworkReply::NoError) {
           QJsonDocument doc = QJsonDocument::fromJson(responseData);
           QJsonObject sessionObj = doc.object();
+
+          if (!sessionObj.contains(QStringLiteral("sourceContext"))) {
+            sessionObj[QStringLiteral("sourceContext")] =
+                json.value(QStringLiteral("sourceContext")).toObject();
+          }
+
           Q_EMIT sessionCreated(sessionObj);
           Q_EMIT logMessage(QStringLiteral("Session created successfully."));
 

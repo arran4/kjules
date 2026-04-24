@@ -412,8 +412,37 @@ jobs:
           TAG: ${{ needs.prepare-release-tag.outputs.release_tag }}
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          CLEAN_TAG="${TAG#v}"
+          CLEAN_TAG="${CLEAN_TAG%%-*}"
+          sed -i -E "s/project\(([^ ]+) VERSION [^)]+\)/project(\1 VERSION ${CLEAN_TAG})/" CMakeLists.txt
+          git add CMakeLists.txt
+          git commit -m "chore: release version $TAG"
           git tag "$TAG"
           git push origin "$TAG" || { sleep 2; git push origin "$TAG"; } || true
+
+      - name: Create PR for next version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_VERSION: ${{ needs.prepare-release-tag.outputs.next_version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="ci/bump-version-${NEXT_VERSION}"
+          git fetch origin main
+          git checkout -b "$BRANCH" origin/main
+          CLEAN_NEXT="${NEXT_VERSION%%-*}"
+          sed -i -E "s/project\(([^ ]+) VERSION [^)]+\)/project(\1 VERSION ${CLEAN_NEXT})/" CMakeLists.txt
+          git add CMakeLists.txt
+          git commit -m "chore: bump version to $NEXT_VERSION"
+          git push origin "$BRANCH" || true
+          gh pr create \
+            --title "chore: bump version to $NEXT_VERSION" \
+            --body "Automated version bump for next development cycle." \
+            --base main \
+            --head "$BRANCH" || true
 
       - name: Create draft release
         env:
