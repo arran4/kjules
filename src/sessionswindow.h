@@ -14,6 +14,7 @@ class QProgressBar;
 class QPushButton;
 class QJsonArray;
 class QComboBox;
+class QLineEdit;
 
 class SessionsProxyModel : public QSortFilterProxyModel {
   Q_OBJECT
