@@ -462,10 +462,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         }
 
         if (!owner.isEmpty() && !repo.isEmpty()) {
-          QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
-          QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
-          QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
-          QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+          QAction *hideRepoAction = menu.addAction(tr("Hide this repo"));
+          QAction *hideOwnerAction = menu.addAction(tr("Hide this owner"));
+          QAction *onlyRepoAction = menu.addAction(tr("Only this repo"));
+          QAction *onlyOwnerAction = menu.addAction(tr("Only this owner"));
 
           connect(hideRepoAction, &QAction::triggered, [this, repo]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
@@ -501,8 +501,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           bool isPrivate = github.value(QStringLiteral("private")).toBool();
 
           QAction *archivedAction =
-              menu.addAction(isArchived ? i18n("Filter out archived")
-                                        : i18n("Filter only archived"));
+              menu.addAction(isArchived ? tr("Filter out archived")
+                                        : tr("Filter only archived"));
           connect(archivedAction, &QAction::triggered, [this, isArchived]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("archived"),
@@ -511,7 +511,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           });
 
           QAction *forkAction = menu.addAction(
-              isFork ? i18n("Filter out forks") : i18n("Filter only forks"));
+              isFork ? tr("Filter out forks") : tr("Filter only forks"));
           connect(forkAction, &QAction::triggered, [this, isFork]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("fork"),
@@ -519,9 +519,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             applyFilter();
           });
 
-          QAction *privateAction =
-              menu.addAction(isPrivate ? i18n("Filter out private")
-                                       : i18n("Filter only private"));
+          QAction *privateAction = menu.addAction(
+              isPrivate ? tr("Filter out private") : tr("Filter only private"));
           connect(privateAction, &QAction::triggered, [this, isPrivate]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("private"),
@@ -800,10 +799,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         }
 
         if (!owner.isEmpty() && !repo.isEmpty()) {
-          QAction *hideRepoAction = menu.addAction(i18n("Hide this repo"));
-          QAction *hideOwnerAction = menu.addAction(i18n("Hide this owner"));
-          QAction *onlyRepoAction = menu.addAction(i18n("Only this repo"));
-          QAction *onlyOwnerAction = menu.addAction(i18n("Only this owner"));
+          QAction *hideRepoAction = menu.addAction(tr("Hide this repo"));
+          QAction *hideOwnerAction = menu.addAction(tr("Hide this owner"));
+          QAction *onlyRepoAction = menu.addAction(tr("Only this repo"));
+          QAction *onlyOwnerAction = menu.addAction(tr("Only this owner"));
 
           connect(hideRepoAction, &QAction::triggered, [this, repo]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
@@ -839,8 +838,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           bool isPrivate = github.value(QStringLiteral("private")).toBool();
 
           QAction *archivedAction =
-              menu.addAction(isArchived ? i18n("Filter out archived")
-                                        : i18n("Filter only archived"));
+              menu.addAction(isArchived ? tr("Filter out archived")
+                                        : tr("Filter only archived"));
           connect(archivedAction, &QAction::triggered, [this, isArchived]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("archived"),
@@ -849,7 +848,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           });
 
           QAction *forkAction = menu.addAction(
-              isFork ? i18n("Filter out forks") : i18n("Filter only forks"));
+              isFork ? tr("Filter out forks") : tr("Filter only forks"));
           connect(forkAction, &QAction::triggered, [this, isFork]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("fork"),
@@ -857,9 +856,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
             applyFilter();
           });
 
-          QAction *privateAction =
-              menu.addAction(isPrivate ? i18n("Filter out private")
-                                       : i18n("Filter only private"));
+          QAction *privateAction = menu.addAction(
+              isPrivate ? tr("Filter out private") : tr("Filter only private"));
           connect(privateAction, &QAction::triggered, [this, isPrivate]() {
             m_filterEdit->setText(FilterEditor::applyQuickFilter(
                 m_filterEdit->text(), QStringLiteral("private"),
