@@ -516,3 +516,5 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
         QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
   }
 }
+
+void FilterEditor::setFocus() { m_lineEdit->setFocus(); }

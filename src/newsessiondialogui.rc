@@ -26,6 +26,7 @@
     <Menu name="view"><text>&amp;View</text>
       <Action name="hide_selected_sources"/>
       <Action name="jump_to_prompt"/>
+      <Action name="focus_filter"/>
       <Separator/>
       <Action name="hide_archived_repos"/>
       <Action name="hide_forks"/>

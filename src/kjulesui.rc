@@ -28,6 +28,7 @@
             <Action name="follow_from_id" />
             <Separator />
             <Action name="view_sessions" />
+            <Action name="focus_filter" />
             <Action name="show_past_new_sessions" />
             <Action name="view_raw_data" />
             <Action name="source_settings" />

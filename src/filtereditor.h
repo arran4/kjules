@@ -21,6 +21,7 @@ public:
   void setFilterText(const QString &text);
   void setCompletions(const QMap<QString, QStringList> &completions);
   void setSimplifiedMode(bool simplified);
+  void setFocus();
 
 Q_SIGNALS:
   void filterChanged(const QString &text);

@@ -2,7 +2,9 @@
 #include "templatesmodel.h"
 
 #include "draftdelegate.h"
+#include <QAction>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -58,6 +60,12 @@ TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel,
           this, &TemplateSelectionDialog::onSelectionChanged);
   connect(m_listView, &QListView::doubleClicked, this,
           &TemplateSelectionDialog::onDoubleClicked);
+
+  QAction *focusFilterAction = new QAction(this);
+  focusFilterAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_K));
+  connect(focusFilterAction, &QAction::triggered, m_filterEdit,
+          qOverload<>(&QWidget::setFocus));
+  addAction(focusFilterAction);
 }
 
 void TemplateSelectionDialog::onSelectionChanged() {

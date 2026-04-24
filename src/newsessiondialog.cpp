@@ -925,6 +925,14 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction,
           &QAction::setChecked);
 
+  QAction *focusFilterAction =
+      actionCollection()->addAction(QStringLiteral("focus_filter"));
+  focusFilterAction->setText(tr("Focus Filter"));
+  actionCollection()->setDefaultShortcut(focusFilterAction,
+                                         QKeySequence(Qt::ALT | Qt::Key_K));
+  connect(focusFilterAction, &QAction::triggered, m_filterEdit,
+          qOverload<>(&QWidget::setFocus));
+
   QAction *refreshSourcesAction =
       actionCollection()->addAction(QStringLiteral("refresh_sources"));
   refreshSourcesAction->setText(tr("Refresh Sources"));

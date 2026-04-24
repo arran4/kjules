@@ -2948,6 +2948,28 @@ void MainWindow::createActions() {
       new QAction(i18n("Configure Concurrency Limit..."), this);
   actionCollection()->addAction(QStringLiteral("configure_concurrency_limit"),
                                 m_configureConcurrencyLimitAction);
+
+  QAction *focusFilterAction = new QAction(i18n("Focus Filter"), this);
+  actionCollection()->addAction(QStringLiteral("focus_filter"),
+                                focusFilterAction);
+  actionCollection()->setDefaultShortcut(focusFilterAction,
+                                         QKeySequence(Qt::ALT | Qt::Key_K));
+  connect(focusFilterAction, &QAction::triggered, this, [this]() {
+    QWidget *currentTab = m_tabWidget->currentWidget();
+    if (currentTab == m_sourceView->parentWidget()) {
+      m_sourcesFilterEditor->setFocus();
+    } else if (currentTab == m_sessionView->parentWidget()) {
+      m_followingFilterEditor->setFocus();
+    } else if (currentTab == m_archiveView->parentWidget()) {
+      m_archiveFilterEditor->setFocus();
+    } else if (currentTab == m_draftsView->parentWidget()) {
+      m_draftsFilter->setFocus();
+    } else if (currentTab == m_templatesView->parentWidget()) {
+      m_templatesFilter->setFocus();
+    } else if (currentTab == m_errorsView->parentWidget()) {
+      m_errorsFilter->setFocus();
+    }
+  });
   connect(
       m_configureConcurrencyLimitAction, &QAction::triggered, this, [this]() {
         QModelIndexList selectedRows =

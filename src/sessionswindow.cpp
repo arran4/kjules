@@ -162,14 +162,14 @@ void SessionsWindow::setupUi() {
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
   QHBoxLayout *filterLayout = new QHBoxLayout();
-  QLineEdit *searchEdit = new QLineEdit(this);
-  searchEdit->setPlaceholderText(i18n("Search title or source..."));
+  m_searchEdit = new QLineEdit(this);
+  m_searchEdit->setPlaceholderText(i18n("Search title or source..."));
   if (!m_filterSource.isEmpty()) {
-    searchEdit->setText(m_filterSource);
+    m_searchEdit->setText(m_filterSource);
   }
-  connect(searchEdit, &QLineEdit::textChanged, m_proxyModel,
+  connect(m_searchEdit, &QLineEdit::textChanged, m_proxyModel,
           &SessionsProxyModel::setTextFilter);
-  filterLayout->addWidget(searchEdit);
+  filterLayout->addWidget(m_searchEdit);
 
   QComboBox *statusCombo = new QComboBox(this);
   statusCombo->addItems({i18n("All"), QStringLiteral("PENDING"),
@@ -261,6 +261,14 @@ void SessionsWindow::setupUi() {
   listDeleteAction->setShortcutContext(Qt::WidgetShortcut);
   connect(listDeleteAction, &QAction::triggered, unmanageSelectedSessions);
   m_listView->addAction(listDeleteAction);
+
+  QAction *focusFilterAction = new QAction(i18n("Focus Filter"), this);
+  actionCollection()->addAction(QStringLiteral("focus_filter"),
+                                focusFilterAction);
+  actionCollection()->setDefaultShortcut(focusFilterAction,
+                                         QKeySequence(Qt::ALT | Qt::Key_K));
+  connect(focusFilterAction, &QAction::triggered, m_searchEdit,
+          qOverload<>(&QWidget::setFocus));
 
   connect(
       m_listView, &QTreeView::customContextMenuRequested,
