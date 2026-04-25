@@ -935,6 +935,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     Q_EMIT refreshSourcesRequested();
   });
 
+  setComponentName(QStringLiteral("kjules"), i18n("kJules"));
   setupGUI(Default, QStringLiteral("newsessiondialogui.rc"));
 }
 

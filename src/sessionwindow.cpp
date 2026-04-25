@@ -53,6 +53,7 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
 
   setupUi(m_sessionData);
   setupActions();
+  setComponentName(QStringLiteral("kjules"), i18n("kJules"));
   setupGUI(Default, QStringLiteral("sessionwindowui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {

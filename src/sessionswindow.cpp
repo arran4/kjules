@@ -725,6 +725,7 @@ void SessionsWindow::setupUi() {
                   QStringLiteral("col_repo"));
   addColumnToggle(i18n("ID"), SessionModel::ColId, QStringLiteral("col_id"));
 
+  setComponentName(QStringLiteral("kjules"), i18n("kJules"));
   setupGUI(Default, QStringLiteral("sessionswindowui.rc"));
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
