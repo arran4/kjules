@@ -107,6 +107,7 @@ private Q_SLOTS:
                                        const QJsonObject &info);
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void updateTrayToolTip();
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
   void increaseFavouriteRank();
@@ -247,6 +248,7 @@ private:
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
+  QString m_lastStatusMessage;
   QTimer *m_followingRefreshTimer;
 
   QTimer *m_queueTimer;
