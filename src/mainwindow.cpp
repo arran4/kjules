@@ -2017,7 +2017,7 @@ void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
 void MainWindow::setupTrayIcon() {
   m_trayIcon = new QSystemTrayIcon(this);
   m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
-  m_lastStatusMessage = i18n("Google Jules Client");
+  m_lastStatusMessage = i18n("KDE Based Client for Google Jules");
   updateTrayToolTip();
 
   m_trayMenu = new QMenu(this);
