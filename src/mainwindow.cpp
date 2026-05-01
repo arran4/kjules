@@ -1785,6 +1785,10 @@ void MainWindow::setupUi() {
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
 
+  m_queueCountdownLabel = new QLabel(this);
+  m_queueCountdownLabel->hide();
+  statusBar()->addPermanentWidget(m_queueCountdownLabel);
+
   m_sourcesRefreshProgressWindow = nullptr;
   m_sourceProgressBar = new ClickableProgressBar(this);
   m_sourceProgressBar->hide();
@@ -3194,6 +3198,7 @@ void MainWindow::updateCountdownStatus() {
   m_queueModel->refreshWaitItems();
 
   if (m_queuePaused || m_queueModel->isEmpty()) {
+    m_queueCountdownLabel->hide();
     return;
   }
 
@@ -3229,7 +3234,10 @@ void MainWindow::updateCountdownStatus() {
     } else {
       timeStr = i18np("1 second", "%1 seconds", secondsLeft);
     }
-    updateStatus(i18n("Next attempt in %1...", timeStr));
+    m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
+    m_queueCountdownLabel->show();
+  } else {
+    m_queueCountdownLabel->hide();
   }
 }
 
