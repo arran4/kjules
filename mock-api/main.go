@@ -44,7 +44,7 @@ var (
 	activities map[string][]Activity
 )
 
-func initData() {
+func initSources() {
 	sources = []Source{
 		{Name: "sources/github/kde/kjules", DisplayName: "KDE kJules", Description: "KDE Jules API Client"},
 		{Name: "sources/github/kde/kio", DisplayName: "KIO", Description: "Network transparent access to files and data"},
@@ -58,7 +58,9 @@ func initData() {
 			Description: "Mock repository for testing pagination.",
 		})
 	}
+}
 
+func initSessions() {
 	activities = make(map[string][]Activity)
 
 	states := []string{"PENDING", "RUNNING", "COMPLETED", "FAILED", "NEEDS_ATTENTION"}
@@ -105,7 +107,11 @@ func initData() {
 		}
 		activities[name] = acts
 	}
+}
 
+func initData() {
+	initSources()
+	initSessions()
 	go stateTransitionLoop()
 }
 
