@@ -28,7 +28,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QHBoxLayout *julesKeyLayout = new QHBoxLayout();
   m_apiKeyEdit = new QLineEdit(this);
   m_apiKeyEdit->setText(m_apiManager->apiKey());
-  m_apiKeyEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
+  m_apiKeyEdit->setEchoMode(QLineEdit::Password);
   QPushButton *testJulesBtn = new QPushButton(i18n("Test API Key"), this);
   connect(testJulesBtn, &QPushButton::clicked, this,
           &SettingsDialog::onTestConnection);
@@ -39,7 +39,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QHBoxLayout *githubTokenLayout = new QHBoxLayout();
   m_githubTokenEdit = new QLineEdit(this);
   m_githubTokenEdit->setText(m_apiManager->githubToken());
-  m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
+  m_githubTokenEdit->setEchoMode(QLineEdit::Password);
   QPushButton *testGithubBtn = new QPushButton(i18n("Test Github Token"), this);
   connect(testGithubBtn, &QPushButton::clicked, this, [this]() {
     m_apiManager->testGithubConnection(m_githubTokenEdit->text());
