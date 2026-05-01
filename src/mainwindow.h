@@ -203,6 +203,7 @@ private:
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
+  QLabel *m_queueCountdownLabel;
   ClickableProgressBar *m_sourceProgressBar;
   SourcesRefreshProgressWindow *m_sourcesRefreshProgressWindow;
   ClickableProgressBar *m_sessionRefreshProgressBar;
