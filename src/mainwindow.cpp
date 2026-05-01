@@ -179,6 +179,7 @@ MainWindow::MainWindow(QWidget *parent)
       allSessions.append(archived[i]);
     }
     m_sourceModel->recalculateStatsFromSessions(allSessions);
+    updateTrayToolTip();
   };
 
   connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this,
@@ -2016,7 +2017,8 @@ void MainWindow::onGithubPullRequestInfoReceived(const QString &prUrl,
 void MainWindow::setupTrayIcon() {
   m_trayIcon = new QSystemTrayIcon(this);
   m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
-  m_trayIcon->setToolTip(i18n("Google Jules Client"));
+  m_lastStatusMessage = i18n("KDE Based Client for Google Jules");
+  updateTrayToolTip();
 
   m_trayMenu = new QMenu(this);
 
@@ -4480,7 +4482,8 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 
 void MainWindow::updateStatus(const QString &message) {
   m_statusLabel->setText(message);
-  m_trayIcon->setToolTip(message);
+  m_lastStatusMessage = message;
+  updateTrayToolTip();
   Q_EMIT statusMessage(message);
 }
 
@@ -4684,6 +4687,66 @@ void MainWindow::cancelSourcesRefresh() {
   // Instead, we let onSourcesRefreshFinished() handle the final status text.
 }
 
+void MainWindow::updateTrayToolTip() {
+  if (!m_trayIcon)
+    return;
+
+  QString tooltipText = m_lastStatusMessage;
+
+  QMap<QString, int> stateCounts;
+  QStringList followingItems;
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    QModelIndex idx = m_sessionModel->index(i, 0);
+    QString state =
+        m_sessionModel->data(idx, SessionModel::StateRole).toString();
+    QString currentId =
+        m_sessionModel->data(idx, SessionModel::IdRole).toString();
+
+    if (state != QStringLiteral("DONE") &&
+        state != QStringLiteral("CANCELED") &&
+        state != QStringLiteral("ERROR") && !currentId.isEmpty()) {
+      stateCounts[state]++;
+      if (followingItems.size() < 5) {
+        QString name = m_sessionModel->getSessionName(currentId);
+        if (name.isEmpty())
+          name = currentId;
+        if (name.length() > 30) {
+          name = name.left(27) + QStringLiteral("...");
+        }
+        followingItems.append(QStringLiteral("• ") + name +
+                              QStringLiteral(" (") + state +
+                              QStringLiteral(")"));
+      }
+    }
+  }
+
+  if (!stateCounts.isEmpty()) {
+    tooltipText += QStringLiteral("\n\n") + i18n("Following stats:");
+    for (auto it = stateCounts.constBegin(); it != stateCounts.constEnd();
+         ++it) {
+      tooltipText += QStringLiteral("\n  ") + it.key() + QStringLiteral(": ") +
+                     QString::number(it.value());
+    }
+
+    if (!followingItems.isEmpty()) {
+      tooltipText += QStringLiteral("\n\n") + i18n("Recent items:");
+      tooltipText +=
+          QStringLiteral("\n") + followingItems.join(QStringLiteral("\n"));
+
+      int totalActive = 0;
+      for (int count : stateCounts)
+        totalActive += count;
+
+      if (totalActive > 5) {
+        tooltipText += QStringLiteral("\n  ...") +
+                       i18np(" and 1 more", " and %1 more", totalActive - 5);
+      }
+    }
+  }
+
+  m_trayIcon->setToolTip(tooltipText);
+}
+
 void MainWindow::updateSessionStats() {
   int sessionCount = m_sessionModel->rowCount();
   QString timeStr = i18n("Never");
@@ -4700,6 +4763,7 @@ void MainWindow::updateSessionStats() {
 
   m_sessionStatsLabel->setText(
       i18n("Sessions: %1 | Updated: %2", sessionCount, timeStr));
+  updateTrayToolTip();
 }
 
 void MainWindow::autoRefreshFollowing() {
