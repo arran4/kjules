@@ -61,6 +61,7 @@ func initSources() {
 }
 
 func initSessions() {
+	sessions = nil
 	activities = make(map[string][]Activity)
 
 	states := []string{"PENDING", "RUNNING", "COMPLETED", "FAILED", "NEEDS_ATTENTION"}
