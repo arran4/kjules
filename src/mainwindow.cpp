@@ -2578,8 +2578,6 @@ void MainWindow::createSourceActions() {
     }
   });
 
-  setStandardToolBarMenuEnabled(true);
-
   // Set up XML GUI
 }
 
@@ -2976,6 +2974,8 @@ void MainWindow::createStandardActions() {
                                      actionCollection());
   KStandardAction::close(this, &QWidget::close, actionCollection());
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
+
+  setStandardToolBarMenuEnabled(true);
 
   setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/kjulesui.rc"));
 
@@ -5545,4 +5545,30 @@ void MainWindow::addGithubLink(QMenu *githubMenu, const QString &urlStr,
     QGuiApplication::clipboard()->setText(urlStr + path);
     updateStatus(i18n("URL copied to clipboard."));
   });
+}
+
+QString MainWindow::urlFromSourceId(const QString &id) const {
+  QString urlStr;
+  QStringList parts = id.split(QLatin1Char('/'));
+  if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+    QString provider = parts[1];
+    QString owner = parts[2];
+    QString repo = parts[3];
+    if (provider == QStringLiteral("github")) {
+      urlStr = QStringLiteral("https://github.com/") + owner +
+               QLatin1Char('/') + repo;
+    } else if (provider == QStringLiteral("gitlab")) {
+      urlStr = QStringLiteral("https://gitlab.com/") + owner +
+               QLatin1Char('/') + repo;
+    } else if (provider == QStringLiteral("bitbucket")) {
+      urlStr = QStringLiteral("https://bitbucket.org/") + owner +
+               QLatin1Char('/') + repo;
+    } else {
+      urlStr = QStringLiteral("https://") + provider + QStringLiteral(".com/") +
+               owner + QLatin1Char('/') + repo;
+    }
+  } else {
+    urlStr = id;
+  }
+  return urlStr;
 }
