@@ -160,6 +160,7 @@ private:
           action);
 
   QStringList getSelectedSessionIds() const;
+  QString urlFromSourceId(const QString &id) const;
 
   void updateFollowingRefreshTimer();
   void setupUi();
@@ -174,6 +175,7 @@ private:
   void createFilterActions();
   void createRefreshActions();
   void createStandardActions();
+  void connectSignals();
 
   APIManager *m_apiManager;
   QHash<QString, QString> m_previousSessionStates;
