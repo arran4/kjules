@@ -10,6 +10,7 @@
 #include <QStatusBar>
 #include <QTextEdit>
 
+class FilterEditor;
 class QLineEdit;
 class QListView;
 class QComboBox;
@@ -93,7 +94,8 @@ private:
   QListView *m_selectedView;
   SourceSelectionProxyModel *m_unselectedProxy;
   SourceSelectionProxyModel *m_selectedProxy;
-  QLineEdit *m_filterEdit;
+  FilterEditor *m_filterEditor;
+  QLineEdit *m_filterLineEditCache;
   PromptTextEdit *m_promptEdit;
   QComboBox *m_markdownModeComboBox;
   QComboBox *m_automationModeComboBox;

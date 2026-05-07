@@ -163,6 +163,8 @@ FilterEditor::FilterEditor(QWidget *parent)
 
   connect(m_lineEdit, &QLineEdit::textChanged, this,
           &FilterEditor::onTextChanged);
+  connect(m_lineEdit, &QLineEdit::returnPressed, this,
+          &FilterEditor::returnPressed);
   connect(m_treeView, &QTreeView::customContextMenuRequested, this,
           &FilterEditor::onTreeContextMenu);
   connect(m_treeModel, &QStandardItemModel::itemChanged, this,
@@ -502,10 +504,11 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
 void FilterEditor::setSimplifiedMode(bool simplified) {
   if (simplified) {
     m_paletteList->clear();
-    m_paletteList->addItems(
-        QStringList{QStringLiteral("OR"), QStringLiteral("AND"),
-                    QStringLiteral("NOT"), QStringLiteral("IN"),
-                    QStringLiteral("repo:"), QStringLiteral("owner:")});
+    m_paletteList->addItems(QStringList{
+        QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+        QStringLiteral("language:"), QStringLiteral("fork:"),
+        QStringLiteral("private:"), QStringLiteral("archived:")});
   } else {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{
@@ -513,6 +516,8 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
         QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
         QStringLiteral("state:"), QStringLiteral("title:"),
         QStringLiteral("created-before:"), QStringLiteral("created-after:"),
-        QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
+        QStringLiteral("updated-before:"), QStringLiteral("updated-after:"),
+        QStringLiteral("language:"), QStringLiteral("fork:"),
+        QStringLiteral("private:"), QStringLiteral("archived:")});
   }
 }

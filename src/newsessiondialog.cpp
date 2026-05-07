@@ -1,4 +1,6 @@
 #include "newsessiondialog.h"
+#include "advancedfilterproxymodel.h"
+#include "filtereditor.h"
 #include "savedialog.h"
 #include "templateselectiondialog.h"
 #include <KActionCollection>
@@ -88,35 +90,12 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
   QTextEdit::insertFromMimeData(source);
 }
 
-class SourceSelectionProxyModel : public QSortFilterProxyModel {
+class SourceSelectionProxyModel : public AdvancedFilterProxyModel {
 public:
   SourceSelectionProxyModel(const QMultiMap<QString, QString> *selectedSources,
                             bool showSelected, QObject *parent = nullptr)
-      : QSortFilterProxyModel(parent), m_selectedSources(selectedSources),
-        m_showSelected(showSelected), m_hideArchived(true), m_hideForks(false),
-        m_hidePrivate(false), m_hidePublic(false) {
-    setFilterKeyColumn(-1);
-  }
-
-  void setHideArchived(bool hide) {
-    m_hideArchived = hide;
-    invalidate();
-  }
-
-  void setHideForks(bool hide) {
-    m_hideForks = hide;
-    invalidate();
-  }
-
-  void setHidePrivate(bool hide) {
-    m_hidePrivate = hide;
-    invalidate();
-  }
-
-  void setHidePublic(bool hide) {
-    m_hidePublic = hide;
-    invalidate();
-  }
+      : AdvancedFilterProxyModel(parent), m_selectedSources(selectedSources),
+        m_showSelected(showSelected) {}
 
   void updateSelection() { invalidate(); }
 
@@ -137,7 +116,7 @@ public:
                branches.join(QStringLiteral(", ")) + QStringLiteral(")");
       }
     }
-    return QSortFilterProxyModel::data(index, role);
+    return AdvancedFilterProxyModel::data(index, role);
   }
 
 protected:
@@ -155,12 +134,12 @@ protected:
         return !leftFav;
       }
     }
-    return QSortFilterProxyModel::lessThan(source_left, source_right);
+    return AdvancedFilterProxyModel::lessThan(source_left, source_right);
   }
 
   bool filterAcceptsRow(int source_row,
                         const QModelIndex &source_parent) const override {
-    if (!QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent))
+    if (!AdvancedFilterProxyModel::filterAcceptsRow(source_row, source_parent))
       return false;
 
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
@@ -175,66 +154,12 @@ protected:
       return false;
     }
 
-    if (m_hideArchived || m_hideForks || m_hidePrivate || m_hidePublic) {
-      QJsonObject rawData =
-          sourceModel()->data(idx, SourceModel::RawDataRole).toJsonObject();
-
-      if (m_hideArchived) {
-        if (rawData.value(QStringLiteral("isArchived")).toBool()) {
-          return false;
-        }
-        const QJsonObject github =
-            rawData.value(QStringLiteral("github")).toObject();
-        if (github.value(QStringLiteral("archived")).toBool()) {
-          return false;
-        }
-      }
-
-      if (m_hideForks) {
-        if (rawData.value(QStringLiteral("isFork")).toBool()) {
-          return false;
-        }
-        const QJsonObject github =
-            rawData.value(QStringLiteral("github")).toObject();
-        if (github.value(QStringLiteral("fork")).toBool()) {
-          return false;
-        }
-      }
-
-      if (m_hidePrivate || m_hidePublic) {
-        bool isPrivate = false;
-        bool hasPrivacyInfo = false;
-
-        if (rawData.contains(QStringLiteral("isPrivate"))) {
-          isPrivate = rawData.value(QStringLiteral("isPrivate")).toBool();
-          hasPrivacyInfo = true;
-        } else if (rawData.contains(QStringLiteral("github"))) {
-          const QJsonObject github =
-              rawData.value(QStringLiteral("github")).toObject();
-          if (github.contains(QStringLiteral("private"))) {
-            isPrivate = github.value(QStringLiteral("private")).toBool();
-            hasPrivacyInfo = true;
-          }
-        }
-
-        if (hasPrivacyInfo) {
-          if ((m_hidePrivate && isPrivate) || (m_hidePublic && !isPrivate)) {
-            return false;
-          }
-        }
-      }
-    }
-
     return true;
   }
 
 private:
   const QMultiMap<QString, QString> *m_selectedSources;
   bool m_showSelected;
-  bool m_hideArchived;
-  bool m_hideForks;
-  bool m_hidePrivate;
-  bool m_hidePublic;
 };
 
 NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
@@ -261,8 +186,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QVBoxLayout *sourceLayout = new QVBoxLayout(m_sourceSelectionWidget);
   sourceLayout->setContentsMargins(0, 0, 0, 0);
 
-  m_filterEdit = new QLineEdit(this);
-  m_filterEdit->setPlaceholderText(tr("Filter sources..."));
+  m_filterEditor = new FilterEditor(this);
+  m_filterEditor->setSimplifiedMode(true);
+  m_filterLineEditCache = m_filterEditor->findChild<QLineEdit *>();
 
   QPushButton *refreshSourcesBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")),
@@ -297,7 +223,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   });
 
   QHBoxLayout *filterLayout = new QHBoxLayout();
-  filterLayout->addWidget(m_filterEdit);
+  filterLayout->addWidget(m_filterEditor);
   filterLayout->addWidget(refreshSourcesBtn);
   filterLayout->addWidget(refreshGithubBtn);
   sourceLayout->addLayout(filterLayout);
@@ -309,21 +235,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   unselectedLayout->addWidget(new QLabel(tr("Unselected Sources:"), this));
 
   m_unselectedView = new QListView(this);
-  bool hideArchived = config.readEntry(QStringLiteral("HideArchived"), true);
-  bool hideForks = config.readEntry(QStringLiteral("HideForks"), false);
-  bool hidePrivate = config.readEntry(QStringLiteral("HidePrivate"), false);
-  bool hidePublic = config.readEntry(QStringLiteral("HidePublic"), false);
-
   m_unselectedProxy =
       new SourceSelectionProxyModel(&m_selectedSources, false, this);
   m_unselectedProxy->setSourceModel(m_sourceModel);
-  m_unselectedProxy->setHideArchived(hideArchived);
-  m_unselectedProxy->setHideForks(hideForks);
-  m_unselectedProxy->setHidePrivate(hidePrivate);
-  m_unselectedProxy->setHidePublic(hidePublic);
   m_unselectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_unselectedProxy->setFilterRole(SourceModel::NameRole);
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
+  QString defaultFilter = config.readEntry(QStringLiteral("DefaultFilter"),
+                                           QStringLiteral("=NOT archived:Yes"));
+  m_filterEditor->setFilterText(defaultFilter);
   m_unselectedView->setModel(m_unselectedProxy);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_unselectedView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -358,7 +278,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QAction *filterAction = menu.addAction(tr("Filter just this"));
         connect(filterAction, &QAction::triggered, this, [this, name]() {
-          m_filterEdit->setText(name);
+          m_filterEditor->setFilterText(name);
           applyFilter();
         });
 
@@ -634,17 +554,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   sourceLayout->addLayout(splitViewLayout);
 
-  connect(m_filterEdit, &QLineEdit::textChanged, this,
+  connect(m_filterEditor, &FilterEditor::filterChanged, this,
           &NewSessionDialog::applyFilter);
 
-  connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
+  connect(m_filterEditor, &FilterEditor::returnPressed, this, [this]() {
     if (m_unselectedProxy->rowCount() == 1) {
       QModelIndex idx = m_unselectedProxy->index(0, 0);
       QString name = idx.data(SourceModel::NameRole).toString();
       QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
       m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
       updateModels();
-      m_filterEdit->clear();
+      m_filterEditor->setFilterText(QStringLiteral(""));
     } else if (m_unselectedProxy->rowCount() > 1) {
       m_unselectedView->setFocus();
       m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
@@ -759,7 +679,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   centralWidget->setLayout(mainLayout);
   setCentralWidget(centralWidget);
 
-  m_filterEdit->installEventFilter(this);
+  if (m_filterLineEditCache)
+    m_filterLineEditCache->installEventFilter(this);
   m_unselectedView->installEventFilter(this);
   m_selectedView->installEventFilter(this);
 
@@ -831,54 +752,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       hideSelectedSourcesAction, &QAction::toggled, this,
       [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
 
-  QAction *hideArchivedAction =
-      actionCollection()->addAction(QStringLiteral("hide_archived_repos"));
-  hideArchivedAction->setText(tr("Hide &Archived Repos"));
-  hideArchivedAction->setCheckable(true);
-  hideArchivedAction->setChecked(hideArchived);
-  connect(hideArchivedAction, &QAction::toggled, this, [this](bool checked) {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("NewSessionDialog"));
-    config.writeEntry(QStringLiteral("HideArchived"), checked);
-    m_unselectedProxy->setHideArchived(checked);
-  });
-
-  QAction *hideForksAction =
-      actionCollection()->addAction(QStringLiteral("hide_forks"));
-  hideForksAction->setText(tr("Hide &Forks"));
-  hideForksAction->setCheckable(true);
-  hideForksAction->setChecked(hideForks);
-  connect(hideForksAction, &QAction::toggled, this, [this](bool checked) {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("NewSessionDialog"));
-    config.writeEntry(QStringLiteral("HideForks"), checked);
-    m_unselectedProxy->setHideForks(checked);
-  });
-
-  QAction *hidePrivateAction =
-      actionCollection()->addAction(QStringLiteral("hide_private_repos"));
-  hidePrivateAction->setText(tr("Hide &Private Repos"));
-  hidePrivateAction->setCheckable(true);
-  hidePrivateAction->setChecked(hidePrivate);
-  connect(hidePrivateAction, &QAction::toggled, this, [this](bool checked) {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("NewSessionDialog"));
-    config.writeEntry(QStringLiteral("HidePrivate"), checked);
-    m_unselectedProxy->setHidePrivate(checked);
-  });
-
-  QAction *hidePublicAction =
-      actionCollection()->addAction(QStringLiteral("hide_public_repos"));
-  hidePublicAction->setText(tr("Hide P&ublic Repos"));
-  hidePublicAction->setCheckable(true);
-  hidePublicAction->setChecked(hidePublic);
-  connect(hidePublicAction, &QAction::toggled, this, [this](bool checked) {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("NewSessionDialog"));
-    config.writeEntry(QStringLiteral("HidePublic"), checked);
-    m_unselectedProxy->setHidePublic(checked);
-  });
-
   QAction *jumpToPromptAction =
       actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
   jumpToPromptAction->setText(tr("Jump to &Prompt"));
@@ -924,6 +797,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           &QCheckBox::setChecked);
   connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction,
           &QAction::setChecked);
+
+  QAction *setDefaultFilterAction =
+      actionCollection()->addAction(QStringLiteral("set_default_filter"));
+  setDefaultFilterAction->setText(tr("Save Current Filter as Default"));
+  connect(setDefaultFilterAction, &QAction::triggered, this, [this]() {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("DefaultFilter"),
+                      m_filterEditor->filterText());
+    config.sync();
+  });
 
   QAction *refreshSourcesAction =
       actionCollection()->addAction(QStringLiteral("refresh_sources"));
@@ -1082,11 +966,11 @@ void NewSessionDialog::updateModels() {
 }
 
 void NewSessionDialog::applyFilter() {
-  m_unselectedProxy->setFilterFixedString(m_filterEdit->text());
+  m_unselectedProxy->setFilterQuery(m_filterEditor->filterText());
   if (m_selectedSources.size() < 10) {
-    m_selectedProxy->setFilterFixedString(QStringLiteral(""));
+    m_selectedProxy->setFilterQuery(QStringLiteral(""));
   } else {
-    m_selectedProxy->setFilterFixedString(m_filterEdit->text());
+    m_selectedProxy->setFilterQuery(m_filterEditor->filterText());
   }
 }
 
@@ -1237,7 +1121,8 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   if (!m_selectedSources.isEmpty()) {
     m_promptEdit->setFocus();
   } else {
-    m_filterEdit->setFocus();
+    if (m_filterLineEditCache)
+      m_filterLineEditCache->setFocus();
   }
 }
 
@@ -1265,13 +1150,14 @@ bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
     auto handleUp = [this](QListView *view) {
       QModelIndex currentIdx = view->currentIndex();
       if (!currentIdx.isValid() || currentIdx.row() == 0) {
-        m_filterEdit->setFocus();
+        if (m_filterLineEditCache)
+          m_filterLineEditCache->setFocus();
         return true;
       }
       return false;
     };
 
-    if (obj == m_filterEdit && keyEvent->key() == Qt::Key_Down) {
+    if (obj == m_filterLineEditCache && keyEvent->key() == Qt::Key_Down) {
       if (m_unselectedProxy->rowCount() > 0) {
         return focusList(m_unselectedView, m_unselectedProxy);
       }

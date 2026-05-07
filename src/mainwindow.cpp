@@ -464,6 +464,10 @@ void MainWindow::setupUi() {
   QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
+  KConfigGroup mwConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
+  m_sourcesFilterEditor->setFilterText(mwConfig.readEntry(
+      QStringLiteral("SourcesDefaultFilter"), QStringLiteral("")));
   srcLayout->addWidget(m_sourcesFilterEditor);
   m_sourceView = new QTreeView(this);
   srcLayout->addWidget(m_sourceView);
@@ -669,6 +673,8 @@ void MainWindow::setupUi() {
   followingTab->setObjectName(QStringLiteral("followingTab"));
   QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
+  m_followingFilterEditor->setFilterText(mwConfig.readEntry(
+      QStringLiteral("FollowingDefaultFilter"), QStringLiteral("")));
   followingLayout->addWidget(m_followingFilterEditor);
 
   m_sessionView = new QTreeView(this);
@@ -1098,6 +1104,8 @@ void MainWindow::setupUi() {
   archTab->setObjectName(QStringLiteral("archiveTab"));
   QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
+  m_archiveFilterEditor->setFilterText(mwConfig.readEntry(
+      QStringLiteral("ArchiveDefaultFilter"), QStringLiteral("")));
   archLayout->addWidget(m_archiveFilterEditor);
   m_archiveView = new QTreeView(this);
   archLayout->addWidget(m_archiveView);
@@ -3044,6 +3052,42 @@ void MainWindow::createActions() {
                                      actionCollection());
   KStandardAction::close(this, &QWidget::close, actionCollection());
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
+
+  QAction *setDefaultSourcesFilterAction = actionCollection()->addAction(
+      QStringLiteral("set_default_sources_filter"));
+  setDefaultSourcesFilterAction->setText(
+      i18n("Save Sources Filter as Default"));
+  connect(setDefaultSourcesFilterAction, &QAction::triggered, this, [this]() {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
+    config.writeEntry(QStringLiteral("SourcesDefaultFilter"),
+                      m_sourcesFilterEditor->filterText());
+    config.sync();
+  });
+
+  QAction *setDefaultFollowingFilterAction = actionCollection()->addAction(
+      QStringLiteral("set_default_following_filter"));
+  setDefaultFollowingFilterAction->setText(
+      i18n("Save Following Filter as Default"));
+  connect(setDefaultFollowingFilterAction, &QAction::triggered, this, [this]() {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
+    config.writeEntry(QStringLiteral("FollowingDefaultFilter"),
+                      m_followingFilterEditor->filterText());
+    config.sync();
+  });
+
+  QAction *setDefaultArchiveFilterAction = actionCollection()->addAction(
+      QStringLiteral("set_default_archive_filter"));
+  setDefaultArchiveFilterAction->setText(
+      i18n("Save Archive Filter as Default"));
+  connect(setDefaultArchiveFilterAction, &QAction::triggered, this, [this]() {
+    KConfigGroup config(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
+    config.writeEntry(QStringLiteral("ArchiveDefaultFilter"),
+                      m_archiveFilterEditor->filterText());
+    config.sync();
+  });
 
   setStandardToolBarMenuEnabled(true);
 

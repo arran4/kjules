@@ -24,6 +24,7 @@ public:
 
 Q_SIGNALS:
   void filterChanged(const QString &text);
+  void returnPressed();
 
 private Q_SLOTS:
   void onTextChanged(const QString &text);
