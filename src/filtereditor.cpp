@@ -232,7 +232,16 @@ void FilterEditor::setCompletions(
   m_completions = completions;
 }
 void FilterEditor::setFilterText(const QString &text) {
+  m_updating = true;
   m_lineEdit->setText(text);
+  if (text.startsWith(QLatin1String("="))) {
+    updateTreeFromText();
+  } else {
+    m_treeView->parentWidget()->setVisible(false);
+    m_treeModel->removeRows(0, m_treeModel->rowCount());
+  }
+  m_updating = false;
+  Q_EMIT filterChanged(text);
 }
 
 void FilterEditor::onTextChanged(const QString &text) {
@@ -241,11 +250,15 @@ void FilterEditor::onTextChanged(const QString &text) {
 
   m_updating = true;
   if (text.startsWith(QLatin1String("="))) {
-    if (!m_builderForceHidden) {
-      m_treeView->parentWidget()->setVisible(true);
-    }
+    m_builderForceHidden = false;
+    if (m_formulaToggleBtn)
+      m_formulaToggleBtn->setChecked(true);
+    m_treeView->parentWidget()->setVisible(true);
     updateTreeFromText();
   } else {
+    m_builderForceHidden = true;
+    if (m_formulaToggleBtn)
+      m_formulaToggleBtn->setChecked(false);
     m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
