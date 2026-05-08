@@ -193,6 +193,7 @@ jobs:
       image: opensuse/tumbleweed
     steps:
       - uses: actions/checkout@v4
+      - run: zypper rr repo-openh264 || true
       - run: zypper refresh
       - run: |
           zypper install -y cmake ninja gcc-c++ clang-tools cppcheck \
@@ -216,6 +217,7 @@ jobs:
       image: opensuse/tumbleweed
     steps:
       - uses: actions/checkout@v4
+      - run: zypper rr repo-openh264 || true
       - run: zypper refresh
       - run: |
           zypper install -y cmake ninja gcc-c++ \
