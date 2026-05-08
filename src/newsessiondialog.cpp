@@ -5,6 +5,7 @@
 #include "templateselectiondialog.h"
 #include <KActionCollection>
 #include <KConfigGroup>
+#include <KI18n/KLocalizedString>
 #include <KSharedConfig>
 #include <QAction>
 #include <QCheckBox>
