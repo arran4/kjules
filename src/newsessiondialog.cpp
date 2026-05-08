@@ -189,7 +189,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   m_filterEditor = new FilterEditor(this);
   m_filterEditor->setSimplifiedMode(true);
-  m_filterLineEditCache = m_filterEditor->findChild<QLineEdit *>();
 
   QPushButton *refreshSourcesBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")),
@@ -556,17 +555,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   sourceLayout->addLayout(splitViewLayout);
 
-  connect(m_filterEditor, &FilterEditor::filterChanged, this,
+  connect(m_filterEdit, &QLineEdit::textChanged, this,
           &NewSessionDialog::applyFilter);
 
-  connect(m_filterEditor, &FilterEditor::returnPressed, this, [this]() {
+  connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
     if (m_unselectedProxy->rowCount() == 1) {
       QModelIndex idx = m_unselectedProxy->index(0, 0);
       QString name = idx.data(SourceModel::NameRole).toString();
       QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
       m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
       updateModels();
-      m_filterEditor->setFilterText(QStringLiteral(""));
+      m_filterEdit->clear();
     } else if (m_unselectedProxy->rowCount() > 1) {
       m_unselectedView->setFocus();
       m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
@@ -681,8 +680,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   centralWidget->setLayout(mainLayout);
   setCentralWidget(centralWidget);
 
-  if (m_filterLineEditCache)
-    m_filterLineEditCache->installEventFilter(this);
+  if (m_filterEditor->lineEdit())
+    m_filterEditor->lineEdit()->installEventFilter(this);
   m_unselectedView->installEventFilter(this);
   m_selectedView->installEventFilter(this);
 
@@ -968,11 +967,11 @@ void NewSessionDialog::updateModels() {
 }
 
 void NewSessionDialog::applyFilter() {
-  m_unselectedProxy->setFilterQuery(m_filterEditor->filterText());
+  m_unselectedProxy->setFilterFixedString(m_filterEdit->text());
   if (m_selectedSources.size() < 10) {
-    m_selectedProxy->setFilterQuery(QStringLiteral(""));
+    m_selectedProxy->setFilterFixedString(QStringLiteral(""));
   } else {
-    m_selectedProxy->setFilterQuery(m_filterEditor->filterText());
+    m_selectedProxy->setFilterFixedString(m_filterEdit->text());
   }
 }
 
@@ -1123,8 +1122,8 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
   if (!m_selectedSources.isEmpty()) {
     m_promptEdit->setFocus();
   } else {
-    if (m_filterLineEditCache)
-      m_filterLineEditCache->setFocus();
+    if (m_filterEditor->lineEdit())
+      m_filterEditor->lineEdit()->setFocus();
   }
 }
 
@@ -1152,14 +1151,14 @@ bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
     auto handleUp = [this](QListView *view) {
       QModelIndex currentIdx = view->currentIndex();
       if (!currentIdx.isValid() || currentIdx.row() == 0) {
-        if (m_filterLineEditCache)
-          m_filterLineEditCache->setFocus();
+        if (m_filterEditor->lineEdit())
+          m_filterEditor->lineEdit()->setFocus();
         return true;
       }
       return false;
     };
 
-    if (obj == m_filterLineEditCache && keyEvent->key() == Qt::Key_Down) {
+    if (obj == m_filterEditor->lineEdit() && keyEvent->key() == Qt::Key_Down) {
       if (m_unselectedProxy->rowCount() > 0) {
         return focusList(m_unselectedView, m_unselectedProxy);
       }

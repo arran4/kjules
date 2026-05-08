@@ -3053,42 +3053,6 @@ void MainWindow::createActions() {
   KStandardAction::close(this, &QWidget::close, actionCollection());
   KStandardAction::quit(qApp, &QCoreApplication::quit, actionCollection());
 
-  QAction *setDefaultSourcesFilterAction = actionCollection()->addAction(
-      QStringLiteral("set_default_sources_filter"));
-  setDefaultSourcesFilterAction->setText(
-      i18n("Save Sources Filter as Default"));
-  connect(setDefaultSourcesFilterAction, &QAction::triggered, this, [this]() {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("MainWindow"));
-    config.writeEntry(QStringLiteral("SourcesDefaultFilter"),
-                      m_sourcesFilterEditor->filterText());
-    config.sync();
-  });
-
-  QAction *setDefaultFollowingFilterAction = actionCollection()->addAction(
-      QStringLiteral("set_default_following_filter"));
-  setDefaultFollowingFilterAction->setText(
-      i18n("Save Following Filter as Default"));
-  connect(setDefaultFollowingFilterAction, &QAction::triggered, this, [this]() {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("MainWindow"));
-    config.writeEntry(QStringLiteral("FollowingDefaultFilter"),
-                      m_followingFilterEditor->filterText());
-    config.sync();
-  });
-
-  QAction *setDefaultArchiveFilterAction = actionCollection()->addAction(
-      QStringLiteral("set_default_archive_filter"));
-  setDefaultArchiveFilterAction->setText(
-      i18n("Save Archive Filter as Default"));
-  connect(setDefaultArchiveFilterAction, &QAction::triggered, this, [this]() {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("MainWindow"));
-    config.writeEntry(QStringLiteral("ArchiveDefaultFilter"),
-                      m_archiveFilterEditor->filterText());
-    config.sync();
-  });
-
   setStandardToolBarMenuEnabled(true);
 
   // Set up XML GUI

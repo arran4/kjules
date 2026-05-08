@@ -95,7 +95,6 @@ private:
   SourceSelectionProxyModel *m_unselectedProxy;
   SourceSelectionProxyModel *m_selectedProxy;
   FilterEditor *m_filterEditor;
-  QLineEdit *m_filterLineEditCache;
   PromptTextEdit *m_promptEdit;
   QComboBox *m_markdownModeComboBox;
   QComboBox *m_automationModeComboBox;

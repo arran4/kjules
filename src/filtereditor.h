@@ -21,11 +21,11 @@ public:
   explicit FilterEditor(QWidget *parent = nullptr);
   QString filterText() const;
   QLineEdit *lineEdit() const;
+  void toggleFormulaBuilder();
+  void setFormulaBuilderVisible(bool visible);
   void setFilterText(const QString &text);
   void setCompletions(const QMap<QString, QStringList> &completions);
   void setSimplifiedMode(bool simplified);
-  void toggleFormulaBuilder();
-  void setFormulaBuilderVisible(bool visible);
 
 Q_SIGNALS:
   void filterChanged(const QString &text);

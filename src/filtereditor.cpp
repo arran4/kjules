@@ -255,18 +255,16 @@ void FilterEditor::onTextChanged(const QString &text) {
 }
 
 void FilterEditor::toggleFormulaBuilder() {
-  m_builderForceHidden = !m_builderForceHidden;
-  m_formulaToggleBtn->setChecked(!m_builderForceHidden);
-  if (m_lineEdit->text().startsWith(QLatin1String("="))) {
-    m_treeView->parentWidget()->setVisible(!m_builderForceHidden);
-  }
+  setFormulaBuilderVisible(m_builderForceHidden);
 }
 
 void FilterEditor::setFormulaBuilderVisible(bool visible) {
   m_builderForceHidden = !visible;
-  m_formulaToggleBtn->setChecked(visible);
+  if (m_formulaToggleBtn) {
+    m_formulaToggleBtn->setChecked(visible);
+  }
   if (m_lineEdit->text().startsWith(QLatin1String("="))) {
-    m_treeView->parentWidget()->setVisible(!m_builderForceHidden);
+    m_treeView->parentWidget()->setVisible(visible);
   }
 }
 
