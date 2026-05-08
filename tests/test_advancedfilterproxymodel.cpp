@@ -17,19 +17,19 @@ private Q_SLOTS:
     SourceModel sourceModel;
 
     QJsonObject src1;
-    src1["id"] = "source1";
-    src1["name"] = "Source 1";
-    src1["local_favourite"] = 1; // Fav rank 1
+    src1[QStringLiteral("id")] = QStringLiteral("source1");
+    src1[QStringLiteral("name")] = QStringLiteral("Source 1");
+    src1[QStringLiteral("local_favourite")] = 1; // Fav rank 1
 
     QJsonObject src2;
-    src2["id"] = "source2";
-    src2["name"] = "Source 2";
+    src2[QStringLiteral("id")] = QStringLiteral("source2");
+    src2[QStringLiteral("name")] = QStringLiteral("Source 2");
     // source2 has no favourite
 
     QJsonObject src3;
-    src3["id"] = "source3";
-    src3["name"] = "Source 3";
-    src3["local_favourite"] = 2; // Fav rank 2
+    src3[QStringLiteral("id")] = QStringLiteral("source3");
+    src3[QStringLiteral("name")] = QStringLiteral("Source 3");
+    src3[QStringLiteral("local_favourite")] = 2; // Fav rank 2
 
     QJsonArray sources;
     sources.append(src1);
@@ -77,18 +77,18 @@ private Q_SLOTS:
     SessionModel sessionModel;
 
     QJsonObject sess1;
-    sess1["id"] = "session1";
-    sess1["title"] = "Session 1";
-    sess1["local_favourite"] = 1;
+    sess1[QStringLiteral("id")] = QStringLiteral("session1");
+    sess1[QStringLiteral("title")] = QStringLiteral("Session 1");
+    sess1[QStringLiteral("local_favourite")] = 1;
 
     QJsonObject sess2;
-    sess2["id"] = "session2";
-    sess2["title"] = "Session 2";
+    sess2[QStringLiteral("id")] = QStringLiteral("session2");
+    sess2[QStringLiteral("title")] = QStringLiteral("Session 2");
 
     QJsonObject sess3;
-    sess3["id"] = "session3";
-    sess3["title"] = "Session 3";
-    sess3["local_favourite"] = 3;
+    sess3[QStringLiteral("id")] = QStringLiteral("session3");
+    sess3[QStringLiteral("title")] = QStringLiteral("Session 3");
+    sess3[QStringLiteral("local_favourite")] = 3;
 
     QJsonArray sessions;
     sessions.append(sess1);
@@ -130,14 +130,14 @@ private Q_SLOTS:
 
   void testLessThanFallbackModel() {
     QStandardItemModel standardModel(2, 1);
-    standardModel.setItem(0, 0, new QStandardItem("A"));
-    standardModel.setItem(1, 0, new QStandardItem("B"));
+    standardModel.setItem(0, 0, new QStandardItem(QStringLiteral("A")));
+    standardModel.setItem(1, 0, new QStandardItem(QStringLiteral("B")));
 
     TestableProxyModel proxyModel;
     proxyModel.setSourceModel(&standardModel);
 
-    QModelIndex idx1 = standardModel.index(0, 0); // "A"
-    QModelIndex idx2 = standardModel.index(1, 0); // "B"
+    QModelIndex idx1 = standardModel.index(0, 0); // QStringLiteral("A")
+    QModelIndex idx2 = standardModel.index(1, 0); // QStringLiteral("B")
 
     proxyModel.sort(0, Qt::AscendingOrder);
 

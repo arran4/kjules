@@ -5100,53 +5100,6 @@ void MainWindow::updateFavouritesMenu() {
   }
 
   int sessionCount = 0;
-  auto processSessionModel = [this, &sessionCount](SessionModel *model) {
-    for (int i = 0; i < model->rowCount(); ++i) {
-      QModelIndex idx = model->index(i, 0);
-      if (model->data(idx, SessionModel::FavouriteRole).toBool()) {
-        if (sessionCount == 0 && !m_favouritesMenu->actions().isEmpty()) {
-          m_favouritesMenu->addSeparator();
-        }
-        QString id = model->data(idx, SessionModel::IdRole).toString();
-        QString name = model->getSessionName(id);
-        if (name.isEmpty())
-          name = id;
-        QAction *action = m_favouritesMenu->addAction(
-            QIcon::fromTheme(QStringLiteral("emblem-favorite")), name);
-        connect(action, &QAction::triggered, this, [this, id]() {
-          QJsonObject sessionData;
-          bool isManaged = false;
-          for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
-            if (m_sessionModel
-                    ->data(m_sessionModel->index(j, 0), SessionModel::IdRole)
-                    .toString() == id) {
-              sessionData = m_sessionModel->getSession(j);
-              isManaged = true;
-              break;
-            }
-          }
-          if (sessionData.isEmpty()) {
-            for (int j = 0; j < m_archiveModel->rowCount(); ++j) {
-              if (m_archiveModel
-                      ->data(m_archiveModel->index(j, 0), SessionModel::IdRole)
-                      .toString() == id) {
-                sessionData = m_archiveModel->getSession(j);
-                isManaged = true;
-                break;
-              }
-            }
-          }
-          if (!sessionData.isEmpty()) {
-            SessionWindow *window =
-                new SessionWindow(sessionData, m_apiManager, isManaged, this);
-            connectSessionWindow(window);
-            window->show();
-          }
-        });
-        sessionCount++;
-      }
-    }
-  };
 
   this->processSessionModel(m_sessionModel, sessionCount);
   this->processSessionModel(m_archiveModel, sessionCount);
