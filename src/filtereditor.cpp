@@ -113,7 +113,7 @@ enum FilterItemRoles {
 enum NodeType { TypeAnd, TypeOr, TypeNot, TypeIn, TypeKV, TypeKeyword };
 
 FilterEditor::FilterEditor(QWidget *parent)
-    : QWidget(parent), m_updating(false) {
+    : QWidget(parent), m_updating(false), m_builderForceHidden(true) {
   QVBoxLayout *layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(2);
@@ -240,7 +240,9 @@ void FilterEditor::onTextChanged(const QString &text) {
 
   m_updating = true;
   if (text.startsWith(QLatin1String("="))) {
-    m_treeView->parentWidget()->setVisible(true);
+    if (!m_builderForceHidden) {
+      m_treeView->parentWidget()->setVisible(true);
+    }
     updateTreeFromText();
   } else {
     m_treeView->parentWidget()->setVisible(false);
@@ -249,6 +251,22 @@ void FilterEditor::onTextChanged(const QString &text) {
   m_updating = false;
 
   Q_EMIT filterChanged(text);
+}
+
+void FilterEditor::toggleFormulaBuilder() {
+  m_builderForceHidden = !m_builderForceHidden;
+  m_formulaToggleBtn->setChecked(!m_builderForceHidden);
+  if (m_lineEdit->text().startsWith(QLatin1String("="))) {
+    m_treeView->parentWidget()->setVisible(!m_builderForceHidden);
+  }
+}
+
+void FilterEditor::setFormulaBuilderVisible(bool visible) {
+  m_builderForceHidden = !visible;
+  m_formulaToggleBtn->setChecked(visible);
+  if (m_lineEdit->text().startsWith(QLatin1String("="))) {
+    m_treeView->parentWidget()->setVisible(!m_builderForceHidden);
+  }
 }
 
 void FilterEditor::updateTreeFromText() {
