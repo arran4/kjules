@@ -521,3 +521,5 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
         QStringLiteral("private:"), QStringLiteral("archived:")});
   }
 }
+
+QLineEdit *FilterEditor::lineEdit() const { return m_lineEdit; }

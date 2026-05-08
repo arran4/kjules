@@ -16,7 +16,7 @@ public:
         {QStringLiteral("private"), SourceModel::ColPrivate},
         {QStringLiteral("archived"), SourceModel::ColArchived}};
 
-    if (keyToColumn.contains(lowerKey)) {
+    if (qobject_cast<SourceModel *>(model) && keyToColumn.contains(lowerKey)) {
       return model
           ->data(model->index(row, keyToColumn.value(lowerKey), parent),
                  Qt::DisplayRole)
