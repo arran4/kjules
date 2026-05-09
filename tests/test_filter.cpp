@@ -43,6 +43,19 @@ private Q_SLOTS:
     InNode whitespaceNode(QStringLiteral("author"),
                           QStringLiteral(" alice , jules , bob "));
     QVERIFY(whitespaceNode.evaluate(accessor));
+
+    // Test toString serialization
+    QVERIFY(exactNode.toString() == QStringLiteral("state IN \"open,closed\""));
+
+    // Verify matching against non-first elements
+    InNode secondMatchNode(QStringLiteral("state"),
+                           QStringLiteral("closed,open"));
+    QVERIFY(secondMatchNode.evaluate(accessor));
+
+    // Edge case: whitespace-only values in the list should not match missing
+    // keys
+    InNode emptyValueNode(QStringLiteral("missing"), QStringLiteral(" , "));
+    QVERIFY(!emptyValueNode.evaluate(accessor));
   }
 
   void testApplyQuickFilter() {
