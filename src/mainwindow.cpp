@@ -275,6 +275,10 @@ void MainWindow::setupUi() {
   QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
+  KConfigGroup mwConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
+  m_sourcesFilterEditor->setFilterText(mwConfig.readEntry(
+      QStringLiteral("SourcesDefaultFilter"), QStringLiteral("")));
   srcLayout->addWidget(m_sourcesFilterEditor);
   m_sourceView = new QTreeView(this);
   srcLayout->addWidget(m_sourceView);
@@ -550,6 +554,8 @@ void MainWindow::setupUi() {
   followingTab->setObjectName(QStringLiteral("followingTab"));
   QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
+  m_followingFilterEditor->setFilterText(mwConfig.readEntry(
+      QStringLiteral("FollowingDefaultFilter"), QStringLiteral("")));
   followingLayout->addWidget(m_followingFilterEditor);
 
   m_sessionView = new QTreeView(this);
@@ -999,6 +1005,8 @@ void MainWindow::setupUi() {
   archTab->setObjectName(QStringLiteral("archiveTab"));
   QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
+  m_archiveFilterEditor->setFilterText(mwConfig.readEntry(
+      QStringLiteral("ArchiveDefaultFilter"), QStringLiteral("")));
   archLayout->addWidget(m_archiveFilterEditor);
   m_archiveView = new QTreeView(this);
   archLayout->addWidget(m_archiveView);

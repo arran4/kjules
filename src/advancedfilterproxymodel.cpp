@@ -9,6 +9,20 @@ public:
       : model(m), row(r), parent(p) {}
 
   QString getValue(const QString &key) const override {
+    QString lowerKey = key.toLower();
+    static const QHash<QString, int> keyToColumn = {
+        {QStringLiteral("language"), SourceModel::ColLanguages},
+        {QStringLiteral("fork"), SourceModel::ColFork},
+        {QStringLiteral("private"), SourceModel::ColPrivate},
+        {QStringLiteral("archived"), SourceModel::ColArchived}};
+
+    if (qobject_cast<SourceModel *>(model) && keyToColumn.contains(lowerKey)) {
+      return model
+          ->data(model->index(row, keyToColumn.value(lowerKey), parent),
+                 Qt::DisplayRole)
+          .toString();
+    }
+
     // Try to match column header with the key.
     for (int c = 0; c < model->columnCount(parent); ++c) {
       QString header = model->headerData(c, Qt::Horizontal, Qt::DisplayRole)

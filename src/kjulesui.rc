@@ -68,11 +68,18 @@
         <Menu name="settings">
             <Action name="options_configure" />
             <Action name="options_configure_toolbars" />
+            <Separator />
+            <Action name="set_default_sources_filter"/>
+            <Action name="set_default_following_filter"/>
+            <Action name="set_default_archive_filter"/>
+            <Separator/>
+            <Action name="toggle_formula_builder"/>
         </Menu>
     </MenuBar>
     <ToolBar name="mainToolBar">
         <text>Main Toolbar</text>
         <Action name="new_session" />
+        <Action name="toggle_formula_builder"/>
         <Separator />
         <Action name="toggle_queue" />
         <Separator />

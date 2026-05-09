@@ -16,6 +16,7 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QStandardItemModel>
+#include <QToolButton>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -257,7 +258,7 @@ QString FilterEditor::applyQuickFilter(const QString &currentFilter,
 }
 
 FilterEditor::FilterEditor(QWidget *parent)
-    : QWidget(parent), m_updating(false) {
+    : QWidget(parent), m_updating(false), m_builderForceHidden(true) {
   QVBoxLayout *layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(2);
@@ -309,6 +310,8 @@ FilterEditor::FilterEditor(QWidget *parent)
 
   connect(m_lineEdit, &QLineEdit::textChanged, this,
           &FilterEditor::onTextChanged);
+  connect(m_lineEdit, &QLineEdit::returnPressed, this,
+          &FilterEditor::returnPressed);
   connect(m_treeView, &QTreeView::customContextMenuRequested, this,
           &FilterEditor::onTreeContextMenu);
   connect(m_treeModel, &QStandardItemModel::itemChanged, this,
@@ -377,7 +380,16 @@ void FilterEditor::setCompletions(
   m_completions = completions;
 }
 void FilterEditor::setFilterText(const QString &text) {
+  m_updating = true;
   m_lineEdit->setText(text);
+  if (text.startsWith(QLatin1String("="))) {
+    updateTreeFromText();
+  } else {
+    m_treeView->parentWidget()->setVisible(false);
+    m_treeModel->removeRows(0, m_treeModel->rowCount());
+  }
+  m_updating = false;
+  Q_EMIT filterChanged(text);
 }
 
 void FilterEditor::onTextChanged(const QString &text) {
@@ -386,15 +398,35 @@ void FilterEditor::onTextChanged(const QString &text) {
 
   m_updating = true;
   if (text.startsWith(QLatin1String("="))) {
+    m_builderForceHidden = false;
+    if (m_formulaToggleBtn)
+      m_formulaToggleBtn->setChecked(true);
     m_treeView->parentWidget()->setVisible(true);
     updateTreeFromText();
   } else {
+    m_builderForceHidden = true;
+    if (m_formulaToggleBtn)
+      m_formulaToggleBtn->setChecked(false);
     m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
   m_updating = false;
 
   Q_EMIT filterChanged(text);
+}
+
+void FilterEditor::toggleFormulaBuilder() {
+  setFormulaBuilderVisible(m_builderForceHidden);
+}
+
+void FilterEditor::setFormulaBuilderVisible(bool visible) {
+  m_builderForceHidden = !visible;
+  if (m_formulaToggleBtn) {
+    m_formulaToggleBtn->setChecked(visible);
+  }
+  if (m_lineEdit->text().startsWith(QLatin1String("="))) {
+    m_treeView->parentWidget()->setVisible(visible);
+  }
 }
 
 void FilterEditor::updateTreeFromText() {
@@ -653,8 +685,8 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
     m_paletteList->addItems(QStringList{
         QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
         QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
-        QStringLiteral("language:"), QStringLiteral("archived:"),
-        QStringLiteral("fork:"), QStringLiteral("private:")});
+        QStringLiteral("language:"), QStringLiteral("fork:"),
+        QStringLiteral("private:"), QStringLiteral("archived:")});
   } else {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{
@@ -664,6 +696,10 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
         QStringLiteral("fork:"), QStringLiteral("private:"),
         QStringLiteral("state:"), QStringLiteral("title:"),
         QStringLiteral("created-before:"), QStringLiteral("created-after:"),
-        QStringLiteral("updated-before:"), QStringLiteral("updated-after:")});
+        QStringLiteral("updated-before:"), QStringLiteral("updated-after:"),
+        QStringLiteral("language:"), QStringLiteral("fork:"),
+        QStringLiteral("private:"), QStringLiteral("archived:")});
   }
 }
+
+QLineEdit *FilterEditor::lineEdit() const { return m_lineEdit; }
