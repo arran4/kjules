@@ -201,6 +201,9 @@ QString NotNode::toString() const {
 
 bool InNode::evaluate(const FilterDataAccessor &accessor) const {
   QString val = accessor.getValue(m_key);
+  if (val.isNull()) {
+    return false;
+  }
   for (const QString &v : m_values) {
     if (val.compare(v, Qt::CaseInsensitive) == 0)
       return true;

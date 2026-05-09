@@ -2,10 +2,62 @@
 #include "../src/filterparser.h"
 #include <QtTest>
 
+class MockAccessor : public FilterDataAccessor {
+public:
+  QMap<QString, QString> data;
+  QString getValue(const QString &key) const override {
+    return data.value(key);
+  }
+  QList<QString> getAllValues() const override { return data.values(); }
+};
+
 class TestFilter : public QObject {
   Q_OBJECT
 
 private Q_SLOTS:
+
+  void testInNodeEvaluate() {
+    MockAccessor accessor;
+    accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
+    accessor.data.insert(QStringLiteral("author"), QStringLiteral("jules"));
+
+    // Happy path: exact match
+    InNode exactNode(QStringLiteral("state"), QStringLiteral("open,closed"));
+    QVERIFY(exactNode.evaluate(accessor));
+
+    // Case insensitivity
+    InNode caseNode(QStringLiteral("state"), QStringLiteral("OPEN,merged"));
+    QVERIFY(caseNode.evaluate(accessor));
+
+    // No match
+    InNode noMatchNode(QStringLiteral("state"),
+                       QStringLiteral("closed,merged"));
+    QVERIFY(!noMatchNode.evaluate(accessor));
+
+    // Missing key
+    InNode missingKeyNode(QStringLiteral("missing"),
+                          QStringLiteral("open,closed"));
+    QVERIFY(!missingKeyNode.evaluate(accessor));
+
+    // Whitespace handling (should match because of trimming)
+    InNode whitespaceNode(QStringLiteral("author"),
+                          QStringLiteral(" alice , jules , bob "));
+    QVERIFY(whitespaceNode.evaluate(accessor));
+
+    // Test toString serialization
+    QVERIFY(exactNode.toString() == QStringLiteral("state IN \"open,closed\""));
+
+    // Verify matching against non-first elements
+    InNode secondMatchNode(QStringLiteral("state"),
+                           QStringLiteral("closed,open"));
+    QVERIFY(secondMatchNode.evaluate(accessor));
+
+    // Edge case: whitespace-only values in the list should not match missing
+    // keys
+    InNode emptyValueNode(QStringLiteral("missing"), QStringLiteral(" , "));
+    QVERIFY(!emptyValueNode.evaluate(accessor));
+  }
+
   void testApplyQuickFilter() {
     QString base = QStringLiteral("=repo:test");
     QString updated = FilterEditor::applyQuickFilter(
