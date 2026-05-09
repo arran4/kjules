@@ -53,6 +53,19 @@ protected:
   void keyPressEvent(QKeyEvent *event) override;
 
 private Q_SLOTS:
+  void deleteFollowingSessions();
+  void archiveSelectedSessions();
+  void deleteArchiveSessions();
+  void deleteDrafts();
+  void deleteTemplates();
+  void deleteErrors();
+  void processSessionModel(SessionModel *model, int &sessionCount);
+
+  void switchToFollowingTab();
+  void onSessionReloaded(const QJsonObject &session);
+  void addGithubLink(QMenu *githubMenu, const QString &urlStr,
+                     const QString &title, const QString &path);
+
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
@@ -94,12 +107,17 @@ private Q_SLOTS:
                                        const QJsonObject &info);
   void cancelSourcesRefresh();
   void updateSessionStats();
+  void updateTrayToolTip();
   void onSourceDetailsReceived(const QJsonObject &source);
   void toggleFavourite();
   void increaseFavouriteRank();
   void decreaseFavouriteRank();
   void setFavouriteRank();
   void processQueue();
+  void onQueueTimerTimeout();
+  void refreshBeforeQueue();
+  void checkPendingRefreshBeforeQueue(const QString &id);
+  QStringList getActiveFollowingSessionIds() const;
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
   void processErrorRetries();
@@ -142,14 +160,22 @@ private:
           action);
 
   QStringList getSelectedSessionIds() const;
-
-  void applyQuickFilter(FilterEditor *editor, const QString &type,
-                        const QString &value, bool isHide);
+  QString urlFromSourceId(const QString &id) const;
 
   void updateFollowingRefreshTimer();
   void setupUi();
   void setupTrayIcon();
   void createActions();
+  void createGeneralActions();
+  void createSessionActions();
+  void createSourceActions();
+  void createDataActions();
+  void createQueueActions();
+  void createArchiveActions();
+  void createFilterActions();
+  void createRefreshActions();
+  void createStandardActions();
+  void connectSignals();
 
   APIManager *m_apiManager;
   QHash<QString, QString> m_previousSessionStates;
@@ -188,6 +214,7 @@ private:
   QMenu *m_trayMenu;
   QLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
+  QLabel *m_queueCountdownLabel;
   ClickableProgressBar *m_sourceProgressBar;
   SourcesRefreshProgressWindow *m_sourcesRefreshProgressWindow;
   ClickableProgressBar *m_sessionRefreshProgressBar;
@@ -223,6 +250,9 @@ private:
   QAction *m_openJulesUrlAction;
   QAction *m_openGithubUrlAction;
   QAction *m_configureConcurrencyLimitAction;
+  QAction *m_viewFilterArchivedAction;
+  QAction *m_viewFilterForksAction;
+  QAction *m_viewFilterPrivateAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
@@ -230,6 +260,7 @@ private:
   int m_pagesLoadedCount;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
+  QString m_lastStatusMessage;
   QTimer *m_followingRefreshTimer;
 
   QTimer *m_queueTimer;
@@ -237,6 +268,8 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   bool m_queuePaused;
+  QSet<QString> m_pendingRefreshIds;
+  bool m_isWaitingForRefreshBeforeQueue;
 
   RefreshProgressWindow *m_refreshProgressWindow;
 };

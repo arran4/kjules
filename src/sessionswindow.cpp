@@ -162,14 +162,14 @@ void SessionsWindow::setupUi() {
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
   QHBoxLayout *filterLayout = new QHBoxLayout();
-  QLineEdit *searchEdit = new QLineEdit(this);
-  searchEdit->setPlaceholderText(i18n("Search title or source..."));
+  m_searchEdit = new QLineEdit(this);
+  m_searchEdit->setPlaceholderText(i18n("Search title or source..."));
   if (!m_filterSource.isEmpty()) {
-    searchEdit->setText(m_filterSource);
+    m_searchEdit->setText(m_filterSource);
   }
-  connect(searchEdit, &QLineEdit::textChanged, m_proxyModel,
+  connect(m_searchEdit, &QLineEdit::textChanged, m_proxyModel,
           &SessionsProxyModel::setTextFilter);
-  filterLayout->addWidget(searchEdit);
+  filterLayout->addWidget(m_searchEdit);
 
   QComboBox *statusCombo = new QComboBox(this);
   statusCombo->addItems({i18n("All"), QStringLiteral("PENDING"),
@@ -563,6 +563,16 @@ void SessionsWindow::setupUi() {
                                 m_loadRemainingAction);
   m_loadRemainingAction->setEnabled(false);
 
+  QAction *focusFilterAction = new QAction(i18n("Focus Filter"), this);
+  actionCollection()->addAction(QStringLiteral("focus_filter"),
+                                focusFilterAction);
+  actionCollection()->setDefaultShortcut(
+      focusFilterAction, QKeySequence(Qt::AltModifier | Qt::Key_K));
+  connect(focusFilterAction, &QAction::triggered, this, [this]() {
+    if (m_searchEdit)
+      m_searchEdit->setFocus();
+  });
+
   QAction *quitAction =
       new QAction(QIcon::fromTheme(QStringLiteral("application-exit")),
                   i18n("Close"), this);
@@ -715,7 +725,7 @@ void SessionsWindow::setupUi() {
                   QStringLiteral("col_repo"));
   addColumnToggle(i18n("ID"), SessionModel::ColId, QStringLiteral("col_id"));
 
-  setupGUI(Default, QStringLiteral("sessionswindowui.rc"));
+  setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/sessionswindowui.rc"));
 
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);

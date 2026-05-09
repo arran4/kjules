@@ -27,8 +27,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   QHBoxLayout *julesKeyLayout = new QHBoxLayout();
   m_apiKeyEdit = new QLineEdit(this);
+  m_apiKeyEdit->setEchoMode(QLineEdit::Password);
   m_apiKeyEdit->setText(m_apiManager->apiKey());
-  m_apiKeyEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
   QPushButton *testJulesBtn = new QPushButton(i18n("Test API Key"), this);
   connect(testJulesBtn, &QPushButton::clicked, this,
           &SettingsDialog::onTestConnection);
@@ -38,8 +38,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   QHBoxLayout *githubTokenLayout = new QHBoxLayout();
   m_githubTokenEdit = new QLineEdit(this);
+  m_githubTokenEdit->setEchoMode(QLineEdit::Password);
   m_githubTokenEdit->setText(m_apiManager->githubToken());
-  m_githubTokenEdit->setEchoMode(QLineEdit::PasswordEchoOnEdit);
   QPushButton *testGithubBtn = new QPushButton(i18n("Test Github Token"), this);
   connect(testGithubBtn, &QPushButton::clicked, this, [this]() {
     m_apiManager->testGithubConnection(m_githubTokenEdit->text());
@@ -235,12 +235,23 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   m_followingAutoRefreshCombo = new QComboBox(this);
   m_followingAutoRefreshCombo->addItem(i18n("Off"), 0);
+  m_followingAutoRefreshCombo->addItem(i18n("Sync with queue processing"), -1);
   m_followingAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
   m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
+
   int followingInterval =
       sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  // Migrate the legacy MergeRefreshAndQueue checkbox state to the new combo box
+  // item if applicable
+  bool legacyMergeRefresh =
+      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh && followingInterval != -1) {
+    followingInterval = -1;
+    // We clean up the old setting on save.
+  }
+
   int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
   if (followingIndex >= 0) {
     m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
@@ -380,6 +391,7 @@ void SettingsDialog::onSave() {
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
   sessionConfig.writeEntry("PrMergeArchiveEnabled",
                            m_prMergeArchiveCheckbox->isChecked());
+  sessionConfig.deleteEntry("MergeRefreshAndQueue"); // Cleanup legacy option
   sessionConfig.sync();
 
   accept();

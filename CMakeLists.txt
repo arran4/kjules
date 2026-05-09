@@ -5,9 +5,7 @@ project(kjules VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(NOT DEFINED QT_MAJOR_VERSION)
-    set(QT_MAJOR_VERSION 6)
-endif()
+set(QT_MAJOR_VERSION 6)
 
 set(QT_DEFAULT_MAJOR_VERSION ${QT_MAJOR_VERSION})
 
@@ -39,13 +37,8 @@ endif()
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
-if (QT_MAJOR_VERSION STREQUAL "6")
-    find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
-    find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
-else()
-    find_package(Qt5 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
-    find_package(KF5 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
-endif()
+find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test)
+find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
@@ -110,51 +103,28 @@ add_executable(kjules ${kjules_SRCS})
 
 target_compile_definitions(kjules PRIVATE "KJULES_VERSION=\"${KJULES_VERSION_STRING}\"")
 
-if (QT_MAJOR_VERSION STREQUAL "6")
-    target_link_libraries(kjules
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Widgets
-        Qt6::Network
-        KF6::CoreAddons
-        KF6::I18n
-        KF6::Wallet
-        KF6::Notifications
-        KF6::XmlGui
-        KF6::ConfigCore
-        KF6::WidgetsAddons
-        KF6::GlobalAccel
-        KF6::Archive
-    )
-else()
-    target_link_libraries(kjules
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
-        Qt5::Network
-        KF5::CoreAddons
-        KF5::I18n
-        KF5::Wallet
-        KF5::Notifications
-        KF5::XmlGui
-        KF5::ConfigCore
-        KF5::WidgetsAddons
-        KF5::GlobalAccel
-        KF5::Archive
-    )
-endif()
+target_link_libraries(kjules
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Network
+    KF6::CoreAddons
+    KF6::I18n
+    KF6::Wallet
+    KF6::Notifications
+    KF6::XmlGui
+    KF6::ConfigCore
+    KF6::WidgetsAddons
+    KF6::GlobalAccel
+    KF6::Archive
+)
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES org.kde.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
-if (QT_MAJOR_VERSION STREQUAL "6")
-    install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
-    install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
-else()
-    install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/kjules)
-    install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFY5RCDIR})
-endif()
+install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/kjules)
+install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 
 enable_testing()
 add_subdirectory(tests)

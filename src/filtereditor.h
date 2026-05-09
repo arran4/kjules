@@ -27,6 +27,13 @@ public:
   void setCompletions(const QMap<QString, QStringList> &completions);
   void setSimplifiedMode(bool simplified);
 
+  static QString applyQuickFilter(const QString &currentFilter,
+                                  const QString &type, const QString &value,
+                                  bool isHide);
+
+public Q_SLOTS:
+  void focusInput();
+
 Q_SIGNALS:
   void filterChanged(const QString &text);
   void returnPressed();

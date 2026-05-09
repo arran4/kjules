@@ -120,10 +120,6 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     switch (index.column()) {
     case ColTitle:
       return session.title.simplified();
-    // case ColFavourite: TODO obsolete need an equiv
-    //   return session.favouriteRank.has_value()
-    //              ? QString::number(session.favouriteRank.value())
-    //              : QString();
     case ColState:
       return session.state;
     case ColChangeSet:
@@ -157,6 +153,12 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     if (index.column() == ColTitle && session.favouriteRank.has_value()) {
       return QIcon::fromTheme(QStringLiteral("emblem-favorite"));
     }
+    return QVariant();
+  } else if (role == Qt::ToolTipRole) {
+    if (index.column() == ColTitle && session.favouriteRank.has_value()) {
+      return i18n("Favourite Rank: %1", session.favouriteRank.value());
+    }
+    return QVariant();
   } else if (role == Qt::FontRole) {
     bool hasUnread = session.hasUnreadChanges;
     bool hasPR = (index.column() == ColPR && !session.prNumber.isEmpty());

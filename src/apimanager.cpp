@@ -280,6 +280,10 @@ void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(
         "Cannot reload session details: No token or previous failure."));
+    Q_EMIT sessionReloadFailed(
+        sessionId,
+        QStringLiteral(
+            "Cannot reload session details: No token or previous failure."));
     return;
   }
 
@@ -288,6 +292,8 @@ void APIManager::reloadSession(const QString &sessionId) {
   if (cleanId.contains(QStringLiteral("..")) ||
       cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    Q_EMIT sessionReloadFailed(sessionId,
+                               QStringLiteral("Invalid session ID."));
     return;
   }
 
