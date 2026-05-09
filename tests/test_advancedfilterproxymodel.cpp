@@ -71,6 +71,41 @@ private Q_SLOTS:
     // Fav 1 vs No Fav (1 > -1 => returns false in descending order)
     QVERIFY(proxyModel.lessThan(idx1, idx2) == false);
     QVERIFY(proxyModel.lessThan(idx2, idx1) == true);
+
+    // No Fav vs No Fav (fallback to default string comparison)
+    // Create two items with no favourite to test fallback
+    SourceModel sourceModelFallback;
+    QJsonObject srcFallback1;
+    srcFallback1[QStringLiteral("id")] = QStringLiteral("sourceB");
+    srcFallback1[QStringLiteral("name")] = QStringLiteral("B Source");
+    QJsonObject srcFallback2;
+    srcFallback2[QStringLiteral("id")] = QStringLiteral("sourceA");
+    srcFallback2[QStringLiteral("name")] = QStringLiteral("A Source");
+
+    QJsonArray fallbackSources;
+    fallbackSources.append(srcFallback1);
+    fallbackSources.append(srcFallback2);
+    sourceModelFallback.setSources(fallbackSources);
+
+    TestableProxyModel proxyModelFallback;
+    proxyModelFallback.setSourceModel(&sourceModelFallback);
+
+    QModelIndex idxFB1 =
+        sourceModelFallback.index(0, SourceModel::ColName); // "B Source"
+    QModelIndex idxFB2 =
+        sourceModelFallback.index(1, SourceModel::ColName); // "A Source"
+
+    proxyModelFallback.sort(SourceModel::ColName, Qt::AscendingOrder);
+    // "B Source" < "A Source" is false
+    QVERIFY(proxyModelFallback.lessThan(idxFB1, idxFB2) == false);
+    // "A Source" < "B Source" is true
+    QVERIFY(proxyModelFallback.lessThan(idxFB2, idxFB1) == true);
+
+    proxyModelFallback.sort(SourceModel::ColName, Qt::DescendingOrder);
+    // QSortFilterProxyModel::lessThan returns true if left < right regardless
+    // of sort order
+    QVERIFY(proxyModelFallback.lessThan(idxFB1, idxFB2) == false);
+    QVERIFY(proxyModelFallback.lessThan(idxFB2, idxFB1) == true);
   }
 
   void testLessThanSessionModel() {
@@ -126,6 +161,36 @@ private Q_SLOTS:
 
     // Fav 1 vs No Fav (1 < -1 => false)
     QVERIFY(proxyModel.lessThan(idx1, idx2) == false);
+
+    // No Fav vs No Fav (fallback to default string comparison)
+    SessionModel sessionModelFallback;
+    QJsonObject sessFallback1;
+    sessFallback1[QStringLiteral("id")] = QStringLiteral("sessionB");
+    sessFallback1[QStringLiteral("title")] = QStringLiteral("B Session");
+    QJsonObject sessFallback2;
+    sessFallback2[QStringLiteral("id")] = QStringLiteral("sessionA");
+    sessFallback2[QStringLiteral("title")] = QStringLiteral("A Session");
+
+    QJsonArray fallbackSessions;
+    fallbackSessions.append(sessFallback1);
+    fallbackSessions.append(sessFallback2);
+    sessionModelFallback.setSessions(fallbackSessions);
+
+    TestableProxyModel proxyModelFallback;
+    proxyModelFallback.setSourceModel(&sessionModelFallback);
+
+    QModelIndex idxFB1 =
+        sessionModelFallback.index(0, SessionModel::ColTitle); // "B Session"
+    QModelIndex idxFB2 =
+        sessionModelFallback.index(1, SessionModel::ColTitle); // "A Session"
+
+    proxyModelFallback.sort(SessionModel::ColTitle, Qt::AscendingOrder);
+    QVERIFY(proxyModelFallback.lessThan(idxFB1, idxFB2) == false);
+    QVERIFY(proxyModelFallback.lessThan(idxFB2, idxFB1) == true);
+
+    proxyModelFallback.sort(SessionModel::ColTitle, Qt::DescendingOrder);
+    QVERIFY(proxyModelFallback.lessThan(idxFB1, idxFB2) == false);
+    QVERIFY(proxyModelFallback.lessThan(idxFB2, idxFB1) == true);
   }
 
   void testLessThanFallbackModel() {
