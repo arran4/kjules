@@ -3568,6 +3568,18 @@ void MainWindow::processQueue() {
 
   QueueItem peekItem = m_queueModel->peek();
   if (peekItem.isWaitItem) {
+    if (peekItem.isFollowingWait) {
+      int activeCount = getActiveFollowingSessionIds().size();
+      if (activeCount < peekItem.followingWaitLimit) {
+        m_queueModel->dequeue();
+        QTimer::singleShot(0, this, &MainWindow::processQueue);
+        return;
+      }
+      // If we are still waiting, just return. The condition will be checked
+      // again on the next tick/refresh.
+      return;
+    }
+
     if (!peekItem.waitStartTime.isValid()) {
       peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
       m_queueModel->updateItem(0, peekItem);
@@ -3672,7 +3684,33 @@ void MainWindow::onSessionCreatedResult(bool success,
       // Prepend a wait item
       QueueItem waitItem;
       waitItem.isWaitItem = true;
-      waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
+
+      KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                               QStringLiteral("Queue"));
+      QString backoffType =
+          queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+
+      if (backoffType == QStringLiteral("reactive")) {
+        KConfigGroup generalConfig(KSharedConfig::openConfig(),
+                                   QStringLiteral("General"));
+        QString tier = generalConfig.readEntry("Tier", QStringLiteral("free"));
+        int tierMax = 3;
+        if (tier == QStringLiteral("pro")) {
+          tierMax = 15;
+        } else if (tier == QStringLiteral("max")) {
+          tierMax = 30;
+        }
+        int reactiveBuffer = queueConfig.readEntry("ReactiveBuffer", 3);
+
+        waitItem.isFollowingWait = true;
+        waitItem.followingWaitLimit = tierMax - reactiveBuffer;
+
+        // Fallback wait seconds in case the condition is somehow never met
+        waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
+      } else {
+        waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
+      }
+
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {

@@ -120,6 +120,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
                               QStringLiteral("exponential"));
   m_backoffTypeCombo->addItem(i18n("Random"), QStringLiteral("random"));
   m_backoffTypeCombo->addItem(i18n("Predict"), QStringLiteral("predict"));
+  m_backoffTypeCombo->addItem(i18n("Reactive"), QStringLiteral("reactive"));
 
   QString currentBackoffType =
       queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
@@ -187,6 +188,18 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
       queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
   allLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
   m_backoffTabWidget->addTab(allTab, i18n("Global Limits"));
+
+  // Reactive Tab
+  QWidget *reactiveTab = new QWidget();
+  QFormLayout *reactiveLayout = new QFormLayout(reactiveTab);
+  m_queueReactiveBufferEdit = new QSpinBox(this);
+  m_queueReactiveBufferEdit->setRange(0, 100);
+  m_queueReactiveBufferEdit->setValue(
+      queueConfig.readEntry("ReactiveBuffer", 3));
+  reactiveLayout->addRow(
+      i18n("Wait until active following count is less than tier max minus:"),
+      m_queueReactiveBufferEdit);
+  m_backoffTabWidget->addTab(reactiveTab, i18n("Reactive"));
 
   formLayout->addRow(i18n("Backoff Settings:"), m_backoffTabWidget);
 
@@ -378,6 +391,7 @@ void SettingsDialog::onSave() {
   queueConfig.writeEntry("BackoffRandomMax",
                          m_queueBackoffRandomMaxEdit->value());
   queueConfig.writeEntry("BackoffMax", m_queueBackoffMaxEdit->value());
+  queueConfig.writeEntry("ReactiveBuffer", m_queueReactiveBufferEdit->value());
   queueConfig.sync();
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(),
