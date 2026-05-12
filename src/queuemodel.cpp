@@ -433,6 +433,8 @@ void QueueModel::insertItem(int index, const QueueItem &item) {
   m_items.insert(index, item);
   endInsertRows();
 
+  mergeWaitItems();
+
   save();
 }
 
@@ -441,6 +443,7 @@ void QueueModel::updateItem(int index, const QueueItem &item) {
     m_items[index] = item;
     QModelIndex idx = this->index(index, 0);
     Q_EMIT dataChanged(idx, idx);
+    mergeWaitItems();
     save();
   }
 }
@@ -453,6 +456,7 @@ QueueItem QueueModel::dequeue() {
   QueueItem item = m_items.takeFirst();
   endRemoveRows();
   removeTrailingWaitItems();
+  mergeWaitItems();
   save();
   return item;
 }
@@ -485,6 +489,7 @@ void QueueModel::requeueTransient(const QueueItem &item) {
   beginInsertRows(QModelIndex(), 0, 0);
   m_items.prepend(item);
   endInsertRows();
+  mergeWaitItems();
   save();
 }
 
@@ -494,6 +499,7 @@ void QueueModel::removeItem(int index) {
     m_items.removeAt(index);
     endRemoveRows();
     removeTrailingWaitItems();
+    mergeWaitItems();
     save();
   }
 }
@@ -522,6 +528,7 @@ void QueueModel::moveItem(int from, int to) {
       std::rotate(m_items.begin() + to, m_items.begin() + from,
                   m_items.begin() + from + 1);
     endMoveRows();
+    mergeWaitItems();
     save();
   }
 }
@@ -552,6 +559,7 @@ void QueueModel::prependWaitItem(const QueueItem &item) {
   beginInsertRows(QModelIndex(), 0, 0);
   m_items.prepend(item);
   endInsertRows();
+  mergeWaitItems();
   save();
 }
 
@@ -670,7 +678,37 @@ void QueueModel::load() {
     m_items.removeLast();
   }
 
+  if (m_items.size() >= 2) {
+    for (int i = m_items.size() - 2; i >= 0; --i) {
+      if (m_items[i].isWaitItem && m_items[i + 1].isWaitItem) {
+        m_items[i].waitSeconds += m_items[i + 1].waitSeconds;
+        if (m_items[i + 1].isDailyLimitWait) {
+          m_items[i].isDailyLimitWait = true;
+        }
+        m_items.removeAt(i + 1);
+      }
+    }
+  }
+
   endResetModel();
+}
+
+void QueueModel::mergeWaitItems() {
+  if (m_items.size() < 2)
+    return;
+  for (int i = m_items.size() - 2; i >= 0; --i) {
+    if (m_items[i].isWaitItem && m_items[i + 1].isWaitItem) {
+      m_items[i].waitSeconds += m_items[i + 1].waitSeconds;
+      if (m_items[i + 1].isDailyLimitWait) {
+        m_items[i].isDailyLimitWait = true;
+      }
+      beginRemoveRows(QModelIndex(), i + 1, i + 1);
+      m_items.removeAt(i + 1);
+      endRemoveRows();
+
+      Q_EMIT dataChanged(index(i, 0), index(i, 0), {SummaryRole, StatusRole});
+    }
+  }
 }
 
 void QueueModel::removeTrailingWaitItems() {

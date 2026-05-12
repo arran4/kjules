@@ -94,6 +94,7 @@ private:
   void load();
   void save();
   void removeTrailingWaitItems();
+  void mergeWaitItems();
 };
 
 #endif // QUEUEMODEL_H
