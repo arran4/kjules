@@ -204,6 +204,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
   queueLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
 
+
   m_refreshWorkersEdit = new QSpinBox(this);
   m_refreshWorkersEdit->setRange(1, 100);
   m_refreshWorkersEdit->setValue(config.readEntry("RefreshWorkers", 3));
