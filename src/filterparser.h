@@ -60,7 +60,10 @@ public:
       : m_key(key), m_valuesStr(valuesStr) {
     QStringList parts = valuesStr.split(QLatin1Char(','), Qt::SkipEmptyParts);
     for (const QString &p : parts) {
-      m_values.append(p.trimmed());
+      QString trimmed = p.trimmed();
+      if (!trimmed.isEmpty()) {
+        m_values.append(trimmed);
+      }
     }
   }
   bool evaluate(const FilterDataAccessor &accessor) const override;

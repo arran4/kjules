@@ -26,6 +26,7 @@
 #include "sourcesrefreshprogresswindow.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
+#include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -3201,18 +3202,7 @@ void MainWindow::updateCountdownStatus() {
   }
 
   if (secondsLeft > 0) {
-    QString timeStr;
-    if (secondsLeft > 3600) {
-      qint64 hours = secondsLeft / 3600;
-      qint64 mins = (secondsLeft % 3600) / 60;
-      timeStr = i18n("%1h %2m", hours, mins);
-    } else if (secondsLeft > 60) {
-      qint64 mins = secondsLeft / 60;
-      qint64 secs = secondsLeft % 60;
-      timeStr = i18n("%1m %2s", mins, secs);
-    } else {
-      timeStr = i18np("1 second", "%1 seconds", secondsLeft);
-    }
+    QString timeStr = Utils::formatDuration(secondsLeft);
     m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
     m_queueCountdownLabel->show();
   } else {
