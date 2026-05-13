@@ -9,7 +9,7 @@ if (QT_MAJOR_VERSION STREQUAL "6")
 else()
     target_link_libraries(test_dummy Qt5::Test)
     target_link_libraries(test_filter Qt5::Test Qt5::Widgets Qt5::Core)
-    target_link_libraries(test_advancedfilterproxymodel Qt5::Test Qt5::Widgets Qt5::Core)
+    target_link_libraries(test_advancedfilterproxymodel Qt5::Test Qt5::Widgets Qt5::Core KF5::I18n)
 endif()
 
 add_test(NAME DummyTest COMMAND test_dummy)

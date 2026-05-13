@@ -1,4 +1,5 @@
 #include "queuemodel.h"
+#include "utils.h"
 #include <utility>
 
 #include <KConfigGroup>
@@ -319,7 +320,7 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     return item.lastTry;
   case SummaryRole: {
     if (item.isWaitItem) {
-      return i18n("Wait for %1 seconds", item.waitSeconds);
+      return i18n("Wait for %1", Utils::formatDuration(item.waitSeconds));
     }
     QString source =
         item.requestData.value(QStringLiteral("source")).toString();
@@ -341,7 +342,8 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
             item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
         qint64 remaining = item.waitSeconds - elapsed;
         if (remaining > 0) {
-          return i18n("Waiting... %1s remaining", remaining);
+          return i18n("Waiting... %1 remaining",
+                      Utils::formatDuration(remaining));
         } else {
           return i18n("Wait complete");
         }
