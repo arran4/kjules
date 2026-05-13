@@ -3568,33 +3568,35 @@ void MainWindow::processQueue() {
 
   QueueItem peekItem = m_queueModel->peek();
   if (peekItem.isWaitItem) {
+    if (!peekItem.waitStartTime.isValid()) {
+      peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
+      m_queueModel->updateItem(0, peekItem);
+    }
+
     if (peekItem.isFollowingWait) {
       int activeCount = getActiveFollowingSessionIds().size();
-      if (activeCount < peekItem.followingWaitLimit) {
+      qint64 elapsed =
+          peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+      if (activeCount < peekItem.followingWaitLimit ||
+          elapsed >= peekItem.waitSeconds) {
         m_queueModel->dequeue();
         QTimer::singleShot(0, this, &MainWindow::processQueue);
         return;
       }
-      // If we are still waiting, just return. The condition will be checked
-      // again on the next tick/refresh.
+      // Re-check periodically to ensure reactivity even if the global timer
+      // interval is long
+      QTimer::singleShot(10000, this, &MainWindow::processQueue);
       return;
     }
 
-    if (!peekItem.waitStartTime.isValid()) {
-      peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
-      m_queueModel->updateItem(0, peekItem);
-      QTimer::singleShot(peekItem.waitSeconds * 1000, this,
-                         &MainWindow::processQueue);
+    qint64 elapsed =
+        peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+    if (elapsed >= peekItem.waitSeconds) {
+      m_queueModel->dequeue(); // Wait completed, remove wait item
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
     } else {
-      qint64 elapsed =
-          peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-      if (elapsed >= peekItem.waitSeconds) {
-        m_queueModel->dequeue(); // Wait completed, remove wait item
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      } else {
-        QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
-                           &MainWindow::processQueue);
-      }
+      QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
+                         &MainWindow::processQueue);
     }
     return;
   }
@@ -3703,7 +3705,7 @@ void MainWindow::onSessionCreatedResult(bool success,
         int reactiveBuffer = queueConfig.readEntry("ReactiveBuffer", 3);
 
         waitItem.isFollowingWait = true;
-        waitItem.followingWaitLimit = tierMax - reactiveBuffer;
+        waitItem.followingWaitLimit = qMax(1, tierMax - reactiveBuffer);
 
         // Fallback wait seconds in case the condition is somehow never met
         waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
