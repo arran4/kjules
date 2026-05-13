@@ -400,8 +400,10 @@ void QueueModel::enqueueItem(const QueueItem &item) {
   pruneRunTimestamps();
 
   qint64 waitTime = config.readEntry("WaitTime", 3600);
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  QString backoffType = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
 
-  if (!m_isHolding) {
+  if (!m_isHolding && backoffType == QStringLiteral("predict")) {
     if (m_jobsSinceLastWait >= jobsBeforeWait) {
       beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
       QueueItem waitItem;
@@ -573,6 +575,12 @@ void QueueModel::checkAndPrependDailyLimitWait() {
     return;
   }
   if (m_items.isEmpty()) {
+    return;
+  }
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  QString backoffType = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  if (backoffType != QStringLiteral("predict")) {
     return;
   }
 
