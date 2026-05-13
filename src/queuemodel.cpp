@@ -397,15 +397,10 @@ void QueueModel::enqueueItem(const QueueItem &item) {
     jobsBeforeWait = 30;
   }
 
-  pruneRunTimestamps();
+  if (!m_isHolding && currentBackoffType() == QStringLiteral("predict")) {
+    pruneRunTimestamps();
 
-  qint64 waitTime = config.readEntry("WaitTime", 3600);
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  QString backoffType =
-      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-
-  if (!m_isHolding && backoffType == QStringLiteral("predict")) {
+    qint64 waitTime = config.readEntry("WaitTime", 3600);
     if (m_jobsSinceLastWait >= jobsBeforeWait) {
       beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
       QueueItem waitItem;
@@ -580,11 +575,7 @@ void QueueModel::checkAndPrependDailyLimitWait() {
     return;
   }
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  QString backoffType =
-      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  if (backoffType != QStringLiteral("predict")) {
+  if (currentBackoffType() != QStringLiteral("predict")) {
     return;
   }
 
@@ -683,6 +674,12 @@ void QueueModel::load() {
   }
 
   endResetModel();
+}
+
+QString QueueModel::currentBackoffType() const {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  return queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
 }
 
 void QueueModel::removeTrailingWaitItems() {

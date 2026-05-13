@@ -94,6 +94,7 @@ private:
   void load();
   void save();
   void removeTrailingWaitItems();
+  QString currentBackoffType() const;
 };
 
 #endif // QUEUEMODEL_H
