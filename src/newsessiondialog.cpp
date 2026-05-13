@@ -400,22 +400,26 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
           connect(hideRepoAction, &QAction::triggered, [this, repo]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo, true));
+                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
+                true));
             applyFilter();
           });
           connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo, false));
+                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
+                false));
             applyFilter();
           });
           connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner, true));
+                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
+                true));
             applyFilter();
           });
           connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner, false));
+                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
+                false));
             applyFilter();
           });
           menu.addSeparator();
@@ -435,20 +439,20 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                 menu.addAction(tr("Filter out language '%1'").arg(language));
             QAction *onlyLanguageAction =
                 menu.addAction(tr("Filter only language '%1'").arg(language));
-            connect(hideLanguageAction, &QAction::triggered,
-                    [this, language]() {
-                      m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                          m_filterEditor->filterText(), QStringLiteral("language"),
-                          language, true));
-                      applyFilter();
-                    });
-            connect(onlyLanguageAction, &QAction::triggered,
-                    [this, language]() {
-                      m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                          m_filterEditor->filterText(), QStringLiteral("language"),
-                          language, false));
-                      applyFilter();
-                    });
+            connect(
+                hideLanguageAction, &QAction::triggered, [this, language]() {
+                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                      m_filterEditor->filterText(), QStringLiteral("language"),
+                      language, true));
+                  applyFilter();
+                });
+            connect(
+                onlyLanguageAction, &QAction::triggered, [this, language]() {
+                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                      m_filterEditor->filterText(), QStringLiteral("language"),
+                      language, false));
+                  applyFilter();
+                });
             menu.addSeparator();
           }
         }
@@ -734,22 +738,26 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
           connect(hideRepoAction, &QAction::triggered, [this, repo]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo, true));
+                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
+                true));
             applyFilter();
           });
           connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo, false));
+                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
+                false));
             applyFilter();
           });
           connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner, true));
+                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
+                true));
             applyFilter();
           });
           connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
             m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner, false));
+                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
+                false));
             applyFilter();
           });
           menu.addSeparator();
@@ -769,20 +777,20 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                 menu.addAction(tr("Filter out language '%1'").arg(language));
             QAction *onlyLanguageAction =
                 menu.addAction(tr("Filter only language '%1'").arg(language));
-            connect(hideLanguageAction, &QAction::triggered,
-                    [this, language]() {
-                      m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                          m_filterEditor->filterText(), QStringLiteral("language"),
-                          language, true));
-                      applyFilter();
-                    });
-            connect(onlyLanguageAction, &QAction::triggered,
-                    [this, language]() {
-                      m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                          m_filterEditor->filterText(), QStringLiteral("language"),
-                          language, false));
-                      applyFilter();
-                    });
+            connect(
+                hideLanguageAction, &QAction::triggered, [this, language]() {
+                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                      m_filterEditor->filterText(), QStringLiteral("language"),
+                      language, true));
+                  applyFilter();
+                });
+            connect(
+                onlyLanguageAction, &QAction::triggered, [this, language]() {
+                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                      m_filterEditor->filterText(), QStringLiteral("language"),
+                      language, false));
+                  applyFilter();
+                });
             menu.addSeparator();
           }
         }
