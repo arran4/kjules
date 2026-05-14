@@ -17,8 +17,6 @@ struct QueueItem {
 
   bool isWaitItem = false;
   bool isDailyLimitWait = false;
-  bool isFollowingWait = false;
-  int followingWaitLimit = 0;
   int waitSeconds = 0;
   QDateTime waitStartTime;
   bool isBlocked = false;

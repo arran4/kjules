@@ -3571,32 +3571,18 @@ void MainWindow::processQueue() {
     if (!peekItem.waitStartTime.isValid()) {
       peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
       m_queueModel->updateItem(0, peekItem);
-    }
-
-    if (peekItem.isFollowingWait) {
-      int activeCount = getActiveFollowingSessionIds().size();
+      QTimer::singleShot(peekItem.waitSeconds * 1000, this,
+                         &MainWindow::processQueue);
+    } else {
       qint64 elapsed =
           peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-      if (activeCount < peekItem.followingWaitLimit ||
-          elapsed >= peekItem.waitSeconds) {
-        m_queueModel->dequeue();
+      if (elapsed >= peekItem.waitSeconds) {
+        m_queueModel->dequeue(); // Wait completed, remove wait item
         QTimer::singleShot(0, this, &MainWindow::processQueue);
-        return;
+      } else {
+        QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
+                           &MainWindow::processQueue);
       }
-      // Re-check periodically to ensure reactivity even if the global timer
-      // interval is long
-      QTimer::singleShot(10000, this, &MainWindow::processQueue);
-      return;
-    }
-
-    qint64 elapsed =
-        peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-    if (elapsed >= peekItem.waitSeconds) {
-      m_queueModel->dequeue(); // Wait completed, remove wait item
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
-    } else {
-      QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
-                         &MainWindow::processQueue);
     }
     return;
   }
@@ -3686,33 +3672,7 @@ void MainWindow::onSessionCreatedResult(bool success,
       // Prepend a wait item
       QueueItem waitItem;
       waitItem.isWaitItem = true;
-
-      KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                               QStringLiteral("Queue"));
-      QString backoffType =
-          queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-
-      if (backoffType == QStringLiteral("reactive")) {
-        KConfigGroup generalConfig(KSharedConfig::openConfig(),
-                                   QStringLiteral("General"));
-        QString tier = generalConfig.readEntry("Tier", QStringLiteral("free"));
-        int tierMax = 3;
-        if (tier == QStringLiteral("pro")) {
-          tierMax = 15;
-        } else if (tier == QStringLiteral("max")) {
-          tierMax = 30;
-        }
-        int reactiveBuffer = queueConfig.readEntry("ReactiveBuffer", 3);
-
-        waitItem.isFollowingWait = true;
-        waitItem.followingWaitLimit = qMax(1, tierMax - reactiveBuffer);
-
-        // Fallback wait seconds in case the condition is somehow never met
-        waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
-      } else {
-        waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
-      }
-
+      waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime(); // Clear backoff
     } else {

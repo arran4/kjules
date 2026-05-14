@@ -95,8 +95,6 @@ QJsonObject QueueItem::toJson() const {
   }
   obj[QStringLiteral("isWaitItem")] = isWaitItem;
   obj[QStringLiteral("isDailyLimitWait")] = isDailyLimitWait;
-  obj[QStringLiteral("isFollowingWait")] = isFollowingWait;
-  obj[QStringLiteral("followingWaitLimit")] = followingWaitLimit;
   obj[QStringLiteral("waitSeconds")] = waitSeconds;
   if (waitStartTime.isValid()) {
     obj[QStringLiteral("waitStartTime")] = waitStartTime.toString(Qt::ISODate);
@@ -124,9 +122,6 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   item.isWaitItem = obj.value(QStringLiteral("isWaitItem")).toBool();
   item.isDailyLimitWait =
       obj.value(QStringLiteral("isDailyLimitWait")).toBool();
-  item.isFollowingWait = obj.value(QStringLiteral("isFollowingWait")).toBool();
-  item.followingWaitLimit =
-      obj.value(QStringLiteral("followingWaitLimit")).toInt();
   item.waitSeconds = obj.value(QStringLiteral("waitSeconds")).toInt();
   if (obj.contains(QStringLiteral("waitStartTime"))) {
     item.waitStartTime = QDateTime::fromString(
@@ -324,13 +319,6 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     return item.lastTry;
   case SummaryRole: {
     if (item.isWaitItem) {
-      if (item.isDailyLimitWait) {
-        return i18n("Wait for daily limit (%1 seconds)", item.waitSeconds);
-      }
-      if (item.isFollowingWait) {
-        return i18n("Wait for active following count < %1",
-                    item.followingWaitLimit);
-      }
       return i18n("Wait for %1 seconds", item.waitSeconds);
     }
     QString source =
@@ -414,23 +402,16 @@ void QueueModel::enqueueItem(const QueueItem &item) {
   qint64 waitTime = config.readEntry("WaitTime", 3600);
 
   if (!m_isHolding) {
-    KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                             QStringLiteral("Queue"));
-    QString backoffType =
-        queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-
-    if (backoffType == QStringLiteral("predict")) {
-      if (m_jobsSinceLastWait >= jobsBeforeWait) {
-        beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-        QueueItem waitItem;
-        waitItem.isWaitItem = true;
-        waitItem.waitSeconds = qMin(waitTime, maxBackoffSeconds());
-        m_items.append(waitItem);
-        endInsertRows();
-        m_jobsSinceLastWait = 0;
-      }
-      m_jobsSinceLastWait++;
+    if (m_jobsSinceLastWait >= jobsBeforeWait) {
+      beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
+      QueueItem waitItem;
+      waitItem.isWaitItem = true;
+      waitItem.waitSeconds = qMin(waitTime, maxBackoffSeconds());
+      m_items.append(waitItem);
+      endInsertRows();
+      m_jobsSinceLastWait = 0;
     }
+    m_jobsSinceLastWait++;
   }
 
   beginInsertRows(QModelIndex(), m_items.size(), m_items.size());

@@ -37,7 +37,6 @@ private:
   QSpinBox *m_queueBackoffRandomMinEdit;
   QSpinBox *m_queueBackoffRandomMaxEdit;
   QSpinBox *m_queueBackoffMaxEdit;
-  QSpinBox *m_queueReactiveBufferEdit;
   QSpinBox *m_waitTimeEdit;
   QSpinBox *m_refreshWorkersEdit;
   QSpinBox *m_pageSizeEdit;
