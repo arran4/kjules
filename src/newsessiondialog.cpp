@@ -908,32 +908,26 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     fmt.setFontStrikeOut(checked);
     m_promptEdit->mergeCurrentCharFormat(fmt);
   });
-  connect(actionBullet, &QAction::triggered, this, [this](bool checked) {
+  auto toggleList = [this](QTextListFormat::Style style) {
     QTextCursor cursor = m_promptEdit->textCursor();
     QTextList *list = cursor.currentList();
-    if (list && list->format().style() == QTextListFormat::ListDisc) {
+    if (list && list->format().style() == style) {
       QTextBlockFormat blockFmt = cursor.blockFormat();
       blockFmt.setObjectIndex(-1);
-      cursor.setBlockFormat(blockFmt);
+      cursor.mergeBlockFormat(blockFmt);
     } else {
-      cursor.createList(QTextListFormat::ListDisc);
+      cursor.createList(style);
     }
-  });
-  connect(actionOrdered, &QAction::triggered, this, [this](bool checked) {
-    QTextCursor cursor = m_promptEdit->textCursor();
-    QTextList *list = cursor.currentList();
-    if (list && list->format().style() == QTextListFormat::ListDecimal) {
-      QTextBlockFormat blockFmt = cursor.blockFormat();
-      blockFmt.setObjectIndex(-1);
-      cursor.setBlockFormat(blockFmt);
-    } else {
-      cursor.createList(QTextListFormat::ListDecimal);
-    }
-  });
+  };
+
+  connect(actionBullet, &QAction::triggered, this,
+          [toggleList](bool) { toggleList(QTextListFormat::ListDisc); });
+  connect(actionOrdered, &QAction::triggered, this,
+          [toggleList](bool) { toggleList(QTextListFormat::ListDecimal); });
   connect(
       m_promptEdit, &QTextEdit::currentCharFormatChanged, this,
       [actionBold, actionItalic, actionStrike](const QTextCharFormat &format) {
-        actionBold->setChecked(format.fontWeight() == QFont::Bold);
+        actionBold->setChecked(format.fontWeight() >= QFont::Bold);
         actionItalic->setChecked(format.fontItalic());
         actionStrike->setChecked(format.fontStrikeOut());
       });
