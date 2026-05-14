@@ -32,7 +32,13 @@
 #include <QSortFilterProxyModel>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QTextBlockFormat>
+#include <QTextCharFormat>
+#include <QTextCursor>
 #include <QTextEdit>
+#include <QTextList>
+#include <QTextListFormat>
+#include <QToolBar>
 #include <QVBoxLayout>
 
 PromptTextEdit::PromptTextEdit(QWidget *parent)
@@ -861,6 +867,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   }
   m_markdownModeComboBox->setCurrentIndex(markdownMode);
   m_promptEdit->setMarkdownMode(markdownMode);
+
   connect(m_markdownModeComboBox,
           QOverload<int>::of(&QComboBox::currentIndexChanged), m_promptEdit,
           &PromptTextEdit::setMarkdownMode);
@@ -869,8 +876,92 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   promptHeaderLayout->addStretch();
   promptHeaderLayout->addWidget(m_markdownModeComboBox);
 
+  QToolBar *formatBar = new QToolBar(this);
+  formatBar->setIconSize(QSize(16, 16));
+  QAction *actionBold = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("format-text-bold")), tr("Bold"));
+  actionBold->setCheckable(true);
+  QAction *actionItalic = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("format-text-italic")), tr("Italic"));
+  actionItalic->setCheckable(true);
+  QAction *actionStrike = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("format-text-strikethrough")),
+      tr("Strikethrough"));
+  actionStrike->setCheckable(true);
+  formatBar->addSeparator();
+  QAction *actionBullet = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("format-list-unordered")),
+      tr("Unordered List"));
+  actionBullet->setCheckable(true);
+  QAction *actionOrdered = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("format-list-ordered")),
+      tr("Ordered List"));
+  actionOrdered->setCheckable(true);
+
+  connect(actionBold, &QAction::triggered, this, [this](bool checked) {
+    m_promptEdit->setFontWeight(checked ? QFont::Bold : QFont::Normal);
+  });
+  connect(actionItalic, &QAction::triggered, this,
+          [this](bool checked) { m_promptEdit->setFontItalic(checked); });
+  connect(actionStrike, &QAction::triggered, this, [this](bool checked) {
+    QTextCharFormat fmt;
+    fmt.setFontStrikeOut(checked);
+    m_promptEdit->mergeCurrentCharFormat(fmt);
+  });
+  connect(actionBullet, &QAction::triggered, this, [this](bool checked) {
+    QTextCursor cursor = m_promptEdit->textCursor();
+    QTextList *list = cursor.currentList();
+    if (list && list->format().style() == QTextListFormat::ListDisc) {
+      QTextBlockFormat blockFmt = cursor.blockFormat();
+      blockFmt.setObjectIndex(-1);
+      cursor.setBlockFormat(blockFmt);
+    } else {
+      cursor.createList(QTextListFormat::ListDisc);
+    }
+  });
+  connect(actionOrdered, &QAction::triggered, this, [this](bool checked) {
+    QTextCursor cursor = m_promptEdit->textCursor();
+    QTextList *list = cursor.currentList();
+    if (list && list->format().style() == QTextListFormat::ListDecimal) {
+      QTextBlockFormat blockFmt = cursor.blockFormat();
+      blockFmt.setObjectIndex(-1);
+      cursor.setBlockFormat(blockFmt);
+    } else {
+      cursor.createList(QTextListFormat::ListDecimal);
+    }
+  });
+  connect(
+      m_promptEdit, &QTextEdit::currentCharFormatChanged, this,
+      [actionBold, actionItalic, actionStrike](const QTextCharFormat &format) {
+        actionBold->setChecked(format.fontWeight() == QFont::Bold);
+        actionItalic->setChecked(format.fontItalic());
+        actionStrike->setChecked(format.fontStrikeOut());
+      });
+  connect(m_promptEdit, &QTextEdit::cursorPositionChanged, this,
+          [this, actionBullet, actionOrdered]() {
+            QTextCursor cursor = m_promptEdit->textCursor();
+            QTextList *list = cursor.currentList();
+            if (list) {
+              actionBullet->setChecked(list->format().style() ==
+                                       QTextListFormat::ListDisc);
+              actionOrdered->setChecked(list->format().style() ==
+                                        QTextListFormat::ListDecimal);
+            } else {
+              actionBullet->setChecked(false);
+              actionOrdered->setChecked(false);
+            }
+          });
+
   QVBoxLayout *promptLayout = new QVBoxLayout();
   promptLayout->addLayout(promptHeaderLayout);
+  promptLayout->addWidget(formatBar);
+  formatBar->setVisible(markdownMode == PromptTextEdit::WysiwygMarkdown);
+  connect(m_markdownModeComboBox,
+          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [formatBar](int index) {
+            formatBar->setVisible(index == PromptTextEdit::WysiwygMarkdown);
+          });
+
   promptLayout->addWidget(m_promptEdit);
 
   connect(m_promptEdit, &QTextEdit::textChanged, this, [this]() {
