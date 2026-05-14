@@ -229,8 +229,7 @@ protected:
         return false;
       }
     } else {
-      if (!AdvancedFilterProxyModel::filterAcceptsRow(source_row,
-                                                      source_parent))
+      if (!AdvancedFilterProxyModel::filterAcceptsRow(source_row, source_parent))
         return false;
     }
 

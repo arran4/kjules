@@ -689,26 +689,16 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
         QStringLiteral("private:"), QStringLiteral("archived:")});
   } else {
     m_paletteList->clear();
-    m_paletteList->addItems(QStringList{QStringLiteral("OR"),
-                                        QStringLiteral("AND"),
-                                        QStringLiteral("NOT"),
-                                        QStringLiteral("IN"),
-                                        QStringLiteral("repo:"),
-                                        QStringLiteral("owner:"),
-                                        QStringLiteral("language:"),
-                                        QStringLiteral("archived:"),
-                                        QStringLiteral("fork:"),
-                                        QStringLiteral("private:"),
-                                        QStringLiteral("state:"),
-                                        QStringLiteral("title:"),
-                                        QStringLiteral("created-before:"),
-                                        QStringLiteral("created-after:"),
-                                        QStringLiteral("updated-before:"),
-                                        QStringLiteral("updated-after:"),
-                                        QStringLiteral("language:"),
-                                        QStringLiteral("fork:"),
-                                        QStringLiteral("private:"),
-                                        QStringLiteral("archived:")});
+    m_paletteList->addItems(QStringList{
+        QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+        QStringLiteral("language:"), QStringLiteral("archived:"),
+        QStringLiteral("fork:"), QStringLiteral("private:"),
+        QStringLiteral("state:"), QStringLiteral("title:"),
+        QStringLiteral("created-before:"), QStringLiteral("created-after:"),
+        QStringLiteral("updated-before:"), QStringLiteral("updated-after:"),
+        QStringLiteral("language:"), QStringLiteral("fork:"),
+        QStringLiteral("private:"), QStringLiteral("archived:")});
   }
 }
 
