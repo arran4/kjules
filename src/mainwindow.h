@@ -30,6 +30,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QAction;
+class QVBoxLayout;
 class RefreshProgressWindow;
 class SourcesRefreshProgressWindow;
 class ClickableProgressBar;
