@@ -1,7 +1,6 @@
 #include "filtereditor.h"
 #include "filterparser.h"
 
-#include <QAction>
 #include <QContextMenuEvent>
 #include <QDebug>
 #include <QDialog>
@@ -19,10 +18,6 @@
 #include <QToolButton>
 #include <QTreeView>
 #include <QVBoxLayout>
-
-#include <QComboBox>
-#include <QCompleter>
-#include <QDateTimeEdit>
 
 #include <QComboBox>
 #include <QCompleter>
