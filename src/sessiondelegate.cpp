@@ -58,7 +58,6 @@ void SessionDelegate::paint(QPainter *painter,
 }
 
 QSize SessionDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                const QModelIndex &index) const {
-  Q_UNUSED(index)
+                                const QModelIndex &) const {
   return QSize(option.rect.width(), 60);
 }

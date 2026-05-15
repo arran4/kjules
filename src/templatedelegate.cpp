@@ -58,8 +58,7 @@ void TemplateDelegate::paint(QPainter *painter,
 }
 
 QSize TemplateDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                 const QModelIndex &index) const {
-  Q_UNUSED(index)
+                                 const QModelIndex &) const {
   QFontMetrics fm(option.font);
   return QSize(200, fm.height() * 2 + 15);
 }

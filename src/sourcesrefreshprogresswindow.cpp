@@ -115,9 +115,8 @@ void SourcesRefreshProgressWindow::processNextGithub() {
                      &SourcesRefreshProgressWindow::processNextGithub);
 }
 
-void SourcesRefreshProgressWindow::onGithubInfoReceived(
-    const QString &sourceId, const QJsonObject &info) {
-  Q_UNUSED(info);
+void SourcesRefreshProgressWindow::onGithubInfoReceived(const QString &sourceId,
+                                                        const QJsonObject &) {
   m_finishedGithubRequests++;
   m_activeWorkers--;
   appendLog(tr("Fetched GitHub info for %1 successfully.").arg(sourceId));

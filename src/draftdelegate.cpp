@@ -111,7 +111,6 @@ void DraftDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
 }
 
 QSize DraftDelegate::sizeHint(const QStyleOptionViewItem &option,
-                              const QModelIndex &index) const {
-  Q_UNUSED(index)
+                              const QModelIndex &) const {
   return QSize(option.rect.width(), 50);
 }
