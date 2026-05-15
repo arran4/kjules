@@ -52,9 +52,7 @@ void QueueDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   painter->restore();
 }
 
-QSize QueueDelegate::sizeHint(const QStyleOptionViewItem &option,
-                              const QModelIndex &index) const {
-  Q_UNUSED(option);
-  Q_UNUSED(index);
+QSize QueueDelegate::sizeHint(const QStyleOptionViewItem & /*option*/,
+                              const QModelIndex & /*index*/) const {
   return QSize(200, 50); // fixed size for simplicity
 }
