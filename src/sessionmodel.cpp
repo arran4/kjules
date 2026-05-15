@@ -49,10 +49,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
       obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
 
   QJsonValue favVal = obj.value(QStringLiteral("local_favourite"));
-  if (favVal.isBool()) {
-    qWarning() << "Deprecated boolean local_favourite found in session data";
-    data.favouriteRank = favVal.toBool() ? std::optional<int>(1) : std::nullopt;
-  } else if (favVal.isDouble()) {
+  if (favVal.isDouble()) {
     data.favouriteRank = favVal.toInt();
   } else {
     data.favouriteRank = std::nullopt;
