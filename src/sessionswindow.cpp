@@ -161,6 +161,30 @@ void SessionsWindow::setupUi() {
 
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
+  setupFilters(layout);
+
+  QTabWidget *tabWidget = new QTabWidget(this);
+
+  m_listView = new QTreeView(this);
+  m_listView->setModel(m_proxyModel);
+  // Remove SessionDelegate if it's meant for a list view, or adjust it
+  // m_listView->setItemDelegate(new SessionDelegate(this));
+  m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
+  // Set some treeview properties
+
+  setupListView();
+
+  tabWidget->addTab(m_listView, i18n("All sessions"));
+  layout->addWidget(tabWidget);
+
+  setupActions();
+
+  setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/sessionswindowui.rc"));
+
+  setupStatusBar();
+}
+
+void SessionsWindow::setupFilters(QVBoxLayout *layout) {
   QHBoxLayout *filterLayout = new QHBoxLayout();
   m_searchEdit = new QLineEdit(this);
   m_searchEdit->setPlaceholderText(i18n("Search title or source..."));
@@ -194,15 +218,9 @@ void SessionsWindow::setupUi() {
           &SessionsWindow::updateRepoFilterList);
   connect(m_model, &SessionModel::modelReset, this,
           &SessionsWindow::updateRepoFilterList);
+}
 
-  QTabWidget *tabWidget = new QTabWidget(this);
-
-  m_listView = new QTreeView(this);
-  m_listView->setModel(m_proxyModel);
-  // Remove SessionDelegate if it's meant for a list view, or adjust it
-  // m_listView->setItemDelegate(new SessionDelegate(this));
-  m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
-  // Set some treeview properties
+void SessionsWindow::setupListView() {
   m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_listView->setSortingEnabled(true);
   m_listView->setRootIsDecorated(false);
@@ -220,322 +238,25 @@ void SessionsWindow::setupUi() {
   m_listView->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
 
   connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this,
-          [this](int value) {
-            if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
-                m_autoLoadGroup->checkedAction()->data().toString() ==
-                    QStringLiteral("auto_bottom")) {
-              QScrollBar *vBar = m_listView->verticalScrollBar();
-              if (value >= vBar->maximum() - 5 && !m_isRefreshing &&
-                  !m_nextPageToken.isEmpty()) {
-                resumeRefresh();
-              }
-            }
-          });
-
-  tabWidget->addTab(m_listView, i18n("All sessions"));
-
-  auto unmanageSelectedSessions = [this]() {
-    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
-    if (selectedRows.isEmpty())
-      return;
-
-    bool allManaged = true;
-    for (const QModelIndex &idx : selectedRows) {
-      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
-      if (!m_managedModel || !m_managedModel->contains(id)) {
-        allManaged = false;
-        break;
-      }
-    }
-
-    if (allManaged) {
-      for (const QModelIndex &idx : selectedRows) {
-        QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
-        Q_EMIT deleteRequested(id);
-      }
-    }
-  };
+          &SessionsWindow::onVerticalScrollBarValueChanged);
 
   QAction *listDeleteAction = new QAction(i18n("Unmanage Session"), m_listView);
   listDeleteAction->setShortcut(QKeySequence::Delete);
   listDeleteAction->setShortcutContext(Qt::WidgetShortcut);
-  connect(listDeleteAction, &QAction::triggered, unmanageSelectedSessions);
+  connect(listDeleteAction, &QAction::triggered, this,
+          &SessionsWindow::unmanageSelectedSessions);
   m_listView->addAction(listDeleteAction);
 
-  connect(
-      m_listView, &QTreeView::customContextMenuRequested,
-      [this, unmanageSelectedSessions](const QPoint &pos) {
-        QModelIndex index = m_listView->indexAt(pos);
-        if (index.isValid()) {
-          QModelIndexList selectedRows =
-              m_listView->selectionModel()->selectedRows();
-          if (selectedRows.isEmpty()) {
-            selectedRows.append(index);
-          }
-
-          QMenu menu;
-          QMenu *favMenu =
-              menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")),
-                           i18n("Favourite"));
-          QAction *toggleFavAction =
-              favMenu->addAction(i18n("Toggle Favourite"));
-          connect(toggleFavAction, &QAction::triggered, this,
-                  &SessionsWindow::toggleFavourite);
-          QAction *incFavAction = favMenu->addAction(i18n("Increase Rank"));
-          connect(incFavAction, &QAction::triggered, this,
-                  &SessionsWindow::increaseFavouriteRank);
-          QAction *decFavAction = favMenu->addAction(i18n("Decrease Rank"));
-          connect(decFavAction, &QAction::triggered, this,
-                  &SessionsWindow::decreaseFavouriteRank);
-          QAction *setFavAction = favMenu->addAction(i18n("Set Rank..."));
-          connect(setFavAction, &QAction::triggered, this,
-                  &SessionsWindow::setFavouriteRank);
-
-          QAction *openSessionUrlAction =
-              menu.addAction(i18n("Open Session URL"));
-          QAction *copySessionUrlAction =
-              menu.addAction(i18n("Copy Session URL"));
-          menu.addSeparator();
-          QAction *openSourceUrlAction =
-              menu.addAction(i18n("Open Source URL"));
-          QAction *copySourceUrlAction =
-              menu.addAction(i18n("Copy Source URL"));
-
-          connect(openSessionUrlAction, &QAction::triggered,
-                  [this, selectedRows]() {
-                    for (const QModelIndex &idx : selectedRows) {
-                      QString id = m_proxyModel
-                                       ->data(m_proxyModel->index(
-                                           idx.row(), SessionModel::ColId))
-                                       .toString();
-                      QString urlStr =
-                          QStringLiteral("https://jules.google.com/session/") +
-                          id;
-                      QDesktopServices::openUrl(QUrl(urlStr));
-                    }
-                    m_statusLabel->setText(
-                        i18n("Opened %1 session URLs", selectedRows.size()));
-                  });
-
-          connect(copySessionUrlAction, &QAction::triggered,
-                  [this, selectedRows]() {
-                    QStringList urls;
-                    for (const QModelIndex &idx : selectedRows) {
-                      QString id = m_proxyModel
-                                       ->data(m_proxyModel->index(
-                                           idx.row(), SessionModel::ColId))
-                                       .toString();
-                      urls.append(
-                          QStringLiteral("https://jules.google.com/session/") +
-                          id);
-                    }
-                    QGuiApplication::clipboard()->setText(
-                        urls.join(QLatin1Char('\n')));
-                    m_statusLabel->setText(
-                        i18n("Session URLs copied to clipboard."));
-                  });
-
-          auto getSourceUrl = [this](const QModelIndex &idx) -> QString {
-            QString provider =
-                m_proxyModel->data(idx, SessionModel::ProviderRole).toString();
-            QString owner = m_proxyModel
-                                ->data(m_proxyModel->index(
-                                    idx.row(), SessionModel::ColOwner))
-                                .toString();
-            QString repo = m_proxyModel
-                               ->data(m_proxyModel->index(
-                                   idx.row(), SessionModel::ColRepo))
-                               .toString();
-            if (provider == QStringLiteral("github")) {
-              return QStringLiteral("https://github.com/") + owner +
-                     QLatin1Char('/') + repo;
-            } else if (provider == QStringLiteral("gitlab")) {
-              return QStringLiteral("https://gitlab.com/") + owner +
-                     QLatin1Char('/') + repo;
-            } else if (provider == QStringLiteral("bitbucket")) {
-              return QStringLiteral("https://bitbucket.org/") + owner +
-                     QLatin1Char('/') + repo;
-            } else if (!provider.isEmpty()) {
-              return QStringLiteral("https://") + provider +
-                     QStringLiteral(".com/") + owner + QLatin1Char('/') + repo;
-            }
-            return QString();
-          };
-
-          connect(openSourceUrlAction, &QAction::triggered,
-                  [this, selectedRows, getSourceUrl]() {
-                    int count = 0;
-                    for (const QModelIndex &idx : selectedRows) {
-                      QString urlStr = getSourceUrl(idx);
-                      if (!urlStr.isEmpty()) {
-                        QDesktopServices::openUrl(QUrl(urlStr));
-                        count++;
-                      }
-                    }
-                    m_statusLabel->setText(
-                        i18n("Opened %1 source URLs", count));
-                  });
-
-          connect(copySourceUrlAction, &QAction::triggered,
-                  [this, selectedRows, getSourceUrl]() {
-                    QStringList urls;
-                    for (const QModelIndex &idx : selectedRows) {
-                      QString urlStr = getSourceUrl(idx);
-                      if (!urlStr.isEmpty()) {
-                        urls.append(urlStr);
-                      }
-                    }
-                    if (!urls.isEmpty()) {
-                      QGuiApplication::clipboard()->setText(
-                          urls.join(QLatin1Char('\n')));
-                      m_statusLabel->setText(
-                          i18n("Source URLs copied to clipboard."));
-                    } else {
-                      m_statusLabel->setText(
-                          i18n("No valid source URLs to copy."));
-                    }
-                  });
-
-          bool hasPr = false;
-          for (const QModelIndex &idx : selectedRows) {
-            if (!m_proxyModel->data(idx, SessionModel::PrUrlRole)
-                     .toString()
-                     .isEmpty()) {
-              hasPr = true;
-              break;
-            }
-          }
-
-          if (hasPr) {
-            menu.addSeparator();
-            QAction *openPrUrlAction = menu.addAction(i18n("Open PR URL"));
-            QAction *copyPrUrlAction = menu.addAction(i18n("Copy PR URL"));
-
-            connect(openPrUrlAction, &QAction::triggered,
-                    [this, selectedRows]() {
-                      int count = 0;
-                      for (const QModelIndex &idx : selectedRows) {
-                        QString prUrl =
-                            m_proxyModel->data(idx, SessionModel::PrUrlRole)
-                                .toString();
-                        if (!prUrl.isEmpty()) {
-                          QDesktopServices::openUrl(QUrl(prUrl));
-                          count++;
-                        }
-                      }
-                      m_statusLabel->setText(i18n("Opened %1 PR URLs", count));
-                    });
-
-            connect(
-                copyPrUrlAction, &QAction::triggered, [this, selectedRows]() {
-                  QStringList urls;
-                  for (const QModelIndex &idx : selectedRows) {
-                    QString prUrl =
-                        m_proxyModel->data(idx, SessionModel::PrUrlRole)
-                            .toString();
-                    if (!prUrl.isEmpty()) {
-                      urls.append(prUrl);
-                    }
-                  }
-                  QGuiApplication::clipboard()->setText(
-                      urls.join(QLatin1Char('\n')));
-                  m_statusLabel->setText(i18n("PR URLs copied to clipboard."));
-                });
-          }
-
-          menu.addSeparator();
-          QAction *reloadSelectedAction =
-              menu.addAction(i18n("Reload Selected"));
-          connect(
-              reloadSelectedAction, &QAction::triggered,
-              [this, selectedRows]() {
-                for (const QModelIndex &idx : selectedRows) {
-                  QString id =
-                      m_proxyModel->data(idx, SessionModel::IdRole).toString();
-                  m_apiManager->reloadSession(id);
-                }
-                m_statusLabel->setText(
-                    i18n("Reloading %1 sessions...", selectedRows.size()));
-              });
-
-          menu.addSeparator();
-          QAction *copyIdAction = menu.addAction(i18n("Copy Jules ID"));
-          connect(copyIdAction, &QAction::triggered, [this, selectedRows]() {
-            QStringList ids;
-            for (const QModelIndex &idx : selectedRows) {
-              ids.append(
-                  m_proxyModel->data(idx, SessionModel::IdRole).toString());
-            }
-            QGuiApplication::clipboard()->setText(ids.join(QLatin1Char('\n')));
-            m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
-          });
-
-          menu.addSeparator();
-
-          bool allManaged = true;
-          bool allUnmanaged = true;
-          for (const QModelIndex &idx : selectedRows) {
-            QString id =
-                m_proxyModel->data(idx, SessionModel::IdRole).toString();
-            if (m_managedModel && m_managedModel->contains(id)) {
-              allUnmanaged = false;
-            } else {
-              allManaged = false;
-            }
-          }
-
-          QAction *watchAction =
-              menu.addAction(QIcon::fromTheme(QStringLiteral("visibility")),
-                             i18n("Follow Session"));
-          if (!allUnmanaged) {
-            watchAction->setEnabled(false);
-          }
-          connect(watchAction, &QAction::triggered, [this, selectedRows]() {
-            for (const QModelIndex &idx : selectedRows) {
-              QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
-              QJsonObject sessionData = m_model->getSession(sourceIndex.row());
-              Q_EMIT watchRequested(sessionData);
-            }
-          });
-
-          QAction *archiveAction =
-              menu.addAction(QIcon::fromTheme(QStringLiteral("archive")),
-                             i18n("Archive Session"));
-          if (!allManaged) {
-            archiveAction->setEnabled(false);
-          }
-          connect(archiveAction, &QAction::triggered, [this, selectedRows]() {
-            for (const QModelIndex &idx : selectedRows) {
-              QString id =
-                  m_proxyModel->data(idx, SessionModel::IdRole).toString();
-              Q_EMIT archiveRequested(id);
-            }
-          });
-
-          QAction *deleteAction =
-              menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
-                             i18n("Unmanage Session"));
-          if (!allManaged) {
-            deleteAction->setEnabled(false);
-          }
-          connect(deleteAction, &QAction::triggered, unmanageSelectedSessions);
-
-          menu.exec(m_listView->mapToGlobal(pos));
-        }
-      });
-
+  connect(m_listView, &QTreeView::customContextMenuRequested, this,
+          &SessionsWindow::showContextMenu);
   connect(m_listView, &QTreeView::doubleClicked, this,
-          [this](const QModelIndex &index) {
-            QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
-            QJsonObject rawData = m_model->getSession(sourceIndex.row());
+          &SessionsWindow::onListViewDoubleClicked);
 
-            SessionWindow *window =
-                new SessionWindow(rawData, m_apiManager, this);
-            window->show();
-          });
+  connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
+          this, &SessionsWindow::updateActionStates);
+}
 
-  layout->addWidget(tabWidget);
-
+void SessionsWindow::setupActions() {
   // Actions
   QAction *refreshAction = new QAction(
       QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
@@ -598,10 +319,9 @@ void SessionsWindow::setupUi() {
   actionCollection()->addAction(QStringLiteral("delete_session"),
                                 deleteMenuAction);
 
-  connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
-          this, &SessionsWindow::updateActionStates);
-
   // Trigger initial state
+  // We can't call updateActionStates until after m_listView is created
+  // and selectionModel exists. Since it's done before this, it's fine.
   updateActionStates();
 
   connect(watchMenuAction, &QAction::triggered, [this]() {
@@ -653,13 +373,16 @@ void SessionsWindow::setupUi() {
 
   KConfigGroup config(KSharedConfig::openConfig(),
                       QStringLiteral("SessionsWindow"));
-  QString autoLoadMode = config.readEntry("AutoLoadMode", "manual");
+  QString autoLoadMode =
+      config.readEntry("AutoLoadMode", QStringLiteral("manual"));
+
   for (QAction *action : m_autoLoadGroup->actions()) {
     if (action->data().toString() == autoLoadMode) {
       action->setChecked(true);
       break;
     }
   }
+
   if (!m_autoLoadGroup->checkedAction()) {
     manualAction->setChecked(true);
   }
@@ -674,9 +397,8 @@ void SessionsWindow::setupUi() {
   m_autoFollowAction =
       new QAction(i18n("Auto-follow active states on refresh"), this);
   m_autoFollowAction->setCheckable(true);
+  m_autoFollowAction->setChecked(config.readEntry("AutoFollowRefresh", false));
   m_autoFollowAction->setEnabled(m_managedModel != nullptr);
-  bool autoFollow = config.readEntry("AutoFollowRefresh", false);
-  m_autoFollowAction->setChecked(autoFollow);
   actionCollection()->addAction(QStringLiteral("auto_follow_refresh"),
                                 m_autoFollowAction);
 
@@ -724,9 +446,9 @@ void SessionsWindow::setupUi() {
   addColumnToggle(i18n("Repo"), SessionModel::ColRepo,
                   QStringLiteral("col_repo"));
   addColumnToggle(i18n("ID"), SessionModel::ColId, QStringLiteral("col_id"));
+}
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui5/kjules/sessionswindowui.rc"));
-
+void SessionsWindow::setupStatusBar() {
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
 
@@ -741,6 +463,297 @@ void SessionsWindow::setupUi() {
   connect(m_cancelBtn, &QPushButton::clicked, this,
           &SessionsWindow::cancelRefresh);
   statusBar()->addPermanentWidget(m_cancelBtn);
+}
+
+void SessionsWindow::onVerticalScrollBarValueChanged(int value) {
+  if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
+      m_autoLoadGroup->checkedAction()->data().toString() ==
+          QStringLiteral("auto_bottom")) {
+    QScrollBar *vBar = m_listView->verticalScrollBar();
+    if (value >= vBar->maximum() - 5 && !m_isRefreshing &&
+        !m_nextPageToken.isEmpty()) {
+      resumeRefresh();
+    }
+  }
+}
+
+void SessionsWindow::unmanageSelectedSessions() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
+
+  bool allManaged = true;
+  for (const QModelIndex &idx : selectedRows) {
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+    if (!m_managedModel || !m_managedModel->contains(id)) {
+      allManaged = false;
+      break;
+    }
+  }
+
+  if (allManaged) {
+    for (const QModelIndex &idx : selectedRows) {
+      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+      Q_EMIT deleteRequested(id);
+    }
+  }
+}
+
+void SessionsWindow::showContextMenu(const QPoint &pos) {
+  QModelIndex index = m_listView->indexAt(pos);
+  if (index.isValid()) {
+    QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+    if (!selectedRows.contains(index)) {
+      m_listView->selectionModel()->select(index,
+                                           QItemSelectionModel::ClearAndSelect |
+                                               QItemSelectionModel::Rows);
+      selectedRows = m_listView->selectionModel()->selectedRows();
+    }
+
+    QMenu menu;
+    QMenu *favMenu = menu.addMenu(
+        QIcon::fromTheme(QStringLiteral("emblem-favorite")), i18n("Favourite"));
+    QAction *toggleFavAction = favMenu->addAction(i18n("Toggle Favourite"));
+    connect(toggleFavAction, &QAction::triggered, this,
+            &SessionsWindow::toggleFavourite);
+    QAction *incFavAction = favMenu->addAction(i18n("Increase Rank"));
+    connect(incFavAction, &QAction::triggered, this,
+            &SessionsWindow::increaseFavouriteRank);
+    QAction *decFavAction = favMenu->addAction(i18n("Decrease Rank"));
+    connect(decFavAction, &QAction::triggered, this,
+            &SessionsWindow::decreaseFavouriteRank);
+    QAction *setFavAction = favMenu->addAction(i18n("Set Rank..."));
+    connect(setFavAction, &QAction::triggered, this,
+            &SessionsWindow::setFavouriteRank);
+
+    QAction *openSessionUrlAction = menu.addAction(i18n("Open Session URL"));
+    QAction *copySessionUrlAction = menu.addAction(i18n("Copy Session URL"));
+    menu.addSeparator();
+    QAction *openSourceUrlAction = menu.addAction(i18n("Open Source URL"));
+    QAction *copySourceUrlAction = menu.addAction(i18n("Copy Source URL"));
+
+    connect(openSessionUrlAction, &QAction::triggered, this,
+            &SessionsWindow::openSessionUrls);
+    connect(copySessionUrlAction, &QAction::triggered, this,
+            &SessionsWindow::copySessionUrls);
+    connect(openSourceUrlAction, &QAction::triggered, this,
+            &SessionsWindow::openSourceUrls);
+    connect(copySourceUrlAction, &QAction::triggered, this,
+            &SessionsWindow::copySourceUrls);
+
+    bool hasPr = false;
+    for (const QModelIndex &idx : selectedRows) {
+      if (!m_proxyModel->data(idx, SessionModel::PrUrlRole)
+               .toString()
+               .isEmpty()) {
+        hasPr = true;
+        break;
+      }
+    }
+
+    if (hasPr) {
+      menu.addSeparator();
+      QAction *openPrUrlAction = menu.addAction(i18n("Open PR URL"));
+      QAction *copyPrUrlAction = menu.addAction(i18n("Copy PR URL"));
+
+      connect(openPrUrlAction, &QAction::triggered, this,
+              &SessionsWindow::openPrUrls);
+      connect(copyPrUrlAction, &QAction::triggered, this,
+              &SessionsWindow::copyPrUrls);
+    }
+
+    menu.addSeparator();
+    QAction *reloadSelectedAction = menu.addAction(i18n("Reload Selected"));
+    connect(reloadSelectedAction, &QAction::triggered, this,
+            &SessionsWindow::reloadSelectedSessions);
+
+    menu.addSeparator();
+    QAction *copyIdAction = menu.addAction(i18n("Copy Jules ID"));
+    connect(copyIdAction, &QAction::triggered, this,
+            &SessionsWindow::copyJulesIds);
+
+    menu.addSeparator();
+
+    bool allManaged = true;
+    bool allUnmanaged = true;
+    for (const QModelIndex &idx : selectedRows) {
+      QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+      if (m_managedModel && m_managedModel->contains(id)) {
+        allUnmanaged = false;
+      } else {
+        allManaged = false;
+      }
+    }
+
+    QAction *watchAction = menu.addAction(
+        QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"));
+    if (!allUnmanaged) {
+      watchAction->setEnabled(false);
+    }
+    connect(watchAction, &QAction::triggered, [this, selectedRows]() {
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+        QJsonObject sessionData = m_model->getSession(sourceIndex.row());
+        Q_EMIT watchRequested(sessionData);
+      }
+    });
+
+    QAction *archiveAction = menu.addAction(
+        QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"));
+    if (!allManaged) {
+      archiveAction->setEnabled(false);
+    }
+    connect(archiveAction, &QAction::triggered, [this, selectedRows]() {
+      for (const QModelIndex &idx : selectedRows) {
+        QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+        Q_EMIT archiveRequested(id);
+      }
+    });
+
+    QAction *deleteAction =
+        menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
+                       i18n("Unmanage Session"));
+    if (!allManaged) {
+      deleteAction->setEnabled(false);
+    }
+    connect(deleteAction, &QAction::triggered, this,
+            &SessionsWindow::unmanageSelectedSessions);
+
+    menu.exec(m_listView->mapToGlobal(pos));
+  }
+}
+
+void SessionsWindow::onListViewDoubleClicked(const QModelIndex &index) {
+  QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+  QJsonObject rawData = m_model->getSession(sourceIndex.row());
+
+  SessionWindow *window = new SessionWindow(rawData, m_apiManager, this);
+  window->show();
+}
+
+void SessionsWindow::openSessionUrls() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QString id =
+        m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColId))
+            .toString();
+    QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
+    QDesktopServices::openUrl(QUrl(urlStr));
+  }
+  m_statusLabel->setText(i18n("Opened %1 session URLs", selectedRows.size()));
+}
+
+void SessionsWindow::copySessionUrls() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  QStringList urls;
+  for (const QModelIndex &idx : selectedRows) {
+    QString id =
+        m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColId))
+            .toString();
+    urls.append(QStringLiteral("https://jules.google.com/session/") + id);
+  }
+  QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
+  m_statusLabel->setText(i18n("Session URLs copied to clipboard."));
+}
+
+QString SessionsWindow::getSourceUrl(const QModelIndex &idx) const {
+  QString provider =
+      m_proxyModel->data(idx, SessionModel::ProviderRole).toString();
+  QString owner =
+      m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColOwner))
+          .toString();
+  QString repo =
+      m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColRepo))
+          .toString();
+  if (provider == QStringLiteral("github")) {
+    return QStringLiteral("https://github.com/") + owner + QLatin1Char('/') +
+           repo;
+  } else if (provider == QStringLiteral("gitlab")) {
+    return QStringLiteral("https://gitlab.com/") + owner + QLatin1Char('/') +
+           repo;
+  } else if (provider == QStringLiteral("bitbucket")) {
+    return QStringLiteral("https://bitbucket.org/") + owner + QLatin1Char('/') +
+           repo;
+  } else if (!provider.isEmpty()) {
+    return QStringLiteral("https://") + provider + QStringLiteral(".com/") +
+           owner + QLatin1Char('/') + repo;
+  }
+  return QString();
+}
+
+void SessionsWindow::openSourceUrls() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  int count = 0;
+  for (const QModelIndex &idx : selectedRows) {
+    QString urlStr = getSourceUrl(idx);
+    if (!urlStr.isEmpty()) {
+      QDesktopServices::openUrl(QUrl(urlStr));
+      count++;
+    }
+  }
+  m_statusLabel->setText(i18n("Opened %1 source URLs", count));
+}
+
+void SessionsWindow::copySourceUrls() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  QStringList urls;
+  for (const QModelIndex &idx : selectedRows) {
+    QString urlStr = getSourceUrl(idx);
+    if (!urlStr.isEmpty()) {
+      urls.append(urlStr);
+    }
+  }
+  if (!urls.isEmpty()) {
+    QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
+    m_statusLabel->setText(i18n("Source URLs copied to clipboard."));
+  } else {
+    m_statusLabel->setText(i18n("No valid source URLs to copy."));
+  }
+}
+
+void SessionsWindow::openPrUrls() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  int count = 0;
+  for (const QModelIndex &idx : selectedRows) {
+    QString prUrl = m_proxyModel->data(idx, SessionModel::PrUrlRole).toString();
+    if (!prUrl.isEmpty()) {
+      QDesktopServices::openUrl(QUrl(prUrl));
+      count++;
+    }
+  }
+  m_statusLabel->setText(i18n("Opened %1 PR URLs", count));
+}
+
+void SessionsWindow::copyPrUrls() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  QStringList urls;
+  for (const QModelIndex &idx : selectedRows) {
+    QString prUrl = m_proxyModel->data(idx, SessionModel::PrUrlRole).toString();
+    if (!prUrl.isEmpty()) {
+      urls.append(prUrl);
+    }
+  }
+  QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
+  m_statusLabel->setText(i18n("PR URLs copied to clipboard."));
+}
+
+void SessionsWindow::reloadSelectedSessions() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+    m_apiManager->reloadSession(id);
+  }
+  m_statusLabel->setText(i18n("Reloading %1 sessions...", selectedRows.size()));
+}
+
+void SessionsWindow::copyJulesIds() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  QStringList ids;
+  for (const QModelIndex &idx : selectedRows) {
+    ids.append(m_proxyModel->data(idx, SessionModel::IdRole).toString());
+  }
+  QGuiApplication::clipboard()->setText(ids.join(QLatin1Char('\n')));
+  m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
 }
 
 void SessionsWindow::toggleFavourite() {
