@@ -161,7 +161,7 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColName) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      bool isFav = favVal.toBool() || (favVal.isDouble() && favVal.toInt() > 0);
+      bool isFav = favVal.isDouble() && favVal.toInt() > 0;
       bool isPriv = source.value(QStringLiteral("isPrivate")).toBool();
 
       if (isFav && isPriv) {
@@ -195,9 +195,7 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       return source;
     case FavouriteRole: {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      if (favVal.isBool()) {
-        return favVal.toBool() ? QVariant(1) : QVariant();
-      } else if (favVal.isDouble()) {
+      if (favVal.isDouble()) {
         return QVariant(favVal.toInt());
       }
       return QVariant();
@@ -258,9 +256,7 @@ void SourceModel::toggleFavourite(const QString &id) {
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
-      if (favVal.isBool()) {
-        currentRank = favVal.toBool() ? 1 : 0;
-      } else if (favVal.isDouble()) {
+      if (favVal.isDouble()) {
         currentRank = favVal.toInt();
       }
       if (currentRank > 0) {
@@ -307,9 +303,7 @@ void SourceModel::increaseFavouriteRank(const QString &id) {
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
-      if (favVal.isBool()) {
-        currentRank = favVal.toBool() ? 1 : 0;
-      } else if (favVal.isDouble()) {
+      if (favVal.isDouble()) {
         currentRank = favVal.toInt();
       }
       source[QStringLiteral("local_favourite")] = currentRank + 1;
@@ -333,9 +327,7 @@ void SourceModel::decreaseFavouriteRank(const QString &id) {
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
-      if (favVal.isBool()) {
-        currentRank = favVal.toBool() ? 1 : 0;
-      } else if (favVal.isDouble()) {
+      if (favVal.isDouble()) {
         currentRank = favVal.toInt();
       }
       int newRank = currentRank - 1;
@@ -361,10 +353,6 @@ void SourceModel::setSources(const QJsonArray &sources) {
 
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
-    QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-    if (favVal.isBool()) {
-      qWarning() << "Deprecated boolean local_favourite found in source data";
-    }
 
     QString id = source.value(QStringLiteral("id")).toString();
     if (id.isEmpty())
