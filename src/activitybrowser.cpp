@@ -74,46 +74,7 @@ void ActivityBrowser::renderHtml() {
                      "#2c3e50; margin-bottom: 10px; }") +
       QStringLiteral("</style></head><body>");
 
-  if (!m_prompt.isEmpty()) {
-    html +=
-        QStringLiteral("<div class='prompt'>") + i18n("Prompt") +
-        QStringLiteral("</div><div style='margin-bottom: 10px; padding: 10px; "
-                       "background-color: #f0f0f0; border-radius: 5px;'>");
-
-    bool promptExpanded =
-        m_expandedItems.contains(QStringLiteral("prompt_view"));
-    QStringList lines = m_prompt.split(QLatin1Char('\n'));
-
-    if (!promptExpanded && lines.size() > 5) {
-      html +=
-          QStringLiteral(
-              "<div style='white-space: pre-wrap; font-family: monospace;'>") +
-          lines.mid(0, 5).join(QLatin1Char('\n')).toHtmlEscaped() +
-          QStringLiteral("\n...</div>");
-      html +=
-          QStringLiteral("<div style='margin-top: 10px;'><a "
-                         "href='expand:prompt_view' style='font-size: 0.9em; "
-                         "color: #3498db; text-decoration: none;'>") +
-          i18n("Click to expand prompt") + QStringLiteral("</a></div>");
-    } else if (promptExpanded && lines.size() > 5) {
-      html +=
-          QStringLiteral(
-              "<div style='white-space: pre-wrap; font-family: monospace;'>") +
-          m_prompt.toHtmlEscaped() + QStringLiteral("</div>");
-      html +=
-          QStringLiteral("<div style='margin-top: 10px;'><a "
-                         "href='collapse:prompt_view' style='font-size: 0.9em; "
-                         "color: #3498db; text-decoration: none;'>") +
-          i18n("Click to collapse prompt") + QStringLiteral("</a></div>");
-    } else {
-      html +=
-          QStringLiteral(
-              "<div style='white-space: pre-wrap; font-family: monospace;'>") +
-          m_prompt.toHtmlEscaped() + QStringLiteral("</div>");
-    }
-
-    html += QStringLiteral("</div><hr>");
-  }
+  html += generatePromptHtml();
 
   if (m_activities.isEmpty()) {
     html += QStringLiteral("<p><i>") + i18n("No activity feed available.") +
@@ -121,37 +82,8 @@ void ActivityBrowser::renderHtml() {
   } else {
     QDateTime lastTime;
 
-    // Deduplication logic
-    QJsonArray dedupedActivities;
     QList<int> repeatCounts;
-
-    for (int i = 0; i < m_activities.size(); ++i) {
-      QJsonObject current = m_activities[i].toObject();
-      if (dedupedActivities.isEmpty()) {
-        dedupedActivities.append(current);
-        repeatCounts.append(1);
-      } else {
-        QJsonObject previous = dedupedActivities.last().toObject();
-
-        // Compare without dynamic fields
-        QJsonObject currComp = current;
-        currComp.remove(QStringLiteral("id"));
-        currComp.remove(QStringLiteral("name"));
-        currComp.remove(QStringLiteral("createTime"));
-
-        QJsonObject prevComp = previous;
-        prevComp.remove(QStringLiteral("id"));
-        prevComp.remove(QStringLiteral("name"));
-        prevComp.remove(QStringLiteral("createTime"));
-
-        if (currComp == prevComp) {
-          repeatCounts.last()++;
-        } else {
-          dedupedActivities.append(current);
-          repeatCounts.append(1);
-        }
-      }
-    }
+    QJsonArray dedupedActivities = deduplicateActivities(repeatCounts);
 
     m_activityJsons.clear();
 
@@ -253,6 +185,85 @@ void ActivityBrowser::renderHtml() {
 
   html += QStringLiteral("</body></html>");
   setHtml(html);
+}
+
+QString ActivityBrowser::generatePromptHtml() const {
+  if (m_prompt.isEmpty()) {
+    return QString();
+  }
+
+  QString html =
+      QStringLiteral("<div class='prompt'>") + i18n("Prompt") +
+      QStringLiteral("</div><div style='margin-bottom: 10px; padding: 10px; "
+                     "background-color: #f0f0f0; border-radius: 5px;'>");
+
+  bool promptExpanded = m_expandedItems.contains(QStringLiteral("prompt_view"));
+  QStringList lines = m_prompt.split(QLatin1Char('\n'));
+
+  if (!promptExpanded && lines.size() > 5) {
+    html +=
+        QStringLiteral(
+            "<div style='white-space: pre-wrap; font-family: monospace;'>") +
+        lines.mid(0, 5).join(QLatin1Char('\n')).toHtmlEscaped() +
+        QStringLiteral("\n...</div>");
+    html += QStringLiteral("<div style='margin-top: 10px;'><a "
+                           "href='expand:prompt_view' style='font-size: 0.9em; "
+                           "color: #3498db; text-decoration: none;'>") +
+            i18n("Click to expand prompt") + QStringLiteral("</a></div>");
+  } else if (promptExpanded && lines.size() > 5) {
+    html +=
+        QStringLiteral(
+            "<div style='white-space: pre-wrap; font-family: monospace;'>") +
+        m_prompt.toHtmlEscaped() + QStringLiteral("</div>");
+    html +=
+        QStringLiteral("<div style='margin-top: 10px;'><a "
+                       "href='collapse:prompt_view' style='font-size: 0.9em; "
+                       "color: #3498db; text-decoration: none;'>") +
+        i18n("Click to collapse prompt") + QStringLiteral("</a></div>");
+  } else {
+    html +=
+        QStringLiteral(
+            "<div style='white-space: pre-wrap; font-family: monospace;'>") +
+        m_prompt.toHtmlEscaped() + QStringLiteral("</div>");
+  }
+
+  html += QStringLiteral("</div><hr>");
+  return html;
+}
+
+QJsonArray
+ActivityBrowser::deduplicateActivities(QList<int> &repeatCounts) const {
+  QJsonArray dedupedActivities;
+
+  for (int i = 0; i < m_activities.size(); ++i) {
+    QJsonObject current = m_activities[i].toObject();
+    if (dedupedActivities.isEmpty()) {
+      dedupedActivities.append(current);
+      repeatCounts.append(1);
+    } else {
+      QJsonObject previous = dedupedActivities.last().toObject();
+
+      // Compare without dynamic fields
+      QJsonObject currComp = current;
+      currComp.remove(QStringLiteral("id"));
+      currComp.remove(QStringLiteral("name"));
+      currComp.remove(QStringLiteral("createTime"));
+
+      QJsonObject prevComp = previous;
+      prevComp.remove(QStringLiteral("id"));
+      prevComp.remove(QStringLiteral("name"));
+      prevComp.remove(QStringLiteral("createTime"));
+
+      if (currComp == prevComp) {
+        repeatCounts.last()++;
+      } else {
+        dedupedActivities.append(current);
+        repeatCounts.append(1);
+      }
+    }
+  }
+
+  return dedupedActivities;
 }
 
 QString ActivityBrowser::generateRawJsonHtml(const QJsonObject &activity,
