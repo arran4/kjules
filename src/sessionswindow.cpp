@@ -167,10 +167,7 @@ void SessionsWindow::setupUi() {
 
   m_listView = new QTreeView(this);
   m_listView->setModel(m_proxyModel);
-  // Remove SessionDelegate if it's meant for a list view, or adjust it
-  // m_listView->setItemDelegate(new SessionDelegate(this));
   m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
-  // Set some treeview properties
 
   setupListView();
 
@@ -353,26 +350,26 @@ void SessionsWindow::setupActions() {
 
   m_autoLoadGroup = new QActionGroup(this);
 
-  QAction *loadManualAction = new QAction(i18n("Manual Loading"), this);
+  QAction *loadManualAction = new QAction(i18n("Manual"), this);
   loadManualAction->setCheckable(true);
   loadManualAction->setChecked(true);
   loadManualAction->setData(QStringLiteral("manual"));
   m_autoLoadGroup->addAction(loadManualAction);
-  actionCollection()->addAction(QStringLiteral("autoload_manual"),
+  actionCollection()->addAction(QStringLiteral("auto_load_manual"),
                                 loadManualAction);
 
-  QAction *loadAllAction = new QAction(i18n("Auto Load All Pages"), this);
+  QAction *loadAllAction = new QAction(i18n("Load All On Refresh"), this);
   loadAllAction->setCheckable(true);
   loadAllAction->setData(QStringLiteral("load_all"));
   m_autoLoadGroup->addAction(loadAllAction);
-  actionCollection()->addAction(QStringLiteral("autoload_all"), loadAllAction);
+  actionCollection()->addAction(QStringLiteral("auto_load_all"), loadAllAction);
 
   QAction *loadBottomAction =
-      new QAction(i18n("Auto Load on Scroll to Bottom"), this);
+      new QAction(i18n("Auto-Load when at bottom"), this);
   loadBottomAction->setCheckable(true);
   loadBottomAction->setData(QStringLiteral("auto_bottom"));
   m_autoLoadGroup->addAction(loadBottomAction);
-  actionCollection()->addAction(QStringLiteral("autoload_bottom"),
+  actionCollection()->addAction(QStringLiteral("auto_load_bottom"),
                                 loadBottomAction);
 
   KConfigGroup config(KSharedConfig::openConfig(),
@@ -643,9 +640,7 @@ void SessionsWindow::onListViewDoubleClicked(const QModelIndex &index) {
 void SessionsWindow::openSessionUrls() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   for (const QModelIndex &idx : selectedRows) {
-    QString id =
-        m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColId))
-            .toString();
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
     QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
     QDesktopServices::openUrl(QUrl(urlStr));
   }
@@ -656,9 +651,7 @@ void SessionsWindow::copySessionUrls() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   QStringList urls;
   for (const QModelIndex &idx : selectedRows) {
-    QString id =
-        m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColId))
-            .toString();
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
     urls.append(QStringLiteral("https://jules.google.com/session/") + id);
   }
   QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
@@ -934,9 +927,7 @@ void SessionsWindow::onListViewDoubleClicked(const QModelIndex &index) {
 void SessionsWindow::openSessionUrls() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   for (const QModelIndex &idx : selectedRows) {
-    QString id =
-        m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColId))
-            .toString();
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
     QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
     QDesktopServices::openUrl(QUrl(urlStr));
   }
@@ -947,9 +938,7 @@ void SessionsWindow::copySessionUrls() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   QStringList urls;
   for (const QModelIndex &idx : selectedRows) {
-    QString id =
-        m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColId))
-            .toString();
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
     urls.append(QStringLiteral("https://jules.google.com/session/") + id);
   }
   QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
