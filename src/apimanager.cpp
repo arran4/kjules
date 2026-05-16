@@ -72,16 +72,6 @@ void APIManager::saveApiKeyToWallet(const QString &key) {
   }
 }
 
-void APIManager::loadGithubTokenFromWallet() {
-  if (m_wallet && m_wallet->isOpen()) {
-    QString token;
-    if (m_wallet->readPassword(QStringLiteral("github_token"), token) == 0) {
-      m_githubToken = token;
-      Q_EMIT logMessage(QStringLiteral("GitHub Token loaded from KWallet"));
-    }
-  }
-}
-
 void APIManager::saveGithubTokenToWallet(const QString &token) {
   if (m_wallet && m_wallet->isOpen()) {
     m_wallet->writePassword(QStringLiteral("github_token"), token);
