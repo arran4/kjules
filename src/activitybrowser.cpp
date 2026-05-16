@@ -234,32 +234,25 @@ QString ActivityBrowser::generatePromptHtml() const {
 QJsonArray
 ActivityBrowser::deduplicateActivities(QList<int> &repeatCounts) const {
   QJsonArray dedupedActivities;
+  QJsonObject lastComp;
 
-  for (int i = 0; i < m_activities.size(); ++i) {
-    QJsonObject current = m_activities[i].toObject();
+  for (const QJsonValue &value : std::as_const(m_activities)) {
+    QJsonObject current = value.toObject();
+    QJsonObject currComp = current;
+    currComp.remove(QStringLiteral("id"));
+    currComp.remove(QStringLiteral("name"));
+    currComp.remove(QStringLiteral("createTime"));
+
     if (dedupedActivities.isEmpty()) {
       dedupedActivities.append(current);
       repeatCounts.append(1);
+      lastComp = currComp;
+    } else if (currComp == lastComp) {
+      repeatCounts.last()++;
     } else {
-      QJsonObject previous = dedupedActivities.last().toObject();
-
-      // Compare without dynamic fields
-      QJsonObject currComp = current;
-      currComp.remove(QStringLiteral("id"));
-      currComp.remove(QStringLiteral("name"));
-      currComp.remove(QStringLiteral("createTime"));
-
-      QJsonObject prevComp = previous;
-      prevComp.remove(QStringLiteral("id"));
-      prevComp.remove(QStringLiteral("name"));
-      prevComp.remove(QStringLiteral("createTime"));
-
-      if (currComp == prevComp) {
-        repeatCounts.last()++;
-      } else {
-        dedupedActivities.append(current);
-        repeatCounts.append(1);
-      }
+      dedupedActivities.append(current);
+      repeatCounts.append(1);
+      lastComp = currComp;
     }
   }
 
