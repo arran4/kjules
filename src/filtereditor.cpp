@@ -1,6 +1,7 @@
 #include "filtereditor.h"
 #include "filterparser.h"
 
+#include <QAction>
 #include <QContextMenuEvent>
 #include <QDebug>
 #include <QDialog>
