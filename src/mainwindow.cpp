@@ -1477,12 +1477,11 @@ void MainWindow::setupUi() {
                               i18np("Remove this task from the queue?",
                                     "Remove these tasks from the queue?",
                                     selectedRows.size())) == QMessageBox::Yes) {
-      QList<int> rowsToDelete;
+      QSet<int> uniqueRows;
       for (const QModelIndex &idx : selectedRows) {
-        if (!rowsToDelete.contains(idx.row())) {
-          rowsToDelete.append(idx.row());
-        }
+        uniqueRows.insert(idx.row());
       }
+      QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
       std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
       for (int row : rowsToDelete) {
@@ -1526,12 +1525,11 @@ void MainWindow::setupUi() {
             i18np("Remove this task from the holding queue?",
                   "Remove these tasks from the holding queue?",
                   selectedRows.size())) == QMessageBox::Yes) {
-      QList<int> rowsToDelete;
+      QSet<int> uniqueRows;
       for (const QModelIndex &idx : selectedRows) {
-        if (!rowsToDelete.contains(idx.row())) {
-          rowsToDelete.append(idx.row());
-        }
+        uniqueRows.insert(idx.row());
       }
+      QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
       std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
       for (int row : rowsToDelete) {
@@ -5220,15 +5218,14 @@ void MainWindow::deleteFollowingSessions() {
       m_sessionView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QList<int> rowsToDelete;
+  QSet<int> uniqueRows;
   const QSortFilterProxyModel *proxy =
       qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
   for (const QModelIndex &idx : selectedRows) {
     QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    if (!rowsToDelete.contains(mappedIdx.row())) {
-      rowsToDelete.append(mappedIdx.row());
-    }
+    uniqueRows.insert(mappedIdx.row());
   }
+  QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
   std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
   for (int row : rowsToDelete) {
@@ -5267,15 +5264,14 @@ void MainWindow::deleteArchiveSessions() {
       m_archiveView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QList<int> rowsToDelete;
+  QSet<int> uniqueRows;
   const QSortFilterProxyModel *proxy =
       qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
   for (const QModelIndex &idx : selectedRows) {
     QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    if (!rowsToDelete.contains(mappedIdx.row())) {
-      rowsToDelete.append(mappedIdx.row());
-    }
+    uniqueRows.insert(mappedIdx.row());
   }
+  QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
   std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
   for (int row : rowsToDelete) {
@@ -5294,12 +5290,11 @@ void MainWindow::deleteDrafts() {
           i18np("Are you sure?",
                 "Are you sure you want to delete these drafts?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QList<int> rowsToDelete;
+    QSet<int> uniqueRows;
     for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToDelete.contains(idx.row())) {
-        rowsToDelete.append(idx.row());
-      }
+      uniqueRows.insert(idx.row());
     }
+    QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
     std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
     for (int row : rowsToDelete) {
@@ -5319,12 +5314,11 @@ void MainWindow::deleteTemplates() {
           i18np("Are you sure you want to delete this template?",
                 "Are you sure you want to delete these templates?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QList<int> rowsToDelete;
+    QSet<int> uniqueRows;
     for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToDelete.contains(idx.row())) {
-        rowsToDelete.append(idx.row());
-      }
+      uniqueRows.insert(idx.row());
     }
+    QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
     std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
     for (int row : rowsToDelete) {
@@ -5344,12 +5338,11 @@ void MainWindow::deleteErrors() {
           i18np("Are you sure?",
                 "Are you sure you want to delete these errors?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QList<int> rowsToDelete;
+    QSet<int> uniqueRows;
     for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToDelete.contains(idx.row())) {
-        rowsToDelete.append(idx.row());
-      }
+      uniqueRows.insert(idx.row());
     }
+    QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
     std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
     for (int row : rowsToDelete) {
