@@ -24,8 +24,6 @@ public:
                 int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
-  void addError(const QJsonObject &request, const QJsonObject &response,
-                const QString &message, const QString &httpDetails = QString());
   void addErrorObj(const QJsonObject &errorObj);
   void removeError(int row);
   QJsonObject getError(int row) const;
