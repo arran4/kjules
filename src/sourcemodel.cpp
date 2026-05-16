@@ -196,7 +196,10 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     case FavouriteRole: {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       if (favVal.isDouble()) {
-        return QVariant(favVal.toInt());
+        int rank = favVal.toInt();
+        if (rank > 0) {
+          return QVariant(rank);
+        }
       }
       return QVariant();
     }
