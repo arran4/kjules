@@ -3,6 +3,7 @@
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
 #include "sessionwindow.h"
+#include "utils.h"
 
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -311,7 +312,10 @@ void SessionsWindow::setupUi() {
                       QString urlStr =
                           QStringLiteral("https://jules.google.com/session/") +
                           id;
-                      QDesktopServices::openUrl(QUrl(urlStr));
+                      QUrl u(urlStr);
+                      if (Utils::isSafeUrl(u)) {
+                        QDesktopServices::openUrl(u);
+                      }
                     }
                     m_statusLabel->setText(
                         i18n("Opened %1 session URLs", selectedRows.size()));
@@ -368,8 +372,11 @@ void SessionsWindow::setupUi() {
                     for (const QModelIndex &idx : selectedRows) {
                       QString urlStr = getSourceUrl(idx);
                       if (!urlStr.isEmpty()) {
-                        QDesktopServices::openUrl(QUrl(urlStr));
-                        count++;
+                        QUrl u(urlStr);
+                        if (Utils::isSafeUrl(u)) {
+                          QDesktopServices::openUrl(u);
+                          count++;
+                        }
                       }
                     }
                     m_statusLabel->setText(
@@ -419,8 +426,11 @@ void SessionsWindow::setupUi() {
                             m_proxyModel->data(idx, SessionModel::PrUrlRole)
                                 .toString();
                         if (!prUrl.isEmpty()) {
-                          QDesktopServices::openUrl(QUrl(prUrl));
-                          count++;
+                          QUrl u(prUrl);
+                          if (Utils::isSafeUrl(u)) {
+                            QDesktopServices::openUrl(u);
+                            count++;
+                          }
                         }
                       }
                       m_statusLabel->setText(i18n("Opened %1 PR URLs", count));

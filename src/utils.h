@@ -2,8 +2,17 @@
 
 #include <KLocalizedString>
 #include <QString>
+#include <QUrl>
 
 namespace Utils {
+
+inline bool isSafeUrl(const QUrl &url) {
+  if (!url.isValid()) {
+    return false;
+  }
+  QString scheme = url.scheme().toLower();
+  return scheme == QStringLiteral("http") || scheme == QStringLiteral("https");
+}
 
 inline QString formatDuration(qint64 secondsLeft) {
   if (secondsLeft >= 3600) {

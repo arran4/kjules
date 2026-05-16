@@ -2,6 +2,7 @@
 
 #include "activitybrowser.h"
 #include "apimanager.h"
+#include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -170,8 +171,10 @@ void SessionWindow::setupActions() {
   QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
   connect(openJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
-    QDesktopServices::openUrl(
-        QUrl(QStringLiteral("https://jules.google.com/session/") + id));
+    QUrl u(QStringLiteral("https://jules.google.com/session/") + id);
+    if (Utils::isSafeUrl(u)) {
+      QDesktopServices::openUrl(u);
+    }
   });
   actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
@@ -197,8 +200,12 @@ void SessionWindow::setupActions() {
 
   if (!prUrlStr.isEmpty()) {
     QAction *openPrAction = new QAction(i18n("Open Pull Request URL"), this);
-    connect(openPrAction, &QAction::triggered, this,
-            [prUrlStr]() { QDesktopServices::openUrl(QUrl(prUrlStr)); });
+    connect(openPrAction, &QAction::triggered, this, [prUrlStr]() {
+      QUrl u(prUrlStr);
+      if (Utils::isSafeUrl(u)) {
+        QDesktopServices::openUrl(u);
+      }
+    });
     actionCollection()->addAction(QStringLiteral("open_pr"), openPrAction);
 
     QAction *copyPrAction = new QAction(i18n("Copy Pull Request URL"), this);
@@ -223,8 +230,12 @@ void SessionWindow::setupActions() {
                             QStringLiteral("/tree/") + branchName;
 
         QAction *openBranchAction = new QAction(i18n("Open Branch URL"), this);
-        connect(openBranchAction, &QAction::triggered, this,
-                [branchUrl]() { QDesktopServices::openUrl(QUrl(branchUrl)); });
+        connect(openBranchAction, &QAction::triggered, this, [branchUrl]() {
+          QUrl u(branchUrl);
+          if (Utils::isSafeUrl(u)) {
+            QDesktopServices::openUrl(u);
+          }
+        });
         actionCollection()->addAction(QStringLiteral("open_branch"),
                                       openBranchAction);
 
