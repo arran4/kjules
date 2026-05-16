@@ -2,6 +2,7 @@
 
 #include "activitybrowser.h"
 #include "apimanager.h"
+#include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -26,7 +27,6 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
-#include "utils.h"
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, bool isManaged,

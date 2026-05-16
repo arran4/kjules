@@ -1,9 +1,9 @@
 #pragma once
 
 #include <KLocalizedString>
+#include <QDesktopServices>
 #include <QString>
 #include <QUrl>
-#include <QDesktopServices>
 
 namespace Utils {
 
@@ -22,7 +22,8 @@ inline QString formatDuration(qint64 secondsLeft) {
 }
 
 inline bool openUrl(const QUrl &url) {
-  if (!url.isValid()) return false;
+  if (!url.isValid())
+    return false;
   const QString scheme = url.scheme().toLower();
   if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")) {
     return QDesktopServices::openUrl(url);

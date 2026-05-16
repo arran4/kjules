@@ -1,6 +1,7 @@
 #include "activitybrowser.h"
 #include "apimanager.h"
 
+#include "utils.h"
 #include <KLocalizedString>
 #include <QApplication>
 #include <QBuffer>
@@ -16,7 +17,6 @@
 #include <QMenu>
 #include <QScreen>
 #include <QVBoxLayout>
-#include "utils.h"
 
 ActivityBrowser::ActivityBrowser(QWidget *parent) : QTextBrowser(parent) {
   setOpenLinks(false);

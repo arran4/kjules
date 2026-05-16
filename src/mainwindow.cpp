@@ -504,9 +504,8 @@ void MainWindow::setupUi() {
                 github.value(QStringLiteral("homepage")).toString();
             if (!homepage.isEmpty()) {
               QAction *openAction = githubMenu->addAction(i18n("Open Website"));
-              connect(openAction, &QAction::triggered, [homepage]() {
-                Utils::openUrl(QUrl(homepage));
-              });
+              connect(openAction, &QAction::triggered,
+                      [homepage]() { Utils::openUrl(QUrl(homepage)); });
               QAction *copyAction =
                   githubMenu->addAction(i18n("Copy Website URL"));
               connect(copyAction, &QAction::triggered, [this, homepage]() {

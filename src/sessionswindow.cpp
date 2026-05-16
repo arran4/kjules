@@ -4,6 +4,7 @@
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 
+#include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -33,7 +34,6 @@
 #include <QTreeView>
 #include <QUrl>
 #include <QVBoxLayout>
-#include "utils.h"
 
 SessionsProxyModel::SessionsProxyModel(QObject *parent)
     : QSortFilterProxyModel(parent) {}
