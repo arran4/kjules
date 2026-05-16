@@ -47,8 +47,6 @@ QString APIManager::apiKey() const { return m_apiKey; }
 
 void APIManager::setBaseUrl(const QString &url) { m_baseUrl = url; }
 
-QString APIManager::baseUrl() const { return m_baseUrl; }
-
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
   m_githubTokenFailed = false;

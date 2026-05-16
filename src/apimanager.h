@@ -31,7 +31,6 @@ public:
   QString githubToken() const;
 
   void setBaseUrl(const QString &url);
-  QString baseUrl() const;
 
   void loadApiKeyFromWallet();
   void saveApiKeyToWallet(const QString &key);
