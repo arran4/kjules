@@ -160,8 +160,7 @@ int BlockedTreeModel::totalBlockedItemsCount() const {
   return count;
 }
 
-int BlockedTreeModel::columnCount(const QModelIndex &parent) const {
-  Q_UNUSED(parent);
+int BlockedTreeModel::columnCount(const QModelIndex & /*parent*/) const {
   return 1;
 }
 
