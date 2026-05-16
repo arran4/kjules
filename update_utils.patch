@@ -1,0 +1,25 @@
+--- src/utils.h
++++ src/utils.h
+@@ -2,6 +2,8 @@
+
+ #include <KLocalizedString>
+ #include <QString>
++#include <QUrl>
++#include <QDesktopServices>
+
+ namespace Utils {
+
+@@ -19,4 +21,13 @@
+   }
+ }
+
++inline bool openUrl(const QUrl &url) {
++  if (!url.isValid()) return false;
++  const QString scheme = url.scheme().toLower();
++  if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")) {
++    return QDesktopServices::openUrl(url);
++  }
++  return false;
++}
++
+ } // namespace Utils

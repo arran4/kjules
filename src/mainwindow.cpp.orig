@@ -4820,7 +4820,7 @@ void MainWindow::backupData() {
     }
 
     if (dialog.openDirectory()) {
-      QDesktopServices::openUrl(QUrl::fromLocalFile(destDirStr));
+      Utils::openUrl(QUrl::fromLocalFile(destDirStr));
     }
   } else {
     updateStatus(i18n("No files to backup."));

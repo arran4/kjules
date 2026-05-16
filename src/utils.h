@@ -2,6 +2,8 @@
 
 #include <KLocalizedString>
 #include <QString>
+#include <QUrl>
+#include <QDesktopServices>
 
 namespace Utils {
 
@@ -17,6 +19,15 @@ inline QString formatDuration(qint64 secondsLeft) {
   } else {
     return i18np("1 second", "%1 seconds", secondsLeft);
   }
+}
+
+inline bool openUrl(const QUrl &url) {
+  if (!url.isValid()) return false;
+  const QString scheme = url.scheme().toLower();
+  if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")) {
+    return QDesktopServices::openUrl(url);
+  }
+  return false;
 }
 
 } // namespace Utils

@@ -26,7 +26,6 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
-#include "utils.h"
 
 SessionWindow::SessionWindow(const QJsonObject &sessionData,
                              APIManager *apiManager, bool isManaged,

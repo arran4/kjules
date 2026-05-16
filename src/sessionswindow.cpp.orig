@@ -33,7 +33,6 @@
 #include <QTreeView>
 #include <QUrl>
 #include <QVBoxLayout>
-#include "utils.h"
 
 SessionsProxyModel::SessionsProxyModel(QObject *parent)
     : QSortFilterProxyModel(parent) {}
