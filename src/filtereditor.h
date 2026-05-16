@@ -21,8 +21,6 @@ public:
   explicit FilterEditor(QWidget *parent = nullptr);
   QString filterText() const;
   QLineEdit *lineEdit() const;
-  void toggleFormulaBuilder();
-  void setFormulaBuilderVisible(bool visible);
   void setFilterText(const QString &text);
   void setCompletions(const QMap<QString, QStringList> &completions);
   void setSimplifiedMode(bool simplified);
@@ -55,8 +53,6 @@ private:
   QStandardItemModel *m_treeModel;
   QListWidget *m_paletteList;
   bool m_updating;
-  bool m_builderForceHidden;
-  QToolButton *m_formulaToggleBtn;
   QMap<QString, QStringList> m_completions;
 };
 

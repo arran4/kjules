@@ -258,7 +258,7 @@ QString FilterEditor::applyQuickFilter(const QString &currentFilter,
 }
 
 FilterEditor::FilterEditor(QWidget *parent)
-    : QWidget(parent), m_updating(false), m_builderForceHidden(true) {
+    : QWidget(parent), m_updating(false) {
   QVBoxLayout *layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(2);
@@ -398,35 +398,15 @@ void FilterEditor::onTextChanged(const QString &text) {
 
   m_updating = true;
   if (text.startsWith(QLatin1String("="))) {
-    m_builderForceHidden = false;
-    if (m_formulaToggleBtn)
-      m_formulaToggleBtn->setChecked(true);
     m_treeView->parentWidget()->setVisible(true);
     updateTreeFromText();
   } else {
-    m_builderForceHidden = true;
-    if (m_formulaToggleBtn)
-      m_formulaToggleBtn->setChecked(false);
     m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
   m_updating = false;
 
   Q_EMIT filterChanged(text);
-}
-
-void FilterEditor::toggleFormulaBuilder() {
-  setFormulaBuilderVisible(m_builderForceHidden);
-}
-
-void FilterEditor::setFormulaBuilderVisible(bool visible) {
-  m_builderForceHidden = !visible;
-  if (m_formulaToggleBtn) {
-    m_formulaToggleBtn->setChecked(visible);
-  }
-  if (m_lineEdit->text().startsWith(QLatin1String("="))) {
-    m_treeView->parentWidget()->setVisible(visible);
-  }
 }
 
 void FilterEditor::updateTreeFromText() {
