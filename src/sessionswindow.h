@@ -15,9 +15,7 @@ class QPushButton;
 class QJsonArray;
 class QComboBox;
 class QLineEdit;
-class QVBoxLayout;
-class QTabWidget;
-class QVBoxLayout;
+class QLayout;
 class QTabWidget;
 
 class SessionsProxyModel : public QSortFilterProxyModel {
@@ -82,29 +80,12 @@ private Q_SLOTS:
   void copyJulesIds();
   void onVerticalScrollBarValueChanged(int value);
   void onListViewDoubleClicked(const QModelIndex &index);
-  void showContextMenu(const QPoint &pos);
-  void unmanageSelectedSessions();
-  void openSessionUrls();
-  void copySessionUrls();
-  void openSourceUrls();
-  void copySourceUrls();
-  void openPrUrls();
-  void copyPrUrls();
-  void reloadSelectedSessions();
-  void copyJulesIds();
-  void onVerticalScrollBarValueChanged(int value);
-  void onListViewDoubleClicked(const QModelIndex &index);
 
 private:
   void applyFavouriteAction(std::function<void(const QString &)> action);
 
   void setupUi();
-  void setupFilters(QVBoxLayout *layout);
-  void setupListView();
-  void setupActions();
-  void setupStatusBar();
-  QString getSourceUrl(const QModelIndex &idx) const;
-  void setupFilters(QVBoxLayout *layout);
+  void setupFilters(QLayout *layout);
   void setupListView();
   void setupActions();
   void setupStatusBar();
