@@ -65,8 +65,6 @@ public:
   void updateItem(int index, const QueueItem &item);
   QueueItem dequeue();
   QueueItem peek() const;
-  void requeueFailed(const QueueItem &item, const QString &errorMsg,
-                     const QString &rawResponse = QString());
   void requeueTransient(const QueueItem &item);
   void prependWaitItem(const QueueItem &item);
   void recordRun();

@@ -470,22 +470,6 @@ QueueItem QueueModel::peek() const {
   return m_items.first();
 }
 
-void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg,
-                               const QString &rawResponse) {
-  // Usually we want failed items to stay at the front of the queue to be
-  // retried
-  QueueItem updatedItem = item;
-  updatedItem.errorCount++;
-  updatedItem.lastError = errorMsg;
-  updatedItem.lastResponse = rawResponse;
-  updatedItem.lastTry = QDateTime::currentDateTimeUtc();
-
-  beginInsertRows(QModelIndex(), 0, 0);
-  m_items.prepend(updatedItem);
-  endInsertRows();
-  save();
-}
-
 void QueueModel::requeueTransient(const QueueItem &item) {
   // Place the item back at the front without recording an error
   beginInsertRows(QModelIndex(), 0, 0);
