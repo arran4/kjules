@@ -897,19 +897,52 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       QIcon::fromTheme(QStringLiteral("format-list-ordered")),
       tr("Ordered List"));
   actionOrdered->setCheckable(true);
+  formatBar->addSeparator();
+  QAction *actionHeader = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("format-text-heading")), tr("Heading"));
+  QAction *actionCode = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("code-context")), tr("Code Block"));
+  QAction *actionTable = formatBar->addAction(
+      QIcon::fromTheme(QStringLiteral("insert-table")), tr("Table"));
 
   connect(actionBold, &QAction::triggered, this, [this](bool checked) {
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      QTextCursor cursor = m_promptEdit->textCursor();
+      cursor.insertText(QStringLiteral("**") + cursor.selectedText() +
+                        QStringLiteral("**"));
+      return;
+    }
     m_promptEdit->setFontWeight(checked ? QFont::Bold : QFont::Normal);
   });
-  connect(actionItalic, &QAction::triggered, this,
-          [this](bool checked) { m_promptEdit->setFontItalic(checked); });
+  connect(actionItalic, &QAction::triggered, this, [this](bool checked) {
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      QTextCursor cursor = m_promptEdit->textCursor();
+      cursor.insertText(QStringLiteral("*") + cursor.selectedText() +
+                        QStringLiteral("*"));
+      return;
+    }
+    m_promptEdit->setFontItalic(checked);
+  });
   connect(actionStrike, &QAction::triggered, this, [this](bool checked) {
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      QTextCursor cursor = m_promptEdit->textCursor();
+      cursor.insertText(QStringLiteral("~~") + cursor.selectedText() +
+                        QStringLiteral("~~"));
+      return;
+    }
     QTextCharFormat fmt;
     fmt.setFontStrikeOut(checked);
     m_promptEdit->mergeCurrentCharFormat(fmt);
   });
   auto toggleList = [this](QTextListFormat::Style style) {
     QTextCursor cursor = m_promptEdit->textCursor();
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      QString prefix = style == QTextListFormat::ListDisc
+                           ? QStringLiteral("- ")
+                           : QStringLiteral("1. ");
+      cursor.insertText(prefix + cursor.selectedText());
+      return;
+    }
     QTextList *list = cursor.currentList();
     if (list && list->format().style() == style) {
       QTextBlockFormat blockFmt = cursor.blockFormat();
@@ -924,6 +957,41 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
           [toggleList](bool) { toggleList(QTextListFormat::ListDisc); });
   connect(actionOrdered, &QAction::triggered, this,
           [toggleList](bool) { toggleList(QTextListFormat::ListDecimal); });
+
+  connect(actionHeader, &QAction::triggered, this, [this]() {
+    QTextCursor cursor = m_promptEdit->textCursor();
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      cursor.insertText(QStringLiteral("### ") + cursor.selectedText());
+      return;
+    }
+    QTextBlockFormat blockFmt = cursor.blockFormat();
+    blockFmt.setHeadingLevel(blockFmt.headingLevel() > 0 ? 0 : 3);
+    cursor.mergeBlockFormat(blockFmt);
+  });
+
+  connect(actionCode, &QAction::triggered, this, [this]() {
+    QTextCursor cursor = m_promptEdit->textCursor();
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      cursor.insertText(QStringLiteral("```\n") + cursor.selectedText() +
+                        QStringLiteral("\n```"));
+      return;
+    }
+    QTextCharFormat fmt;
+    fmt.setFontFixedPitch(true);
+    fmt.setFontFamily(QStringLiteral("monospace"));
+    m_promptEdit->mergeCurrentCharFormat(fmt);
+  });
+
+  connect(actionTable, &QAction::triggered, this, [this]() {
+    QTextCursor cursor = m_promptEdit->textCursor();
+    if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      cursor.insertText(QStringLiteral(
+          "| Header | Header |\n|--------|--------|\n| Cell   | Cell   |"));
+      return;
+    }
+    cursor.insertTable(3, 3);
+  });
+
   connect(
       m_promptEdit, &QTextEdit::currentCharFormatChanged, this,
       [actionBold, actionItalic, actionStrike](const QTextCharFormat &format) {
@@ -949,12 +1017,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   QVBoxLayout *promptLayout = new QVBoxLayout();
   promptLayout->addLayout(promptHeaderLayout);
   promptLayout->addWidget(formatBar);
-  formatBar->setVisible(markdownMode == PromptTextEdit::WysiwygMarkdown);
-  connect(m_markdownModeComboBox,
-          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          [formatBar](int index) {
-            formatBar->setVisible(index == PromptTextEdit::WysiwygMarkdown);
-          });
 
   promptLayout->addWidget(m_promptEdit);
 

@@ -1,0 +1,12 @@
+#!/bin/bash
+cat << 'REPLACE' > diff2.txt
+<<<<<<< SEARCH
+  formatBar->setVisible(markdownMode == PromptTextEdit::WysiwygMarkdown);
+  connect(m_markdownModeComboBox,
+          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [formatBar](int index) {
+            formatBar->setVisible(index == PromptTextEdit::WysiwygMarkdown);
+          });
+=======
+>>>>>>> REPLACE
+REPLACE
