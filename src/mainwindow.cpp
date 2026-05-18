@@ -536,7 +536,7 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
               QAction *openAction =
                   githubMenu->addAction(i18n("Open %1", title));
               connect(openAction, &QAction::triggered, [urlStr, path]() {
-                QDesktopServices::openUrl(QUrl(urlStr + path));
+                Utils::openUrl(QUrl(urlStr + path));
               });
               QAction *copyAction =
                   githubMenu->addAction(i18n("Copy %1 URL", title));
@@ -564,9 +564,8 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
                 github.value(QStringLiteral("homepage")).toString();
             if (!homepage.isEmpty()) {
               QAction *openAction = githubMenu->addAction(i18n("Open Website"));
-              connect(openAction, &QAction::triggered, [homepage]() {
-                QDesktopServices::openUrl(QUrl(homepage));
-              });
+              connect(openAction, &QAction::triggered,
+                      [homepage]() { Utils::openUrl(QUrl(homepage)); });
               QAction *copyAction =
                   githubMenu->addAction(i18n("Copy Website URL"));
               connect(copyAction, &QAction::triggered, [this, homepage]() {
@@ -909,7 +908,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
                   QString urlStr =
                       QStringLiteral("https://jules.google.com/session/") +
                       currentId;
-                  QDesktopServices::openUrl(QUrl(urlStr));
+                  Utils::openUrl(QUrl(urlStr));
                   count++;
                 }
               }
@@ -957,7 +956,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
                     m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole)
                         .toString();
                 if (!currentPrUrl.isEmpty()) {
-                  QDesktopServices::openUrl(QUrl(currentPrUrl));
+                  Utils::openUrl(QUrl(currentPrUrl));
                   count++;
                 }
               }
@@ -2265,7 +2264,7 @@ void MainWindow::createSessionActions() {
       if (!id.isEmpty()) {
         QString urlStr =
             QStringLiteral("https://jules.google.com/session/") + id;
-        QDesktopServices::openUrl(QUrl(urlStr));
+        Utils::openUrl(QUrl(urlStr));
         count++;
       }
     }
@@ -2295,7 +2294,7 @@ void MainWindow::createSessionActions() {
           m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
 
       if (!prUrl.isEmpty()) {
-        QDesktopServices::openUrl(QUrl(prUrl));
+        Utils::openUrl(QUrl(prUrl));
         count++;
       }
     }
@@ -2595,7 +2594,7 @@ void MainWindow::createSourceActions() {
       QString urlStr = urlFromSourceId(id);
 
       if (!urlStr.isEmpty()) {
-        QDesktopServices::openUrl(QUrl(urlStr));
+        Utils::openUrl(QUrl(urlStr));
         count++;
       }
     }
@@ -5540,7 +5539,7 @@ void MainWindow::addGithubLink(QMenu *githubMenu, const QString &urlStr,
                                const QString &title, const QString &path) {
   QAction *openAction = githubMenu->addAction(i18n("Open %1", title));
   connect(openAction, &QAction::triggered,
-          [urlStr, path]() { QDesktopServices::openUrl(QUrl(urlStr + path)); });
+          [urlStr, path]() { Utils::openUrl(QUrl(urlStr + path)); });
   QAction *copyAction = githubMenu->addAction(i18n("Copy %1 URL", title));
   connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
     QGuiApplication::clipboard()->setText(urlStr + path);

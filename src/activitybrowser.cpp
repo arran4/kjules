@@ -1,6 +1,7 @@
 #include "activitybrowser.h"
 #include "apimanager.h"
 
+#include "utils.h"
 #include <KLocalizedString>
 #include <QApplication>
 #include <QBuffer>
@@ -706,7 +707,7 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
     }
   } else if (scheme == QStringLiteral("http") ||
              scheme == QStringLiteral("https")) {
-    QDesktopServices::openUrl(url);
+    Utils::openUrl(url);
   }
 }
 

@@ -4,6 +4,7 @@
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 
+#include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -311,7 +312,7 @@ void SessionsWindow::setupUi() {
                       QString urlStr =
                           QStringLiteral("https://jules.google.com/session/") +
                           id;
-                      QDesktopServices::openUrl(QUrl(urlStr));
+                      Utils::openUrl(QUrl(urlStr));
                     }
                     m_statusLabel->setText(
                         i18n("Opened %1 session URLs", selectedRows.size()));
@@ -368,7 +369,7 @@ void SessionsWindow::setupUi() {
                     for (const QModelIndex &idx : selectedRows) {
                       QString urlStr = getSourceUrl(idx);
                       if (!urlStr.isEmpty()) {
-                        QDesktopServices::openUrl(QUrl(urlStr));
+                        Utils::openUrl(QUrl(urlStr));
                         count++;
                       }
                     }
@@ -419,7 +420,7 @@ void SessionsWindow::setupUi() {
                             m_proxyModel->data(idx, SessionModel::PrUrlRole)
                                 .toString();
                         if (!prUrl.isEmpty()) {
-                          QDesktopServices::openUrl(QUrl(prUrl));
+                          Utils::openUrl(QUrl(prUrl));
                           count++;
                         }
                       }
