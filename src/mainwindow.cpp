@@ -2407,6 +2407,9 @@ void MainWindow::setupRecalculateStatsAction() {
     m_sourceModel->recalculateStatsFromSessions(allSessions);
     updateStatus(i18n("Session statistics recalculated successfully."));
   });
+}
+
+void MainWindow::setupShowFollowingNewSessionsAction() {
   m_showFollowingNewSessionsAction =
       new QAction(i18n("Show following new sessions"), this);
   actionCollection()->addAction(QStringLiteral("show_following_new_sessions"),
@@ -2482,6 +2485,9 @@ void MainWindow::setupRecalculateStatsAction() {
           sessionsWindow->show();
         }
       });
+}
+
+void MainWindow::setupViewRawDataAction() {
   m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
   actionCollection()->addAction(QStringLiteral("view_raw_data"),
                                 m_viewRawDataAction);
@@ -2537,7 +2543,9 @@ void MainWindow::setupRecalculateStatsAction() {
       rawWindow->show();
     }
   });
+}
 
+void MainWindow::setupUrlActions() {
   m_openUrlAction = new QAction(i18n("Open URL"), this);
   actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
   connect(m_openUrlAction, &QAction::triggered, this, [this]() {
@@ -2601,11 +2609,6 @@ void MainWindow::setupRecalculateStatsAction() {
   });
 }
 
-void MainWindow::setupShowFollowingNewSessionsAction() {}
-
-void MainWindow::setupViewRawDataAction() {}
-
-void MainWindow::setupUrlActions() {}
 
 void MainWindow::createDataActions() {
   m_restoreDataAction = new QAction(i18n("Restore Data"), this);
