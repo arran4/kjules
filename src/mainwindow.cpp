@@ -1477,12 +1477,7 @@ void MainWindow::setupUi() {
                               i18np("Remove this task from the queue?",
                                     "Remove these tasks from the queue?",
                                     selectedRows.size())) == QMessageBox::Yes) {
-      QSet<int> uniqueRows;
-      for (const QModelIndex &idx : selectedRows) {
-        uniqueRows.insert(idx.row());
-      }
-      QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+      QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_draftsView);
 
       for (int row : rowsToDelete) {
         m_queueModel->removeItem(row);
@@ -1525,12 +1520,8 @@ void MainWindow::setupUi() {
             i18np("Remove this task from the holding queue?",
                   "Remove these tasks from the holding queue?",
                   selectedRows.size())) == QMessageBox::Yes) {
-      QSet<int> uniqueRows;
-      for (const QModelIndex &idx : selectedRows) {
-        uniqueRows.insert(idx.row());
-      }
-      QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+      QList<int> rowsToDelete =
+          getUniqueSortedRows(selectedRows, m_templatesView);
 
       for (int row : rowsToDelete) {
         m_holdingModel->removeItem(row);
@@ -1637,14 +1628,8 @@ void MainWindow::setupUi() {
           connect(requeueAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_errorsView->selectionModel()->selectedRows();
-            QList<int> rowsToRequeue;
-            for (const QModelIndex &idx : selectedRows) {
-              if (!rowsToRequeue.contains(idx.row())) {
-                rowsToRequeue.append(idx.row());
-              }
-            }
-            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(),
-                      std::greater<int>());
+            QList<int> rowsToDelete =
+                getUniqueSortedRows(selectedRows, m_queueView);
 
             for (int row : rowsToRequeue) {
               QJsonObject errData = m_errorsModel->getError(row);
@@ -3299,718 +3284,20 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
 
 void MainWindow::processErrorRetries() {
   QDateTime now = QDateTime::currentDateTimeUtc();
-  QList<int> rowsToRetry;
-
-  for (int i = m_errorsModel->rowCount() - 1; i >= 0; --i) {
-    QJsonObject error = m_errorsModel->getError(i);
-    QString timestampStr = error.value(QStringLiteral("timestamp")).toString();
-    if (!timestampStr.isEmpty()) {
-      QDateTime timestamp = QDateTime::fromString(timestampStr, Qt::ISODate);
-      int errorCount = 1;
-      if (error.contains(QStringLiteral("pastErrors"))) {
-        errorCount +=
-            error.value(QStringLiteral("pastErrors")).toArray().size();
-      }
-      qint64 backoffSecs = QueueModel::calculateBackoff(errorCount);
-      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffSecs) {
-        rowsToRetry.append(i);
-      }
-    }
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_holdingView);
+  for (int r : rowsToHold) {
+    QueueItem holdItem = m_queueModel->getItem(r);
+    m_queueModel->removeItem(r);
+    holdItem.isWaitItem = false;
+    m_holdingModel->enqueueItem(holdItem);
   }
-
-  for (int row : rowsToRetry) {
-    QJsonObject error = m_errorsModel->getError(row);
-    QJsonObject request = error.value(QStringLiteral("request")).toObject();
-
-    // Create a QueueItem and embed the entire error object as context
-    // This maintains the error history which was previously tracked implicitly
-    // or manually.
-    QueueItem item;
-    item.requestData = request;
-    // Track error history natively through the requestData wrapper if
-    // supported, or just re-add to queue and letting API retry.
-    if (error.contains(QStringLiteral("pastErrors"))) {
-      item.pastErrors = error.value(QStringLiteral("pastErrors")).toArray();
-    }
-    QJsonObject strippedError = error;
-    strippedError.remove(QStringLiteral("pastErrors"));
-    item.pastErrors.append(strippedError); // append current error
-
-    m_queueModel->enqueueItem(item);
-    m_errorsModel->removeError(row);
-  }
-
-  if (!rowsToRetry.isEmpty() && !m_queueTimer->isActive() && !m_queuePaused) {
-    m_queueTimer->start(1000);
-  }
-}
-
-void MainWindow::onQueueTimerTimeout() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
-    return;
-
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
-                             QStringLiteral("SessionWindow"));
-  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
-
-  // Backwards compatibility migration
-  bool legacyMergeRefresh =
-      sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (legacyMergeRefresh && seconds != -1) {
-    seconds = -1;
-  }
-
-  if (seconds == -1) {
-    refreshBeforeQueue();
+  if (rowsToHold.size() > 0) {
+    updateStatus(i18np("Task moved to holding queue.",
+                       "%1 tasks moved to holding queue.", rowsToHold.size()));
   } else {
-    processQueue();
+    updateStatus(i18n("No tangible tasks selected to move to holding queue."));
   }
 }
-
-QStringList MainWindow::getActiveFollowingSessionIds() const {
-  QStringList activeIds;
-  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-    QModelIndex index = m_sessionModel->index(i, 0);
-    QString state =
-        m_sessionModel->data(index, SessionModel::StateRole).toString();
-    if (state == QStringLiteral("DONE") ||
-        state == QStringLiteral("CANCELED") || state == QStringLiteral("ERROR"))
-      continue;
-    QString currentId =
-        m_sessionModel->data(index, SessionModel::IdRole).toString();
-    if (!currentId.isEmpty()) {
-      activeIds.append(currentId);
-    }
-  }
-  return activeIds;
-}
-
-void MainWindow::refreshBeforeQueue() {
-  QStringList sessionsToReload = getActiveFollowingSessionIds();
-
-  if (sessionsToReload.isEmpty()) {
-    processQueue();
-    return;
-  }
-
-  m_pendingRefreshIds =
-      QSet<QString>(sessionsToReload.begin(), sessionsToReload.end());
-  m_isWaitingForRefreshBeforeQueue = true;
-  updateStatus(
-      i18np("Refreshing 1 following session before processing queue...",
-            "Refreshing %1 following sessions before processing queue...",
-            m_pendingRefreshIds.size()));
-
-  for (const QString &id : sessionsToReload) {
-    m_apiManager->reloadSession(id);
-  }
-}
-
-void MainWindow::checkPendingRefreshBeforeQueue(const QString &id) {
-  if (m_isWaitingForRefreshBeforeQueue && m_pendingRefreshIds.contains(id)) {
-    m_pendingRefreshIds.remove(id);
-    if (m_pendingRefreshIds.isEmpty()) {
-      m_isWaitingForRefreshBeforeQueue = false;
-      processQueue();
-    }
-  }
-}
-
-void MainWindow::processQueue() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
-    return;
-  if (m_queueModel->isEmpty()) {
-    if (m_queueTimer->isActive()) {
-      KNotification *notification = new KNotification(
-          QStringLiteral("queueEmpty"), KNotification::CloseOnTimeout, this);
-      notification->setTitle(i18n("Queue Empty"));
-      notification->setText(i18n("The processing queue is now empty."));
-      connect(notification, &KNotification::closed, notification,
-              &QObject::deleteLater);
-      notification->sendEvent();
-      m_queueTimer->stop();
-    }
-    return;
-  }
-
-  if (m_queueBackoffUntil.isValid() &&
-      QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
-    // We are backing off
-    return;
-  }
-
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-
-  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
-  if (currentQueueMode.isEmpty()) {
-    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
-                           ? QStringLiteral("one_at_a_time")
-                           : QStringLiteral("asap");
-  }
-  bool oneAtATimeMode = currentQueueMode == QStringLiteral("one_at_a_time");
-
-  int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
-  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
-                                       QStringLiteral("SourceConcurrency"));
-
-  int processIndex = -1;
-  QHash<QString, int> activeCountCache;
-
-  // Pre-calculate active session counts from m_sessionModel
-  for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
-    QModelIndex idx = m_sessionModel->index(j, 0);
-    QString prStatus =
-        m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
-    if (prStatus != QStringLiteral("merged") &&
-        prStatus != QStringLiteral("closed")) {
-      QString source =
-          m_sessionModel->data(idx, SessionModel::SourceRole).toString();
-      activeCountCache[source]++;
-    }
-  }
-
-  m_queueModel->beginBatchUpdate();
-
-  for (int i = 0; i < m_queueModel->rowCount(); ++i) {
-    QueueItem item = m_queueModel->getItem(i);
-    bool needsUpdate = false;
-
-    if (item.isWaitItem) {
-      if (processIndex == -1) {
-        processIndex =
-            i; // We hit a wait item before any valid processable item
-      }
-      continue;
-    }
-
-    QString source = item.requestData.value(QStringLiteral("sourceContext"))
-                         .toObject()
-                         .value(QStringLiteral("source"))
-                         .toString();
-    if (source.isEmpty()) {
-      source = item.requestData.value(QStringLiteral("source")).toString();
-    }
-
-    int sourceLimit = sourceConcurrencyConfig.readEntry(source, -1);
-    bool checkLimit = (sourceLimit != 0) && (oneAtATimeMode || sourceLimit > 0);
-    int effectiveLimit =
-        (sourceLimit > 0) ? sourceLimit : globalOneAtATimeLimit;
-
-    if (item.blockMetadata.value(QStringLiteral("forced")).toBool()) {
-      checkLimit = false;
-    }
-
-    if (!checkLimit) {
-      if (item.isBlocked) {
-        item.isBlocked = false;
-        item.blockMetadata = QJsonObject();
-        needsUpdate = true;
-      }
-      if (processIndex == -1) {
-        processIndex = i;
-      }
-      activeCountCache[source]++;
-      if (needsUpdate)
-        m_queueModel->updateItem(i, item);
-      continue;
-    }
-
-    if (activeCountCache[source] >= effectiveLimit) {
-      if (!item.isBlocked) {
-        item.isBlocked = true;
-        QJsonObject meta;
-        meta[QStringLiteral("reason")] =
-            QStringLiteral("Concurrency limit reached");
-        meta[QStringLiteral("source")] = source;
-        item.blockMetadata = meta;
-        needsUpdate = true;
-      }
-    } else {
-      if (item.isBlocked) {
-        item.isBlocked = false;
-        item.blockMetadata = QJsonObject();
-        needsUpdate = true;
-      }
-      if (processIndex == -1) {
-        processIndex = i;
-      }
-      activeCountCache[source]++; // We consider this one active now
-    }
-
-    if (needsUpdate) {
-      m_queueModel->updateItem(i, item);
-    }
-  }
-
-  m_queueModel->endBatchUpdate();
-
-  if (processIndex == -1) {
-    // Everything is blocked or queue is essentially empty
-    return;
-  }
-
-  if (processIndex != 0) {
-    m_queueModel->moveItem(processIndex, 0);
-  }
-
-  QueueItem peekItem = m_queueModel->peek();
-  if (peekItem.isWaitItem) {
-    if (!peekItem.waitStartTime.isValid()) {
-      peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
-      m_queueModel->updateItem(0, peekItem);
-      QTimer::singleShot(peekItem.waitSeconds * 1000, this,
-                         &MainWindow::processQueue);
-    } else {
-      qint64 elapsed =
-          peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-      if (elapsed >= peekItem.waitSeconds) {
-        m_queueModel->dequeue(); // Wait completed, remove wait item
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      } else {
-        QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
-                           &MainWindow::processQueue);
-      }
-    }
-    return;
-  }
-
-  m_isProcessingQueue = true;
-  QueueItem item = m_queueModel->peek();
-  m_apiManager->createSessionAsync(item.requestData);
-}
-
-void MainWindow::onSessionCreatedResult(bool success,
-                                        const QJsonObject &session,
-                                        const QString &errorMsg,
-                                        const QString &rawResponse) {
-  if (!m_isProcessingQueue) {
-    if (success) {
-      m_sessionModel->addSession(session);
-      QString sourceId = session.value(QStringLiteral("sourceContext"))
-                             .toObject()
-                             .value(QStringLiteral("source"))
-                             .toString();
-      if (!sourceId.isEmpty())
-        m_sourceModel->recordSessionCreated(sourceId);
-      updateStatus(i18n("Session created successfully."));
-    }
-    return;
-  }
-
-  QueueItem item = m_queueModel->peek(); // Peek the item we were processing
-  m_queueModel
-      ->recordRun(); // Record that we completed a run successfully or not
-  m_isProcessingQueue = false;
-
-  if (success) {
-    m_queueModel->dequeue(); // Pop the item only on successful state transition
-    m_queueModel
-        ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
-    m_sessionModel->addSession(session);
-    QString sourceId = session.value(QStringLiteral("sourceContext"))
-                           .toObject()
-                           .value(QStringLiteral("source"))
-                           .toString();
-    if (!sourceId.isEmpty())
-      m_sourceModel->recordSessionCreated(sourceId);
-    updateStatus(i18n("Session created from queue."));
-    ActivityLogWindow::instance()->logMessage(
-        i18n("Processed schedule run: Session created for %1.", sourceId));
-    m_queueBackoffUntil = QDateTime(); // reset backoff
-    // The next item will be processed by the configured timer (m_queueTimer)
-  } else {
-    QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
-    bool isPrecondition = false;
-    bool isResourceExhausted = false;
-    if (errDoc.isObject()) {
-      QJsonObject errObj =
-          errDoc.object().value(QStringLiteral("error")).toObject();
-      if (errObj.value(QStringLiteral("status")).toString() ==
-          QStringLiteral("FAILED_PRECONDITION")) {
-        isPrecondition = true;
-      } else if (errObj.value(QStringLiteral("status")).toString() ==
-                     QStringLiteral("RESOURCE_EXHAUSTED") ||
-                 errObj.value(QStringLiteral("code")).toInt() == 429) {
-        isResourceExhausted = true;
-      }
-    }
-
-    if (isPrecondition) {
-      updateStatus(
-          i18n("Too many concurrent tasks, waiting before retrying..."));
-
-      // The item remains at the front of the queue.
-
-      // Apply a short backoff (e.g. 5 minutes)
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                               QStringLiteral("Queue"));
-      int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-      waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60,
-                                  QueueModel::maxBackoffSeconds());
-      m_queueModel->prependWaitItem(waitItem);
-      m_queueBackoffUntil = QDateTime(); // Clear backoff
-    } else if (isResourceExhausted) {
-      updateStatus(i18n("API Rate limit hit, adding a wait item..."));
-
-      // The item remains at the front of the queue.
-
-      // Prepend a wait item
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
-      m_queueModel->prependWaitItem(waitItem);
-      m_queueBackoffUntil = QDateTime(); // Clear backoff
-    } else {
-      updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-      m_queueModel->dequeue(); // Pop the item out of the queue because it is in
-                               // Error state
-      // The error is recorded to the error model through the APIManager error
-      // signal handlers and onSessionCreationFailed.
-    }
-  }
-}
-
-void MainWindow::onDraftSaved(const QJsonObject &draft) {
-  m_draftsModel->addDraft(draft);
-  updateStatus(i18n("Draft saved."));
-}
-
-void MainWindow::onTemplateSaved(const QJsonObject &tmpl) {
-  m_templatesModel->addTemplate(tmpl);
-  updateStatus(i18n("Template saved."));
-}
-
-void MainWindow::onTemplateActivated(const QModelIndex &index) {
-  QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
-
-  // Create template dialog
-  QJsonObject templateData = tmpl;
-
-  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window =
-      new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  window->setInitialData(templateData);
-
-  connectNewSessionDialog(window);
-  connect(window, &NewSessionDialog::createSessionRequested, this,
-          &MainWindow::onSessionCreated);
-  connect(window, &NewSessionDialog::saveDraftRequested, this,
-          &MainWindow::onDraftSaved);
-  connect(window, &NewSessionDialog::saveTemplateRequested, this,
-          &MainWindow::onTemplateSaved);
-
-  window->show();
-}
-
-void MainWindow::onQueueActivated(const QModelIndex &index) {
-  if (!index.isValid())
-    return;
-  int row = index.row();
-  QueueItem item = m_queueModel->getItem(row);
-  if (item.errorCount > 0) {
-    showErrorDetails(row, m_queueModel);
-  } else {
-    editQueueItem(row);
-  }
-}
-
-void MainWindow::updateHoldingTabVisibility() {
-  int holdingIdx = m_tabWidget->indexOf(m_holdingView);
-  if (m_holdingModel->isEmpty()) {
-    if (holdingIdx != -1) {
-      m_tabWidget->removeTab(holdingIdx);
-    }
-  } else {
-    if (holdingIdx == -1) {
-      int queueIdx = m_tabWidget->indexOf(m_queueView);
-      if (queueIdx != -1) {
-        holdingIdx = m_tabWidget->insertTab(queueIdx + 1, m_holdingView,
-                                            i18n("Holding"));
-      } else {
-        holdingIdx = m_tabWidget->addTab(m_holdingView, i18n("Holding"));
-      }
-    }
-    m_tabWidget->setTabText(holdingIdx,
-                            i18n("Holding (%1)", m_holdingModel->size()));
-  }
-}
-
-void MainWindow::updateBlockedTabVisibility() {
-  int blockedIdx = m_tabWidget->indexOf(m_blockedView);
-  int blockedItems = m_blockedTreeModel->totalBlockedItemsCount();
-  int blockedSources = m_blockedTreeModel->blockedSourcesCount();
-
-  if (blockedItems == 0) {
-    if (blockedIdx != -1) {
-      m_tabWidget->removeTab(blockedIdx);
-    }
-  } else {
-    if (blockedIdx == -1) {
-      int holdingIdx = m_tabWidget->indexOf(m_holdingView);
-      if (holdingIdx != -1) {
-        blockedIdx = m_tabWidget->insertTab(holdingIdx + 1, m_blockedView,
-                                            i18n("Blocked"));
-      } else {
-        int queueIdx = m_tabWidget->indexOf(m_queueView);
-        if (queueIdx != -1) {
-          blockedIdx = m_tabWidget->insertTab(queueIdx + 1, m_blockedView,
-                                              i18n("Blocked"));
-        } else {
-          blockedIdx = m_tabWidget->addTab(m_blockedView, i18n("Blocked"));
-        }
-      }
-    }
-    KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                             QStringLiteral("Queue"));
-    int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
-    m_tabWidget->setTabText(blockedIdx,
-                            i18n("Blocked (%1 / %2 / %3)", blockedSources,
-                                 blockedItems, globalOneAtATimeLimit));
-  }
-}
-
-void MainWindow::onHoldingActivated(const QModelIndex &index) {
-  int row = index.row();
-  QueueItem item = m_holdingModel->getItem(row);
-  if (item.errorCount > 0) {
-    showErrorDetails(row, m_holdingModel);
-  }
-}
-
-void MainWindow::onBlockedContextMenu(const QPoint &pos) {
-  QModelIndex index = m_blockedView->indexAt(pos);
-  if (!index.isValid())
-    return;
-
-  bool isSource =
-      m_blockedTreeModel->data(index, BlockedTreeModel::IsSourceRole).toBool();
-
-  int queueIndex =
-      m_blockedTreeModel->data(index, BlockedTreeModel::QueueIndexRole).toInt();
-
-  QMenu menu(this);
-  if (isSource) {
-    QString id = m_blockedTreeModel->data(index, BlockedTreeModel::SourceIdRole)
-                     .toString();
-    QAction *configLimitAction =
-        menu.addAction(i18n("Configure Concurrency Limit"));
-    connect(configLimitAction, &QAction::triggered, [this, id]() {
-      KConfigGroup sourceConfig(KSharedConfig::openConfig(),
-                                QStringLiteral("SourceConcurrency"));
-      int currentLimit = sourceConfig.readEntry(id, -1);
-
-      bool ok;
-      int newLimit =
-          QInputDialog::getInt(this, i18n("Concurrency Limit"),
-                               i18n("Enter max active sessions for %1 (0 to "
-                                    "disable limit, -1 to defer to global):",
-                                    id),
-                               currentLimit, -1, 1000, 1, &ok);
-      if (ok) {
-        if (newLimit == -1) {
-          sourceConfig.deleteEntry(id);
-        } else {
-          sourceConfig.writeEntry(id, newLimit);
-        }
-        sourceConfig.sync();
-        updateStatus(
-            i18n("Concurrency limit for %1 updated to %2", id, newLimit));
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      }
-    });
-  } else {
-    QAction *forceAction = menu.addAction(i18n("Force into queue (unblock)"));
-    connect(forceAction, &QAction::triggered, this, [this, queueIndex]() {
-      QueueItem item = m_queueModel->getItem(queueIndex);
-      item.isBlocked = false;
-      QJsonObject meta;
-      meta[QStringLiteral("forced")] = true;
-      item.blockMetadata = meta;
-      m_queueModel->updateItem(queueIndex, item);
-      m_queueModel->moveItem(queueIndex, 0);
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
-    });
-  }
-  menu.exec(m_blockedView->viewport()->mapToGlobal(pos));
-}
-
-void MainWindow::onHoldingContextMenu(const QPoint &pos) {
-  QModelIndex index = m_holdingView->indexAt(pos);
-  if (!index.isValid())
-    return;
-  if (!m_holdingView->selectionModel()->isSelected(index)) {
-    m_holdingView->selectionModel()->select(
-        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-    m_holdingView->setCurrentIndex(index);
-  }
-  int row = index.row();
-
-  QMenu menu;
-  QAction *moveUpAction = nullptr;
-  QAction *moveDownAction = nullptr;
-
-  if (m_holdingView->selectionModel()->selectedRows().size() == 1) {
-    if (row > 0) {
-      moveUpAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")),
-                                    i18n("Move Up"));
-    }
-    if (row < m_holdingModel->rowCount() - 1) {
-      moveDownAction = menu.addAction(
-          QIcon::fromTheme(QStringLiteral("go-down")), i18n("Move Down"));
-    }
-    if (moveUpAction || moveDownAction) {
-      menu.addSeparator();
-    }
-  }
-
-  QAction *requeueAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("go-up")), i18n("Requeue"));
-  QAction *deleteAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
-
-  QAction *selected = menu.exec(m_holdingView->viewport()->mapToGlobal(pos));
-  if (moveUpAction && selected == moveUpAction) {
-    m_holdingModel->moveItem(row, row - 1);
-  } else if (moveDownAction && selected == moveDownAction) {
-    m_holdingModel->moveItem(row, row + 1);
-  } else if (selected == requeueAction) {
-    QModelIndexList selectedRows =
-        m_holdingView->selectionModel()->selectedRows();
-    QList<int> rowsToRequeue;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToRequeue.contains(idx.row())) {
-        rowsToRequeue.append(idx.row());
-      }
-    }
-    std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
-    for (int r : rowsToRequeue) {
-      QueueItem item = m_holdingModel->getItem(r);
-      m_holdingModel->removeItem(r);
-      item.isWaitItem = false;
-      m_queueModel->enqueueItem(item);
-    }
-    updateStatus(i18np("Task moved back to queue.",
-                       "%1 tasks moved back to queue.", rowsToRequeue.size()));
-  } else if (selected == deleteAction) {
-    if (m_deleteHoldingItemsLambda) {
-      m_deleteHoldingItemsLambda();
-    }
-  }
-}
-
-void MainWindow::onQueueContextMenu(const QPoint &pos) {
-  QModelIndex index = m_queueView->indexAt(pos);
-  if (!index.isValid())
-    return;
-  if (!m_queueView->selectionModel()->isSelected(index)) {
-    m_queueView->selectionModel()->select(
-        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-    m_queueView->setCurrentIndex(index);
-  }
-  int row = index.row();
-
-  QueueItem item = m_queueModel->getItem(row);
-
-  QMenu menu;
-
-  QAction *moveUpAction = nullptr;
-  QAction *moveDownAction = nullptr;
-
-  if (m_queueView->selectionModel()->selectedRows().size() == 1) {
-    if (row > 0) {
-      moveUpAction = menu.addAction(QIcon::fromTheme(QStringLiteral("go-up")),
-                                    i18n("Move Up"));
-    }
-    if (row < m_queueModel->rowCount() - 1) {
-      moveDownAction = menu.addAction(
-          QIcon::fromTheme(QStringLiteral("go-down")), i18n("Move Down"));
-    }
-    if (moveUpAction || moveDownAction) {
-      menu.addSeparator();
-    }
-  }
-
-  QAction *errorAction = nullptr;
-  if (item.errorCount > 0) {
-    errorAction =
-        menu.addAction(QIcon::fromTheme(QStringLiteral("dialog-error")),
-                       i18n("View Error Details"));
-    menu.addSeparator();
-  }
-
-  QAction *editAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
-  QAction *deleteAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
-  QAction *draftAction =
-      menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
-                     i18n("Convert to Draft"));
-  QAction *copyTemplateAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
-  QAction *sendAction = menu.addAction(
-      QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"));
-  menu.addSeparator();
-  QAction *holdAction =
-      menu.addAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")),
-                     i18n("Move to Holding"));
-
-  QAction *selected = menu.exec(m_queueView->viewport()->mapToGlobal(pos));
-  if (moveUpAction && selected == moveUpAction) {
-    m_queueModel->moveItem(row, row - 1);
-  } else if (moveDownAction && selected == moveDownAction) {
-    m_queueModel->moveItem(row, row + 1);
-  } else if (errorAction && selected == errorAction) {
-    showErrorDetails(row, m_queueModel);
-  } else if (selected == editAction) {
-    editQueueItem(row);
-  } else if (selected == deleteAction) {
-    if (m_deleteQueueItemsLambda) {
-      m_deleteQueueItemsLambda();
-    }
-  } else if (selected == draftAction) {
-    convertQueueItemToDraft(row);
-  } else if (selected == copyTemplateAction) {
-    SaveDialog dlg(QStringLiteral("Template"), this);
-    if (dlg.exec() == QDialog::Accepted) {
-      QJsonObject data = item.requestData;
-      data[QStringLiteral("name")] = dlg.nameOrComment();
-      data[QStringLiteral("description")] = dlg.description();
-      m_templatesModel->addTemplate(data);
-      updateStatus(i18n("Template created from queued item."));
-    }
-  } else if (selected == sendAction) {
-    sendQueueItemNow(row);
-  } else if (selected == holdAction) {
-    QModelIndexList selectedRows =
-        m_queueView->selectionModel()->selectedRows();
-    QList<int> rowsToHold;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToHold.contains(idx.row())) {
-        QueueItem checkItem = m_queueModel->getItem(idx.row());
-        if (!checkItem.isWaitItem) {
-          rowsToHold.append(idx.row());
-        }
-      }
-    }
-    std::sort(rowsToHold.begin(), rowsToHold.end(), std::greater<int>());
-    for (int r : rowsToHold) {
-      QueueItem holdItem = m_queueModel->getItem(r);
-      m_queueModel->removeItem(r);
-      holdItem.isWaitItem = false;
-      m_holdingModel->enqueueItem(holdItem);
-    }
-    if (rowsToHold.size() > 0) {
-      updateStatus(i18np("Task moved to holding queue.",
-                         "%1 tasks moved to holding queue.",
-                         rowsToHold.size()));
-    } else {
-      updateStatus(
-          i18n("No tangible tasks selected to move to holding queue."));
-    }
-  }
 }
 
 void MainWindow::sendQueueItemNow(int row) {
@@ -5218,15 +4505,7 @@ void MainWindow::deleteFollowingSessions() {
       m_sessionView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QSet<int> uniqueRows;
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    uniqueRows.insert(mappedIdx.row());
-  }
-  QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-  std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_sessionView);
 
   for (int row : rowsToDelete) {
     m_sessionModel->removeSession(row);
@@ -5238,16 +4517,7 @@ void MainWindow::deleteFollowingSessions() {
 void MainWindow::archiveSelectedSessions() {
   QModelIndexList selectedRows =
       m_sessionView->selectionModel()->selectedRows();
-  QList<int> rowsToArchive;
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    if (!rowsToArchive.contains(mappedIdx.row())) {
-      rowsToArchive.append(mappedIdx.row());
-    }
-  }
-  std::sort(rowsToArchive.begin(), rowsToArchive.end(), std::greater<int>());
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_sessionView);
 
   for (int row : rowsToArchive) {
     QJsonObject session = m_sessionModel->getSession(row);
@@ -5264,15 +4534,7 @@ void MainWindow::deleteArchiveSessions() {
       m_archiveView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QSet<int> uniqueRows;
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    uniqueRows.insert(mappedIdx.row());
-  }
-  QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-  std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_archiveView);
 
   for (int row : rowsToDelete) {
     m_archiveModel->removeSession(row);
@@ -5290,12 +4552,7 @@ void MainWindow::deleteDrafts() {
           i18np("Are you sure?",
                 "Are you sure you want to delete these drafts?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QSet<int> uniqueRows;
-    for (const QModelIndex &idx : selectedRows) {
-      uniqueRows.insert(idx.row());
-    }
-    QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+    QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_errorsView);
 
     for (int row : rowsToDelete) {
       m_draftsModel->removeDraft(row);
@@ -5314,12 +4571,7 @@ void MainWindow::deleteTemplates() {
           i18np("Are you sure you want to delete this template?",
                 "Are you sure you want to delete these templates?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QSet<int> uniqueRows;
-    for (const QModelIndex &idx : selectedRows) {
-      uniqueRows.insert(idx.row());
-    }
-    QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+    QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_queueView);
 
     for (int row : rowsToDelete) {
       m_templatesModel->removeTemplate(row);
@@ -5338,12 +4590,7 @@ void MainWindow::deleteErrors() {
           i18np("Are you sure?",
                 "Are you sure you want to delete these errors?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QSet<int> uniqueRows;
-    for (const QModelIndex &idx : selectedRows) {
-      uniqueRows.insert(idx.row());
-    }
-    QList<int> rowsToDelete(uniqueRows.begin(), uniqueRows.end());
-    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+    QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_holdingView);
 
     for (int row : rowsToDelete) {
       m_errorsModel->removeError(row);
@@ -5514,4 +4761,139 @@ QString MainWindow::urlFromSourceId(const QString &id) const {
     urlStr = id;
   }
   return urlStr;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, );
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
 }

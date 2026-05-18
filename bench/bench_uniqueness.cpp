@@ -46,7 +46,7 @@ private Q_SLOTS:
              << "Time (ns):" << setTime;
     qDebug() << "Improvement:" << (double)listTime / setTime << "x";
 
-    QCOMPARE(rowsToDeleteList.size(), rowsToDeleteSet.size());
+    QCOMPARE(rowsToDeleteList, rowsToDeleteSet);
   }
 };
 
