@@ -24,8 +24,19 @@ public:
                 int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
-  void addError(const QJsonObject &request, const QJsonObject &response,
-                const QString &message, const QString &httpDetails = QString());
+  /**
+   * @brief Adds an error object to the model.
+   *
+   * The expected JSON structure for errorObj is:
+   * {
+   *   "request": QJsonObject,     // The request payload/details (optional but
+   * expected) "response": QJsonObject,    // The response payload/details
+   * (optional but expected) "message": QString,         // A human-readable
+   * error message (used as the title) "httpDetails": QString,     // (Optional)
+   * Detailed HTTP status/headers "timestamp": QString        // (Optional) ISO
+   * 8601 formatted UTC timestamp
+   * }
+   */
   void addErrorObj(const QJsonObject &errorObj);
   void removeError(int row);
   QJsonObject getError(int row) const;
