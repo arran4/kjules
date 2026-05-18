@@ -5,7 +5,7 @@ add_executable(test_advancedfilterproxymodel test_advancedfilterproxymodel.cpp .
 if (QT_MAJOR_VERSION STREQUAL "6")
     target_link_libraries(test_dummy Qt6::Test)
     target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core)
-    target_link_libraries(test_advancedfilterproxymodel Qt6::Test Qt6::Widgets Qt6::Core)
+    target_link_libraries(test_advancedfilterproxymodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore)
 else()
     target_link_libraries(test_dummy Qt5::Test)
     target_link_libraries(test_filter Qt5::Test Qt5::Widgets Qt5::Core)
