@@ -396,11 +396,11 @@ void FilterEditor::onTextChanged(const QString &text) {
     return;
 
   m_updating = true;
-  if (text.startsWith(QLatin1String("="))) {
-    m_treeView->parentWidget()->setVisible(true);
+  bool isFormula = text.startsWith(QLatin1String("="));
+  m_treeView->parentWidget()->setVisible(isFormula);
+  if (isFormula) {
     updateTreeFromText();
   } else {
-    m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
   m_updating = false;
