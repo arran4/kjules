@@ -169,6 +169,12 @@ private:
   void createGeneralActions();
   void createSessionActions();
   void createSourceActions();
+  void setupSourceSettingsAction();
+  void setupRefreshSourceActions();
+  void setupRecalculateStatsAction();
+  void setupShowFollowingNewSessionsAction();
+  void setupViewRawDataAction();
+  void setupUrlActions();
   void createDataActions();
   void createQueueActions();
   void createArchiveActions();

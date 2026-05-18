@@ -2609,7 +2609,6 @@ void MainWindow::setupUrlActions() {
   });
 }
 
-
 void MainWindow::createDataActions() {
   m_restoreDataAction = new QAction(i18n("Restore Data"), this);
   actionCollection()->addAction(QStringLiteral("restore_data"),
