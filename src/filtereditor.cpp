@@ -24,10 +24,6 @@
 #include <QCompleter>
 #include <QDateTimeEdit>
 
-#include <QComboBox>
-#include <QCompleter>
-#include <QDateTimeEdit>
-
 class FilterInputDialog : public QDialog {
 public:
   QString key;
