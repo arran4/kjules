@@ -164,6 +164,17 @@ private:
 
   void updateFollowingRefreshTimer();
   void setupUi();
+
+  void setupSourcesTab(QWidget *tab);
+  void setupFollowingTab(QWidget *tab);
+  void setupArchiveTab(QWidget *tab);
+  void setupDraftsTab(QWidget *tab);
+  void setupTemplatesTab(QWidget *tab);
+  void setupQueueTab();
+  void setupHoldingTab();
+  void setupBlockedTab();
+  void setupErrorsTab(QWidget *tab);
+  void setupStatusBar();
   void setupTrayIcon();
   void createActions();
   void createGeneralActions();

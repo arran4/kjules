@@ -273,7 +273,67 @@ void MainWindow::setupUi() {
   // Sources View
   QWidget *srcTab = new QWidget(this);
   srcTab->setObjectName(QStringLiteral("sourcesTab"));
-  QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
+  setupSourcesTab(srcTab);
+  m_tabWidget->addTab(srcTab, i18n("Sources"));
+
+  // Following View (originally labeled Sessions View)
+  QWidget *followingTab = new QWidget(this);
+  followingTab->setObjectName(QStringLiteral("followingTab"));
+  setupFollowingTab(followingTab);
+  m_tabWidget->addTab(followingTab, i18n("Following"));
+
+  // Archive View
+  QWidget *archTab = new QWidget(this);
+  archTab->setObjectName(QStringLiteral("archiveTab"));
+  setupArchiveTab(archTab);
+  m_tabWidget->addTab(archTab, i18n("Archive"));
+
+  // Drafts View
+  QWidget *draftsTab = new QWidget(this);
+  draftsTab->setObjectName(QStringLiteral("draftsTab"));
+  setupDraftsTab(draftsTab);
+  m_tabWidget->addTab(draftsTab, i18n("Drafts"));
+
+  // Templates View
+  QWidget *templatesTab = new QWidget(this);
+  templatesTab->setObjectName(QStringLiteral("templatesTab"));
+  setupTemplatesTab(templatesTab);
+  m_tabWidget->addTab(templatesTab, i18n("Templates"));
+
+  // Queue View
+  setupQueueTab();
+
+  // Holding View
+  setupHoldingTab();
+
+  // Blocked View
+  setupBlockedTab();
+
+  // Errors View
+  QWidget *errTab = new QWidget(this);
+  errTab->setObjectName(QStringLiteral("errorsTab"));
+  setupErrorsTab(errTab);
+  m_tabWidget->addTab(errTab, i18n("Errors"));
+
+  mainLayout->addWidget(m_tabWidget);
+
+  setupStatusBar();
+
+  // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
+  // Connect model signals to update tab titles with counts
+  connectModelForTabUpdates(m_draftsModel);
+  connectModelForTabUpdates(m_templatesModel);
+  connectModelForTabUpdates(m_errorsModel);
+  connectModelForTabUpdates(m_queueModel);
+  connectModelForTabUpdates(m_sessionModel);
+
+  // Initial title update
+  updateTabTitles();
+}
+
+void MainWindow::setupSourcesTab(QWidget *tab) {
+  QVBoxLayout *srcLayout = new QVBoxLayout(tab);
+  // Sources View
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
   KConfigGroup mwConfig(KSharedConfig::openConfig(),
@@ -548,12 +608,13 @@ void MainWindow::setupUi() {
       });
   connect(m_sourceView, &QTreeView::doubleClicked, this,
           &MainWindow::onSourceActivated);
-  m_tabWidget->addTab(srcTab, i18n("Sources"));
+}
 
+void MainWindow::setupFollowingTab(QWidget *tab) {
+  QVBoxLayout *followingLayout = new QVBoxLayout(tab);
+  KConfigGroup mwConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
   // Sessions View
-  QWidget *followingTab = new QWidget(this);
-  followingTab->setObjectName(QStringLiteral("followingTab"));
-  QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
   m_followingFilterEditor->setFilterText(mwConfig.readEntry(
       QStringLiteral("FollowingDefaultFilter"), QStringLiteral("")));
@@ -999,12 +1060,13 @@ void MainWindow::setupUi() {
       });
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
+}
 
-  m_tabWidget->addTab(followingTab, i18n("Following"));
+void MainWindow::setupArchiveTab(QWidget *tab) {
+  QVBoxLayout *archLayout = new QVBoxLayout(tab);
+  KConfigGroup mwConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
   // Archive View
-  QWidget *archTab = new QWidget(this);
-  archTab->setObjectName(QStringLiteral("archiveTab"));
-  QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
   m_archiveFilterEditor->setFilterText(mwConfig.readEntry(
       QStringLiteral("ArchiveDefaultFilter"), QStringLiteral("")));
@@ -1266,12 +1328,11 @@ void MainWindow::setupUi() {
           updateStatus(i18n("Fetching details for session %1...", id));
         }
       });
+}
 
-  m_tabWidget->addTab(archTab, i18n("Archive"));
-
+void MainWindow::setupDraftsTab(QWidget *tab) {
+  QVBoxLayout *draftsLayout = new QVBoxLayout(tab);
   // Drafts View
-  QWidget *draftsTab = new QWidget(this);
-  QVBoxLayout *draftsLayout = new QVBoxLayout(draftsTab);
   m_draftsFilter = new QLineEdit(this);
   m_draftsFilter->setPlaceholderText(i18n("Filter drafts..."));
   draftsLayout->addWidget(m_draftsFilter);
@@ -1347,12 +1408,11 @@ void MainWindow::setupUi() {
           });
   connect(m_draftsView, &QListView::doubleClicked, this,
           &MainWindow::onDraftActivated);
+}
 
-  m_tabWidget->addTab(draftsTab, i18n("Drafts"));
-
+void MainWindow::setupTemplatesTab(QWidget *tab) {
+  QVBoxLayout *tplLayout = new QVBoxLayout(tab);
   // Templates View
-  QWidget *tplTab = new QWidget(this);
-  QVBoxLayout *tplLayout = new QVBoxLayout(tplTab);
   m_templatesFilter = new QLineEdit(this);
   m_templatesFilter->setPlaceholderText(i18n("Filter templates..."));
   tplLayout->addWidget(m_templatesFilter);
@@ -1449,9 +1509,9 @@ void MainWindow::setupUi() {
       });
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
+}
 
-  m_tabWidget->addTab(tplTab, i18n("Templates"));
-
+void MainWindow::setupQueueTab() {
   // Queue View
   m_queueView = new QListView(this);
   m_queueView->setModel(m_queueModel);
@@ -1500,7 +1560,9 @@ void MainWindow::setupUi() {
   m_queueView->addAction(queueDeleteAction);
 
   m_tabWidget->addTab(m_queueView, i18n("Queue"));
+}
 
+void MainWindow::setupHoldingTab() {
   m_holdingView = new QListView(this);
   m_holdingView->setModel(m_holdingModel);
   m_holdingView->setItemDelegate(new QueueDelegate(this));
@@ -1556,7 +1618,9 @@ void MainWindow::setupUi() {
   connect(m_holdingModel, &QAbstractListModel::modelReset, this,
           &MainWindow::updateHoldingTabVisibility);
   updateHoldingTabVisibility();
+}
 
+void MainWindow::setupBlockedTab() {
   // Blocked View
   m_blockedTreeModel = new BlockedTreeModel(m_sourceModel, m_queueModel, this);
   m_blockedView = new QTreeView(this);
@@ -1572,10 +1636,11 @@ void MainWindow::setupUi() {
   connect(m_blockedTreeModel, &QAbstractItemModel::modelReset, this,
           &MainWindow::updateBlockedTabVisibility);
   updateBlockedTabVisibility();
+}
 
+void MainWindow::setupErrorsTab(QWidget *tab) {
+  QVBoxLayout *errLayout = new QVBoxLayout(tab);
   // Errors View
-  QWidget *errTab = new QWidget(this);
-  QVBoxLayout *errLayout = new QVBoxLayout(errTab);
   m_errorsFilter = new QLineEdit(this);
   m_errorsFilter->setPlaceholderText(i18n("Filter errors..."));
   errLayout->addWidget(m_errorsFilter);
@@ -1763,13 +1828,9 @@ void MainWindow::setupUi() {
       });
   connect(m_errorsView, &QListView::doubleClicked, this,
           &MainWindow::onErrorActivated);
+}
 
-  m_tabWidget->addTab(errTab, i18n("Errors"));
-
-  mainLayout->addWidget(m_tabWidget);
-
-  // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
-
+void MainWindow::setupStatusBar() {
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
@@ -1805,16 +1866,6 @@ void MainWindow::setupUi() {
   connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
           &MainWindow::cancelSourcesRefresh);
   statusBar()->addPermanentWidget(m_cancelRefreshBtn);
-
-  // Connect model signals to update tab titles with counts
-  connectModelForTabUpdates(m_draftsModel);
-  connectModelForTabUpdates(m_templatesModel);
-  connectModelForTabUpdates(m_errorsModel);
-  connectModelForTabUpdates(m_queueModel);
-  connectModelForTabUpdates(m_sessionModel);
-
-  // Initial title update
-  updateTabTitles();
 }
 
 void MainWindow::onRefreshProgressUpdated(int current, int total) {
