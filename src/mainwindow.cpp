@@ -470,25 +470,6 @@ void MainWindow::setupUi() {
               githubMenu->addSeparator();
             }
 
-            auto addGithubLink = [this, githubMenu,
-                                  urlStr](const QString &title,
-                                          const QString &path) {
-              QAction *openAction =
-                  githubMenu->addAction(i18n("Open %1", title));
-              connect(openAction, &QAction::triggered, [urlStr, path]() {
-                QUrl u(urlStr + path);
-                if (Utils::isSafeUrl(u)) {
-                  QDesktopServices::openUrl(u);
-                }
-              });
-              QAction *copyAction =
-                  githubMenu->addAction(i18n("Copy %1 URL", title));
-              connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
-                QGuiApplication::clipboard()->setText(urlStr + path);
-                updateStatus(i18n("URL copied to clipboard."));
-              });
-            };
-
             if (github.value(QStringLiteral("has_wiki")).toBool()) {
               this->addGithubLink(githubMenu, urlStr, QStringLiteral("Wiki"),
                                   QStringLiteral("/wiki"));

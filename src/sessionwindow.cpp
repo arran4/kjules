@@ -561,12 +561,24 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   mainLayout->addWidget(m_tabWidget);
 
   m_detailsBrowser = new QTextBrowser(this);
-  m_detailsBrowser->setOpenExternalLinks(true);
+  m_detailsBrowser->setOpenExternalLinks(false);
+  connect(m_detailsBrowser, &QTextBrowser::anchorClicked, this,
+          [this](const QUrl &url) {
+            if (Utils::isSafeUrl(url)) {
+              QDesktopServices::openUrl(url);
+            }
+          });
 
   m_promptBrowser = new QTextBrowser(this);
 
   m_prBrowser = new QTextBrowser(this);
-  m_prBrowser->setOpenExternalLinks(true);
+  m_prBrowser->setOpenExternalLinks(false);
+  connect(m_prBrowser, &QTextBrowser::anchorClicked, this,
+          [this](const QUrl &url) {
+            if (Utils::isSafeUrl(url)) {
+              QDesktopServices::openUrl(url);
+            }
+          });
 
   m_diffBrowser = new QTextBrowser(this);
   m_diffBrowser->setStyleSheet(QStringLiteral("font-family: monospace;"));
