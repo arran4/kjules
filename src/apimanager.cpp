@@ -424,26 +424,6 @@ void APIManager::cancelListSources() {
   }
 }
 
-void APIManager::createSession(const QString &source, const QString &prompt,
-                               const QString &automationMode,
-                               bool requirePlanApproval) {
-  if (!canConnect()) {
-    Q_EMIT errorOccurred(
-        QStringLiteral("Cannot create session: No token or previous failure."));
-    return;
-  }
-  QJsonObject requestData;
-  requestData[QStringLiteral("source")] = source;
-  requestData[QStringLiteral("prompt")] = prompt;
-  if (requirePlanApproval) {
-    requestData[QStringLiteral("requirePlanApproval")] = true;
-  }
-  if (!automationMode.isEmpty()) {
-    requestData[QStringLiteral("automationMode")] = automationMode;
-  }
-  createSessionAsync(requestData);
-}
-
 void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     Q_EMIT githubPullRequestFailed(

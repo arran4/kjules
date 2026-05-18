@@ -22,8 +22,11 @@ private Q_SLOTS:
     QElapsedTimer timer;
     timer.start();
     for (const QString &source : sources) {
-      manager.createSession(source, QStringLiteral("Test prompt"),
-                            QStringLiteral("auto"));
+      QJsonObject req;
+      req[QStringLiteral("source")] = source;
+      req[QStringLiteral("prompt")] = QStringLiteral("Test prompt");
+      req[QStringLiteral("automationMode")] = QStringLiteral("auto");
+      manager.createSessionAsync(req);
     }
     qint64 oldTime = timer.nsecsElapsed();
 
