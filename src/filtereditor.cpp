@@ -16,7 +16,6 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QStandardItemModel>
-#include <QToolButton>
 #include <QTreeView>
 #include <QVBoxLayout>
 

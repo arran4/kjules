@@ -10,9 +10,6 @@ class QTreeView;
 class QStandardItemModel;
 class QStandardItem;
 class QListWidget;
-class QToolButton;
-class QListWidget;
-class QToolButton;
 class ASTNode;
 
 class FilterEditor : public QWidget {
