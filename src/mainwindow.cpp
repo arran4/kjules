@@ -334,7 +334,6 @@ void MainWindow::setupUi() {
 void MainWindow::setupSourcesTab(QWidget *tab) {
   QVBoxLayout *srcLayout = new QVBoxLayout(tab);
   // Sources View
-  // Sources View
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
   KConfigGroup mwConfig(KSharedConfig::openConfig(),
@@ -615,7 +614,6 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
   QVBoxLayout *followingLayout = new QVBoxLayout(tab);
   KConfigGroup mwConfig(KSharedConfig::openConfig(),
                         QStringLiteral("MainWindow"));
-  // Sessions View
   // Sessions View
   m_followingFilterEditor = new FilterEditor(this);
   m_followingFilterEditor->setFilterText(mwConfig.readEntry(
@@ -1069,7 +1067,6 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
   KConfigGroup mwConfig(KSharedConfig::openConfig(),
                         QStringLiteral("MainWindow"));
   // Archive View
-  // Archive View
   m_archiveFilterEditor = new FilterEditor(this);
   m_archiveFilterEditor->setFilterText(mwConfig.readEntry(
       QStringLiteral("ArchiveDefaultFilter"), QStringLiteral("")));
@@ -1336,7 +1333,6 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
 void MainWindow::setupDraftsTab(QWidget *tab) {
   QVBoxLayout *draftsLayout = new QVBoxLayout(tab);
   // Drafts View
-  // Drafts View
   m_draftsFilter = new QLineEdit(this);
   m_draftsFilter->setPlaceholderText(i18n("Filter drafts..."));
   draftsLayout->addWidget(m_draftsFilter);
@@ -1416,7 +1412,6 @@ void MainWindow::setupDraftsTab(QWidget *tab) {
 
 void MainWindow::setupTemplatesTab(QWidget *tab) {
   QVBoxLayout *tplLayout = new QVBoxLayout(tab);
-  // Templates View
   // Templates View
   m_templatesFilter = new QLineEdit(this);
   m_templatesFilter->setPlaceholderText(i18n("Filter templates..."));
@@ -1517,7 +1512,6 @@ void MainWindow::setupTemplatesTab(QWidget *tab) {
 }
 
 void MainWindow::setupQueueTab() {
-  // Queue View
   // Queue View
   m_queueView = new QListView(this);
   m_queueView->setModel(m_queueModel);
@@ -1628,7 +1622,6 @@ void MainWindow::setupHoldingTab() {
 
 void MainWindow::setupBlockedTab() {
   // Blocked View
-  // Blocked View
   m_blockedTreeModel = new BlockedTreeModel(m_sourceModel, m_queueModel, this);
   m_blockedView = new QTreeView(this);
   m_blockedView->setModel(m_blockedTreeModel);
@@ -1647,7 +1640,6 @@ void MainWindow::setupBlockedTab() {
 
 void MainWindow::setupErrorsTab(QWidget *tab) {
   QVBoxLayout *errLayout = new QVBoxLayout(tab);
-  // Errors View
   // Errors View
   m_errorsFilter = new QLineEdit(this);
   m_errorsFilter->setPlaceholderText(i18n("Filter errors..."));
@@ -1839,7 +1831,7 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
 }
 
 void MainWindow::setupStatusBar() {
-
+  // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
 
