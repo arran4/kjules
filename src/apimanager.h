@@ -35,7 +35,6 @@ public:
 
   void loadApiKeyFromWallet();
   void saveApiKeyToWallet(const QString &key);
-  void loadGithubTokenFromWallet();
   void saveGithubTokenToWallet(const QString &token);
 
   bool canConnect() const;
