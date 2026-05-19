@@ -181,7 +181,7 @@ void SessionsWindow::setupUi() {
   setupStatusBar();
 }
 
-void SessionsWindow::setupFilters(QLayout *layout) {
+void SessionsWindow::setupFilters(QVBoxLayout *layout) {
   QHBoxLayout *filterLayout = new QHBoxLayout();
   m_searchEdit = new QLineEdit(this);
   m_searchEdit->setPlaceholderText(i18n("Search title or source..."));

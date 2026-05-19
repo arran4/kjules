@@ -85,7 +85,7 @@ private:
   void applyFavouriteAction(std::function<void(const QString &)> action);
 
   void setupUi();
-  void setupFilters(QLayout *layout);
+  void setupFilters(QVBoxLayout *layout);
   void setupListView();
   void setupActions();
   void setupStatusBar();
