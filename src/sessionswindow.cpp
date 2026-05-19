@@ -4,6 +4,7 @@
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 
+#include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -246,6 +247,7 @@ void SessionsWindow::setupListView() {
 
   connect(m_listView, &QTreeView::customContextMenuRequested, this,
           &SessionsWindow::showContextMenu);
+
   connect(m_listView, &QTreeView::doubleClicked, this,
           &SessionsWindow::onListViewDoubleClicked);
 

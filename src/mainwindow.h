@@ -22,6 +22,7 @@ class TemplatesModel;
 class QueueModel;
 class ErrorsModel;
 class BlockedTreeModel;
+class QAbstractItemView;
 class QListView;
 class QTreeView;
 class FilterEditor;
@@ -155,6 +156,9 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
+  QList<int> getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                 const QAbstractItemView *view) const;
+
   void applyFavouriteAction(
       std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
                          const QModelIndexList &, int)>
@@ -165,11 +169,28 @@ private:
 
   void updateFollowingRefreshTimer();
   void setupUi();
+
+  void setupSourcesTab(QWidget *tab);
+  void setupFollowingTab(QWidget *tab);
+  void setupArchiveTab(QWidget *tab);
+  void setupDraftsTab(QWidget *tab);
+  void setupTemplatesTab(QWidget *tab);
+  void setupQueueTab();
+  void setupHoldingTab();
+  void setupBlockedTab();
+  void setupErrorsTab(QWidget *tab);
+  void setupStatusBar();
   void setupTrayIcon();
   void createActions();
   void createGeneralActions();
   void createSessionActions();
   void createSourceActions();
+  void setupSourceSettingsAction();
+  void setupRefreshSourceActions();
+  void setupRecalculateStatsAction();
+  void setupShowFollowingNewSessionsAction();
+  void setupViewRawDataAction();
+  void setupUrlActions();
   void createDataActions();
   void createQueueActions();
   void createArchiveActions();

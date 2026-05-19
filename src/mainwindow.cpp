@@ -37,6 +37,7 @@
 #include <KToolBar>
 #include <KXMLGUIFactory>
 #include <KZip>
+#include <QAbstractItemView>
 #include <QAction>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -62,6 +63,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSortFilterProxyModel>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -273,7 +275,67 @@ void MainWindow::setupUi() {
   // Sources View
   QWidget *srcTab = new QWidget(this);
   srcTab->setObjectName(QStringLiteral("sourcesTab"));
-  QVBoxLayout *srcLayout = new QVBoxLayout(srcTab);
+  setupSourcesTab(srcTab);
+  m_tabWidget->addTab(srcTab, i18n("Sources"));
+
+  // Following View (originally labeled Sessions View)
+  QWidget *followingTab = new QWidget(this);
+  followingTab->setObjectName(QStringLiteral("followingTab"));
+  setupFollowingTab(followingTab);
+  m_tabWidget->addTab(followingTab, i18n("Following"));
+
+  // Archive View
+  QWidget *archTab = new QWidget(this);
+  archTab->setObjectName(QStringLiteral("archiveTab"));
+  setupArchiveTab(archTab);
+  m_tabWidget->addTab(archTab, i18n("Archive"));
+
+  // Drafts View
+  QWidget *draftsTab = new QWidget(this);
+  draftsTab->setObjectName(QStringLiteral("draftsTab"));
+  setupDraftsTab(draftsTab);
+  m_tabWidget->addTab(draftsTab, i18n("Drafts"));
+
+  // Templates View
+  QWidget *templatesTab = new QWidget(this);
+  templatesTab->setObjectName(QStringLiteral("templatesTab"));
+  setupTemplatesTab(templatesTab);
+  m_tabWidget->addTab(templatesTab, i18n("Templates"));
+
+  // Queue View
+  setupQueueTab();
+
+  // Holding View
+  setupHoldingTab();
+
+  // Blocked View
+  setupBlockedTab();
+
+  // Errors View
+  QWidget *errTab = new QWidget(this);
+  errTab->setObjectName(QStringLiteral("errorsTab"));
+  setupErrorsTab(errTab);
+  m_tabWidget->addTab(errTab, i18n("Errors"));
+
+  mainLayout->addWidget(m_tabWidget);
+
+  setupStatusBar();
+
+  // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
+  // Connect model signals to update tab titles with counts
+  connectModelForTabUpdates(m_draftsModel);
+  connectModelForTabUpdates(m_templatesModel);
+  connectModelForTabUpdates(m_errorsModel);
+  connectModelForTabUpdates(m_queueModel);
+  connectModelForTabUpdates(m_sessionModel);
+
+  // Initial title update
+  updateTabTitles();
+}
+
+void MainWindow::setupSourcesTab(QWidget *tab) {
+  QVBoxLayout *srcLayout = new QVBoxLayout(tab);
+  // Sources View
   m_sourcesFilterEditor = new FilterEditor(this);
   m_sourcesFilterEditor->setSimplifiedMode(true);
   KConfigGroup mwConfig(KSharedConfig::openConfig(),
@@ -476,7 +538,7 @@ void MainWindow::setupUi() {
               QAction *openAction =
                   githubMenu->addAction(i18n("Open %1", title));
               connect(openAction, &QAction::triggered, [urlStr, path]() {
-                QDesktopServices::openUrl(QUrl(urlStr + path));
+                Utils::openUrl(QUrl(urlStr + path));
               });
               QAction *copyAction =
                   githubMenu->addAction(i18n("Copy %1 URL", title));
@@ -504,9 +566,8 @@ void MainWindow::setupUi() {
                 github.value(QStringLiteral("homepage")).toString();
             if (!homepage.isEmpty()) {
               QAction *openAction = githubMenu->addAction(i18n("Open Website"));
-              connect(openAction, &QAction::triggered, [homepage]() {
-                QDesktopServices::openUrl(QUrl(homepage));
-              });
+              connect(openAction, &QAction::triggered,
+                      [homepage]() { Utils::openUrl(QUrl(homepage)); });
               QAction *copyAction =
                   githubMenu->addAction(i18n("Copy Website URL"));
               connect(copyAction, &QAction::triggered, [this, homepage]() {
@@ -548,12 +609,13 @@ void MainWindow::setupUi() {
       });
   connect(m_sourceView, &QTreeView::doubleClicked, this,
           &MainWindow::onSourceActivated);
-  m_tabWidget->addTab(srcTab, i18n("Sources"));
+}
 
+void MainWindow::setupFollowingTab(QWidget *tab) {
+  QVBoxLayout *followingLayout = new QVBoxLayout(tab);
+  KConfigGroup mwConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
   // Sessions View
-  QWidget *followingTab = new QWidget(this);
-  followingTab->setObjectName(QStringLiteral("followingTab"));
-  QVBoxLayout *followingLayout = new QVBoxLayout(followingTab);
   m_followingFilterEditor = new FilterEditor(this);
   m_followingFilterEditor->setFilterText(mwConfig.readEntry(
       QStringLiteral("FollowingDefaultFilter"), QStringLiteral("")));
@@ -848,7 +910,7 @@ void MainWindow::setupUi() {
                   QString urlStr =
                       QStringLiteral("https://jules.google.com/session/") +
                       currentId;
-                  QDesktopServices::openUrl(QUrl(urlStr));
+                  Utils::openUrl(QUrl(urlStr));
                   count++;
                 }
               }
@@ -896,7 +958,7 @@ void MainWindow::setupUi() {
                     m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole)
                         .toString();
                 if (!currentPrUrl.isEmpty()) {
-                  QDesktopServices::openUrl(QUrl(currentPrUrl));
+                  Utils::openUrl(QUrl(currentPrUrl));
                   count++;
                 }
               }
@@ -999,12 +1061,13 @@ void MainWindow::setupUi() {
       });
   connect(m_sessionView, &QTreeView::doubleClicked, this,
           &MainWindow::onSessionActivated);
+}
 
-  m_tabWidget->addTab(followingTab, i18n("Following"));
+void MainWindow::setupArchiveTab(QWidget *tab) {
+  QVBoxLayout *archLayout = new QVBoxLayout(tab);
+  KConfigGroup mwConfig(KSharedConfig::openConfig(),
+                        QStringLiteral("MainWindow"));
   // Archive View
-  QWidget *archTab = new QWidget(this);
-  archTab->setObjectName(QStringLiteral("archiveTab"));
-  QVBoxLayout *archLayout = new QVBoxLayout(archTab);
   m_archiveFilterEditor = new FilterEditor(this);
   m_archiveFilterEditor->setFilterText(mwConfig.readEntry(
       QStringLiteral("ArchiveDefaultFilter"), QStringLiteral("")));
@@ -1266,12 +1329,11 @@ void MainWindow::setupUi() {
           updateStatus(i18n("Fetching details for session %1...", id));
         }
       });
+}
 
-  m_tabWidget->addTab(archTab, i18n("Archive"));
-
+void MainWindow::setupDraftsTab(QWidget *tab) {
+  QVBoxLayout *draftsLayout = new QVBoxLayout(tab);
   // Drafts View
-  QWidget *draftsTab = new QWidget(this);
-  QVBoxLayout *draftsLayout = new QVBoxLayout(draftsTab);
   m_draftsFilter = new QLineEdit(this);
   m_draftsFilter->setPlaceholderText(i18n("Filter drafts..."));
   draftsLayout->addWidget(m_draftsFilter);
@@ -1347,12 +1409,11 @@ void MainWindow::setupUi() {
           });
   connect(m_draftsView, &QListView::doubleClicked, this,
           &MainWindow::onDraftActivated);
+}
 
-  m_tabWidget->addTab(draftsTab, i18n("Drafts"));
-
+void MainWindow::setupTemplatesTab(QWidget *tab) {
+  QVBoxLayout *tplLayout = new QVBoxLayout(tab);
   // Templates View
-  QWidget *tplTab = new QWidget(this);
-  QVBoxLayout *tplLayout = new QVBoxLayout(tplTab);
   m_templatesFilter = new QLineEdit(this);
   m_templatesFilter->setPlaceholderText(i18n("Filter templates..."));
   tplLayout->addWidget(m_templatesFilter);
@@ -1449,9 +1510,9 @@ void MainWindow::setupUi() {
       });
   connect(m_templatesView, &QListView::doubleClicked, this,
           &MainWindow::onTemplateActivated);
+}
 
-  m_tabWidget->addTab(tplTab, i18n("Templates"));
-
+void MainWindow::setupQueueTab() {
   // Queue View
   m_queueView = new QListView(this);
   m_queueView->setModel(m_queueModel);
@@ -1477,13 +1538,7 @@ void MainWindow::setupUi() {
                               i18np("Remove this task from the queue?",
                                     "Remove these tasks from the queue?",
                                     selectedRows.size())) == QMessageBox::Yes) {
-      QList<int> rowsToDelete;
-      for (const QModelIndex &idx : selectedRows) {
-        if (!rowsToDelete.contains(idx.row())) {
-          rowsToDelete.append(idx.row());
-        }
-      }
-      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+      QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_queueView);
 
       for (int row : rowsToDelete) {
         m_queueModel->removeItem(row);
@@ -1500,7 +1555,9 @@ void MainWindow::setupUi() {
   m_queueView->addAction(queueDeleteAction);
 
   m_tabWidget->addTab(m_queueView, i18n("Queue"));
+}
 
+void MainWindow::setupHoldingTab() {
   m_holdingView = new QListView(this);
   m_holdingView->setModel(m_holdingModel);
   m_holdingView->setItemDelegate(new QueueDelegate(this));
@@ -1526,13 +1583,8 @@ void MainWindow::setupUi() {
             i18np("Remove this task from the holding queue?",
                   "Remove these tasks from the holding queue?",
                   selectedRows.size())) == QMessageBox::Yes) {
-      QList<int> rowsToDelete;
-      for (const QModelIndex &idx : selectedRows) {
-        if (!rowsToDelete.contains(idx.row())) {
-          rowsToDelete.append(idx.row());
-        }
-      }
-      std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+      QList<int> rowsToDelete =
+          getUniqueSortedRows(selectedRows, m_holdingView);
 
       for (int row : rowsToDelete) {
         m_holdingModel->removeItem(row);
@@ -1556,7 +1608,9 @@ void MainWindow::setupUi() {
   connect(m_holdingModel, &QAbstractListModel::modelReset, this,
           &MainWindow::updateHoldingTabVisibility);
   updateHoldingTabVisibility();
+}
 
+void MainWindow::setupBlockedTab() {
   // Blocked View
   m_blockedTreeModel = new BlockedTreeModel(m_sourceModel, m_queueModel, this);
   m_blockedView = new QTreeView(this);
@@ -1572,10 +1626,11 @@ void MainWindow::setupUi() {
   connect(m_blockedTreeModel, &QAbstractItemModel::modelReset, this,
           &MainWindow::updateBlockedTabVisibility);
   updateBlockedTabVisibility();
+}
 
+void MainWindow::setupErrorsTab(QWidget *tab) {
+  QVBoxLayout *errLayout = new QVBoxLayout(tab);
   // Errors View
-  QWidget *errTab = new QWidget(this);
-  QVBoxLayout *errLayout = new QVBoxLayout(errTab);
   m_errorsFilter = new QLineEdit(this);
   m_errorsFilter->setPlaceholderText(i18n("Filter errors..."));
   errLayout->addWidget(m_errorsFilter);
@@ -1639,14 +1694,8 @@ void MainWindow::setupUi() {
           connect(requeueAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_errorsView->selectionModel()->selectedRows();
-            QList<int> rowsToRequeue;
-            for (const QModelIndex &idx : selectedRows) {
-              if (!rowsToRequeue.contains(idx.row())) {
-                rowsToRequeue.append(idx.row());
-              }
-            }
-            std::sort(rowsToRequeue.begin(), rowsToRequeue.end(),
-                      std::greater<int>());
+            QList<int> rowsToRequeue =
+                getUniqueSortedRows(selectedRows, m_errorsView);
 
             for (int row : rowsToRequeue) {
               QJsonObject errData = m_errorsModel->getError(row);
@@ -1763,13 +1812,9 @@ void MainWindow::setupUi() {
       });
   connect(m_errorsView, &QListView::doubleClicked, this,
           &MainWindow::onErrorActivated);
+}
 
-  m_tabWidget->addTab(errTab, i18n("Errors"));
-
-  mainLayout->addWidget(m_tabWidget);
-
-  // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
-
+void MainWindow::setupStatusBar() {
   // Status Bar
   m_statusLabel = new QLabel(i18n("Ready"), this);
   statusBar()->addWidget(m_statusLabel);
@@ -1805,16 +1850,6 @@ void MainWindow::setupUi() {
   connect(m_cancelRefreshBtn, &QPushButton::clicked, this,
           &MainWindow::cancelSourcesRefresh);
   statusBar()->addPermanentWidget(m_cancelRefreshBtn);
-
-  // Connect model signals to update tab titles with counts
-  connectModelForTabUpdates(m_draftsModel);
-  connectModelForTabUpdates(m_templatesModel);
-  connectModelForTabUpdates(m_errorsModel);
-  connectModelForTabUpdates(m_queueModel);
-  connectModelForTabUpdates(m_sessionModel);
-
-  // Initial title update
-  updateTabTitles();
 }
 
 void MainWindow::onRefreshProgressUpdated(int current, int total) {
@@ -2214,7 +2249,7 @@ void MainWindow::createSessionActions() {
       if (!id.isEmpty()) {
         QString urlStr =
             QStringLiteral("https://jules.google.com/session/") + id;
-        QDesktopServices::openUrl(QUrl(urlStr));
+        Utils::openUrl(QUrl(urlStr));
         count++;
       }
     }
@@ -2244,7 +2279,7 @@ void MainWindow::createSessionActions() {
           m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
 
       if (!prUrl.isEmpty()) {
-        QDesktopServices::openUrl(QUrl(prUrl));
+        Utils::openUrl(QUrl(prUrl));
         count++;
       }
     }
@@ -2258,6 +2293,17 @@ void MainWindow::createSessionActions() {
 }
 
 void MainWindow::createSourceActions() {
+  setupSourceSettingsAction();
+  setupRefreshSourceActions();
+  setupRecalculateStatsAction();
+  setupShowFollowingNewSessionsAction();
+  setupViewRawDataAction();
+  setupUrlActions();
+
+  // Set up XML GUI
+}
+
+void MainWindow::setupSourceSettingsAction() {
   m_sourceSettingsAction = new QAction(i18n("Source Settings"), this);
   actionCollection()->addAction(QStringLiteral("source_settings"),
                                 m_sourceSettingsAction);
@@ -2269,64 +2315,63 @@ void MainWindow::createSourceActions() {
     const QSortFilterProxyModel *proxy =
         qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
 
-    if (selectedRows.size() > 0) {
-      QModelIndex idx = selectedRows.first();
-      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-      QMainWindow *settingsWindow = new QMainWindow(this);
-      settingsWindow->setObjectName(
-          QStringLiteral("SourceSettingsWindow_%1")
-              .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
-                       .toString()
-                       .replace(QLatin1Char('/'), QLatin1Char('_'))));
-      settingsWindow->setAttribute(Qt::WA_DeleteOnClose);
-      settingsWindow->setWindowTitle(i18n("Source Settings"));
+    QModelIndex idx = selectedRows.first();
+    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    QMainWindow *settingsWindow = new QMainWindow(this);
+    settingsWindow->setObjectName(
+        QStringLiteral("SourceSettingsWindow_%1")
+            .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
+                     .toString()
+                     .replace(QLatin1Char('/'), QLatin1Char('_'))));
+    settingsWindow->setAttribute(Qt::WA_DeleteOnClose);
+    settingsWindow->setWindowTitle(i18n("Source Settings"));
 
-      QTextEdit *textEdit = new QTextEdit(settingsWindow);
-      QJsonObject rawData =
-          m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
-              .toJsonObject();
-      QJsonDocument doc(rawData);
-      textEdit->setPlainText(
-          QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    QTextEdit *textEdit = new QTextEdit(settingsWindow);
+    QJsonObject rawData =
+        m_sourceModel->data(mappedIdx, SourceModel::RawDataRole).toJsonObject();
+    QJsonDocument doc(rawData);
+    textEdit->setPlainText(
+        QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
 
-      QMenu *fileMenu = new QMenu(i18n("File"), settingsWindow);
-      QAction *saveAction =
-          new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
-                      i18n("Save"), settingsWindow);
-      saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
-      connect(saveAction, &QAction::triggered, settingsWindow,
-              [this, textEdit, mappedIdx, settingsWindow]() {
-                QJsonParseError parseError;
-                QJsonDocument newDoc = QJsonDocument::fromJson(
-                    textEdit->toPlainText().toUtf8(), &parseError);
-                if (parseError.error != QJsonParseError::NoError) {
-                  QMessageBox::warning(settingsWindow, i18n("Invalid JSON"),
-                                       i18n("The JSON data is invalid: %1",
-                                            parseError.errorString()));
-                  return;
-                }
-                QJsonObject mergedData = newDoc.object();
+    QMenu *fileMenu = new QMenu(i18n("File"), settingsWindow);
+    QAction *saveAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
+                    i18n("Save"), settingsWindow);
+    saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+    connect(saveAction, &QAction::triggered, settingsWindow,
+            [this, textEdit, mappedIdx, settingsWindow]() {
+              QJsonParseError parseError;
+              QJsonDocument newDoc = QJsonDocument::fromJson(
+                  textEdit->toPlainText().toUtf8(), &parseError);
+              if (parseError.error != QJsonParseError::NoError) {
+                QMessageBox::warning(settingsWindow, i18n("Invalid JSON"),
+                                     i18n("The JSON data is invalid: %1",
+                                          parseError.errorString()));
+                return;
+              }
+              QJsonObject mergedData = newDoc.object();
 
-                m_sourceModel->updateSource(mergedData);
-                updateStatus(i18n("Source settings saved successfully."));
-              });
-      fileMenu->addAction(saveAction);
+              m_sourceModel->updateSource(mergedData);
+              updateStatus(i18n("Source settings saved successfully."));
+            });
+    fileMenu->addAction(saveAction);
 
-      QAction *closeAction =
-          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
-                      i18n("Close"), settingsWindow);
-      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, settingsWindow,
-              &QMainWindow::close);
-      fileMenu->addAction(closeAction);
-      settingsWindow->menuBar()->addMenu(fileMenu);
+    QAction *closeAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                    i18n("Close"), settingsWindow);
+    closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    connect(closeAction, &QAction::triggered, settingsWindow,
+            &QMainWindow::close);
+    fileMenu->addAction(closeAction);
+    settingsWindow->menuBar()->addMenu(fileMenu);
 
-      settingsWindow->setCentralWidget(textEdit);
-      settingsWindow->resize(600, 400);
-      settingsWindow->show();
-    }
+    settingsWindow->setCentralWidget(textEdit);
+    settingsWindow->resize(600, 400);
+    settingsWindow->show();
   });
+}
 
+void MainWindow::setupRefreshSourceActions() {
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
@@ -2357,24 +2402,6 @@ void MainWindow::createSourceActions() {
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
 
-  m_recalculateStatsAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")),
-                  i18n("Recalculate Session Stats"), this);
-  actionCollection()->addAction(QStringLiteral("recalculate_stats"),
-                                m_recalculateStatsAction);
-  connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
-    QJsonArray allSessions;
-    QJsonArray active = m_sessionModel->getAllSessions();
-    for (int i = 0; i < active.size(); ++i) {
-      allSessions.append(active[i]);
-    }
-    QJsonArray archived = m_archiveModel->getAllSessions();
-    for (int i = 0; i < archived.size(); ++i) {
-      allSessions.append(archived[i]);
-    }
-    m_sourceModel->recalculateStatsFromSessions(allSessions);
-    updateStatus(i18n("Session statistics recalculated successfully."));
-  });
   connect(m_refreshSourceAction, &QAction::triggered, this, [this]() {
     QModelIndexList selectedRows =
         m_sourceView->selectionModel()->selectedRows();
@@ -2394,6 +2421,30 @@ void MainWindow::createSourceActions() {
     updateStatus(
         i18np("Refreshing 1 source...", "Refreshing %1 sources...", count));
   });
+}
+
+void MainWindow::setupRecalculateStatsAction() {
+  m_recalculateStatsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")),
+                  i18n("Recalculate Session Stats"), this);
+  actionCollection()->addAction(QStringLiteral("recalculate_stats"),
+                                m_recalculateStatsAction);
+  connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
+    QJsonArray allSessions;
+    QJsonArray active = m_sessionModel->getAllSessions();
+    for (int i = 0; i < active.size(); ++i) {
+      allSessions.append(active[i]);
+    }
+    QJsonArray archived = m_archiveModel->getAllSessions();
+    for (int i = 0; i < archived.size(); ++i) {
+      allSessions.append(archived[i]);
+    }
+    m_sourceModel->recalculateStatsFromSessions(allSessions);
+    updateStatus(i18n("Session statistics recalculated successfully."));
+  });
+}
+
+void MainWindow::setupShowFollowingNewSessionsAction() {
   m_showFollowingNewSessionsAction =
       new QAction(i18n("Show following new sessions"), this);
   actionCollection()->addAction(QStringLiteral("show_following_new_sessions"),
@@ -2469,6 +2520,9 @@ void MainWindow::createSourceActions() {
           sessionsWindow->show();
         }
       });
+}
+
+void MainWindow::setupViewRawDataAction() {
   m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
   actionCollection()->addAction(QStringLiteral("view_raw_data"),
                                 m_viewRawDataAction);
@@ -2524,7 +2578,9 @@ void MainWindow::createSourceActions() {
       rawWindow->show();
     }
   });
+}
 
+void MainWindow::setupUrlActions() {
   m_openUrlAction = new QAction(i18n("Open URL"), this);
   actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
   connect(m_openUrlAction, &QAction::triggered, this, [this]() {
@@ -2544,7 +2600,7 @@ void MainWindow::createSourceActions() {
       QString urlStr = urlFromSourceId(id);
 
       if (!urlStr.isEmpty()) {
-        QDesktopServices::openUrl(QUrl(urlStr));
+        Utils::openUrl(QUrl(urlStr));
         count++;
       }
     }
@@ -2586,8 +2642,6 @@ void MainWindow::createSourceActions() {
       updateStatus(i18n("Invalid source ID for copying URL."));
     }
   });
-
-  // Set up XML GUI
 }
 
 void MainWindow::createDataActions() {
@@ -3299,53 +3353,7 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
-void MainWindow::processErrorRetries() {
-  QDateTime now = QDateTime::currentDateTimeUtc();
-  QList<int> rowsToRetry;
-
-  for (int i = m_errorsModel->rowCount() - 1; i >= 0; --i) {
-    QJsonObject error = m_errorsModel->getError(i);
-    QString timestampStr = error.value(QStringLiteral("timestamp")).toString();
-    if (!timestampStr.isEmpty()) {
-      QDateTime timestamp = QDateTime::fromString(timestampStr, Qt::ISODate);
-      int errorCount = 1;
-      if (error.contains(QStringLiteral("pastErrors"))) {
-        errorCount +=
-            error.value(QStringLiteral("pastErrors")).toArray().size();
-      }
-      qint64 backoffSecs = QueueModel::calculateBackoff(errorCount);
-      if (timestamp.isValid() && timestamp.secsTo(now) >= backoffSecs) {
-        rowsToRetry.append(i);
-      }
-    }
-  }
-
-  for (int row : rowsToRetry) {
-    QJsonObject error = m_errorsModel->getError(row);
-    QJsonObject request = error.value(QStringLiteral("request")).toObject();
-
-    // Create a QueueItem and embed the entire error object as context
-    // This maintains the error history which was previously tracked implicitly
-    // or manually.
-    QueueItem item;
-    item.requestData = request;
-    // Track error history natively through the requestData wrapper if
-    // supported, or just re-add to queue and letting API retry.
-    if (error.contains(QStringLiteral("pastErrors"))) {
-      item.pastErrors = error.value(QStringLiteral("pastErrors")).toArray();
-    }
-    QJsonObject strippedError = error;
-    strippedError.remove(QStringLiteral("pastErrors"));
-    item.pastErrors.append(strippedError); // append current error
-
-    m_queueModel->enqueueItem(item);
-    m_errorsModel->removeError(row);
-  }
-
-  if (!rowsToRetry.isEmpty() && !m_queueTimer->isActive() && !m_queuePaused) {
-    m_queueTimer->start(1000);
-  }
-}
+void MainWindow::processErrorRetries() {}
 
 void MainWindow::onQueueTimerTimeout() {
   if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
@@ -3355,7 +3363,6 @@ void MainWindow::onQueueTimerTimeout() {
                              QStringLiteral("SessionWindow"));
   int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
 
-  // Backwards compatibility migration
   bool legacyMergeRefresh =
       sessionConfig.readEntry("MergeRefreshAndQueue", false);
   if (legacyMergeRefresh && seconds != -1) {
@@ -3437,7 +3444,6 @@ void MainWindow::processQueue() {
 
   if (m_queueBackoffUntil.isValid() &&
       QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
-    // We are backing off
     return;
   }
 
@@ -3459,7 +3465,6 @@ void MainWindow::processQueue() {
   int processIndex = -1;
   QHash<QString, int> activeCountCache;
 
-  // Pre-calculate active session counts from m_sessionModel
   for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
     QModelIndex idx = m_sessionModel->index(j, 0);
     QString prStatus =
@@ -3480,8 +3485,7 @@ void MainWindow::processQueue() {
 
     if (item.isWaitItem) {
       if (processIndex == -1) {
-        processIndex =
-            i; // We hit a wait item before any valid processable item
+        processIndex = i;
       }
       continue;
     }
@@ -3537,7 +3541,7 @@ void MainWindow::processQueue() {
       if (processIndex == -1) {
         processIndex = i;
       }
-      activeCountCache[source]++; // We consider this one active now
+      activeCountCache[source]++;
     }
 
     if (needsUpdate) {
@@ -3548,7 +3552,6 @@ void MainWindow::processQueue() {
   m_queueModel->endBatchUpdate();
 
   if (processIndex == -1) {
-    // Everything is blocked or queue is essentially empty
     return;
   }
 
@@ -3567,7 +3570,7 @@ void MainWindow::processQueue() {
       qint64 elapsed =
           peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
       if (elapsed >= peekItem.waitSeconds) {
-        m_queueModel->dequeue(); // Wait completed, remove wait item
+        m_queueModel->dequeue();
         QTimer::singleShot(0, this, &MainWindow::processQueue);
       } else {
         QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this,
@@ -3600,15 +3603,12 @@ void MainWindow::onSessionCreatedResult(bool success,
     return;
   }
 
-  QueueItem item = m_queueModel->peek(); // Peek the item we were processing
-  m_queueModel
-      ->recordRun(); // Record that we completed a run successfully or not
+  m_queueModel->recordRun();
   m_isProcessingQueue = false;
 
   if (success) {
-    m_queueModel->dequeue(); // Pop the item only on successful state transition
-    m_queueModel
-        ->checkAndPrependDailyLimitWait(); // Dynamically check after a run
+    m_queueModel->dequeue();
+    m_queueModel->checkAndPrependDailyLimitWait();
     m_sessionModel->addSession(session);
     QString sourceId = session.value(QStringLiteral("sourceContext"))
                            .toObject()
@@ -3619,8 +3619,7 @@ void MainWindow::onSessionCreatedResult(bool success,
     updateStatus(i18n("Session created from queue."));
     ActivityLogWindow::instance()->logMessage(
         i18n("Processed schedule run: Session created for %1.", sourceId));
-    m_queueBackoffUntil = QDateTime(); // reset backoff
-    // The next item will be processed by the configured timer (m_queueTimer)
+    m_queueBackoffUntil = QDateTime();
   } else {
     QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
     bool isPrecondition = false;
@@ -3641,10 +3640,6 @@ void MainWindow::onSessionCreatedResult(bool success,
     if (isPrecondition) {
       updateStatus(
           i18n("Too many concurrent tasks, waiting before retrying..."));
-
-      // The item remains at the front of the queue.
-
-      // Apply a short backoff (e.g. 5 minutes)
       QueueItem waitItem;
       waitItem.isWaitItem = true;
       KConfigGroup queueConfig(KSharedConfig::openConfig(),
@@ -3653,24 +3648,17 @@ void MainWindow::onSessionCreatedResult(bool success,
       waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60,
                                   QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
-      m_queueBackoffUntil = QDateTime(); // Clear backoff
+      m_queueBackoffUntil = QDateTime();
     } else if (isResourceExhausted) {
       updateStatus(i18n("API Rate limit hit, adding a wait item..."));
-
-      // The item remains at the front of the queue.
-
-      // Prepend a wait item
       QueueItem waitItem;
       waitItem.isWaitItem = true;
       waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
-      m_queueBackoffUntil = QDateTime(); // Clear backoff
+      m_queueBackoffUntil = QDateTime();
     } else {
       updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-      m_queueModel->dequeue(); // Pop the item out of the queue because it is in
-                               // Error state
-      // The error is recorded to the error model through the APIManager error
-      // signal handlers and onSessionCreationFailed.
+      m_queueModel->dequeue();
     }
   }
 }
@@ -3688,13 +3676,10 @@ void MainWindow::onTemplateSaved(const QJsonObject &tmpl) {
 void MainWindow::onTemplateActivated(const QModelIndex &index) {
   QJsonObject tmpl = m_templatesModel->getTemplate(index.row());
 
-  // Create template dialog
-  QJsonObject templateData = tmpl;
-
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window =
       new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  window->setInitialData(templateData);
+  window->setInitialData(tmpl);
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested, this,
@@ -3789,7 +3774,6 @@ void MainWindow::onBlockedContextMenu(const QPoint &pos) {
 
   bool isSource =
       m_blockedTreeModel->data(index, BlockedTreeModel::IsSourceRole).toBool();
-
   int queueIndex =
       m_blockedTreeModel->data(index, BlockedTreeModel::QueueIndexRole).toInt();
 
@@ -3881,13 +3865,7 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
   } else if (selected == requeueAction) {
     QModelIndexList selectedRows =
         m_holdingView->selectionModel()->selectedRows();
-    QList<int> rowsToRequeue;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToRequeue.contains(idx.row())) {
-        rowsToRequeue.append(idx.row());
-      }
-    }
-    std::sort(rowsToRequeue.begin(), rowsToRequeue.end(), std::greater<int>());
+    QList<int> rowsToRequeue = getUniqueSortedRows(selectedRows, m_holdingView);
     for (int r : rowsToRequeue) {
       QueueItem item = m_holdingModel->getItem(r);
       m_holdingModel->removeItem(r);
@@ -3989,15 +3967,14 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     QModelIndexList selectedRows =
         m_queueView->selectionModel()->selectedRows();
     QList<int> rowsToHold;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToHold.contains(idx.row())) {
-        QueueItem checkItem = m_queueModel->getItem(idx.row());
-        if (!checkItem.isWaitItem) {
-          rowsToHold.append(idx.row());
-        }
+    const QList<int> selectedQueueRows =
+        getUniqueSortedRows(selectedRows, m_queueView);
+    for (int selectedRow : selectedQueueRows) {
+      QueueItem checkItem = m_queueModel->getItem(selectedRow);
+      if (!checkItem.isWaitItem) {
+        rowsToHold.append(selectedRow);
       }
     }
-    std::sort(rowsToHold.begin(), rowsToHold.end(), std::greater<int>());
     for (int r : rowsToHold) {
       QueueItem holdItem = m_queueModel->getItem(r);
       m_queueModel->removeItem(r);
@@ -5220,16 +5197,7 @@ void MainWindow::deleteFollowingSessions() {
       m_sessionView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QList<int> rowsToDelete;
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    if (!rowsToDelete.contains(mappedIdx.row())) {
-      rowsToDelete.append(mappedIdx.row());
-    }
-  }
-  std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_sessionView);
 
   for (int row : rowsToDelete) {
     m_sessionModel->removeSession(row);
@@ -5241,16 +5209,7 @@ void MainWindow::deleteFollowingSessions() {
 void MainWindow::archiveSelectedSessions() {
   QModelIndexList selectedRows =
       m_sessionView->selectionModel()->selectedRows();
-  QList<int> rowsToArchive;
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    if (!rowsToArchive.contains(mappedIdx.row())) {
-      rowsToArchive.append(mappedIdx.row());
-    }
-  }
-  std::sort(rowsToArchive.begin(), rowsToArchive.end(), std::greater<int>());
+  QList<int> rowsToArchive = getUniqueSortedRows(selectedRows, m_sessionView);
 
   for (int row : rowsToArchive) {
     QJsonObject session = m_sessionModel->getSession(row);
@@ -5267,16 +5226,7 @@ void MainWindow::deleteArchiveSessions() {
       m_archiveView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QList<int> rowsToDelete;
-  const QSortFilterProxyModel *proxy =
-      qobject_cast<const QSortFilterProxyModel *>(m_archiveView->model());
-  for (const QModelIndex &idx : selectedRows) {
-    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    if (!rowsToDelete.contains(mappedIdx.row())) {
-      rowsToDelete.append(mappedIdx.row());
-    }
-  }
-  std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_archiveView);
 
   for (int row : rowsToDelete) {
     m_archiveModel->removeSession(row);
@@ -5294,13 +5244,7 @@ void MainWindow::deleteDrafts() {
           i18np("Are you sure?",
                 "Are you sure you want to delete these drafts?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QList<int> rowsToDelete;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToDelete.contains(idx.row())) {
-        rowsToDelete.append(idx.row());
-      }
-    }
-    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+    QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_draftsView);
 
     for (int row : rowsToDelete) {
       m_draftsModel->removeDraft(row);
@@ -5319,13 +5263,8 @@ void MainWindow::deleteTemplates() {
           i18np("Are you sure you want to delete this template?",
                 "Are you sure you want to delete these templates?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QList<int> rowsToDelete;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToDelete.contains(idx.row())) {
-        rowsToDelete.append(idx.row());
-      }
-    }
-    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+    QList<int> rowsToDelete =
+        getUniqueSortedRows(selectedRows, m_templatesView);
 
     for (int row : rowsToDelete) {
       m_templatesModel->removeTemplate(row);
@@ -5344,13 +5283,7 @@ void MainWindow::deleteErrors() {
           i18np("Are you sure?",
                 "Are you sure you want to delete these errors?",
                 selectedRows.size())) == QMessageBox::Yes) {
-    QList<int> rowsToDelete;
-    for (const QModelIndex &idx : selectedRows) {
-      if (!rowsToDelete.contains(idx.row())) {
-        rowsToDelete.append(idx.row());
-      }
-    }
-    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+    QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_errorsView);
 
     for (int row : rowsToDelete) {
       m_errorsModel->removeError(row);
@@ -5489,7 +5422,7 @@ void MainWindow::addGithubLink(QMenu *githubMenu, const QString &urlStr,
                                const QString &title, const QString &path) {
   QAction *openAction = githubMenu->addAction(i18n("Open %1", title));
   connect(openAction, &QAction::triggered,
-          [urlStr, path]() { QDesktopServices::openUrl(QUrl(urlStr + path)); });
+          [urlStr, path]() { Utils::openUrl(QUrl(urlStr + path)); });
   QAction *copyAction = githubMenu->addAction(i18n("Copy %1 URL", title));
   connect(copyAction, &QAction::triggered, [this, urlStr, path]() {
     QGuiApplication::clipboard()->setText(urlStr + path);
@@ -5521,4 +5454,19 @@ QString MainWindow::urlFromSourceId(const QString &id) const {
     urlStr = id;
   }
   return urlStr;
+}
+
+QList<int>
+MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                const QAbstractItemView *view) const {
+  QSet<int> uniqueRows;
+  const auto *proxy =
+      qobject_cast<const QSortFilterProxyModel *>(view->model());
+  for (const QModelIndex &idx : selectedRows) {
+    const QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    uniqueRows.insert(mappedIdx.row());
+  }
+  QList<int> rows(uniqueRows.begin(), uniqueRows.end());
+  std::sort(rows.begin(), rows.end(), std::greater<int>());
+  return rows;
 }

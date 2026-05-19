@@ -31,11 +31,9 @@ public:
   QString githubToken() const;
 
   void setBaseUrl(const QString &url);
-  QString baseUrl() const;
 
   void loadApiKeyFromWallet();
   void saveApiKeyToWallet(const QString &key);
-  void loadGithubTokenFromWallet();
   void saveGithubTokenToWallet(const QString &token);
 
   bool canConnect() const;
@@ -43,9 +41,6 @@ public:
   void testGithubConnection(const QString &token = QString());
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
-  void createSession(const QString &source, const QString &prompt,
-                     const QString &automationMode = QString(),
-                     bool requirePlanApproval = false);
   void createSessionAsync(const QJsonObject &requestData);
   void listSessions(const QString &pageToken = QString());
   void cancelListSessions();
