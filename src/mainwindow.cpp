@@ -2308,6 +2308,17 @@ void MainWindow::createSessionActions() {
 }
 
 void MainWindow::createSourceActions() {
+  setupSourceSettingsAction();
+  setupRefreshSourceActions();
+  setupRecalculateStatsAction();
+  setupShowFollowingNewSessionsAction();
+  setupViewRawDataAction();
+  setupUrlActions();
+
+  // Set up XML GUI
+}
+
+void MainWindow::setupSourceSettingsAction() {
   m_sourceSettingsAction = new QAction(i18n("Source Settings"), this);
   actionCollection()->addAction(QStringLiteral("source_settings"),
                                 m_sourceSettingsAction);
@@ -2319,64 +2330,63 @@ void MainWindow::createSourceActions() {
     const QSortFilterProxyModel *proxy =
         qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
 
-    if (selectedRows.size() > 0) {
-      QModelIndex idx = selectedRows.first();
-      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-      QMainWindow *settingsWindow = new QMainWindow(this);
-      settingsWindow->setObjectName(
-          QStringLiteral("SourceSettingsWindow_%1")
-              .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
-                       .toString()
-                       .replace(QLatin1Char('/'), QLatin1Char('_'))));
-      settingsWindow->setAttribute(Qt::WA_DeleteOnClose);
-      settingsWindow->setWindowTitle(i18n("Source Settings"));
+    QModelIndex idx = selectedRows.first();
+    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    QMainWindow *settingsWindow = new QMainWindow(this);
+    settingsWindow->setObjectName(
+        QStringLiteral("SourceSettingsWindow_%1")
+            .arg(m_sourceModel->data(mappedIdx, SourceModel::IdRole)
+                     .toString()
+                     .replace(QLatin1Char('/'), QLatin1Char('_'))));
+    settingsWindow->setAttribute(Qt::WA_DeleteOnClose);
+    settingsWindow->setWindowTitle(i18n("Source Settings"));
 
-      QTextEdit *textEdit = new QTextEdit(settingsWindow);
-      QJsonObject rawData =
-          m_sourceModel->data(mappedIdx, SourceModel::RawDataRole)
-              .toJsonObject();
-      QJsonDocument doc(rawData);
-      textEdit->setPlainText(
-          QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    QTextEdit *textEdit = new QTextEdit(settingsWindow);
+    QJsonObject rawData =
+        m_sourceModel->data(mappedIdx, SourceModel::RawDataRole).toJsonObject();
+    QJsonDocument doc(rawData);
+    textEdit->setPlainText(
+        QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
 
-      QMenu *fileMenu = new QMenu(i18n("File"), settingsWindow);
-      QAction *saveAction =
-          new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
-                      i18n("Save"), settingsWindow);
-      saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
-      connect(saveAction, &QAction::triggered, settingsWindow,
-              [this, textEdit, mappedIdx, settingsWindow]() {
-                QJsonParseError parseError;
-                QJsonDocument newDoc = QJsonDocument::fromJson(
-                    textEdit->toPlainText().toUtf8(), &parseError);
-                if (parseError.error != QJsonParseError::NoError) {
-                  QMessageBox::warning(settingsWindow, i18n("Invalid JSON"),
-                                       i18n("The JSON data is invalid: %1",
-                                            parseError.errorString()));
-                  return;
-                }
-                QJsonObject mergedData = newDoc.object();
+    QMenu *fileMenu = new QMenu(i18n("File"), settingsWindow);
+    QAction *saveAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
+                    i18n("Save"), settingsWindow);
+    saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+    connect(saveAction, &QAction::triggered, settingsWindow,
+            [this, textEdit, mappedIdx, settingsWindow]() {
+              QJsonParseError parseError;
+              QJsonDocument newDoc = QJsonDocument::fromJson(
+                  textEdit->toPlainText().toUtf8(), &parseError);
+              if (parseError.error != QJsonParseError::NoError) {
+                QMessageBox::warning(settingsWindow, i18n("Invalid JSON"),
+                                     i18n("The JSON data is invalid: %1",
+                                          parseError.errorString()));
+                return;
+              }
+              QJsonObject mergedData = newDoc.object();
 
-                m_sourceModel->updateSource(mergedData);
-                updateStatus(i18n("Source settings saved successfully."));
-              });
-      fileMenu->addAction(saveAction);
+              m_sourceModel->updateSource(mergedData);
+              updateStatus(i18n("Source settings saved successfully."));
+            });
+    fileMenu->addAction(saveAction);
 
-      QAction *closeAction =
-          new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
-                      i18n("Close"), settingsWindow);
-      closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-      connect(closeAction, &QAction::triggered, settingsWindow,
-              &QMainWindow::close);
-      fileMenu->addAction(closeAction);
-      settingsWindow->menuBar()->addMenu(fileMenu);
+    QAction *closeAction =
+        new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                    i18n("Close"), settingsWindow);
+    closeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    connect(closeAction, &QAction::triggered, settingsWindow,
+            &QMainWindow::close);
+    fileMenu->addAction(closeAction);
+    settingsWindow->menuBar()->addMenu(fileMenu);
 
-      settingsWindow->setCentralWidget(textEdit);
-      settingsWindow->resize(600, 400);
-      settingsWindow->show();
-    }
+    settingsWindow->setCentralWidget(textEdit);
+    settingsWindow->resize(600, 400);
+    settingsWindow->show();
   });
+}
 
+void MainWindow::setupRefreshSourceActions() {
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
                   i18n("Refresh Sources"), this);
@@ -2407,24 +2417,6 @@ void MainWindow::createSourceActions() {
   actionCollection()->addAction(QStringLiteral("refresh_source"),
                                 m_refreshSourceAction);
 
-  m_recalculateStatsAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")),
-                  i18n("Recalculate Session Stats"), this);
-  actionCollection()->addAction(QStringLiteral("recalculate_stats"),
-                                m_recalculateStatsAction);
-  connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
-    QJsonArray allSessions;
-    QJsonArray active = m_sessionModel->getAllSessions();
-    for (int i = 0; i < active.size(); ++i) {
-      allSessions.append(active[i]);
-    }
-    QJsonArray archived = m_archiveModel->getAllSessions();
-    for (int i = 0; i < archived.size(); ++i) {
-      allSessions.append(archived[i]);
-    }
-    m_sourceModel->recalculateStatsFromSessions(allSessions);
-    updateStatus(i18n("Session statistics recalculated successfully."));
-  });
   connect(m_refreshSourceAction, &QAction::triggered, this, [this]() {
     QModelIndexList selectedRows =
         m_sourceView->selectionModel()->selectedRows();
@@ -2444,6 +2436,30 @@ void MainWindow::createSourceActions() {
     updateStatus(
         i18np("Refreshing 1 source...", "Refreshing %1 sources...", count));
   });
+}
+
+void MainWindow::setupRecalculateStatsAction() {
+  m_recalculateStatsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")),
+                  i18n("Recalculate Session Stats"), this);
+  actionCollection()->addAction(QStringLiteral("recalculate_stats"),
+                                m_recalculateStatsAction);
+  connect(m_recalculateStatsAction, &QAction::triggered, this, [this]() {
+    QJsonArray allSessions;
+    QJsonArray active = m_sessionModel->getAllSessions();
+    for (int i = 0; i < active.size(); ++i) {
+      allSessions.append(active[i]);
+    }
+    QJsonArray archived = m_archiveModel->getAllSessions();
+    for (int i = 0; i < archived.size(); ++i) {
+      allSessions.append(archived[i]);
+    }
+    m_sourceModel->recalculateStatsFromSessions(allSessions);
+    updateStatus(i18n("Session statistics recalculated successfully."));
+  });
+}
+
+void MainWindow::setupShowFollowingNewSessionsAction() {
   m_showFollowingNewSessionsAction =
       new QAction(i18n("Show following new sessions"), this);
   actionCollection()->addAction(QStringLiteral("show_following_new_sessions"),
@@ -2519,6 +2535,9 @@ void MainWindow::createSourceActions() {
           sessionsWindow->show();
         }
       });
+}
+
+void MainWindow::setupViewRawDataAction() {
   m_viewRawDataAction = new QAction(i18n("View Raw Data"), this);
   actionCollection()->addAction(QStringLiteral("view_raw_data"),
                                 m_viewRawDataAction);
@@ -2574,7 +2593,9 @@ void MainWindow::createSourceActions() {
       rawWindow->show();
     }
   });
+}
 
+void MainWindow::setupUrlActions() {
   m_openUrlAction = new QAction(i18n("Open URL"), this);
   actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
   connect(m_openUrlAction, &QAction::triggered, this, [this]() {
@@ -2636,8 +2657,6 @@ void MainWindow::createSourceActions() {
       updateStatus(i18n("Invalid source ID for copying URL."));
     }
   });
-
-  // Set up XML GUI
 }
 
 void MainWindow::createDataActions() {
