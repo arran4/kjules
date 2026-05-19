@@ -22,6 +22,7 @@ class TemplatesModel;
 class QueueModel;
 class ErrorsModel;
 class BlockedTreeModel;
+class QAbstractItemView;
 class QListView;
 class QTreeView;
 class FilterEditor;
