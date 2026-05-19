@@ -15,7 +15,7 @@ class QPushButton;
 class QJsonArray;
 class QComboBox;
 class QLineEdit;
-class QLayout;
+class QVBoxLayout;
 class QTabWidget;
 
 class SessionsProxyModel : public QSortFilterProxyModel {
