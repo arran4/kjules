@@ -67,7 +67,6 @@ public:
   QueueItem peek() const;
   void requeueFailed(const QueueItem &item, const QString &errorMsg,
                      const QString &rawResponse = QString());
-  void requeueTransient(const QueueItem &item);
   void prependWaitItem(const QueueItem &item);
   void recordRun();
   void checkAndPrependDailyLimitWait();
@@ -94,6 +93,7 @@ private:
   void load();
   void save();
   void removeTrailingWaitItems();
+  void mergeWaitItems();
 };
 
 #endif // QUEUEMODEL_H

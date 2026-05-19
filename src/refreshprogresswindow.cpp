@@ -181,8 +181,7 @@ void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
 }
 
 void RefreshProgressWindow::onGithubPullRequestInfoReceived(
-    const QString &prUrl, const QJsonObject &info) {
-  Q_UNUSED(info);
+    const QString &prUrl, const QJsonObject & /*info*/) {
   QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
   for (const QString &id : idsToFinish) {
     m_textBrowser->append(i18n(

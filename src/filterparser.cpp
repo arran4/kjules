@@ -203,6 +203,8 @@ bool InNode::evaluate(const FilterDataAccessor &accessor) const {
   if (m_values.isEmpty())
     return false;
   QString val = accessor.getValue(m_key);
+  if (val.isEmpty())
+    return false;
   for (const QString &v : m_values) {
     if (val.compare(v, Qt::CaseInsensitive) == 0)
       return true;
