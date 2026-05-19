@@ -195,7 +195,9 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       return source;
     case FavouriteRole: {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      if (favVal.isDouble() && favVal.toInt() > 0) {
+      if (favVal.isBool()) {
+        return favVal.toBool() ? QVariant(1) : QVariant();
+      } else if (favVal.isDouble()) {
         return QVariant(favVal.toInt());
       }
       return QVariant();
@@ -255,7 +257,12 @@ void SourceModel::toggleFavourite(const QString &id) {
 
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      int currentRank = favVal.isDouble() ? favVal.toInt() : 0;
+      int currentRank = 0;
+      if (favVal.isBool()) {
+        currentRank = favVal.toBool() ? 1 : 0;
+      } else if (favVal.isDouble()) {
+        currentRank = favVal.toInt();
+      }
       if (currentRank > 0) {
         source.remove(QStringLiteral("local_favourite"));
       } else {
@@ -299,7 +306,12 @@ void SourceModel::increaseFavouriteRank(const QString &id) {
     }
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      int currentRank = favVal.isDouble() ? favVal.toInt() : 0;
+      int currentRank = 0;
+      if (favVal.isBool()) {
+        currentRank = favVal.toBool() ? 1 : 0;
+      } else if (favVal.isDouble()) {
+        currentRank = favVal.toInt();
+      }
       source[QStringLiteral("local_favourite")] = currentRank + 1;
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
@@ -320,7 +332,12 @@ void SourceModel::decreaseFavouriteRank(const QString &id) {
     }
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      int currentRank = favVal.isDouble() ? favVal.toInt() : 0;
+      int currentRank = 0;
+      if (favVal.isBool()) {
+        currentRank = favVal.toBool() ? 1 : 0;
+      } else if (favVal.isDouble()) {
+        currentRank = favVal.toInt();
+      }
       int newRank = currentRank - 1;
       if (newRank <= 0) {
         source.remove(QStringLiteral("local_favourite"));
