@@ -3,6 +3,7 @@
 #define MAINWINDOW_H
 
 #include <KXmlGuiWindow>
+#include <QAbstractItemView>
 #include <QDateTime>
 #include <QJsonObject>
 #include <QMap>
@@ -154,6 +155,9 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
+  QList<int> getUniqueSortedRows(const QModelIndexList &selectedRows,
+                                 const QAbstractItemView *view) const;
+
   void applyFavouriteAction(
       std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
                          const QModelIndexList &, int)>
