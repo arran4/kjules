@@ -9,6 +9,7 @@
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
@@ -867,10 +868,24 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   }
   m_markdownModeComboBox->setCurrentIndex(markdownMode);
   m_promptEdit->setMarkdownMode(markdownMode);
+  if (markdownMode == PromptTextEdit::RawMarkdown) {
+    QFont font = m_promptEdit->font();
+    font.setFamilies({QStringLiteral("monospace")});
+    m_promptEdit->setFont(font);
+  }
 
   connect(m_markdownModeComboBox,
-          QOverload<int>::of(&QComboBox::currentIndexChanged), m_promptEdit,
-          &PromptTextEdit::setMarkdownMode);
+          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [this](int mode) {
+            m_promptEdit->setMarkdownMode(mode);
+            if (mode == PromptTextEdit::RawMarkdown) {
+              QFont font = m_promptEdit->font();
+              font.setFamilies({QStringLiteral("monospace")});
+              m_promptEdit->setFont(font);
+            } else {
+              m_promptEdit->setFont(QApplication::font());
+            }
+          });
 
   promptHeaderLayout->addWidget(m_loadTemplateButton);
   promptHeaderLayout->addStretch();
@@ -937,10 +952,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   auto toggleList = [this](QTextListFormat::Style style) {
     QTextCursor cursor = m_promptEdit->textCursor();
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
+      cursor.movePosition(QTextCursor::StartOfLine);
       QString prefix = style == QTextListFormat::ListDisc
                            ? QStringLiteral("- ")
                            : QStringLiteral("1. ");
-      cursor.insertText(prefix + cursor.selectedText());
+      cursor.insertText(prefix);
       return;
     }
     QTextList *list = cursor.currentList();
@@ -961,11 +977,36 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(actionHeader, &QAction::triggered, this, [this]() {
     QTextCursor cursor = m_promptEdit->textCursor();
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
-      cursor.insertText(QStringLiteral("### ") + cursor.selectedText());
+      cursor.movePosition(QTextCursor::StartOfLine);
+      QString currentText = cursor.block().text();
+      int hashCount = 0;
+      while (hashCount < currentText.length() &&
+             currentText[hashCount] == QLatin1Char('#')) {
+        hashCount++;
+      }
+      int charsToRemove = hashCount;
+      if (hashCount > 0 && charsToRemove < currentText.length() &&
+          currentText[charsToRemove] == QLatin1Char(' ')) {
+        charsToRemove++;
+      }
+      cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
+                          charsToRemove);
+      cursor.removeSelectedText();
+
+      int nextLevel = (hashCount == 0 || hashCount > 3)
+                          ? 1
+                          : (hashCount == 3 ? 0 : hashCount + 1);
+      if (nextLevel > 0) {
+        cursor.insertText(QString(nextLevel, QLatin1Char('#')) +
+                          QLatin1Char(' '));
+      }
       return;
     }
     QTextBlockFormat blockFmt = cursor.blockFormat();
-    blockFmt.setHeadingLevel(blockFmt.headingLevel() > 0 ? 0 : 3);
+    int currentLevel = blockFmt.headingLevel();
+    int nextLevel =
+        currentLevel == 0 ? 1 : (currentLevel == 3 ? 0 : currentLevel + 1);
+    blockFmt.setHeadingLevel(nextLevel);
     cursor.mergeBlockFormat(blockFmt);
   });
 
@@ -978,7 +1019,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     }
     QTextCharFormat fmt;
     fmt.setFontFixedPitch(true);
-    fmt.setFontFamily(QStringLiteral("monospace"));
+    fmt.setFontFamilies({QStringLiteral("monospace")});
     m_promptEdit->mergeCurrentCharFormat(fmt);
   });
 
