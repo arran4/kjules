@@ -47,8 +47,6 @@ QString APIManager::apiKey() const { return m_apiKey; }
 
 void APIManager::setBaseUrl(const QString &url) { m_baseUrl = url; }
 
-QString APIManager::baseUrl() const { return m_baseUrl; }
-
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
   m_githubTokenFailed = false;
@@ -69,16 +67,6 @@ void APIManager::loadApiKeyFromWallet() {
 void APIManager::saveApiKeyToWallet(const QString &key) {
   if (m_wallet && m_wallet->isOpen()) {
     m_wallet->writePassword(QStringLiteral("jules_api_key"), key);
-  }
-}
-
-void APIManager::loadGithubTokenFromWallet() {
-  if (m_wallet && m_wallet->isOpen()) {
-    QString token;
-    if (m_wallet->readPassword(QStringLiteral("github_token"), token) == 0) {
-      m_githubToken = token;
-      Q_EMIT logMessage(QStringLiteral("GitHub Token loaded from KWallet"));
-    }
   }
 }
 
@@ -432,26 +420,6 @@ void APIManager::cancelListSources() {
     // The finished signal will be emitted with OperationCanceledError,
     // which will emit sourcesRefreshFinished().
   }
-}
-
-void APIManager::createSession(const QString &source, const QString &prompt,
-                               const QString &automationMode,
-                               bool requirePlanApproval) {
-  if (!canConnect()) {
-    Q_EMIT errorOccurred(
-        QStringLiteral("Cannot create session: No token or previous failure."));
-    return;
-  }
-  QJsonObject requestData;
-  requestData[QStringLiteral("source")] = source;
-  requestData[QStringLiteral("prompt")] = prompt;
-  if (requirePlanApproval) {
-    requestData[QStringLiteral("requirePlanApproval")] = true;
-  }
-  if (!automationMode.isEmpty()) {
-    requestData[QStringLiteral("automationMode")] = automationMode;
-  }
-  createSessionAsync(requestData);
 }
 
 void APIManager::fetchGithubPullRequest(const QString &prUrl) {

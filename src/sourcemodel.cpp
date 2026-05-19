@@ -195,11 +195,10 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       return source;
     case FavouriteRole: {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      if (favVal.isDouble()) {
-        int rank = favVal.toInt();
-        if (rank > 0) {
-          return QVariant(rank);
-        }
+      if (favVal.isBool()) {
+        return favVal.toBool() ? QVariant(1) : QVariant();
+      } else if (favVal.isDouble()) {
+        return QVariant(favVal.toInt());
       }
       return QVariant();
     }
@@ -259,7 +258,9 @@ void SourceModel::toggleFavourite(const QString &id) {
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
-      if (favVal.isDouble()) {
+      if (favVal.isBool()) {
+        currentRank = favVal.toBool() ? 1 : 0;
+      } else if (favVal.isDouble()) {
         currentRank = favVal.toInt();
       }
       if (currentRank > 0) {
@@ -306,7 +307,9 @@ void SourceModel::increaseFavouriteRank(const QString &id) {
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
-      if (favVal.isDouble()) {
+      if (favVal.isBool()) {
+        currentRank = favVal.toBool() ? 1 : 0;
+      } else if (favVal.isDouble()) {
         currentRank = favVal.toInt();
       }
       source[QStringLiteral("local_favourite")] = currentRank + 1;
@@ -330,7 +333,9 @@ void SourceModel::decreaseFavouriteRank(const QString &id) {
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
-      if (favVal.isDouble()) {
+      if (favVal.isBool()) {
+        currentRank = favVal.toBool() ? 1 : 0;
+      } else if (favVal.isDouble()) {
         currentRank = favVal.toInt();
       }
       int newRank = currentRank - 1;

@@ -58,22 +58,6 @@ QHash<int, QByteArray> ErrorsModel::roleNames() const {
   return roles;
 }
 
-void ErrorsModel::addError(const QJsonObject &request,
-                           const QJsonObject &response, const QString &message,
-                           const QString &httpDetails) {
-  QJsonObject errorObj;
-  errorObj[QStringLiteral("request")] = request;
-  errorObj[QStringLiteral("response")] = response;
-  errorObj[QStringLiteral("message")] = message;
-  if (!httpDetails.isEmpty()) {
-    errorObj[QStringLiteral("httpDetails")] = httpDetails;
-  }
-  errorObj[QStringLiteral("timestamp")] =
-      QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-
-  addErrorObj(errorObj);
-}
-
 void ErrorsModel::addErrorObj(const QJsonObject &errorObj) {
   beginInsertRows(QModelIndex(), 0, 0);
   m_errors.insert(0, errorObj);

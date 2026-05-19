@@ -194,8 +194,8 @@ QMimeData *QueueModel::mimeData(const QModelIndexList &indexes) const {
 }
 
 bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
-                              int row, int column, const QModelIndex &parent) {
-  Q_UNUSED(column);
+                              int row, int /*column*/,
+                              const QModelIndex &parent) {
   if (action == Qt::IgnoreAction)
     return true;
 
@@ -483,15 +483,6 @@ void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg,
   beginInsertRows(QModelIndex(), 0, 0);
   m_items.prepend(updatedItem);
   endInsertRows();
-  save();
-}
-
-void QueueModel::requeueTransient(const QueueItem &item) {
-  // Place the item back at the front without recording an error
-  beginInsertRows(QModelIndex(), 0, 0);
-  m_items.prepend(item);
-  endInsertRows();
-  mergeWaitItems();
   save();
 }
 
