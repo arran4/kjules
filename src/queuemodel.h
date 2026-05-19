@@ -66,6 +66,8 @@ public:
   QueueItem dequeue();
   QueueItem peek() const;
   void requeueTransient(const QueueItem &item);
+  void requeueFailed(const QueueItem &item, const QString &errorMsg,
+                     const QString &rawResponse = QString());
   void prependWaitItem(const QueueItem &item);
   void recordRun();
   void checkAndPrependDailyLimitWait();

@@ -479,6 +479,22 @@ void QueueModel::requeueTransient(const QueueItem &item) {
   save();
 }
 
+void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg,
+                               const QString &rawResponse) {
+  // Usually we want failed items to stay at the front of the queue to be
+  // retried
+  QueueItem updatedItem = item;
+  updatedItem.errorCount++;
+  updatedItem.lastError = errorMsg;
+  updatedItem.lastResponse = rawResponse;
+  updatedItem.lastTry = QDateTime::currentDateTimeUtc();
+
+  beginInsertRows(QModelIndex(), 0, 0);
+  m_items.prepend(updatedItem);
+  endInsertRows();
+  save();
+}
+
 void QueueModel::removeItem(int index) {
   if (index >= 0 && index < m_items.size()) {
     beginRemoveRows(QModelIndex(), index, index);

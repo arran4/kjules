@@ -161,7 +161,7 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColName) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-      bool isFav = favVal.toBool() || (favVal.isDouble() && favVal.toInt() > 0);
+      bool isFav = favVal.isDouble() && favVal.toInt() > 0;
       bool isPriv = source.value(QStringLiteral("isPrivate")).toBool();
 
       if (isFav && isPriv) {
@@ -361,10 +361,6 @@ void SourceModel::setSources(const QJsonArray &sources) {
 
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
-    QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
-    if (favVal.isBool()) {
-      qWarning() << "Deprecated boolean local_favourite found in source data";
-    }
 
     QString id = source.value(QStringLiteral("id")).toString();
     if (id.isEmpty())
