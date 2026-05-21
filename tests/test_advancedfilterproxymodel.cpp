@@ -3,6 +3,79 @@
 #include <QStringList>
 #include <QtTest>
 
+#include "../src/sessionmodel.h"
+#include "../src/sourcemodel.h"
+
+class MockSourceModel : public SourceModel {
+  Q_OBJECT
+public:
+  MockSourceModel(QObject *parent = nullptr) : SourceModel(parent) {}
+  int rowCount(const QModelIndex &parent = QModelIndex()) const override {
+    if (parent.isValid())
+      return 0;
+    return m_favourites.size();
+  }
+  int columnCount(const QModelIndex &parent = QModelIndex()) const override {
+    if (parent.isValid())
+      return 0;
+    return 1;
+  }
+  QVariant data(const QModelIndex &index,
+                int role = Qt::DisplayRole) const override {
+    if (!index.isValid() || index.row() >= m_favourites.size())
+      return QVariant();
+    if (role == SourceModel::FavouriteRole)
+      return m_favourites[index.row()];
+    // Return dummy data for display role so lessThan can fallback if needed
+    if (role == Qt::DisplayRole)
+      return QStringLiteral("Item %1").arg(index.row());
+    return QVariant();
+  }
+  void setFavourites(const QList<QVariant> &favs) {
+    beginResetModel();
+    m_favourites = favs;
+    endResetModel();
+  }
+
+private:
+  QList<QVariant> m_favourites;
+};
+
+class MockSessionModel : public SessionModel {
+  Q_OBJECT
+public:
+  MockSessionModel(QObject *parent = nullptr)
+      : SessionModel(QStringLiteral(""), parent) {}
+  int rowCount(const QModelIndex &parent = QModelIndex()) const override {
+    if (parent.isValid())
+      return 0;
+    return m_favourites.size();
+  }
+  int columnCount(const QModelIndex &parent = QModelIndex()) const override {
+    if (parent.isValid())
+      return 0;
+    return 1;
+  }
+  QVariant data(const QModelIndex &index,
+                int role = Qt::DisplayRole) const override {
+    if (!index.isValid() || index.row() >= m_favourites.size())
+      return QVariant();
+    if (role == SessionModel::FavouriteRole)
+      return m_favourites[index.row()];
+    if (role == Qt::DisplayRole)
+      return QStringLiteral("Item %1").arg(index.row());
+    return QVariant();
+  }
+  void setFavourites(const QList<QVariant> &favs) {
+    beginResetModel();
+    m_favourites = favs;
+    endResetModel();
+  }
+
+private:
+  QList<QVariant> m_favourites;
+};
+
 class TestAdvancedFilterProxyModel : public QObject {
   Q_OBJECT
 
@@ -69,6 +142,48 @@ private Q_SLOTS:
     proxyModel.setFilterQuery(
         QStringLiteral("=(owner:apple AND repo:repo1) OR owner:banana"));
     QCOMPARE(proxyModel.rowCount(), 2);
+  }
+
+  void testLessThanSourceModel() {
+    MockSourceModel sourceModel;
+    // Set 4 items: row 0 = fav 10, row 1 = fav 5, row 2 = fav 10 (equal), row 3
+    // = no fav (QVariant invalid)
+    sourceModel.setFavourites(QList<QVariant>() << 10 << 5 << 10 << QVariant());
+
+    AdvancedFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sourceModel);
+
+    proxyModel.sort(0, Qt::AscendingOrder);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 0);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 2);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 1);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 3);
+
+    proxyModel.sort(0, Qt::DescendingOrder);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 3);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 1);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 2);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 0);
+  }
+
+  void testLessThanSessionModel() {
+    MockSessionModel sessionModel;
+    sessionModel.setFavourites(QList<QVariant>() << 2 << 8 << QVariant() << 8);
+
+    AdvancedFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sessionModel);
+
+    proxyModel.sort(0, Qt::AscendingOrder);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 1);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 3);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 0);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 2);
+
+    proxyModel.sort(0, Qt::DescendingOrder);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 2);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 0);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 3);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 1);
   }
 };
 
