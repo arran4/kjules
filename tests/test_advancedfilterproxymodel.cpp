@@ -7,7 +7,6 @@
 #include "../src/sourcemodel.h"
 
 class MockSourceModel : public SourceModel {
-  Q_OBJECT
 public:
   MockSourceModel(QObject *parent = nullptr) : SourceModel(parent) {}
   int rowCount(const QModelIndex &parent = QModelIndex()) const override {
@@ -42,7 +41,6 @@ private:
 };
 
 class MockSessionModel : public SessionModel {
-  Q_OBJECT
 public:
   MockSessionModel(QObject *parent = nullptr)
       : SessionModel(QStringLiteral(""), parent) {}
@@ -159,11 +157,13 @@ private Q_SLOTS:
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 1);
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 3);
 
+    // Sort Descending: Favorites still at the top (highest rank first),
+    // but tie-breakers (like string sorting) are inverted.
     proxyModel.sort(0, Qt::DescendingOrder);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 3);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 1);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 2);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 0);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 2);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 0);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 1);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 3);
   }
 
   void testLessThanSessionModel() {
@@ -180,10 +180,10 @@ private Q_SLOTS:
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 2);
 
     proxyModel.sort(0, Qt::DescendingOrder);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 2);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 0);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 3);
-    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 1);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(0, 0)).row(), 3);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 1);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 0);
+    QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 2);
   }
 };
 
