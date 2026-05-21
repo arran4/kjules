@@ -203,6 +203,91 @@ void APIManager::testConnection(const QString &apiKey) {
   });
 }
 
+void APIManager::sendMessage(const QString &sessionId, const QString &message) {
+  if (!canConnect()) {
+    Q_EMIT messageSendFailed(
+        sessionId,
+        QStringLiteral("Cannot send message: No token or previous failure."),
+        QString());
+    return;
+  }
+
+  QString cleanId = cleanSessionId(sessionId);
+
+  if (cleanId.contains(QStringLiteral("..")) ||
+      cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT messageSendFailed(sessionId, QStringLiteral("Invalid session ID."),
+                             QString());
+    return;
+  }
+
+  QString endpoint =
+      QStringLiteral("/sessions/") + cleanId + QStringLiteral("/messages");
+
+  QNetworkRequest request = createRequest(endpoint);
+
+  QJsonObject json;
+  json[QStringLiteral("message")] = message;
+  QByteArray data = QJsonDocument(json).toJson();
+
+  QNetworkReply *reply = m_nam->post(request, data);
+  connect(reply, &QNetworkReply::finished, this,
+          [this, reply, sessionId, request, data]() {
+            if (reply->error() == QNetworkReply::NoError) {
+              Q_EMIT messageSent(sessionId);
+              Q_EMIT logMessage(QStringLiteral("Message sent successfully."));
+            } else {
+              int statusCode =
+                  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
+                      .toInt();
+              if (statusCode == 401 || statusCode == 403) {
+                m_tokenFailed = true;
+              }
+
+              QString method = QStringLiteral("POST");
+              QString url = reply->url().toString();
+              QString httpReq =
+                  method + QStringLiteral(" ") + url + QStringLiteral("\n");
+              const auto reqHeaders = request.rawHeaderList();
+              for (const QByteArray &h : reqHeaders) {
+                if (h.toLower() != "x-goog-api-key" &&
+                    h.toLower() != "authorization") {
+                  httpReq += QString::fromUtf8(h) + QStringLiteral(": ") +
+                             QString::fromUtf8(request.rawHeader(h)) +
+                             QStringLiteral("\n");
+                } else {
+                  httpReq +=
+                      QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
+                }
+              }
+              httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
+
+              QString httpRes = QStringLiteral("HTTP %1 %2\n")
+                                    .arg(statusCode)
+                                    .arg(reply->errorString());
+              const auto resHeaders = reply->rawHeaderList();
+              for (const QByteArray &h : resHeaders) {
+                httpRes += QString::fromUtf8(h) + QStringLiteral(": ") +
+                           QString::fromUtf8(reply->rawHeader(h)) +
+                           QStringLiteral("\n");
+              }
+
+              QByteArray responseData = reply->readAll();
+              httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
+
+              QString httpDetails =
+                  QStringLiteral("=== Request ===\n") + httpReq +
+                  QStringLiteral("\n\n=== Response ===\n") + httpRes;
+
+              QString errorMsg = QStringLiteral("Failed to send message: ") +
+                                 reply->errorString();
+              Q_EMIT messageSendFailed(sessionId, errorMsg, httpDetails);
+              Q_EMIT errorOccurred(errorMsg);
+            }
+            reply->deleteLater();
+          });
+}
+
 void APIManager::listActivities(const QString &sessionId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral(

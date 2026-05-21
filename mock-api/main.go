@@ -304,6 +304,36 @@ func main() {
 				"activities": acts,
 			})
 			return
+		} else if len(parts) == 3 && parts[2] == "messages" && r.Method == "POST" {
+			name := "sessions/" + parts[1]
+
+			var req map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			msgText := ""
+			if msg, ok := req["message"].(string); ok {
+				msgText = msg
+			} else {
+				http.Error(w, "missing 'message' field", http.StatusBadRequest)
+				return
+			}
+
+			acts := activities[name]
+			newAct := Activity{
+				Name:        fmt.Sprintf("%s/activities/%d", name, len(acts)),
+				Description: msgText,
+				CreateTime:  time.Now().Format(time.RFC3339),
+				State:       "COMPLETED",
+			}
+			acts = append(acts, newAct)
+			activities[name] = acts
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(newAct)
+			return
 		}
 
 		http.NotFound(w, r)

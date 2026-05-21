@@ -27,6 +27,9 @@ private:
   void onSessionReloaded(const QJsonObject &session);
   void onActivitiesReceived(const QString &sessionId,
                             const QJsonArray &activities);
+  void onMessageSent(const QString &sessionId);
+  void onMessageSendFailed(const QString &sessionId, const QString &message,
+                           const QString &httpDetails);
   void duplicateSession();
   void updateAutoRefresh();
   void renderDetailsAndDiff();
@@ -48,6 +51,8 @@ private:
 
   QWidget *m_activityTabWidget;
   class QLineEdit *m_chatInput;
+  class QPushButton *m_sendButton;
+  QString m_pendingMessage;
 
 Q_SIGNALS:
   void watchRequested(const QJsonObject &sessionData);
