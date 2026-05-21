@@ -206,9 +206,7 @@ void APIManager::testConnection(const QString &apiKey) {
 void APIManager::sendMessage(const QString &sessionId, const QString &message) {
   if (!canConnect()) {
     Q_EMIT messageSendFailed(
-        sessionId,
-        QStringLiteral("Cannot send message: No token or previous failure."),
-        QString());
+        sessionId, QStringLiteral("No token or previous failure."), QString());
     return;
   }
 
@@ -279,9 +277,10 @@ void APIManager::sendMessage(const QString &sessionId, const QString &message) {
                   QStringLiteral("=== Request ===\n") + httpReq +
                   QStringLiteral("\n\n=== Response ===\n") + httpRes;
 
-              QString errorMsg = QStringLiteral("Failed to send message: ") +
-                                 reply->errorString();
-              Q_EMIT messageSendFailed(sessionId, errorMsg, httpDetails);
+              QString reason = reply->errorString();
+              QString errorMsg =
+                  QStringLiteral("Failed to send message: ") + reason;
+              Q_EMIT messageSendFailed(sessionId, reason, httpDetails);
               Q_EMIT errorOccurred(errorMsg);
             }
             reply->deleteLater();
