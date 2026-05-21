@@ -96,7 +96,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_followingRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false),
-      m_refreshProgressWindow(nullptr) {
+      m_refreshProgressWindow(nullptr), m_trayIcon(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
 
