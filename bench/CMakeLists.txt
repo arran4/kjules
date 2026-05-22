@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 project(bench_tests)
 
 set(CMAKE_AUTOMOC ON)
-find_package(Qt6 COMPONENTS Core Test REQUIRED)
+find_package(Qt6 COMPONENTS Core Test Network REQUIRED)
+find_package(KF6Wallet REQUIRED)
+find_package(KF6Config REQUIRED)
 
 add_executable(benchmark benchmark.cpp)
 target_link_libraries(benchmark Qt6::Core Qt6::Test)
