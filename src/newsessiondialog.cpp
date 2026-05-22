@@ -1419,13 +1419,13 @@ void NewSessionDialog::applyFilter() {
   }
 
   m_unselectedProxy->setFilterAST(ast);
-  m_unselectedProxy->setFilterFixedString(filterString);
+  m_unselectedProxy->setFilterQuery(filterString);
 
   bool applyToSelected = m_selectedSources.size() >= 10;
   m_selectedProxy->setFilterAST(applyToSelected ? ast
                                                 : QSharedPointer<ASTNode>());
-  m_selectedProxy->setFilterFixedString(applyToSelected ? filterString
-                                                        : QStringLiteral(""));
+  m_selectedProxy->setFilterQuery(applyToSelected ? filterString
+                                                  : QStringLiteral(""));
 }
 
 void NewSessionDialog::onAddSelected() {
