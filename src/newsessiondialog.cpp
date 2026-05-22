@@ -1415,7 +1415,7 @@ void NewSessionDialog::applyFilter() {
   if (text.startsWith(QStringLiteral("="))) {
     ast = FilterParser::parse(text.mid(1));
   } else {
-    m_selectedProxy->setFilterFixedString(text);
+    filterString = text;
   }
 
   m_unselectedProxy->setFilterAST(ast);
