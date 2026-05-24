@@ -16,6 +16,26 @@ class TestFilter : public QObject {
 
 private Q_SLOTS:
 
+  void testNotNodeEvaluate() {
+    MockAccessor accessor;
+    accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
+
+    // Happy path: child evaluates to true, NotNode evaluates to false
+    QSharedPointer<ASTNode> childTrue(
+        new InNode(QStringLiteral("state"), QStringLiteral("open")));
+    NotNode notNodeTrue(childTrue);
+    QVERIFY(!notNodeTrue.evaluate(accessor));
+
+    // Child evaluates to false, NotNode evaluates to true
+    QSharedPointer<ASTNode> childFalse(
+        new InNode(QStringLiteral("state"), QStringLiteral("closed")));
+    NotNode notNodeFalse(childFalse);
+    QVERIFY(notNodeFalse.evaluate(accessor));
+
+    // Test toString serialization
+    QVERIFY(notNodeTrue.toString() == QStringLiteral("NOT state IN \"open\""));
+  }
+
   void testInNodeEvaluate() {
     MockAccessor accessor;
     accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
