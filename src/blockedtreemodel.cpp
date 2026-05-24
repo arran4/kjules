@@ -51,8 +51,10 @@ void BlockedTreeModel::rebuildTree() {
   for (int j = 0; j < m_sourceModel->rowCount(); ++j) {
     QModelIndex idx = m_sourceModel->index(j, 0);
     QString sourceId = m_sourceModel->data(idx, SourceModel::IdRole).toString();
-    QString name = m_sourceModel->data(idx, SourceModel::NameRole).toString();
-    sourceNames.insert(sourceId, name);
+    if (!sourceNames.contains(sourceId)) {
+      sourceNames.insert(
+          sourceId, m_sourceModel->data(idx, SourceModel::NameRole).toString());
+    }
   }
 
   for (int i = 0; i < m_queueModel->rowCount(); ++i) {
