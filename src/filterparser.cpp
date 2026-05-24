@@ -182,7 +182,7 @@ bool OrNode::evaluate(const FilterDataAccessor &accessor) const {
     if (child->evaluate(accessor))
       return true;
   }
-  return m_children.isEmpty();
+  return false;
 }
 QString OrNode::toString() const {
   QStringList parts;
