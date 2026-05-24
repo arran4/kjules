@@ -1263,18 +1263,8 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
           connect(unarchiveAction, &QAction::triggered, [this]() {
             QModelIndexList selectedRows =
                 m_archiveView->selectionModel()->selectedRows();
-            QList<int> rowsToUnarchive;
-            const QSortFilterProxyModel *proxy =
-                qobject_cast<const QSortFilterProxyModel *>(
-                    m_archiveView->model());
-            for (const QModelIndex &idx : selectedRows) {
-              QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-              if (!rowsToUnarchive.contains(mappedIdx.row())) {
-                rowsToUnarchive.append(mappedIdx.row());
-              }
-            }
-            std::sort(rowsToUnarchive.begin(), rowsToUnarchive.end(),
-                      std::greater<int>());
+            QList<int> rowsToUnarchive =
+                getUniqueSortedRows(selectedRows, m_archiveView);
 
             for (int row : rowsToUnarchive) {
               QJsonObject session = m_archiveModel->getSession(row);
@@ -1282,6 +1272,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
               m_archiveModel->removeSession(row);
             }
             m_sessionModel->saveSessions();
+            m_archiveModel->saveSessions();
             updateStatus(i18np("1 session unarchived.",
                                "%1 sessions unarchived.",
                                rowsToUnarchive.size()));
