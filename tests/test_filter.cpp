@@ -70,6 +70,12 @@ private Q_SLOTS:
                                    QStringLiteral("2023-01-20T12:00:00Z"));
     QVERIFY(createdBeforeNode.evaluate(accessor));
 
+    // Timezone handling: filter with offset (14:00+01:00 is 13:00Z, which is
+    // after 12:00Z)
+    KeyValueNode offsetNode(QStringLiteral("created-before"),
+                            QStringLiteral("2023-01-15T14:00:00+01:00"));
+    QVERIFY(offsetNode.evaluate(accessor));
+
     // created-before fails
     KeyValueNode createdBeforeNodeFail(QStringLiteral("created-before"),
                                        QStringLiteral("2023-01-10T12:00:00Z"));
@@ -100,6 +106,16 @@ private Q_SLOTS:
                                QStringLiteral("2023-01-15T12:00:00Z"));
     QVERIFY(!exactDateNode.evaluate(accessor));
 
+    // Exact same date for after filter should also return false
+    KeyValueNode exactDateAfterNode(QStringLiteral("created-after"),
+                                    QStringLiteral("2023-01-15T12:00:00Z"));
+    QVERIFY(!exactDateAfterNode.evaluate(accessor));
+
+    // updated-before fails
+    KeyValueNode updatedBeforeNodeFail(QStringLiteral("updated-before"),
+                                       QStringLiteral("2023-02-10T12:00:00Z"));
+    QVERIFY(!updatedBeforeNodeFail.evaluate(accessor));
+
     // Invalid date in filter
     KeyValueNode invalidFilterDateNode(QStringLiteral("created-before"),
                                        QStringLiteral("not-a-date"));
@@ -113,6 +129,10 @@ private Q_SLOTS:
         QStringLiteral("created-before"),
         QStringLiteral("2023-01-20T12:00:00Z"));
     QVERIFY(!validFilterInvalidDataNode.evaluate(invalidDataAccessor));
+
+    // Missing key in data
+    MockAccessor emptyAccessor;
+    QVERIFY(!createdBeforeNode.evaluate(emptyAccessor));
   }
 
   void testApplyQuickFilter() {
