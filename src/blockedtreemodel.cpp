@@ -46,6 +46,16 @@ void BlockedTreeModel::rebuildTree() {
   }
 
   QHash<QString, Node *> sourceNodes;
+  QHash<QString, QString> sourceNames;
+
+  for (int j = 0; j < m_sourceModel->rowCount(); ++j) {
+    QModelIndex idx = m_sourceModel->index(j, 0);
+    QString sourceId = m_sourceModel->data(idx, SourceModel::IdRole).toString();
+    if (!sourceNames.contains(sourceId)) {
+      sourceNames.insert(
+          sourceId, m_sourceModel->data(idx, SourceModel::NameRole).toString());
+    }
+  }
 
   for (int i = 0; i < m_queueModel->rowCount(); ++i) {
     QueueItem item = m_queueModel->getItem(i);
@@ -63,15 +73,7 @@ void BlockedTreeModel::rebuildTree() {
 
     if (!sourceNodes.contains(source)) {
       // Find friendly name in source model if possible
-      QString name = source;
-      for (int j = 0; j < m_sourceModel->rowCount(); ++j) {
-        QModelIndex idx = m_sourceModel->index(j, 0);
-        if (m_sourceModel->data(idx, SourceModel::IdRole).toString() ==
-            source) {
-          name = m_sourceModel->data(idx, SourceModel::NameRole).toString();
-          break;
-        }
-      }
+      QString name = sourceNames.value(source, source);
       Node *node = new Node{true, source, -1, name, {}, m_rootNode};
       sourceNodes.insert(source, node);
       m_rootNode->children.append(node);
