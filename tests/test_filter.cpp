@@ -58,6 +58,63 @@ private Q_SLOTS:
     QVERIFY(!emptyValueNode.evaluate(accessor));
   }
 
+  void testKeyValueNodeDateFilterEvaluate() {
+    MockAccessor accessor;
+    accessor.data.insert(QStringLiteral("createdat"),
+                         QStringLiteral("2023-01-15T12:00:00Z"));
+    accessor.data.insert(QStringLiteral("updatedat"),
+                         QStringLiteral("2023-02-15T12:00:00Z"));
+
+    // Happy path: created-before
+    KeyValueNode createdBeforeNode(QStringLiteral("created-before"),
+                                   QStringLiteral("2023-01-20T12:00:00Z"));
+    QVERIFY(createdBeforeNode.evaluate(accessor));
+
+    // created-before fails
+    KeyValueNode createdBeforeNodeFail(QStringLiteral("created-before"),
+                                       QStringLiteral("2023-01-10T12:00:00Z"));
+    QVERIFY(!createdBeforeNodeFail.evaluate(accessor));
+
+    // Happy path: created-after
+    KeyValueNode createdAfterNode(QStringLiteral("created-after"),
+                                  QStringLiteral("2023-01-10T12:00:00Z"));
+    QVERIFY(createdAfterNode.evaluate(accessor));
+
+    // created-after fails
+    KeyValueNode createdAfterNodeFail(QStringLiteral("created-after"),
+                                      QStringLiteral("2023-01-20T12:00:00Z"));
+    QVERIFY(!createdAfterNodeFail.evaluate(accessor));
+
+    // Happy path: updated-before
+    KeyValueNode updatedBeforeNode(QStringLiteral("updated-before"),
+                                   QStringLiteral("2023-02-20T12:00:00Z"));
+    QVERIFY(updatedBeforeNode.evaluate(accessor));
+
+    // Happy path: updated-after
+    KeyValueNode updatedAfterNode(QStringLiteral("updated-after"),
+                                  QStringLiteral("2023-02-10T12:00:00Z"));
+    QVERIFY(updatedAfterNode.evaluate(accessor));
+
+    // Exact same date should return false
+    KeyValueNode exactDateNode(QStringLiteral("created-before"),
+                               QStringLiteral("2023-01-15T12:00:00Z"));
+    QVERIFY(!exactDateNode.evaluate(accessor));
+
+    // Invalid date in filter
+    KeyValueNode invalidFilterDateNode(QStringLiteral("created-before"),
+                                       QStringLiteral("not-a-date"));
+    QVERIFY(!invalidFilterDateNode.evaluate(accessor));
+
+    // Invalid date in data
+    MockAccessor invalidDataAccessor;
+    invalidDataAccessor.data.insert(QStringLiteral("createdat"),
+                                    QStringLiteral("invalid-date"));
+    KeyValueNode validFilterInvalidDataNode(
+        QStringLiteral("created-before"),
+        QStringLiteral("2023-01-20T12:00:00Z"));
+    QVERIFY(!validFilterInvalidDataNode.evaluate(invalidDataAccessor));
+  }
+
   void testApplyQuickFilter() {
     QString base = QStringLiteral("=repo:test");
     QString updated = FilterEditor::applyQuickFilter(
