@@ -16,6 +16,52 @@ class TestFilter : public QObject {
 
 private Q_SLOTS:
 
+  void testOrNodeEvaluate() {
+    MockAccessor accessor;
+    accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
+    accessor.data.insert(QStringLiteral("author"), QStringLiteral("jules"));
+
+    QSharedPointer<ASTNode> trueNode1 = QSharedPointer<ASTNode>(
+        new KeyValueNode(QStringLiteral("state"), QStringLiteral("open")));
+    QSharedPointer<ASTNode> trueNode2 = QSharedPointer<ASTNode>(
+        new KeyValueNode(QStringLiteral("author"), QStringLiteral("jules")));
+    QSharedPointer<ASTNode> falseNode1 = QSharedPointer<ASTNode>(
+        new KeyValueNode(QStringLiteral("state"), QStringLiteral("closed")));
+    QSharedPointer<ASTNode> falseNode2 = QSharedPointer<ASTNode>(
+        new KeyValueNode(QStringLiteral("author"), QStringLiteral("alice")));
+
+    // Empty OrNode
+    OrNode emptyNode({});
+    QVERIFY(emptyNode.evaluate(accessor)); // based on current behavior
+
+    // Single true child
+    OrNode singleTrueNode({trueNode1});
+    QVERIFY(singleTrueNode.evaluate(accessor));
+
+    // Single false child
+    OrNode singleFalseNode({falseNode1});
+    QVERIFY(!singleFalseNode.evaluate(accessor));
+
+    // Multiple true children
+    OrNode multipleTrueNode({trueNode1, trueNode2});
+    QVERIFY(multipleTrueNode.evaluate(accessor));
+
+    // Mixed true/false children
+    OrNode mixedNode({falseNode1, trueNode1});
+    QVERIFY(mixedNode.evaluate(accessor));
+
+    OrNode mixedNode2({trueNode1, falseNode1});
+    QVERIFY(mixedNode2.evaluate(accessor));
+
+    // Multiple false children
+    OrNode multipleFalseNode({falseNode1, falseNode2});
+    QVERIFY(!multipleFalseNode.evaluate(accessor));
+
+    // Test toString serialization
+    QCOMPARE(multipleTrueNode.toString(),
+             QStringLiteral("(state:open OR author:jules)"));
+  }
+
   void testInNodeEvaluate() {
     MockAccessor accessor;
     accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
