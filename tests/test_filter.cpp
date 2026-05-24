@@ -16,6 +16,32 @@ class TestFilter : public QObject {
 
 private Q_SLOTS:
 
+  void testAndNodeEvaluate() {
+    MockAccessor accessor;
+    accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
+    accessor.data.insert(QStringLiteral("author"), QStringLiteral("jules"));
+
+    QList<QSharedPointer<ASTNode>> allTrueNodes;
+    allTrueNodes.append(QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("state"), QStringLiteral("open")));
+    allTrueNodes.append(QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("author"), QStringLiteral("jules")));
+    AndNode allTrueAndNode(allTrueNodes);
+    QVERIFY(allTrueAndNode.evaluate(accessor));
+
+    QList<QSharedPointer<ASTNode>> mixedNodes;
+    mixedNodes.append(QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("state"), QStringLiteral("open")));
+    mixedNodes.append(QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("author"), QStringLiteral("bob")));
+    AndNode mixedAndNode(mixedNodes);
+    QVERIFY(!mixedAndNode.evaluate(accessor));
+
+    QList<QSharedPointer<ASTNode>> emptyNodes;
+    AndNode emptyAndNode(emptyNodes);
+    QVERIFY(emptyAndNode.evaluate(accessor));
+  }
+
   void testInNodeEvaluate() {
     MockAccessor accessor;
     accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
