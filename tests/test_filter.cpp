@@ -21,18 +21,14 @@ private Q_SLOTS:
     accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
     accessor.data.insert(QStringLiteral("author"), QStringLiteral("jules"));
 
-    QSharedPointer<ASTNode> trueNode1 = QSharedPointer<ASTNode>(
-        new KeyValueNode(QStringLiteral("state"), QStringLiteral("open")));
-    QSharedPointer<ASTNode> trueNode2 = QSharedPointer<ASTNode>(
-        new KeyValueNode(QStringLiteral("author"), QStringLiteral("jules")));
-    QSharedPointer<ASTNode> falseNode1 = QSharedPointer<ASTNode>(
-        new KeyValueNode(QStringLiteral("state"), QStringLiteral("closed")));
-    QSharedPointer<ASTNode> falseNode2 = QSharedPointer<ASTNode>(
-        new KeyValueNode(QStringLiteral("author"), QStringLiteral("alice")));
+    auto trueNode1 = QSharedPointer<KeyValueNode>::create(QStringLiteral("state"), QStringLiteral("open"));
+    auto trueNode2 = QSharedPointer<KeyValueNode>::create(QStringLiteral("author"), QStringLiteral("jules"));
+    auto falseNode1 = QSharedPointer<KeyValueNode>::create(QStringLiteral("state"), QStringLiteral("closed"));
+    auto falseNode2 = QSharedPointer<KeyValueNode>::create(QStringLiteral("author"), QStringLiteral("alice"));
 
     // Empty OrNode
     OrNode emptyNode({});
-    QVERIFY(emptyNode.evaluate(accessor)); // based on current behavior
+    QVERIFY(!emptyNode.evaluate(accessor));
 
     // Single true child
     OrNode singleTrueNode({trueNode1});
