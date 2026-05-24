@@ -16,6 +16,33 @@ class TestFilter : public QObject {
 
 private Q_SLOTS:
 
+  void testNotNodeEvaluate() {
+    MockAccessor accessor;
+    accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
+
+    // Happy path: child evaluates to true, NotNode evaluates to false
+    QSharedPointer<ASTNode> childTrue = QSharedPointer<InNode>::create(
+        QStringLiteral("state"), QStringLiteral("open"));
+    NotNode notNodeTrue(childTrue);
+    QVERIFY(!notNodeTrue.evaluate(accessor));
+
+    // Child evaluates to false, NotNode evaluates to true
+    QSharedPointer<ASTNode> childFalse = QSharedPointer<InNode>::create(
+        QStringLiteral("state"), QStringLiteral("closed"));
+    NotNode notNodeFalse(childFalse);
+    QVERIFY(notNodeFalse.evaluate(accessor));
+
+    // Test toString serialization
+    QCOMPARE(notNodeTrue.toString(), QStringLiteral("NOT state IN \"open\""));
+
+    // Test nested NOT nodes
+    QSharedPointer<ASTNode> doubleNot = QSharedPointer<NotNode>::create(
+        QSharedPointer<NotNode>::create(childTrue));
+    QVERIFY(doubleNot->evaluate(accessor));
+    QCOMPARE(doubleNot->toString(),
+             QStringLiteral("NOT NOT state IN \"open\""));
+  }
+
   void testOrNodeEvaluate() {
     MockAccessor accessor;
     accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
