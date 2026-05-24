@@ -262,8 +262,15 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     }
 
     beginResetModel();
+    auto sourceIt = sourceRows.cbegin();
+    auto sourceEnd = sourceRows.cend();
     for (int i = 0; i < m_items.size(); ++i) {
-      if (!sourceRows.contains(i)) {
+      while (sourceIt != sourceEnd && *sourceIt < i) {
+        ++sourceIt;
+      }
+      if (sourceIt != sourceEnd && *sourceIt == i) {
+        // Skip this item as it's being moved
+      } else {
         newItems.append(m_items[i]);
       }
     }
