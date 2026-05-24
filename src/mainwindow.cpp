@@ -1272,6 +1272,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
               m_archiveModel->removeSession(row);
             }
             m_sessionModel->saveSessions();
+            m_archiveModel->saveSessions();
             updateStatus(i18np("1 session unarchived.",
                                "%1 sessions unarchived.",
                                rowsToUnarchive.size()));
