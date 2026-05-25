@@ -533,17 +533,15 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
           if (ok && !customSource.trimmed().isEmpty()) {
             customSource = customSource.trimmed();
-            bool exists = false;
-            for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
-              if (m_sourceModel
-                      ->data(m_sourceModel->index(i, 0), SourceModel::NameRole)
-                      .toString() == customSource) {
-                exists = true;
-                break;
-              }
-            }
 
-            if (!exists) {
+            QModelIndexList matches = m_sourceModel->match(
+                m_sourceModel->index(0, 0), SourceModel::NameRole, customSource,
+                1, Qt::MatchExactly);
+
+            QString targetBranch = QStringLiteral("main");
+            if (!matches.isEmpty()) {
+              targetBranch = getDefaultBranch(matches.first());
+            } else {
               QJsonArray arr;
               QJsonObject obj;
               obj[QStringLiteral("id")] = customSource;
@@ -552,8 +550,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               m_sourceModel->addSources(arr);
             }
 
-            m_selectedSources.insert(customSource, QStringLiteral("main"));
-            updateModels();
+            if (!m_selectedSources.values(customSource)
+                     .contains(targetBranch)) {
+              m_selectedSources.insert(customSource, targetBranch);
+              updateModels();
+            }
           }
         });
 
