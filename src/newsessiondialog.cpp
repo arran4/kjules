@@ -521,8 +521,47 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QPoint viewportPos =
             m_selectedView->viewport()->mapFrom(m_selectedView, pos);
         QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
-        if (!proxyIdx.isValid())
+
+        QMenu menu(this);
+
+        QAction *addCustomAction = menu.addAction(tr("Add Custom Source..."));
+        connect(addCustomAction, &QAction::triggered, this, [this]() {
+          bool ok;
+          QString customSource = QInputDialog::getText(
+              this, tr("Add Custom Source"), tr("Source name (owner/repo):"),
+              QLineEdit::Normal, QString(), &ok);
+
+          if (ok && !customSource.trimmed().isEmpty()) {
+            customSource = customSource.trimmed();
+            bool exists = false;
+            for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
+              if (m_sourceModel
+                      ->data(m_sourceModel->index(i, 0), SourceModel::NameRole)
+                      .toString() == customSource) {
+                exists = true;
+                break;
+              }
+            }
+
+            if (!exists) {
+              QJsonArray arr;
+              QJsonObject obj;
+              obj[QStringLiteral("id")] = customSource;
+              obj[QStringLiteral("name")] = customSource;
+              arr.append(obj);
+              m_sourceModel->addSources(arr);
+            }
+
+            m_selectedSources.insert(customSource, QStringLiteral("main"));
+            updateModels();
+          }
+        });
+
+        if (!proxyIdx.isValid()) {
+          menu.exec(m_selectedView->mapToGlobal(pos));
           return;
+        }
+        menu.addSeparator();
 
         QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
         QString name =
@@ -530,8 +569,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QString displayName =
             m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
                 .toString();
-
-        QMenu menu(this);
 
         QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
         connect(
