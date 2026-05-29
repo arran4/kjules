@@ -35,8 +35,11 @@ void ActivityBrowser::setActivities(const QJsonArray &activities) {
   for (int i = 0; i < m_activities.size(); ++i) {
     QJsonObject activity = m_activities[i].toObject();
     QString id = activity.value(QStringLiteral("id")).toString();
-    if (id.isEmpty())
+    if (id.isEmpty()) {
       id = QString::number(i);
+      activity.insert(QStringLiteral("id"), id);
+      m_activities[i] = activity;
+    }
     m_activityObjects.insert(id, activity);
   }
 
