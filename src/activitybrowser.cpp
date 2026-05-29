@@ -630,9 +630,9 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 
     QAction *showRawAction = menu.addAction(i18n("Show Raw JSON"));
     connect(showRawAction, &QAction::triggered, this, [this, path]() {
-      QJsonObject rawJsonObj = m_activityJsons.value(path);
-      if (!rawJsonObj.isEmpty()) {
-        QJsonDocument doc(rawJsonObj);
+      auto it = m_activityJsons.constFind(path);
+      if (it != m_activityJsons.constEnd()) {
+        QJsonDocument doc(it.value());
         QString rawJson =
             QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
         QDialog *dlg = new QDialog(this);
@@ -650,9 +650,9 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 
     menu.exec(QCursor::pos());
   } else if (scheme == QStringLiteral("raw")) {
-    QJsonObject rawJsonObj = m_activityJsons.value(path);
-    if (!rawJsonObj.isEmpty()) {
-      QJsonDocument doc(rawJsonObj);
+    auto it = m_activityJsons.constFind(path);
+    if (it != m_activityJsons.constEnd()) {
+      QJsonDocument doc(it.value());
       QString rawJson = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
       QDialog *dlg = new QDialog(this);
       dlg->setWindowTitle(i18n("Raw Activity JSON"));
