@@ -647,7 +647,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           // Cache session locally
           QString path =
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-          QtConcurrent::run([path, sessionObj]() {
+          auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
             QMutexLocker locker(&s_sessionCacheMutex);
             QDir().mkpath(path);
             QFile file(path + QStringLiteral("/cached_sessions.json"));
@@ -665,6 +665,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
               file.close();
             }
           });
+          Q_UNUSED(cacheFuture)
         } else {
           int statusCode =
               reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)

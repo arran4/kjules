@@ -258,10 +258,6 @@ protected:
 private:
   const QMultiMap<QString, QString> *m_selectedSources;
   bool m_showSelected;
-  bool m_hideArchived;
-  bool m_hideForks;
-  bool m_hidePrivate;
-  bool m_hidePublic;
   QSharedPointer<ASTNode> m_ast;
 };
 
