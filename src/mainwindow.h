@@ -35,7 +35,6 @@ class QVBoxLayout;
 class RefreshProgressWindow;
 class SourcesRefreshProgressWindow;
 class ClickableProgressBar;
-class ClickableProgressBar;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT

@@ -90,13 +90,13 @@ MainWindow::MainWindow(QWidget *parent)
       m_holdingModel(
           new QueueModel(this, QStringLiteral("holding.json"), true)),
       m_errorsModel(new ErrorsModel(this)), m_errorRetryTimer(new QTimer(this)),
+      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
       m_isRefreshingSources(false), m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)),
       m_followingRefreshTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
       m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false),
-      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
       m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
@@ -1247,7 +1247,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
                   m_archiveModel->getSession(mappedIdx.row());
               if (!sessionData.isEmpty()) {
                 SessionWindow *window =
-                    new SessionWindow(sessionData, m_apiManager, this);
+                    new SessionWindow(sessionData, m_apiManager, true, this);
                 connectSessionWindow(window);
                 window->show();
               } else {
@@ -1311,7 +1311,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
         QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
         if (!sessionData.isEmpty()) {
           SessionWindow *window =
-              new SessionWindow(sessionData, m_apiManager, this);
+              new SessionWindow(sessionData, m_apiManager, true, this);
           connectSessionWindow(window);
           window->show();
         } else {
@@ -2331,7 +2331,7 @@ void MainWindow::setupSourceSettingsAction() {
                     i18n("Save"), settingsWindow);
     saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
     connect(saveAction, &QAction::triggered, settingsWindow,
-            [this, textEdit, mappedIdx, settingsWindow]() {
+            [this, textEdit, settingsWindow]() {
               QJsonParseError parseError;
               QJsonDocument newDoc = QJsonDocument::fromJson(
                   textEdit->toPlainText().toUtf8(), &parseError);

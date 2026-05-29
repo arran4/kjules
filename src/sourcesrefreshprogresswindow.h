@@ -28,6 +28,7 @@ private Q_SLOTS:
   void onGithubInfoFailed(const QString &sourceId, const QString &message);
   void onSourcesRefreshFinished();
   void processNextGithub();
+  void cancel();
 
 Q_SIGNALS:
   void progressSummary(const QString &msg);
@@ -36,12 +37,14 @@ private:
   QProgressBar *m_progressBar;
   QTextBrowser *m_textBrowser;
   QPushButton *m_closeButton;
+  class QToolButton *m_actionButton;
 
   APIManager *m_apiManager;
   int m_totalGithubRequests;
   int m_finishedGithubRequests;
   int m_activeWorkers;
   QStringList m_githubQueue;
+  bool m_isFinished;
 };
 
 #endif // SOURCESREFRESHPROGRESSWINDOW_H

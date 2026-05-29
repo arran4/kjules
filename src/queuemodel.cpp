@@ -64,7 +64,7 @@ qint64 QueueModel::calculateBackoff(int errorCount) {
   QString type = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
   qint64 initialWait =
       queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
-  qint64 waitSeconds = initialWait;
+  qint64 waitSeconds;
 
   if (type == QStringLiteral("exponential")) {
     int expBase = queueConfig.readEntry("BackoffExpBase", 2);

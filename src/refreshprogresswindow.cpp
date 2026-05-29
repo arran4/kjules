@@ -6,9 +6,11 @@
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
+#include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTextBrowser>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
@@ -37,9 +39,25 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
           &RefreshProgressWindow::onAnchorClicked);
   layout->addWidget(m_textBrowser);
 
+  m_actionButton = new QToolButton(this);
+  m_actionButton->setText(i18n("Hide"));
+  m_actionButton->setPopupMode(QToolButton::MenuButtonPopup);
+  m_actionButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+
+  QMenu *menu = new QMenu(this);
+  QAction *cancelAction = menu->addAction(i18n("Cancel"));
+  m_actionButton->setMenu(menu);
+
+  connect(m_actionButton, &QToolButton::clicked, this, &QDialog::hide);
+  connect(cancelAction, &QAction::triggered, this,
+          &RefreshProgressWindow::cancel);
+
   m_closeButton = new QPushButton(i18n("Close"), this);
   m_closeButton->setEnabled(false); // Disable until finished
+  m_closeButton->hide();            // Hide initially
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
+
+  layout->addWidget(m_actionButton);
   layout->addWidget(m_closeButton);
 
   connect(m_apiManager, &APIManager::sessionReloaded, this,
@@ -70,22 +88,41 @@ void RefreshProgressWindow::addSessionIds(const QStringList &ids) {
   m_progressBar->setMaximum(m_totalCount);
 
   // If we were finished, we need to restart processing
-  if (m_isFinished && !ids.isEmpty()) {
+  if (m_isFinished && !ids.isEmpty() && !m_isCancelled) {
     m_isFinished = false;
     m_closeButton->setEnabled(false);
+    m_closeButton->hide();
+    m_actionButton->show();
     QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
                               Qt::QueuedConnection);
   }
 }
 
+void RefreshProgressWindow::cancel() {
+  m_isFinished = true;
+  m_isCancelled = true;
+  m_apiManager->disconnect(this);
+  m_textBrowser->append(i18n("<b>Cancelled.</b>"));
+  m_actionButton->hide();
+  m_closeButton->setEnabled(true);
+  m_closeButton->show();
+  Q_EMIT progressFinished();
+}
+
 void RefreshProgressWindow::processNext() {
   Q_EMIT progressUpdated(m_currentIndex, m_totalCount);
+
+  if (m_isFinished) {
+    return;
+  }
 
   if (!m_apiManager->canConnect()) {
     m_textBrowser->append(i18n("<b>Error:</b> Cannot refresh: No token or "
                                "previous failure. Processing stopped."));
     m_progressBar->setValue(m_totalCount); // Force completion
+    m_actionButton->hide();
     m_closeButton->setEnabled(true);
+    m_closeButton->show();
     m_isFinished = true;
     Q_EMIT progressFinished();
     return;
@@ -93,7 +130,9 @@ void RefreshProgressWindow::processNext() {
 
   if (m_processedCount >= m_totalCount) {
     m_textBrowser->append(i18n("<b>Finished.</b>"));
+    m_actionButton->hide();
     m_closeButton->setEnabled(true);
+    m_closeButton->show();
     m_isFinished = true;
     Q_EMIT progressFinished();
     return;
