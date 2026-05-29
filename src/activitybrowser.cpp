@@ -30,6 +30,19 @@ ActivityBrowser::ActivityBrowser(QWidget *parent) : QTextBrowser(parent) {
 
 void ActivityBrowser::setActivities(const QJsonArray &activities) {
   m_activities = activities;
+
+  m_activityObjects.clear();
+  for (int i = 0; i < m_activities.size(); ++i) {
+    QJsonObject activity = m_activities[i].toObject();
+    QString id = activity.value(QStringLiteral("id")).toString();
+    if (id.isEmpty()) {
+      id = QString::number(i);
+      activity.insert(QStringLiteral("id"), id);
+      m_activities[i] = activity;
+    }
+    m_activityObjects.insert(id, activity);
+  }
+
   renderHtml();
 }
 
@@ -86,9 +99,6 @@ void ActivityBrowser::renderHtml() {
     QList<int> repeatCounts;
     QJsonArray dedupedActivities = deduplicateActivities(repeatCounts);
 
-    m_activityJsons.clear();
-    m_activityObjects.clear();
-
     for (int i = 0; i < dedupedActivities.size(); ++i) {
       QJsonObject activity = dedupedActivities[i].toObject();
       QString id = activity.value(QStringLiteral("id")).toString();
@@ -96,11 +106,6 @@ void ActivityBrowser::renderHtml() {
         id = QString::number(i);
 
       int count = repeatCounts[i];
-
-      QJsonDocument doc(activity);
-      m_activityJsons.insert(
-          id, QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
-      m_activityObjects.insert(id, activity);
 
       QString createTimeStr =
           activity.value(QStringLiteral("createTime")).toString();
@@ -593,8 +598,9 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
   } else if (scheme == QStringLiteral("diff")) {
     // Find the diff
     QString diffText;
-    QJsonObject activity = m_activityObjects.value(path);
-    if (!activity.isEmpty()) {
+    auto it = m_activityObjects.constFind(path);
+    if (it != m_activityObjects.constEnd()) {
+      QJsonObject activity = it.value();
       QJsonArray artifacts =
           activity.value(QStringLiteral("artifacts")).toArray();
       for (int j = 0; j < artifacts.size(); ++j) {
@@ -629,8 +635,11 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 
     QAction *showRawAction = menu.addAction(i18n("Show Raw JSON"));
     connect(showRawAction, &QAction::triggered, this, [this, path]() {
-      QString rawJson = m_activityJsons.value(path);
-      if (!rawJson.isEmpty()) {
+      auto it = m_activityObjects.constFind(path);
+      if (it != m_activityObjects.constEnd()) {
+        QJsonDocument doc(it.value());
+        QString rawJson =
+            QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
         QDialog *dlg = new QDialog(this);
         dlg->setWindowTitle(i18n("Raw Activity JSON"));
         dlg->resize(600, 400);
@@ -646,8 +655,10 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 
     menu.exec(QCursor::pos());
   } else if (scheme == QStringLiteral("raw")) {
-    QString rawJson = m_activityJsons.value(path);
-    if (!rawJson.isEmpty()) {
+    auto it = m_activityObjects.constFind(path);
+    if (it != m_activityObjects.constEnd()) {
+      QJsonDocument doc(it.value());
+      QString rawJson = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
       QDialog *dlg = new QDialog(this);
       dlg->setWindowTitle(i18n("Raw Activity JSON"));
       dlg->resize(600, 400);
@@ -661,8 +672,9 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
     }
   } else if (scheme == QStringLiteral("img")) {
     QString b64;
-    QJsonObject activity = m_activityObjects.value(path);
-    if (!activity.isEmpty()) {
+    auto it = m_activityObjects.constFind(path);
+    if (it != m_activityObjects.constEnd()) {
+      QJsonObject activity = it.value();
       QJsonArray artifacts =
           activity.value(QStringLiteral("artifacts")).toArray();
       for (int j = 0; j < artifacts.size(); ++j) {

@@ -1,9 +1,9 @@
 #ifndef ACTIVITYBROWSER_H
 #define ACTIVITYBROWSER_H
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QMap>
 #include <QSet>
 #include <QTextBrowser>
 
@@ -33,10 +33,8 @@ private:
   QJsonArray m_activities;
   QString m_prompt;
   QSet<QString> m_expandedItems;
-  // Map element id to the string representation of its JSON for context menu
-  QMap<QString, QString> m_activityJsons;
-  // Map element id to its JSON object for quick lookup
-  QMap<QString, QJsonObject> m_activityObjects;
+  // Cache of parsed activities for O(1) lookups
+  QHash<QString, QJsonObject> m_activityObjects;
 };
 
 #endif // ACTIVITYBROWSER_H

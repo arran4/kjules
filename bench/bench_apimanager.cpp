@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
