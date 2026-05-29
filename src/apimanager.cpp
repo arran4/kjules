@@ -7,7 +7,14 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QNetworkReply>
+#include <QSaveFile>
+#include <QtConcurrent>
+
+namespace {
+QMutex s_sessionCacheMutex;
+} // namespace
 
 const QString DEFAULT_BASE_URL =
     QStringLiteral("https://jules.googleapis.com/v1alpha");
@@ -641,24 +648,28 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           // Cache session locally
           QString path =
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-          QDir dir(path);
-          if (!dir.exists()) {
-            dir.mkpath(QStringLiteral("."));
-          }
-          QFile file(path + QStringLiteral("/cached_sessions.json"));
-          QJsonArray cachedSessions;
-          if (file.open(QIODevice::ReadOnly)) {
-            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-            cachedSessions = doc.array();
-            file.close();
-          }
-          cachedSessions.append(sessionObj);
-          if (file.open(QIODevice::WriteOnly)) {
-            file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-            QJsonDocument writeDoc(cachedSessions);
-            file.write(writeDoc.toJson());
-            file.close();
-          }
+          auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
+            QMutexLocker locker(&s_sessionCacheMutex);
+            QDir().mkpath(path);
+            QString filePath = path + QStringLiteral("/cached_sessions.json");
+            QFile file(filePath);
+            QJsonArray cachedSessions;
+            if (file.open(QIODevice::ReadOnly)) {
+              QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+              cachedSessions = doc.array();
+              file.close();
+            }
+            cachedSessions.append(sessionObj);
+
+            QSaveFile saveFile(filePath);
+            if (saveFile.open(QIODevice::WriteOnly)) {
+              QJsonDocument writeDoc(cachedSessions);
+              saveFile.write(writeDoc.toJson());
+              saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+              saveFile.commit();
+            }
+          });
+          Q_UNUSED(cacheFuture)
         } else {
           int statusCode =
               reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)

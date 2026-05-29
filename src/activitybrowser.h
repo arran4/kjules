@@ -4,7 +4,6 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QMap>
 #include <QSet>
 #include <QTextBrowser>
 
