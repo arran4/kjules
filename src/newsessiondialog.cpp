@@ -526,22 +526,44 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QAction *addCustomAction = menu.addAction(tr("Add Custom Source..."));
         connect(addCustomAction, &QAction::triggered, this, [this]() {
-          bool ok;
-          QString customSource = QInputDialog::getText(
-              this, tr("Add Custom Source"), tr("Source name (owner/repo):"),
-              QLineEdit::Normal, QString(), &ok);
+          QDialog dialog(this);
+          dialog.setWindowTitle(tr("Add Custom Source"));
+          QFormLayout layout(&dialog);
 
-          if (ok && !customSource.trimmed().isEmpty()) {
-            customSource = customSource.trimmed();
+          QLineEdit *sourceEdit = new QLineEdit(&dialog);
+          sourceEdit->setPlaceholderText(QStringLiteral("owner/repo"));
+          layout.addRow(tr("Source name:"), sourceEdit);
+
+          QComboBox *branchCombo = new QComboBox(&dialog);
+          branchCombo->setEditable(true);
+          branchCombo->addItem(QStringLiteral("main"));
+          branchCombo->addItem(QStringLiteral("master"));
+          layout.addRow(tr("Branch:"), branchCombo);
+
+          QDialogButtonBox *buttonBox = new QDialogButtonBox(
+              QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+          layout.addRow(buttonBox);
+
+          connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
+                  &QDialog::accept);
+          connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
+                  &QDialog::reject);
+
+          if (dialog.exec() == QDialog::Accepted) {
+            QString customSource = sourceEdit->text().trimmed();
+            if (customSource.isEmpty())
+              return;
 
             QModelIndexList matches = m_sourceModel->match(
                 m_sourceModel->index(0, 0), SourceModel::NameRole, customSource,
                 1, Qt::MatchExactly);
 
-            QString targetBranch = QStringLiteral("main");
-            if (!matches.isEmpty()) {
-              targetBranch = getDefaultBranch(matches.first());
-            } else {
+            QString targetBranch = branchCombo->currentText().trimmed();
+            if (targetBranch.isEmpty()) {
+              targetBranch = QStringLiteral("main");
+            }
+
+            if (matches.isEmpty()) {
               QJsonArray arr;
               QJsonObject obj;
               obj[QStringLiteral("id")] = customSource;
