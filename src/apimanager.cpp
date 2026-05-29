@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QMutex>
 #include <QNetworkReply>
+#include <QSaveFile>
 #include <QtConcurrent>
 
 namespace {
@@ -650,7 +651,8 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
             QMutexLocker locker(&s_sessionCacheMutex);
             QDir().mkpath(path);
-            QFile file(path + QStringLiteral("/cached_sessions.json"));
+            QString filePath = path + QStringLiteral("/cached_sessions.json");
+            QFile file(filePath);
             QJsonArray cachedSessions;
             if (file.open(QIODevice::ReadOnly)) {
               QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -658,11 +660,13 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
               file.close();
             }
             cachedSessions.append(sessionObj);
-            if (file.open(QIODevice::WriteOnly)) {
-              file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+
+            QSaveFile saveFile(filePath);
+            if (saveFile.open(QIODevice::WriteOnly)) {
               QJsonDocument writeDoc(cachedSessions);
-              file.write(writeDoc.toJson());
-              file.close();
+              saveFile.write(writeDoc.toJson());
+              saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+              saveFile.commit();
             }
           });
           Q_UNUSED(cacheFuture)
