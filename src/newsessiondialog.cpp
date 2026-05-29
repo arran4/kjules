@@ -258,10 +258,6 @@ protected:
 private:
   const QMultiMap<QString, QString> *m_selectedSources;
   bool m_showSelected;
-  bool m_hideArchived;
-  bool m_hideForks;
-  bool m_hidePrivate;
-  bool m_hidePublic;
   QSharedPointer<ASTNode> m_ast;
 };
 
@@ -521,8 +517,70 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QPoint viewportPos =
             m_selectedView->viewport()->mapFrom(m_selectedView, pos);
         QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
-        if (!proxyIdx.isValid())
+
+        QMenu menu(this);
+
+        QAction *addCustomAction = menu.addAction(tr("Add Custom Source..."));
+        connect(addCustomAction, &QAction::triggered, this, [this]() {
+          QDialog dialog(this);
+          dialog.setWindowTitle(tr("Add Custom Source"));
+          QFormLayout layout(&dialog);
+
+          QLineEdit *sourceEdit = new QLineEdit(&dialog);
+          sourceEdit->setPlaceholderText(QStringLiteral("owner/repo"));
+          layout.addRow(tr("Source name:"), sourceEdit);
+
+          QComboBox *branchCombo = new QComboBox(&dialog);
+          branchCombo->setEditable(true);
+          branchCombo->addItem(QStringLiteral("main"));
+          branchCombo->addItem(QStringLiteral("master"));
+          layout.addRow(tr("Branch:"), branchCombo);
+
+          QDialogButtonBox *buttonBox = new QDialogButtonBox(
+              QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+          layout.addRow(buttonBox);
+
+          connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
+                  &QDialog::accept);
+          connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
+                  &QDialog::reject);
+
+          if (dialog.exec() == QDialog::Accepted) {
+            QString customSource = sourceEdit->text().trimmed();
+            if (customSource.isEmpty())
+              return;
+
+            QModelIndexList matches = m_sourceModel->match(
+                m_sourceModel->index(0, 0), SourceModel::NameRole, customSource,
+                1, Qt::MatchExactly);
+
+            QString targetBranch = branchCombo->currentText().trimmed();
+            if (targetBranch.isEmpty()) {
+              targetBranch = QStringLiteral("main");
+            }
+
+            if (matches.isEmpty()) {
+              QJsonArray arr;
+              QJsonObject obj;
+              obj[QStringLiteral("id")] = customSource;
+              obj[QStringLiteral("name")] = customSource;
+              arr.append(obj);
+              m_sourceModel->addSources(arr);
+            }
+
+            if (!m_selectedSources.values(customSource)
+                     .contains(targetBranch)) {
+              m_selectedSources.insert(customSource, targetBranch);
+              updateModels();
+            }
+          }
+        });
+
+        if (!proxyIdx.isValid()) {
+          menu.exec(m_selectedView->mapToGlobal(pos));
           return;
+        }
+        menu.addSeparator();
 
         QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
         QString name =
@@ -530,8 +588,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
         QString displayName =
             m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
                 .toString();
-
-        QMenu menu(this);
 
         QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
         connect(

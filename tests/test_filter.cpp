@@ -48,10 +48,14 @@ private Q_SLOTS:
     accessor.data.insert(QStringLiteral("state"), QStringLiteral("open"));
     accessor.data.insert(QStringLiteral("author"), QStringLiteral("jules"));
 
-    auto trueNode1 = QSharedPointer<KeyValueNode>::create(QStringLiteral("state"), QStringLiteral("open"));
-    auto trueNode2 = QSharedPointer<KeyValueNode>::create(QStringLiteral("author"), QStringLiteral("jules"));
-    auto falseNode1 = QSharedPointer<KeyValueNode>::create(QStringLiteral("state"), QStringLiteral("closed"));
-    auto falseNode2 = QSharedPointer<KeyValueNode>::create(QStringLiteral("author"), QStringLiteral("alice"));
+    auto trueNode1 = QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("state"), QStringLiteral("open"));
+    auto trueNode2 = QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("author"), QStringLiteral("jules"));
+    auto falseNode1 = QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("state"), QStringLiteral("closed"));
+    auto falseNode2 = QSharedPointer<KeyValueNode>::create(
+        QStringLiteral("author"), QStringLiteral("alice"));
 
     // Empty OrNode
     OrNode emptyNode({});

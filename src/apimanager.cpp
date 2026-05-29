@@ -10,9 +10,11 @@
 #include <QMutex>
 #include <QNetworkReply>
 #include <QSaveFile>
-#include <QThread>
+#include <QtConcurrent>
 
-Q_GLOBAL_STATIC(QMutex, s_cacheMutex)
+namespace {
+QMutex s_sessionCacheMutex;
+} // namespace
 
 const QString DEFAULT_BASE_URL =
     QStringLiteral("https://jules.googleapis.com/v1alpha");
@@ -646,12 +648,9 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           // Cache session locally
           QString path =
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-          auto writeCache = [path, sessionObj]() {
-            QMutexLocker locker(s_cacheMutex());
-            QDir dir(path);
-            if (!dir.exists()) {
-              dir.mkpath(QStringLiteral("."));
-            }
+          auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
+            QMutexLocker locker(&s_sessionCacheMutex);
+            QDir().mkpath(path);
             QString filePath = path + QStringLiteral("/cached_sessions.json");
             QFile file(filePath);
             QJsonArray cachedSessions;
@@ -669,15 +668,8 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
               saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
               saveFile.commit();
             }
-          };
-
-          QThread *thread = QThread::create(writeCache);
-          if (thread) {
-            connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-            thread->start();
-          } else {
-            writeCache();
-          }
+          });
+          Q_UNUSED(cacheFuture)
         } else {
           int statusCode =
               reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
