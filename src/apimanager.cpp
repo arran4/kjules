@@ -649,10 +649,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
           QtConcurrent::run([path, sessionObj]() {
             QMutexLocker locker(&s_sessionCacheMutex);
-            QDir dir(path);
-            if (!dir.exists()) {
-              dir.mkpath(QStringLiteral("."));
-            }
+            QDir().mkpath(path);
             QFile file(path + QStringLiteral("/cached_sessions.json"));
             QJsonArray cachedSessions;
             if (file.open(QIODevice::ReadOnly)) {
