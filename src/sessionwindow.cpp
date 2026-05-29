@@ -50,6 +50,10 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
             &SessionWindow::onSessionReloaded);
     connect(m_apiManager, &APIManager::activitiesReceived, this,
             &SessionWindow::onActivitiesReceived);
+    connect(m_apiManager, &APIManager::messageSent, this,
+            &SessionWindow::onMessageSent);
+    connect(m_apiManager, &APIManager::messageSendFailed, this,
+            &SessionWindow::onMessageSendFailed);
   }
 
   setupUi(m_sessionData);
@@ -278,6 +282,66 @@ void SessionWindow::onSessionReloaded(const QJsonObject &session) {
     if (m_apiManager) {
       m_apiManager->listActivities(currentId);
     }
+  }
+}
+
+void SessionWindow::onMessageSent(const QString &sessionId) {
+  QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
+  if (currentId != sessionId)
+    return;
+
+  m_pendingMessage.clear();
+  if (m_chatInput) {
+    m_chatInput->setEnabled(true);
+    m_chatInput->setFocus();
+  }
+  if (m_sendButton) {
+    m_sendButton->setEnabled(true);
+  }
+
+  if (m_statusLabel) {
+    m_statusLabel->setText(i18n("Message sent. Refreshing..."));
+  }
+
+  if (m_apiManager) {
+    m_apiManager->listActivities(currentId);
+  }
+}
+
+void SessionWindow::onMessageSendFailed(const QString &sessionId,
+                                        const QString &message,
+                                        const QString &httpDetails) {
+  QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
+  if (currentId != sessionId)
+    return;
+
+  if (m_chatInput) {
+    m_chatInput->setEnabled(true);
+    if (m_chatInput->text().isEmpty() && !m_pendingMessage.isEmpty()) {
+      m_chatInput->setText(m_pendingMessage);
+    }
+  }
+  if (m_sendButton) {
+    m_sendButton->setEnabled(true);
+  }
+
+  if (m_statusLabel) {
+    QString errorText = message;
+    if (!httpDetails.isEmpty()) {
+      errorText +=
+          QStringLiteral(" <a href=\"#show_error_details\">[Details]</a>");
+    }
+    m_statusLabel->setText(i18n("Failed to send message: %1", errorText));
+    m_statusLabel->setTextFormat(Qt::RichText);
+    m_statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+
+    // Disconnect any previous connections to avoid accumulating handlers
+    m_statusLabel->disconnect(this);
+
+    connect(m_statusLabel, &QLabel::linkActivated, this, [this, httpDetails]() {
+      m_textBrowser->setPlainText(httpDetails);
+      m_tabWidget->setCurrentWidget(m_textBrowser);
+    });
   }
 }
 
@@ -574,23 +638,30 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   QHBoxLayout *chatInputLayout = new QHBoxLayout();
   m_chatInput = new QLineEdit(this);
   m_chatInput->setPlaceholderText(i18n("Type a message..."));
-  QPushButton *sendButton = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send"), this);
+  m_sendButton = new QPushButton(QIcon::fromTheme(QStringLiteral("mail-send")),
+                                 i18n("Send"), this);
   chatInputLayout->addWidget(m_chatInput);
-  chatInputLayout->addWidget(sendButton);
+  chatInputLayout->addWidget(m_sendButton);
   activityLayout->addLayout(chatInputLayout);
 
-  connect(sendButton, &QPushButton::clicked, this, [this]() {
+  connect(m_sendButton, &QPushButton::clicked, this, [this]() {
     QString text = m_chatInput->text().trimmed();
-    if (text.isEmpty())
+    if (text.isEmpty() || !m_apiManager)
       return;
+
+    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    m_pendingMessage = text;
     m_chatInput->clear();
+    m_chatInput->setEnabled(false);
+    m_sendButton->setEnabled(false);
+
     if (m_statusLabel) {
-      m_statusLabel->setText(
-          i18n("Sending message not yet implemented by Jules API..."));
+      m_statusLabel->setText(i18n("Sending message..."));
     }
+
+    m_apiManager->sendMessage(id, text);
   });
-  connect(m_chatInput, &QLineEdit::returnPressed, sendButton,
+  connect(m_chatInput, &QLineEdit::returnPressed, m_sendButton,
           &QPushButton::click);
 
   m_tabWidget->addTab(m_detailsBrowser, i18n("Details"));

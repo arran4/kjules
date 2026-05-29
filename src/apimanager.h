@@ -49,6 +49,7 @@ public:
   static QString cleanSessionId(const QString &sessionId);
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
+  void sendMessage(const QString &sessionId, const QString &message);
   void fetchGithubInfo(const QString &sourceId);
   void fetchGithubBranches(const QString &sourceId);
   void fetchGithubPullRequest(const QString &prUrl);
@@ -82,6 +83,9 @@ Q_SIGNALS:
                              const QJsonObject &response,
                              const QString &errorString,
                              const QString &httpDetails);
+  void messageSent(const QString &sessionId);
+  void messageSendFailed(const QString &sessionId, const QString &message,
+                         const QString &httpDetails);
   void logMessage(const QString &message);
 
 private Q_SLOTS:
