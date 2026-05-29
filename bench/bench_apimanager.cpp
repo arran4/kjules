@@ -10,6 +10,7 @@
 #include <QStringList>
 #include <QTest>
 #include <QThread>
+#include <atomic>
 
 class APIManagerPerfTest : public QObject {
   Q_OBJECT
@@ -75,12 +76,14 @@ private Q_SLOTS:
 
     // Test Async Write (offloaded to thread)
     timer.start();
-    int finishedCount = 0;
+    std::atomic<int> finishedCount{0};
+    int startedCount = 0;
     for (int i = 0; i < 50; ++i) {
       QByteArray jsonBytes = QJsonDocument(cachedSessions).toJson();
+      QString threadFilePath = filePath + QString::number(i);
       QThread *thread =
-          QThread::create([filePath, jsonBytes, &finishedCount]() {
-            QFile file(filePath);
+          QThread::create([threadFilePath, jsonBytes, &finishedCount]() {
+            QFile file(threadFilePath);
             if (file.open(QIODevice::WriteOnly)) {
               file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
               file.write(jsonBytes);
@@ -88,15 +91,18 @@ private Q_SLOTS:
             }
             finishedCount++;
           });
-      connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-      thread->start();
+      if (thread) {
+        connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+        thread->start();
+        startedCount++;
+      }
     }
 
     // Wait for all threads to finish just to ensure clean exit for the test,
     // but the main thread elapsed time is what matters.
     qint64 elapsedAsyncMainThread = timer.nsecsElapsed();
 
-    while (finishedCount < 50) {
+    while (finishedCount < startedCount) {
       QCoreApplication::processEvents();
     }
 

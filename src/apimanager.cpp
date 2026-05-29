@@ -7,10 +7,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkReply>
-#include <QThread>
 #include <QMutex>
+#include <QNetworkReply>
 #include <QSaveFile>
+#include <QThread>
 
 Q_GLOBAL_STATIC(QMutex, s_cacheMutex)
 
@@ -646,7 +646,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           // Cache session locally
           QString path =
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-          QThread *thread = QThread::create([path, sessionObj]() {
+          auto writeCache = [path, sessionObj]() {
             QMutexLocker locker(s_cacheMutex());
             QDir dir(path);
             if (!dir.exists()) {
@@ -669,9 +669,15 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
               saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
               saveFile.commit();
             }
-          });
-          connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-          thread->start();
+          };
+
+          QThread *thread = QThread::create(writeCache);
+          if (thread) {
+            connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+            thread->start();
+          } else {
+            writeCache();
+          }
         } else {
           int statusCode =
               reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
