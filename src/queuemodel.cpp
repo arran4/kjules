@@ -695,18 +695,27 @@ void QueueModel::load() {
 void QueueModel::mergeWaitItems() {
   if (m_items.size() < 2)
     return;
-  for (int i = m_items.size() - 2; i >= 0; --i) {
-    if (m_items[i].isWaitItem && m_items[i + 1].isWaitItem) {
-      m_items[i].waitSeconds += m_items[i + 1].waitSeconds;
-      if (m_items[i + 1].isDailyLimitWait) {
-        m_items[i].isDailyLimitWait = true;
-      }
-      beginRemoveRows(QModelIndex(), i + 1, i + 1);
-      m_items.removeAt(i + 1);
-      endRemoveRows();
 
-      Q_EMIT dataChanged(index(i, 0), index(i, 0), {SummaryRole, StatusRole});
+  bool changed = false;
+  QVector<QueueItem> newItems;
+  newItems.reserve(m_items.size());
+
+  for (const auto &item : std::as_const(m_items)) {
+    if (!newItems.isEmpty() && newItems.last().isWaitItem && item.isWaitItem) {
+      newItems.last().waitSeconds += item.waitSeconds;
+      if (item.isDailyLimitWait) {
+        newItems.last().isDailyLimitWait = true;
+      }
+      changed = true;
+    } else {
+      newItems.append(item);
     }
+  }
+
+  if (changed) {
+    beginResetModel();
+    m_items = std::move(newItems);
+    endResetModel();
   }
 }
 
