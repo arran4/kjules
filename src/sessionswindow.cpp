@@ -410,7 +410,7 @@ void SessionsWindow::setupActions() {
   actionCollection()->addAction(QStringLiteral("auto_follow_refresh"),
                                 m_autoFollowAction);
 
-  connect(m_autoFollowAction, &QAction::toggled, [this](bool checked) {
+  connect(m_autoFollowAction, &QAction::toggled, [](bool checked) {
     KConfigGroup config(KSharedConfig::openConfig(),
                         QStringLiteral("SessionsWindow"));
     config.writeEntry("AutoFollowRefresh", checked);
@@ -635,7 +635,7 @@ void SessionsWindow::onListViewDoubleClicked(const QModelIndex &index) {
   QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
   QJsonObject rawData = m_model->getSession(sourceIndex.row());
 
-  SessionWindow *window = new SessionWindow(rawData, m_apiManager, this);
+  SessionWindow *window = new SessionWindow(rawData, m_apiManager, true, this);
   window->show();
 }
 
