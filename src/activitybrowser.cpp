@@ -96,9 +96,7 @@ void ActivityBrowser::renderHtml() {
 
       int count = repeatCounts[i];
 
-      QJsonDocument doc(activity);
-      m_activityJsons.insert(
-          id, QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      m_activityJsons.insert(id, activity);
 
       QString createTimeStr =
           activity.value(QStringLiteral("createTime")).toString();
@@ -632,8 +630,11 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 
     QAction *showRawAction = menu.addAction(i18n("Show Raw JSON"));
     connect(showRawAction, &QAction::triggered, this, [this, path]() {
-      QString rawJson = m_activityJsons.value(path);
-      if (!rawJson.isEmpty()) {
+      QJsonObject rawJsonObj = m_activityJsons.value(path);
+      if (!rawJsonObj.isEmpty()) {
+        QJsonDocument doc(rawJsonObj);
+        QString rawJson =
+            QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
         QDialog *dlg = new QDialog(this);
         dlg->setWindowTitle(i18n("Raw Activity JSON"));
         dlg->resize(600, 400);
@@ -649,8 +650,10 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
 
     menu.exec(QCursor::pos());
   } else if (scheme == QStringLiteral("raw")) {
-    QString rawJson = m_activityJsons.value(path);
-    if (!rawJson.isEmpty()) {
+    QJsonObject rawJsonObj = m_activityJsons.value(path);
+    if (!rawJsonObj.isEmpty()) {
+      QJsonDocument doc(rawJsonObj);
+      QString rawJson = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
       QDialog *dlg = new QDialog(this);
       dlg->setWindowTitle(i18n("Raw Activity JSON"));
       dlg->resize(600, 400);

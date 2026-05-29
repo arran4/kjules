@@ -34,7 +34,7 @@ private:
   QString m_prompt;
   QSet<QString> m_expandedItems;
   // Map element id to the string representation of its JSON for context menu
-  QMap<QString, QString> m_activityJsons;
+  QMap<QString, QJsonObject> m_activityJsons;
 };
 
 #endif // ACTIVITYBROWSER_H
