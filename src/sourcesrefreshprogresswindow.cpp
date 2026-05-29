@@ -2,9 +2,11 @@
 #include "apimanager.h"
 #include <QDateTime>
 #include <QDialogButtonBox>
+#include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTextBrowser>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <QTimer>
@@ -12,7 +14,7 @@
 SourcesRefreshProgressWindow::SourcesRefreshProgressWindow(
     APIManager *apiManager, QWidget *parent)
     : QDialog(parent), m_apiManager(apiManager), m_totalGithubRequests(0),
-      m_finishedGithubRequests(0), m_activeWorkers(0) {
+      m_finishedGithubRequests(0), m_activeWorkers(0), m_isFinished(false) {
   setWindowTitle(tr("Sources Refresh Progress"));
   resize(600, 400);
 
@@ -28,7 +30,24 @@ SourcesRefreshProgressWindow::SourcesRefreshProgressWindow(
   layout->addWidget(m_textBrowser);
 
   QDialogButtonBox *buttonBox = new QDialogButtonBox(Qt::Horizontal);
+
+  m_actionButton = new QToolButton(this);
+  m_actionButton->setText(tr("Hide"));
+  m_actionButton->setPopupMode(QToolButton::MenuButtonPopup);
+  m_actionButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+
+  QMenu *menu = new QMenu(this);
+  QAction *cancelAction = menu->addAction(tr("Cancel"));
+  m_actionButton->setMenu(menu);
+
+  connect(m_actionButton, &QToolButton::clicked, this, &QDialog::hide);
+  connect(cancelAction, &QAction::triggered, this,
+          &SourcesRefreshProgressWindow::cancel);
+
   m_closeButton = new QPushButton(tr("Close"), this);
+  m_closeButton->hide(); // Hide initially
+
+  buttonBox->addButton(m_actionButton, QDialogButtonBox::ActionRole);
   buttonBox->addButton(m_closeButton, QDialogButtonBox::AcceptRole);
   layout->addWidget(buttonBox);
 
@@ -58,6 +77,7 @@ void SourcesRefreshProgressWindow::setProgress(int current, int total) {
 }
 
 void SourcesRefreshProgressWindow::reset() {
+  m_isFinished = false;
   m_totalGithubRequests = 0;
   m_finishedGithubRequests = 0;
   m_activeWorkers = 0;
@@ -65,11 +85,23 @@ void SourcesRefreshProgressWindow::reset() {
   m_progressBar->setMaximum(0);
   m_progressBar->setValue(0);
   m_textBrowser->clear();
+  m_actionButton->show();
+  m_closeButton->hide();
   appendLog(tr("Starting refresh..."));
+}
+
+void SourcesRefreshProgressWindow::cancel() {
+  m_isFinished = true;
+  m_githubQueue.clear();
+  appendLog(tr("<b>Cancelled.</b>"));
+  m_actionButton->hide();
+  m_closeButton->show();
 }
 
 void SourcesRefreshProgressWindow::onSourcesReceived(
     const QJsonArray &sources) {
+  if (m_isFinished)
+    return;
   appendLog(tr("Loaded page with %1 sources.").arg(sources.size()));
   if (!m_apiManager->githubToken().isEmpty()) {
     for (int i = 0; i < sources.size(); ++i) {
@@ -90,13 +122,23 @@ void SourcesRefreshProgressWindow::onSourcesReceived(
 }
 
 void SourcesRefreshProgressWindow::processNextGithub() {
+  if (m_isFinished)
+    return;
+
   if (m_githubQueue.isEmpty()) {
     if (m_totalGithubRequests > 0 &&
         m_finishedGithubRequests == m_totalGithubRequests) {
+      m_isFinished = true;
       appendLog(tr("All GitHub API requests completed."));
       setProgress(m_finishedGithubRequests, m_totalGithubRequests);
+      m_actionButton->hide();
+      m_closeButton->show();
       Q_EMIT progressSummary(tr("All %1 GitHub API requests completed.")
                                  .arg(m_totalGithubRequests));
+    } else if (m_totalGithubRequests == 0 && m_isFinished) {
+      // It finished but there was nothing in the github queue
+      m_actionButton->hide();
+      m_closeButton->show();
     }
     return;
   }
@@ -145,10 +187,16 @@ void SourcesRefreshProgressWindow::onGithubInfoFailed(const QString &sourceId,
 }
 
 void SourcesRefreshProgressWindow::onSourcesRefreshFinished() {
+  if (m_isFinished)
+    return;
+
   appendLog(tr("Finished refreshing sources from API. Waiting for GitHub info "
                "to complete..."));
   if (m_totalGithubRequests == 0) {
     setProgress(1, 1);
+    m_isFinished = true;
+    m_actionButton->hide();
+    m_closeButton->show();
   } else {
     setProgress(m_finishedGithubRequests, m_totalGithubRequests);
   }

@@ -44,6 +44,7 @@ private Q_SLOTS:
   void onGithubPullRequestFailed(const QString &prUrl, const QString &message);
 
   void onSessionAutoArchived(const QString &id, const QString &reason);
+  void cancel();
 
 private:
   QString getSessionLink(const QString &id) const;
@@ -52,6 +53,7 @@ private:
   QProgressBar *m_progressBar;
   QTextBrowser *m_textBrowser;
   QPushButton *m_closeButton;
+  class QToolButton *m_actionButton;
 
   QStringList m_queue;
   int m_totalCount;
