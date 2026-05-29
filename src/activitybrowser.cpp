@@ -30,6 +30,16 @@ ActivityBrowser::ActivityBrowser(QWidget *parent) : QTextBrowser(parent) {
 
 void ActivityBrowser::setActivities(const QJsonArray &activities) {
   m_activities = activities;
+
+  m_activityObjects.clear();
+  for (int i = 0; i < m_activities.size(); ++i) {
+    QJsonObject activity = m_activities[i].toObject();
+    QString id = activity.value(QStringLiteral("id")).toString();
+    if (id.isEmpty())
+      id = QString::number(i);
+    m_activityObjects.insert(id, activity);
+  }
+
   renderHtml();
 }
 
@@ -591,24 +601,20 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
   } else if (scheme == QStringLiteral("diff")) {
     // Find the diff
     QString diffText;
-    for (int i = 0; i < m_activities.size(); ++i) {
-      QJsonObject activity = m_activities[i].toObject();
-      QString id = activity.value(QStringLiteral("id")).toString();
-      if (id.isEmpty())
-        id = QString::number(i);
-      if (id == path) {
-        QJsonArray artifacts =
-            activity.value(QStringLiteral("artifacts")).toArray();
-        for (int j = 0; j < artifacts.size(); ++j) {
-          QJsonObject art = artifacts[j].toObject();
-          if (art.contains(QStringLiteral("changeSet"))) {
-            diffText = art.value(QStringLiteral("changeSet"))
-                           .toObject()
-                           .value(QStringLiteral("gitPatch"))
-                           .toObject()
-                           .value(QStringLiteral("unidiffPatch"))
-                           .toString();
-          }
+    auto it = m_activityObjects.constFind(path);
+    if (it != m_activityObjects.constEnd()) {
+      QJsonObject activity = it.value();
+      QJsonArray artifacts =
+          activity.value(QStringLiteral("artifacts")).toArray();
+      for (int j = 0; j < artifacts.size(); ++j) {
+        QJsonObject art = artifacts[j].toObject();
+        if (art.contains(QStringLiteral("changeSet"))) {
+          diffText = art.value(QStringLiteral("changeSet"))
+                         .toObject()
+                         .value(QStringLiteral("gitPatch"))
+                         .toObject()
+                         .value(QStringLiteral("unidiffPatch"))
+                         .toString();
         }
       }
     }
@@ -664,22 +670,18 @@ void ActivityBrowser::onAnchorClicked(const QUrl &url) {
     }
   } else if (scheme == QStringLiteral("img")) {
     QString b64;
-    for (int i = 0; i < m_activities.size(); ++i) {
-      QJsonObject activity = m_activities[i].toObject();
-      QString id = activity.value(QStringLiteral("id")).toString();
-      if (id.isEmpty())
-        id = QString::number(i);
-      if (id == path) {
-        QJsonArray artifacts =
-            activity.value(QStringLiteral("artifacts")).toArray();
-        for (int j = 0; j < artifacts.size(); ++j) {
-          QJsonObject art = artifacts[j].toObject();
-          if (art.contains(QStringLiteral("media"))) {
-            b64 = art.value(QStringLiteral("media"))
-                      .toObject()
-                      .value(QStringLiteral("data"))
-                      .toString();
-          }
+    auto it = m_activityObjects.constFind(path);
+    if (it != m_activityObjects.constEnd()) {
+      QJsonObject activity = it.value();
+      QJsonArray artifacts =
+          activity.value(QStringLiteral("artifacts")).toArray();
+      for (int j = 0; j < artifacts.size(); ++j) {
+        QJsonObject art = artifacts[j].toObject();
+        if (art.contains(QStringLiteral("media"))) {
+          b64 = art.value(QStringLiteral("media"))
+                    .toObject()
+                    .value(QStringLiteral("data"))
+                    .toString();
         }
       }
     }
