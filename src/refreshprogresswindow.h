@@ -54,6 +54,7 @@ private:
   QTextBrowser *m_textBrowser;
   QPushButton *m_closeButton;
   class QToolButton *m_actionButton;
+  bool m_isCancelled = false;
 
   QStringList m_queue;
   int m_totalCount;

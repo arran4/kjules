@@ -87,12 +87,26 @@ void SourcesRefreshProgressWindow::reset() {
   m_textBrowser->clear();
   m_actionButton->show();
   m_closeButton->hide();
+
+  m_apiManager->disconnect(this);
+  connect(m_apiManager, &APIManager::sourcesReceived, this,
+          &SourcesRefreshProgressWindow::onSourcesReceived);
+  connect(m_apiManager, &APIManager::githubInfoReceived, this,
+          &SourcesRefreshProgressWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubInfoFailed, this,
+          &SourcesRefreshProgressWindow::onGithubInfoFailed);
+  connect(m_apiManager, &APIManager::sourcesRefreshFinished, this,
+          &SourcesRefreshProgressWindow::onSourcesRefreshFinished);
+  connect(m_apiManager, &APIManager::logMessage, this,
+          &SourcesRefreshProgressWindow::appendLog);
+
   appendLog(tr("Starting refresh..."));
 }
 
 void SourcesRefreshProgressWindow::cancel() {
   m_isFinished = true;
   m_githubQueue.clear();
+  m_apiManager->disconnect(this);
   appendLog(tr("<b>Cancelled.</b>"));
   m_actionButton->hide();
   m_closeButton->show();

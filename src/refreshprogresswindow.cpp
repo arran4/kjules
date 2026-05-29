@@ -88,7 +88,7 @@ void RefreshProgressWindow::addSessionIds(const QStringList &ids) {
   m_progressBar->setMaximum(m_totalCount);
 
   // If we were finished, we need to restart processing
-  if (m_isFinished && !ids.isEmpty()) {
+  if (m_isFinished && !ids.isEmpty() && !m_isCancelled) {
     m_isFinished = false;
     m_closeButton->setEnabled(false);
     m_closeButton->hide();
@@ -100,6 +100,8 @@ void RefreshProgressWindow::addSessionIds(const QStringList &ids) {
 
 void RefreshProgressWindow::cancel() {
   m_isFinished = true;
+  m_isCancelled = true;
+  m_apiManager->disconnect(this);
   m_textBrowser->append(i18n("<b>Cancelled.</b>"));
   m_actionButton->hide();
   m_closeButton->setEnabled(true);
