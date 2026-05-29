@@ -7,7 +7,13 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QNetworkReply>
+#include <QtConcurrent>
+
+namespace {
+QMutex s_sessionCacheMutex;
+} // namespace
 
 const QString DEFAULT_BASE_URL =
     QStringLiteral("https://jules.googleapis.com/v1alpha");
@@ -641,24 +647,24 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           // Cache session locally
           QString path =
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-          QDir dir(path);
-          if (!dir.exists()) {
-            dir.mkpath(QStringLiteral("."));
-          }
-          QFile file(path + QStringLiteral("/cached_sessions.json"));
-          QJsonArray cachedSessions;
-          if (file.open(QIODevice::ReadOnly)) {
-            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-            cachedSessions = doc.array();
-            file.close();
-          }
-          cachedSessions.append(sessionObj);
-          if (file.open(QIODevice::WriteOnly)) {
-            file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-            QJsonDocument writeDoc(cachedSessions);
-            file.write(writeDoc.toJson());
-            file.close();
-          }
+          QtConcurrent::run([path, sessionObj]() {
+            QMutexLocker locker(&s_sessionCacheMutex);
+            QDir().mkpath(path);
+            QFile file(path + QStringLiteral("/cached_sessions.json"));
+            QJsonArray cachedSessions;
+            if (file.open(QIODevice::ReadOnly)) {
+              QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+              cachedSessions = doc.array();
+              file.close();
+            }
+            cachedSessions.append(sessionObj);
+            if (file.open(QIODevice::WriteOnly)) {
+              file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+              QJsonDocument writeDoc(cachedSessions);
+              file.write(writeDoc.toJson());
+              file.close();
+            }
+          });
         } else {
           int statusCode =
               reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
