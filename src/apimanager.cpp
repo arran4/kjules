@@ -11,6 +11,10 @@
 #include <QNetworkReply>
 #include <QtConcurrent>
 
+namespace {
+QMutex s_sessionCacheMutex;
+} // namespace
+
 const QString DEFAULT_BASE_URL =
     QStringLiteral("https://jules.googleapis.com/v1alpha");
 
@@ -644,8 +648,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           QString path =
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
           QtConcurrent::run([path, sessionObj]() {
-            static QMutex fileMutex;
-            QMutexLocker locker(&fileMutex);
+            QMutexLocker locker(&s_sessionCacheMutex);
             QDir dir(path);
             if (!dir.exists()) {
               dir.mkpath(QStringLiteral("."));
