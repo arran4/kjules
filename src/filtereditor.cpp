@@ -380,7 +380,8 @@ void FilterEditor::setFilterText(const QString &text) {
                         ? text
                         : text + QLatin1Char(' ');
   m_lineEdit->setText(newText);
-  if (newText.trimmed().startsWith(QLatin1String("="))) {
+  if (newText.startsWith(QLatin1String("="))) {
+    m_treeView->parentWidget()->setVisible(true);
     updateTreeFromText();
   } else {
     m_treeView->parentWidget()->setVisible(false);
