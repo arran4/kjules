@@ -10,12 +10,15 @@ class QTreeView;
 class QStandardItemModel;
 class QStandardItem;
 class QListWidget;
+class QFrame;
+class QToolButton;
 class ASTNode;
 
 class FilterEditor : public QWidget {
   Q_OBJECT
 public:
   explicit FilterEditor(QWidget *parent = nullptr);
+  ~FilterEditor() override;
   QString filterText() const;
   QLineEdit *lineEdit() const;
   void setFilterText(const QString &text);
@@ -37,6 +40,8 @@ private Q_SLOTS:
   void onTextChanged(const QString &text);
   void onTreeContextMenu(const QPoint &pos);
   void onTreeItemChanged(QStandardItem *item);
+  void toggleFormulaBuilder();
+  void dismissFormulaBuilder();
 
 private:
   void updateTreeFromText();
@@ -44,13 +49,20 @@ private:
   void updateTextFromTree();
   void populateTree(QStandardItem *parentItem, QSharedPointer<ASTNode> node);
   QSharedPointer<ASTNode> buildASTFromTree(QStandardItem *item);
+  void updatePopupPosition();
 
   QLineEdit *m_lineEdit;
+  QToolButton *m_toggleButton;
   QTreeView *m_treeView;
   QStandardItemModel *m_treeModel;
   QListWidget *m_paletteList;
+  QFrame *m_popupFrame;
   bool m_updating;
+  bool m_userDismissed;
   QMap<QString, QStringList> m_completions;
+
+protected:
+  bool eventFilter(QObject *obj, QEvent *event) override;
 };
 
 #endif // FILTEREDITOR_H

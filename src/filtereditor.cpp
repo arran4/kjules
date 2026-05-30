@@ -5,6 +5,7 @@
 #include <QContextMenuEvent>
 #include <QDebug>
 #include <QDialog>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -16,6 +17,7 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QStandardItemModel>
+#include <QToolButton>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -253,8 +255,8 @@ QString FilterEditor::applyQuickFilter(const QString &currentFilter,
 }
 
 FilterEditor::FilterEditor(QWidget *parent)
-    : QWidget(parent), m_updating(false) {
-  QVBoxLayout *layout = new QVBoxLayout(this);
+    : QWidget(parent), m_updating(false), m_userDismissed(false) {
+  QHBoxLayout *layout = new QHBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(2);
 
@@ -262,7 +264,15 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula "
                                     "(e.g. =\"Update all\" state:PAUSED)"));
   m_lineEdit->setClearButtonEnabled(true);
+  m_lineEdit->installEventFilter(this);
   layout->addWidget(m_lineEdit);
+
+  m_toggleButton = new QToolButton(this);
+  m_toggleButton->setIcon(QIcon::fromTheme(QStringLiteral("view-filter")));
+  m_toggleButton->setToolTip(tr("Toggle Formula Builder"));
+  m_toggleButton->setCheckable(true);
+  m_toggleButton->setVisible(false);
+  layout->addWidget(m_toggleButton);
 
   m_treeView = new QTreeView(this);
   m_treeModel = new QStandardItemModel(this);
@@ -295,13 +305,61 @@ FilterEditor::FilterEditor(QWidget *parent)
                    Qt::ItemIsEnabled);
   }
 
-  QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+  m_popupFrame = new QFrame(this);
+  m_popupFrame->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint |
+                               Qt::WindowStaysOnTopHint);
+  m_popupFrame->setAttribute(Qt::WA_ShowWithoutActivating);
+  m_popupFrame->setFocusPolicy(Qt::NoFocus);
+  m_popupFrame->setFrameShape(QFrame::StyledPanel);
+
+  QVBoxLayout *popupLayout = new QVBoxLayout(m_popupFrame);
+  popupLayout->setContentsMargins(4, 4, 4, 4);
+
+  QHBoxLayout *popupHeaderLayout = new QHBoxLayout();
+  QLabel *popupTitle = new QLabel(tr("Formula Builder"), m_popupFrame);
+  QFont f = popupTitle->font();
+  f.setBold(true);
+  popupTitle->setFont(f);
+  QToolButton *dismissBtn = new QToolButton(m_popupFrame);
+  dismissBtn->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
+  dismissBtn->setAutoRaise(true);
+  dismissBtn->setToolTip(tr("Dismiss"));
+  popupHeaderLayout->addWidget(popupTitle);
+  popupHeaderLayout->addStretch();
+  popupHeaderLayout->addWidget(dismissBtn);
+
+  popupLayout->addLayout(popupHeaderLayout);
+
+  QSplitter *splitter = new QSplitter(Qt::Horizontal, m_popupFrame);
   splitter->addWidget(m_treeView);
   splitter->addWidget(m_paletteList);
   splitter->setStretchFactor(0, 3);
   splitter->setStretchFactor(1, 1);
-  splitter->setVisible(false);
-  layout->addWidget(splitter);
+
+  popupLayout->addWidget(splitter);
+
+  // Setup connections for the popup
+  connect(m_toggleButton, &QToolButton::toggled, this, [this](bool checked) {
+    if (checked) {
+      m_userDismissed = false;
+      updatePopupPosition();
+      m_popupFrame->show();
+    } else {
+      m_userDismissed = true;
+      m_popupFrame->hide();
+    }
+  });
+
+  connect(dismissBtn, &QToolButton::clicked, this,
+          &FilterEditor::dismissFormulaBuilder);
+
+  this->installEventFilter(this);
+  if (parent) {
+    parent->installEventFilter(this);
+    if (parent->window() && parent->window() != parent) {
+      parent->window()->installEventFilter(this);
+    }
+  }
 
   connect(m_lineEdit, &QLineEdit::textChanged, this,
           &FilterEditor::onTextChanged);
@@ -374,17 +432,79 @@ void FilterEditor::setCompletions(
     const QMap<QString, QStringList> &completions) {
   m_completions = completions;
 }
+
+FilterEditor::~FilterEditor() {
+  if (parentWidget()) {
+    parentWidget()->removeEventFilter(this);
+    if (parentWidget()->window() &&
+        parentWidget()->window() != parentWidget()) {
+      parentWidget()->window()->removeEventFilter(this);
+    }
+  }
+}
+
+void FilterEditor::toggleFormulaBuilder() {
+  m_toggleButton->setChecked(!m_toggleButton->isChecked());
+}
+
+void FilterEditor::dismissFormulaBuilder() {
+  m_userDismissed = true;
+  m_popupFrame->hide();
+  m_toggleButton->setChecked(false);
+}
+
+#include <QApplication>
+
+void FilterEditor::updatePopupPosition() {
+  QPoint globalPos = m_lineEdit->mapToGlobal(QPoint(0, m_lineEdit->height()));
+  m_popupFrame->move(globalPos);
+  m_popupFrame->resize(m_lineEdit->width(), 300);
+}
+
+bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
+  if (obj == m_lineEdit) {
+    if (event->type() == QEvent::FocusIn) {
+      m_userDismissed = false;
+      updatePopupPosition();
+      m_popupFrame->show();
+      m_toggleButton->setChecked(true);
+    } else if (event->type() == QEvent::FocusOut) {
+      QWidget *reasonWidget = QApplication::focusWidget();
+      bool focusInPopup =
+          reasonWidget && (m_popupFrame->isAncestorOf(reasonWidget) ||
+                           reasonWidget == m_popupFrame);
+      if (!focusInPopup && reasonWidget != m_toggleButton &&
+          reasonWidget != this) {
+        m_popupFrame->hide();
+        m_toggleButton->setChecked(false);
+      }
+    }
+  }
+
+  if (event->type() == QEvent::Move || event->type() == QEvent::Resize ||
+      event->type() == QEvent::Show) {
+    if (m_popupFrame->isVisible()) {
+      updatePopupPosition();
+    }
+  }
+  return QWidget::eventFilter(obj, event);
+}
+
 void FilterEditor::setFilterText(const QString &text) {
   m_updating = true;
   QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' '))
                         ? text
                         : text + QLatin1Char(' ');
   m_lineEdit->setText(newText);
+  m_toggleButton->setVisible(true);
+  if (!m_userDismissed && m_lineEdit->hasFocus()) {
+    updatePopupPosition();
+    m_popupFrame->show();
+    m_toggleButton->setChecked(true);
+  }
   if (newText.startsWith(QLatin1String("="))) {
-    m_treeView->parentWidget()->setVisible(true);
     updateTreeFromText();
   } else {
-    m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
   m_updating = false;
@@ -396,9 +516,13 @@ void FilterEditor::onTextChanged(const QString &text) {
     return;
 
   m_updating = true;
-  bool isFormula = text.startsWith(QLatin1String("="));
-  m_treeView->parentWidget()->setVisible(isFormula);
-  if (isFormula) {
+  m_toggleButton->setVisible(true);
+  if (!m_userDismissed && m_lineEdit->hasFocus()) {
+    updatePopupPosition();
+    m_popupFrame->show();
+    m_toggleButton->setChecked(true);
+  }
+  if (text.startsWith(QLatin1String("="))) {
     updateTreeFromText();
   } else {
     m_treeModel->removeRows(0, m_treeModel->rowCount());
