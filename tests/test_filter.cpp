@@ -229,6 +229,18 @@ private Q_SLOTS:
     QVERIFY(
         hideUpdated.contains(QStringLiteral("NOT (repo:test OR repo:other)")));
   }
+  void testFilterEditorSetFilterText() {
+    FilterEditor editor;
+
+    editor.setFilterText(QStringLiteral("=repo:test"));
+    QCOMPARE(editor.filterText(), QStringLiteral("=repo:test "));
+
+    editor.setFilterText(QStringLiteral(""));
+    QCOMPARE(editor.filterText(), QStringLiteral(""));
+
+    editor.setFilterText(QStringLiteral("owner:jules "));
+    QCOMPARE(editor.filterText(), QStringLiteral("owner:jules "));
+  }
 };
 
 QTEST_MAIN(TestFilter)

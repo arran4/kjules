@@ -376,15 +376,16 @@ void FilterEditor::setCompletions(
 }
 void FilterEditor::setFilterText(const QString &text) {
   m_updating = true;
-  m_lineEdit->setText(text);
-  if (text.startsWith(QLatin1String("="))) {
+  QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' ')) ? text : text + QLatin1Char(' ');
+  m_lineEdit->setText(newText);
+  if (newText.trimmed().startsWith(QLatin1String("="))) {
     updateTreeFromText();
   } else {
     m_treeView->parentWidget()->setVisible(false);
     m_treeModel->removeRows(0, m_treeModel->rowCount());
   }
   m_updating = false;
-  Q_EMIT filterChanged(text);
+  Q_EMIT filterChanged(newText);
 }
 
 void FilterEditor::onTextChanged(const QString &text) {
