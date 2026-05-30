@@ -376,7 +376,9 @@ void FilterEditor::setCompletions(
 }
 void FilterEditor::setFilterText(const QString &text) {
   m_updating = true;
-  QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' ')) ? text : text + QLatin1Char(' ');
+  QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' '))
+                        ? text
+                        : text + QLatin1Char(' ');
   m_lineEdit->setText(newText);
   if (newText.trimmed().startsWith(QLatin1String("="))) {
     updateTreeFromText();
