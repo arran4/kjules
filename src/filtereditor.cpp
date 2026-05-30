@@ -483,7 +483,8 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
     }
   }
 
-  if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
+  if (event->type() == QEvent::Move || event->type() == QEvent::Resize ||
+      event->type() == QEvent::Show) {
     if (m_popupFrame->isVisible()) {
       updatePopupPosition();
     }

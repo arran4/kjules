@@ -1,0 +1,13 @@
+--- src/filtereditor.cpp
++++ src/filtereditor.cpp
+@@ -467,6 +467,11 @@
+     if (m_popupFrame->isVisible()) {
+       updatePopupPosition();
+     }
++  } else if (event->type() == QEvent::Show) {
++    if (m_popupFrame->isVisible()) {
++      updatePopupPosition();
++    }
+   }
+   return QWidget::eventFilter(obj, event);
+ }
