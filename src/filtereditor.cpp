@@ -306,7 +306,7 @@ FilterEditor::FilterEditor(QWidget *parent)
   }
 
   m_popupFrame = new QFrame(this);
-  m_popupFrame->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
+  m_popupFrame->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint |
                                Qt::WindowStaysOnTopHint);
   m_popupFrame->setAttribute(Qt::WA_ShowWithoutActivating);
   m_popupFrame->setFocusPolicy(Qt::NoFocus);
