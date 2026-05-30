@@ -1,0 +1,49 @@
+--- src/filtereditor.cpp
++++ src/filtereditor.cpp
+@@ -262,6 +262,7 @@
+   m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula "
+                                     "(e.g. =\"Update all\" state:PAUSED)"));
+   m_lineEdit->setClearButtonEnabled(true);
++  m_lineEdit->installEventFilter(this);
+   layout->addWidget(m_lineEdit);
+
+   m_toggleButton = new QToolButton(this);
+@@ -439,15 +440,36 @@
+ }
+
+ void FilterEditor::updatePopupPosition() {
+-  QPoint globalPos = mapToGlobal(QPoint(0, height()));
+-  m_popupFrame->move(globalPos);
+-  m_popupFrame->resize(width(), 300);
++  QPoint globalPos = m_lineEdit->mapToGlobal(QPoint(0, m_lineEdit->height()));
++  m_popupFrame->move(globalPos);
++  m_popupFrame->resize(m_lineEdit->width(), 300);
+ }
+
+ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
++  if (obj == m_lineEdit) {
++    if (event->type() == QEvent::FocusIn) {
++      if (m_lineEdit->text().startsWith(QLatin1String("="))) {
++        m_userDismissed = false;
++        updatePopupPosition();
++        m_popupFrame->show();
++        m_toggleButton->setChecked(true);
++      }
++    } else if (event->type() == QEvent::FocusOut) {
++      QFocusEvent *focusEvent = static_cast<QFocusEvent *>(event);
++      QWidget *reasonWidget = QApplication::focusWidget();
++      bool focusInPopup = reasonWidget && (m_popupFrame->isAncestorOf(reasonWidget) || reasonWidget == m_popupFrame);
++      if (!focusInPopup && reasonWidget != m_toggleButton) {
++        m_popupFrame->hide();
++        m_toggleButton->setChecked(false);
++      }
++    }
++  }
++
+   if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
+     if (m_popupFrame->isVisible()) {
+       updatePopupPosition();
+     }
+   }
+   return QWidget::eventFilter(obj, event);
+ }

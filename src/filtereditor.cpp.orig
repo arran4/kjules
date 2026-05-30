@@ -264,7 +264,6 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula "
                                     "(e.g. =\"Update all\" state:PAUSED)"));
   m_lineEdit->setClearButtonEnabled(true);
-  m_lineEdit->installEventFilter(this);
   layout->addWidget(m_lineEdit);
 
   m_toggleButton = new QToolButton(this);
