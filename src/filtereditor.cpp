@@ -352,9 +352,10 @@ FilterEditor::FilterEditor(QWidget *parent)
   connect(dismissBtn, &QToolButton::clicked, this,
           &FilterEditor::dismissFormulaBuilder);
 
+  this->installEventFilter(this);
   if (parent) {
     parent->installEventFilter(this);
-    if (parent->window()) {
+    if (parent->window() && parent->window() != parent) {
       parent->window()->installEventFilter(this);
     }
   }
@@ -429,6 +430,16 @@ void FilterEditor::focusInput() { m_lineEdit->setFocus(); }
 void FilterEditor::setCompletions(
     const QMap<QString, QStringList> &completions) {
   m_completions = completions;
+}
+
+FilterEditor::~FilterEditor() {
+  if (parentWidget()) {
+    parentWidget()->removeEventFilter(this);
+    if (parentWidget()->window() &&
+        parentWidget()->window() != parentWidget()) {
+      parentWidget()->window()->removeEventFilter(this);
+    }
+  }
 }
 
 void FilterEditor::toggleFormulaBuilder() {

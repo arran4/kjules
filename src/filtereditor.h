@@ -18,6 +18,7 @@ class FilterEditor : public QWidget {
   Q_OBJECT
 public:
   explicit FilterEditor(QWidget *parent = nullptr);
+  ~FilterEditor() override;
   QString filterText() const;
   QLineEdit *lineEdit() const;
   void setFilterText(const QString &text);
