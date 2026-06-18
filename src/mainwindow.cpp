@@ -1617,6 +1617,8 @@ void MainWindow::setupBlockedTab() {
           &MainWindow::updateBlockedTabVisibility);
   connect(m_blockedTreeModel, &QAbstractItemModel::modelReset, this,
           &MainWindow::updateBlockedTabVisibility);
+  connect(m_blockedTreeModel, &QAbstractItemModel::modelReset, m_blockedView,
+          &QTreeView::expandAll, Qt::QueuedConnection);
   updateBlockedTabVisibility();
 }
 
