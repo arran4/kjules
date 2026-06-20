@@ -3034,7 +3034,7 @@ void MainWindow::createStandardActions() {
 
   setStandardToolBarMenuEnabled(true);
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/kjules/kjulesui.rc"));
+  setupGUI(Default, QStringLiteral("kjulesui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
