@@ -5,7 +5,9 @@ QueueProxyModel::QueueProxyModel(QObject *parent)
     : QSortFilterProxyModel(parent) {}
 
 bool QueueProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
-  QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
-  bool isBlocked = sourceModel()->data(idx, QueueModel::Roles::StatusRole).toString() == QStringLiteral("Blocked");
-  return !isBlocked;
+  const auto *model = qobject_cast<const QueueModel *>(sourceModel());
+  if (!model) {
+    return true;
+  }
+  return !model->getItem(source_row).isBlocked;
 }
