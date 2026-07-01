@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gui name="kjules"
+<gui name="org.kde.kjules"
      version="2"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -28,7 +28,7 @@
             <Action name="follow_from_id" />
             <Separator />
             <Action name="view_sessions" />
-            <Action name="show_past_new_sessions" />
+            <Action name="show_following_new_sessions" />
             <Action name="view_raw_data" />
             <Action name="source_settings" />
             <Separator />

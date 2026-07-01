@@ -58,7 +58,7 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
 
   setupUi(m_sessionData);
   setupActions();
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/kjules/sessionwindowui.rc"));
+  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionwindowui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     QAction *closeAct =
