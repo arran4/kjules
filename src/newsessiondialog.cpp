@@ -1317,7 +1317,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     Q_EMIT refreshSourcesRequested();
   });
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
+  setupGUI(Default,
+           QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
 }
 
 void NewSessionDialog::onSubmitSession() {

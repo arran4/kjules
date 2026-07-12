@@ -177,7 +177,8 @@ void SessionsWindow::setupUi() {
 
   setupActions();
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc"));
+  setupGUI(Default,
+           QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc"));
 
   setupStatusBar();
 }
