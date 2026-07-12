@@ -6,6 +6,8 @@
         <file>sessionwindowui.rc</file>
     </qresource>
     <qresource prefix="/">
+        <file alias="icons/kjules-tray-red.png">../icons/kjules-tray-red.png</file>
+        <file alias="icons/kjules-tray-yellow.png">../icons/kjules-tray-yellow.png</file>
         <file alias="icons/kjules-tray.png">../icons/kjules-tray.png</file>
     </qresource>
 </RCC>

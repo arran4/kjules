@@ -1,0 +1,1 @@
+sed -i '/<qresource prefix="\/">/a \        <file alias="icons/kjules-tray-red.png">../icons/kjules-tray-red.png</file>\n        <file alias="icons/kjules-tray-yellow.png">../icons/kjules-tray-yellow.png</file>' src/kjules.qrc
