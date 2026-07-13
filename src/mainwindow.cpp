@@ -4696,13 +4696,15 @@ void MainWindow::updateTrayToolTip() {
   bool hasDoneOpenPR = false;
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex idx = m_sessionModel->index(i, 0);
-    QString state = m_sessionModel->data(idx, SessionModel::StateRole).toString();
+    QString state =
+        m_sessionModel->data(idx, SessionModel::StateRole).toString();
     if (state == QStringLiteral("WAITING_APPROVAL")) {
       hasWaitingApproval = true;
       break;
     }
     if (state == QStringLiteral("DONE")) {
-      QString prStatus = m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
+      QString prStatus =
+          m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
       if (prStatus == QStringLiteral("open")) {
         hasDoneOpenPR = true;
       }
@@ -4712,7 +4714,8 @@ void MainWindow::updateTrayToolTip() {
   if (hasWaitingApproval) {
     m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray-red.png")));
   } else if (hasDoneOpenPR) {
-    m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray-yellow.png")));
+    m_trayIcon->setIcon(
+        QIcon(QStringLiteral(":/icons/kjules-tray-yellow.png")));
   } else {
     m_trayIcon->setIcon(QIcon(QStringLiteral(":/icons/kjules-tray.png")));
   }
