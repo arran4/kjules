@@ -461,7 +461,14 @@ jobs:
             release-test|release-rc|release-alpha) prerelease="--prerelease" ;;
           esac
 
-          gh release create "$TAG" --draft --generate-notes $prerelease || true
+          git fetch --tags --force
+          PREV_TAG=$(git tag -l 'v*' | sort -V | grep -B1 -x "$TAG" | head -n1)
+          NOTES_START_ARG=""
+          if [[ -n "$PREV_TAG" && "$PREV_TAG" != "$TAG" ]]; then
+            NOTES_START_ARG="--notes-start-tag $PREV_TAG"
+          fi
+
+          gh release create "$TAG" --draft --generate-notes $NOTES_START_ARG $prerelease || true
 
   flatpak-build:
     name: Flatpak build
