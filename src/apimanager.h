@@ -58,8 +58,11 @@ public:
 
 Q_SIGNALS:
   void githubUsernameFetched(const QString &username);
-  void githubRepoCreated(const QJsonObject &requestData, const QJsonObject &response);
-  void githubRepoCreationFailed(const QJsonObject &requestData, const QJsonObject &response, const QString &errorString);
+  void githubRepoCreated(const QJsonObject &requestData,
+                         const QJsonObject &response);
+  void githubRepoCreationFailed(const QJsonObject &requestData,
+                                const QJsonObject &response,
+                                const QString &errorString);
 
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void githubInfoFailed(const QString &sourceId, const QString &message);

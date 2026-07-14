@@ -25,7 +25,8 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   QFormLayout *formLayout = new QFormLayout();
 
   m_orgEdit = new QLineEdit(this);
-  m_orgEdit->setPlaceholderText(i18n("Leave blank to use your own user account"));
+  m_orgEdit->setPlaceholderText(
+      i18n("Leave blank to use your own user account"));
   formLayout->addRow(i18n("Organization / User:"), m_orgEdit);
 
   m_repoNameEdit = new QLineEdit(this);
@@ -52,17 +53,22 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   optionsLayout->addWidget(new QLabel(i18n("Automation Mode:")));
   optionsLayout->addWidget(m_automationModeComboBox);
 
-  m_requirePlanApprovalCheckBox = new QCheckBox(i18n("Require Plan Approval"), this);
+  m_requirePlanApprovalCheckBox =
+      new QCheckBox(i18n("Require Plan Approval"), this);
   optionsLayout->addWidget(m_requirePlanApprovalCheckBox);
   optionsLayout->addStretch();
 
   mainLayout->addLayout(optionsLayout);
 
   // Dialog buttons
-  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
-  m_createButton = buttonBox->addButton(i18n("Create"), QDialogButtonBox::AcceptRole);
-  connect(buttonBox, &QDialogButtonBox::accepted, this, &CreateRepoDialog::onSubmit);
-  connect(buttonBox, &QDialogButtonBox::rejected, this, &CreateRepoDialog::close);
+  QDialogButtonBox *buttonBox =
+      new QDialogButtonBox(QDialogButtonBox::Cancel, this);
+  m_createButton =
+      buttonBox->addButton(i18n("Create"), QDialogButtonBox::AcceptRole);
+  connect(buttonBox, &QDialogButtonBox::accepted, this,
+          &CreateRepoDialog::onSubmit);
+  connect(buttonBox, &QDialogButtonBox::rejected, this,
+          &CreateRepoDialog::close);
   mainLayout->addWidget(buttonBox);
 
   setCentralWidget(centralWidget);
@@ -70,14 +76,17 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   QStatusBar *statusBar = new QStatusBar(this);
   setStatusBar(statusBar);
 
-  connect(m_apiManager, &APIManager::githubUsernameFetched, this, &CreateRepoDialog::onGithubUsernameFetched);
-  connect(m_apiManager, &APIManager::githubConnectionTested, this, [this](bool success, const QString &message) {
-      if (!success && m_apiManager->githubUsername().isEmpty()) {
-          updateStatus(i18n("Failed to fetch GitHub username: %1", message));
-          // If we fail to fetch it, the user must provide an org.
-          m_createButton->setEnabled(true);
-      }
-  });
+  connect(m_apiManager, &APIManager::githubUsernameFetched, this,
+          &CreateRepoDialog::onGithubUsernameFetched);
+  connect(m_apiManager, &APIManager::githubConnectionTested, this,
+          [this](bool success, const QString &message) {
+            if (!success && m_apiManager->githubUsername().isEmpty()) {
+              updateStatus(
+                  i18n("Failed to fetch GitHub username: %1", message));
+              // If we fail to fetch it, the user must provide an org.
+              m_createButton->setEnabled(true);
+            }
+          });
 }
 
 void CreateRepoDialog::showEvent(QShowEvent *event) {
@@ -110,7 +119,8 @@ void CreateRepoDialog::onSubmit() {
 
   QString org = m_orgEdit->text().trimmed();
   if (org.isEmpty() && m_apiManager->githubUsername().isEmpty()) {
-    updateStatus(i18n("Organization / User cannot be empty if GitHub username could not be fetched."));
+    updateStatus(i18n("Organization / User cannot be empty if GitHub username "
+                      "could not be fetched."));
     return;
   }
   bool isPrivate = m_privateCheckBox->isChecked();
@@ -118,6 +128,7 @@ void CreateRepoDialog::onSubmit() {
   QString automationMode = m_automationModeComboBox->currentData().toString();
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
 
-  Q_EMIT createRepoAndSessionRequested(org, repoName, isPrivate, prompt, automationMode, requirePlanApproval);
+  Q_EMIT createRepoAndSessionRequested(org, repoName, isPrivate, prompt,
+                                       automationMode, requirePlanApproval);
   close();
 }

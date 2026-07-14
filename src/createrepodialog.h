@@ -1,9 +1,9 @@
 #ifndef CREATEREPODIALOG_H
 #define CREATEREPODIALOG_H
 
+#include "newsessiondialog.h"
 #include <KXmlGuiWindow>
 #include <QJsonObject>
-#include "newsessiondialog.h"
 
 class QLineEdit;
 class QCheckBox;
@@ -19,8 +19,9 @@ public:
   explicit CreateRepoDialog(APIManager *apiManager, QWidget *parent = nullptr);
 
 Q_SIGNALS:
-  void createRepoAndSessionRequested(const QString &org, const QString &repoName,
-                                     bool isPrivate, const QString &prompt,
+  void createRepoAndSessionRequested(const QString &org,
+                                     const QString &repoName, bool isPrivate,
+                                     const QString &prompt,
                                      const QString &automationMode,
                                      bool requirePlanApproval);
 
