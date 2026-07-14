@@ -142,9 +142,8 @@ void APIManager::testGithubConnection(const QString &token) {
     if (!m_githubScopes.isEmpty()) {
       msg += QStringLiteral("\nToken scopes: ") + m_githubScopes;
       if (!m_githubScopes.contains(QStringLiteral("repo"))) {
-        msg +=
-            QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
-                           "not be able to fetch private repositories.");
+        msg += QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
+                              "not be able to fetch private repositories.");
       }
     } else {
       msg += QStringLiteral(
