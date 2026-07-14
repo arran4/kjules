@@ -3662,6 +3662,8 @@ void MainWindow::onGithubRepoCreatedResult(bool success,
                                            const QJsonObject &requestData,
                                            const QJsonObject &response,
                                            const QString &errorMsg) {
+  Q_UNUSED(requestData);
+
   if (!m_isProcessingQueue) {
     if (success) {
       updateStatus(

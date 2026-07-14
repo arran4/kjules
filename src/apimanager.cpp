@@ -632,7 +632,8 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
-  request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    QStringLiteral("application/json"));
 
   QJsonObject payload;
   payload[QStringLiteral("name")] =
