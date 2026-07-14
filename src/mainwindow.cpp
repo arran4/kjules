@@ -2162,8 +2162,8 @@ void MainWindow::createSessionActions() {
     window->show();
   });
 
-  m_followFromIdAction =
-      new QAction(i18n("Follow from Jules Session ID"), this);
+  m_followFromIdAction = new QAction(
+      i18n("Adopt/Follow Jules Session from URL or sesion id"), this);
   actionCollection()->addAction(QStringLiteral("follow_from_id"),
                                 m_followFromIdAction);
   connect(m_followFromIdAction, &QAction::triggered, this, [this]() {
