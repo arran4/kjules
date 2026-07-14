@@ -85,8 +85,11 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
               m_createButton->setEnabled(true);
             } else {
               QString scopes = m_apiManager->githubScopes();
-              if (scopes.isEmpty() || (!scopes.contains(QStringLiteral("repo")) && !scopes.contains(QStringLiteral("public_repo")))) {
-                updateStatus(i18n("Warning: GitHub token may lack 'repo' scope required to create repositories."));
+              if (scopes.isEmpty() ||
+                  (!scopes.contains(QStringLiteral("repo")) &&
+                   !scopes.contains(QStringLiteral("public_repo")))) {
+                updateStatus(i18n("Warning: GitHub token may lack 'repo' scope "
+                                  "required to create repositories."));
               } else {
                 updateStatus(i18n("Ready."));
               }
