@@ -124,6 +124,8 @@ bool APIManager::canConnect() const {
 
 QString APIManager::githubUsername() const { return m_githubUsername; }
 
+QString APIManager::githubScopes() const { return m_githubScopes; }
+
 void APIManager::testGithubConnection(const QString &token) {
   QString tk = token.isEmpty() ? m_githubToken : token;
   if (tk.isEmpty()) {
@@ -153,6 +155,7 @@ void APIManager::testGithubConnection(const QString &token) {
       }
 
       QString scopes = QString::fromUtf8(reply->rawHeader("X-OAuth-Scopes"));
+      m_githubScopes = scopes;
       QString msg = QStringLiteral("GitHub API connected successfully.");
       if (!scopes.isEmpty()) {
         msg += QStringLiteral("\nToken scopes: ") + scopes;

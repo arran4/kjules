@@ -2136,15 +2136,6 @@ void MainWindow::createGeneralActions() {
           &MainWindow::showCreateRepoDialog);
   actionCollection()->addAction(QStringLiteral("create_repo_and_session"),
                                 m_createRepoAndSessionAction);
-  m_createRepoAndSessionAction->setEnabled(
-      !m_apiManager->githubToken().isEmpty());
-  connect(m_apiManager, &APIManager::githubConnectionTested, this,
-          [this](bool success) {
-            if (success) {
-              m_createRepoAndSessionAction->setEnabled(
-                  !m_apiManager->githubToken().isEmpty());
-            }
-          });
 
   m_showActivityLogAction = new QAction(i18n("Show Activity Log"), this);
   actionCollection()->addAction(QStringLiteral("show_activity_log"),

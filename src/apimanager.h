@@ -40,6 +40,7 @@ public:
   void testConnection(const QString &apiKey = QString());
   void testGithubConnection(const QString &token = QString());
   QString githubUsername() const;
+  QString githubScopes() const;
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
   void createSessionAsync(const QJsonObject &requestData);
@@ -105,6 +106,7 @@ private:
   QString m_apiKey;
   QString m_githubToken;
   QString m_githubUsername;
+  QString m_githubScopes;
   QString m_baseUrl;
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;

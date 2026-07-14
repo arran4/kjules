@@ -80,10 +80,16 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
           &CreateRepoDialog::onGithubUsernameFetched);
   connect(m_apiManager, &APIManager::githubConnectionTested, this,
           [this](bool success, const QString &message) {
-            if (!success && m_apiManager->githubUsername().isEmpty()) {
-              updateStatus(
-                  i18n("Failed to fetch GitHub username: %1", message));
-              // If we fail to fetch it, the user must provide an org.
+            if (!success) {
+              updateStatus(i18n("GitHub check failed: %1", message));
+              m_createButton->setEnabled(true);
+            } else {
+              QString scopes = m_apiManager->githubScopes();
+              if (scopes.isEmpty() || (!scopes.contains(QStringLiteral("repo")) && !scopes.contains(QStringLiteral("public_repo")))) {
+                updateStatus(i18n("Warning: GitHub token may lack 'repo' scope required to create repositories."));
+              } else {
+                updateStatus(i18n("Ready."));
+              }
               m_createButton->setEnabled(true);
             }
           });
@@ -91,19 +97,18 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
 
 void CreateRepoDialog::showEvent(QShowEvent *event) {
   KXmlGuiWindow::showEvent(event);
-  if (m_apiManager->githubUsername().isEmpty()) {
-    updateStatus(i18n("Fetching GitHub username..."));
+  if (m_apiManager->githubToken().isEmpty()) {
+    updateStatus(i18n("Missing GitHub token. Please add one in Settings."));
+    m_createButton->setEnabled(false);
+  } else {
+    updateStatus(i18n("Checking GitHub connection..."));
     m_createButton->setEnabled(false);
     m_apiManager->testGithubConnection();
-  } else {
-    onGithubUsernameFetched(m_apiManager->githubUsername());
   }
 }
 
 void CreateRepoDialog::onGithubUsernameFetched(const QString &username) {
   Q_UNUSED(username);
-  m_createButton->setEnabled(true);
-  updateStatus(i18n("Ready."));
 }
 
 void CreateRepoDialog::updateStatus(const QString &message) {
