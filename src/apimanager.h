@@ -39,6 +39,7 @@ public:
   bool canConnect() const;
   void testConnection(const QString &apiKey = QString());
   void testGithubConnection(const QString &token = QString());
+  QString githubUsername() const;
   void listSources(const QString &pageToken = QString());
   void cancelListSources();
   void createSessionAsync(const QJsonObject &requestData);
@@ -53,8 +54,13 @@ public:
   void fetchGithubInfo(const QString &sourceId);
   void fetchGithubBranches(const QString &sourceId);
   void fetchGithubPullRequest(const QString &prUrl);
+  void createGithubRepoAsync(const QJsonObject &requestData);
 
 Q_SIGNALS:
+  void githubUsernameFetched(const QString &username);
+  void githubRepoCreated(const QJsonObject &requestData, const QJsonObject &response);
+  void githubRepoCreationFailed(const QJsonObject &requestData, const QJsonObject &response, const QString &errorString);
+
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void githubInfoFailed(const QString &sourceId, const QString &message);
   void githubBranchesReceived(const QString &sourceId,
@@ -95,6 +101,7 @@ private:
   QNetworkAccessManager *m_nam;
   QString m_apiKey;
   QString m_githubToken;
+  QString m_githubUsername;
   QString m_baseUrl;
   KWallet::Wallet *m_wallet;
   bool m_tokenFailed;

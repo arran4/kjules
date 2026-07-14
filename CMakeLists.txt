@@ -81,6 +81,7 @@ set(kjules_SRCS
     src/templateselectiondialog.cpp
     src/templateeditdialog.cpp
     src/settingsdialog.cpp
+    src/createrepodialog.cpp
     src/draftdelegate.cpp
     src/queuedelegate.cpp
     src/queuemodel.cpp

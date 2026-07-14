@@ -72,10 +72,12 @@ private Q_SLOTS:
   void refreshGithubDataForSources(const QStringList &sourceIds);
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
                             bool ignoreSelection = false);
+  void showCreateRepoDialog();
   void showSettingsDialog();
   void onSessionCreated(const QMultiMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
                         bool requirePlanApproval);
+  void onCreateRepoAndSession(const QString &org, const QString &repoName, bool isPrivate, const QString &prompt, const QString &automationMode, bool requirePlanApproval);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onTemplateSaved(const QJsonObject &tmpl);
@@ -126,6 +128,7 @@ private Q_SLOTS:
   void onSessionCreatedResult(bool success, const QJsonObject &session,
                               const QString &errorMsg,
                               const QString &rawResponse = QString());
+  void onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response, const QString &errorMsg);
   void sendQueueItemNow(int row);
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
@@ -274,6 +277,7 @@ private:
   QAction *m_viewFilterArchivedAction;
   QAction *m_viewFilterForksAction;
   QAction *m_viewFilterPrivateAction;
+  QAction *m_createRepoAndSessionAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
