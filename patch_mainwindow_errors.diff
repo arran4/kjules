@@ -1,9 +1,0 @@
-<<<<<<< SEARCH
-      m_errorsModel->addError(item.requestData, errorMsg, QString(), item.pastErrors);
-=======
-      QJsonObject errorObj;
-      errorObj[QStringLiteral("request")] = item.requestData;
-      errorObj[QStringLiteral("message")] = errorMsg;
-      errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
-      m_errorsModel->addErrorObj(errorObj);
->>>>>>> REPLACE

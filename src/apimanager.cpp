@@ -625,7 +625,8 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
           ? QStringLiteral("https://api.github.com/user/repos")
           : QStringLiteral("https://api.github.com/orgs/%1/repos").arg(org);
 
-  QNetworkRequest request(QUrl(endpoint));
+  QNetworkRequest request;
+  request.setUrl(QUrl(endpoint));
   request.setHeader(QNetworkRequest::UserAgentHeader,
                     QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
