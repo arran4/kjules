@@ -8,6 +8,7 @@
     <MenuBar>
         <Menu name="file">
             <Action name="new_session" />
+            <Action name="create_repo_and_session" />
             <Separator />
             <Action name="import_templates" />
             <Action name="export_templates" />

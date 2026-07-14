@@ -5,6 +5,7 @@
 #include "backupdialog.h"
 #include "blockedtreemodel.h"
 #include "clickableprogressbar.h"
+#include "createrepodialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
 #include "errorsmodel.h"
@@ -140,6 +141,16 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionCreated,
           [this](const QJsonObject &session) {
             onSessionCreatedResult(true, session, QString());
+          });
+  connect(m_apiManager, &APIManager::githubRepoCreated, this,
+          [this](const QJsonObject &requestData, const QJsonObject &response) {
+            onGithubRepoCreatedResult(true, requestData, response, QString());
+          });
+  connect(m_apiManager, &APIManager::githubRepoCreationFailed, this,
+          [this](const QJsonObject &requestData, const QJsonObject &response,
+                 const QString &errorString) {
+            onGithubRepoCreatedResult(false, requestData, response,
+                                      errorString);
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
           &MainWindow::showSessionWindow);
@@ -2118,6 +2129,14 @@ void MainWindow::createGeneralActions() {
   actionCollection()->setDefaultShortcut(newSessionAction,
                                          QKeySequence(Qt::CTRL | Qt::Key_N));
 
+  m_createRepoAndSessionAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("folder-new")),
+                  i18n("Create Repo and Session"), this);
+  connect(m_createRepoAndSessionAction, &QAction::triggered, this,
+          &MainWindow::showCreateRepoDialog);
+  actionCollection()->addAction(QStringLiteral("create_repo_and_session"),
+                                m_createRepoAndSessionAction);
+
   m_showActivityLogAction = new QAction(i18n("Show Activity Log"), this);
   actionCollection()->addAction(QStringLiteral("show_activity_log"),
                                 m_showActivityLogAction);
@@ -3136,6 +3155,51 @@ void MainWindow::refreshSources() {
   m_apiManager->listSources();
 }
 
+void MainWindow::showCreateRepoDialog() {
+  CreateRepoDialog *dialog = new CreateRepoDialog(m_apiManager, this);
+  connect(dialog, &CreateRepoDialog::createRepoAndSessionRequested, this,
+          &MainWindow::onCreateRepoAndSession);
+  dialog->show();
+}
+
+void MainWindow::onCreateRepoAndSession(const QString &org,
+                                        const QString &repoName, bool isPrivate,
+                                        const QString &prompt,
+                                        const QString &automationMode,
+                                        bool requirePlanApproval) {
+  QJsonObject repoReq;
+  repoReq[QStringLiteral("_kjules_action")] =
+      QStringLiteral("create_github_repo");
+  repoReq[QStringLiteral("org")] = org;
+  repoReq[QStringLiteral("repoName")] = repoName;
+  repoReq[QStringLiteral("private")] = isPrivate;
+
+  QString username = m_apiManager->githubUsername();
+  QString sourceId = QStringLiteral("github/") +
+                     (org.isEmpty() ? username : org) + QStringLiteral("/") +
+                     repoName;
+
+  QJsonObject sessionReq;
+  sessionReq[QStringLiteral("source")] = sourceId;
+  sessionReq[QStringLiteral("prompt")] = prompt;
+  if (requirePlanApproval) {
+    sessionReq[QStringLiteral("requirePlanApproval")] = true;
+  }
+  if (!automationMode.isEmpty()) {
+    sessionReq[QStringLiteral("automationMode")] = automationMode;
+  }
+
+  m_queueModel->enqueue(repoReq);
+  m_queueModel->enqueue(sessionReq);
+
+  updateStatus(i18n("Added 2 tasks to queue for creating repo and session."));
+
+  if (!m_queuePaused && !m_queueTimer->isActive()) {
+    m_queueTimer->start();
+  }
+  QTimer::singleShot(0, this, &MainWindow::processQueue);
+}
+
 void MainWindow::showNewSessionDialog(const QJsonObject &initialData,
                                       bool ignoreSelection) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
@@ -3576,7 +3640,70 @@ void MainWindow::processQueue() {
 
   m_isProcessingQueue = true;
   QueueItem item = m_queueModel->peek();
-  m_apiManager->createSessionAsync(item.requestData);
+  if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
+      item.requestData.value(QStringLiteral("_kjules_action")).toString() ==
+          QStringLiteral("create_github_repo")) {
+    m_apiManager->createGithubRepoAsync(item.requestData);
+  } else {
+    m_apiManager->createSessionAsync(item.requestData);
+  }
+}
+
+void MainWindow::onGithubRepoCreatedResult(bool success,
+                                           const QJsonObject &requestData,
+                                           const QJsonObject &response,
+                                           const QString &errorMsg) {
+  Q_UNUSED(requestData);
+
+  if (!m_isProcessingQueue) {
+    if (success) {
+      updateStatus(
+          i18n("GitHub repository created successfully: %1",
+               response.value(QStringLiteral("full_name")).toString()));
+    } else {
+      updateStatus(i18n("Failed to create GitHub repository: %1", errorMsg));
+    }
+    return;
+  }
+
+  m_queueModel->recordRun();
+  m_isProcessingQueue = false;
+
+  if (success) {
+    m_queueModel->dequeue();
+    m_queueModel->checkAndPrependDailyLimitWait();
+    updateStatus(i18n("GitHub repository created from queue."));
+    ActivityLogWindow::instance()->logMessage(
+        i18n("Processed schedule run: GitHub repository created."));
+    m_queueBackoffUntil = QDateTime();
+  } else {
+    QueueItem item = m_queueModel->peek();
+    item.errorCount++;
+    item.lastError = errorMsg;
+    item.lastResponse = QString();
+
+    qint64 backoffSeconds = QueueModel::calculateBackoff(item.errorCount);
+
+    if (item.errorCount >= 4) {
+      item.pastErrors.append(errorMsg);
+      m_queueModel->removeItem(0);
+      QJsonObject errorObj;
+      errorObj[QStringLiteral("request")] = item.requestData;
+      errorObj[QStringLiteral("message")] = errorMsg;
+      errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
+      m_errorsModel->addErrorObj(errorObj);
+      updateStatus(i18n("Repository creation failed %1 times. Moved to Errors.",
+                        item.errorCount));
+    } else {
+      m_queueModel->updateItem(0, item);
+      m_queueBackoffUntil =
+          QDateTime::currentDateTimeUtc().addSecs(backoffSeconds);
+      updateStatus(i18n("Repository creation failed. Retrying in %1 seconds.",
+                        backoffSeconds));
+    }
+  }
+
+  QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
 void MainWindow::onSessionCreatedResult(bool success,
