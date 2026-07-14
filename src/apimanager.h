@@ -105,6 +105,7 @@ private:
   QNetworkAccessManager *m_nam;
   QString m_apiKey;
   QString m_githubToken;
+  QString m_testedGithubToken;
   QString m_githubUsername;
   QString m_githubScopes;
   QString m_baseUrl;

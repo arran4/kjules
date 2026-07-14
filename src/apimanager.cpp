@@ -134,6 +134,27 @@ void APIManager::testGithubConnection(const QString &token) {
     return;
   }
 
+  if (tk == m_testedGithubToken && !m_githubTokenFailed) {
+    if (!m_githubUsername.isEmpty()) {
+      Q_EMIT githubUsernameFetched(m_githubUsername);
+    }
+    QString msg = QStringLiteral("GitHub API connected successfully (Cached).");
+    if (!m_githubScopes.isEmpty()) {
+      msg += QStringLiteral("\nToken scopes: ") + m_githubScopes;
+      if (!m_githubScopes.contains(QStringLiteral("repo"))) {
+        msg +=
+            QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
+                           "not be able to fetch private repositories.");
+      }
+    } else {
+      msg += QStringLiteral(
+          "\nWarning: No scopes detected. If this is a fine-grained token, "
+          "ensure repository read permissions are granted.");
+    }
+    Q_EMIT githubConnectionTested(true, msg);
+    return;
+  }
+
   QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/user")));
   request.setHeader(QNetworkRequest::UserAgentHeader,
                     QVariant(QStringLiteral("kjules")));
@@ -156,6 +177,7 @@ void APIManager::testGithubConnection(const QString &token) {
 
       QString scopes = QString::fromUtf8(reply->rawHeader("X-OAuth-Scopes"));
       m_githubScopes = scopes;
+      m_testedGithubToken = tk;
       QString msg = QStringLiteral("GitHub API connected successfully.");
       if (!scopes.isEmpty()) {
         msg += QStringLiteral("\nToken scopes: ") + scopes;
