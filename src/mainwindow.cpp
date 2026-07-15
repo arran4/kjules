@@ -2385,9 +2385,13 @@ void MainWindow::setupSourceSettingsAction() {
 }
 
 void MainWindow::setupRefreshSourceActions() {
-  m_manageCustomSourcesAction = new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")), i18n("Manage Custom Sources..."), this);
-  actionCollection()->addAction(QStringLiteral("manage_custom_sources"), m_manageCustomSourcesAction);
-  connect(m_manageCustomSourcesAction, &QAction::triggered, this, &MainWindow::showManageCustomSourcesDialog);
+  m_manageCustomSourcesAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-list-details")),
+                  i18n("Manage Custom Sources..."), this);
+  actionCollection()->addAction(QStringLiteral("manage_custom_sources"),
+                                m_manageCustomSourcesAction);
+  connect(m_manageCustomSourcesAction, &QAction::triggered, this,
+          &MainWindow::showManageCustomSourcesDialog);
 
   m_refreshSourcesAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")),
@@ -3175,35 +3179,39 @@ void MainWindow::showManageCustomSourcesDialog() {
   layout.addWidget(listWidget);
 
   for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
-      QModelIndex idx = m_sourceModel->index(i, 0);
-      QJsonObject raw = m_sourceModel->data(idx, SourceModel::RawDataRole).toJsonObject();
-      if (raw.value(QStringLiteral("isCustom")).toBool()) {
-          QListWidgetItem *item = new QListWidgetItem(raw.value(QStringLiteral("name")).toString(), listWidget);
-          item->setData(Qt::UserRole, raw.value(QStringLiteral("id")).toString());
-      }
+    QModelIndex idx = m_sourceModel->index(i, 0);
+    QJsonObject raw =
+        m_sourceModel->data(idx, SourceModel::RawDataRole).toJsonObject();
+    if (raw.value(QStringLiteral("isCustom")).toBool()) {
+      QListWidgetItem *item = new QListWidgetItem(
+          raw.value(QStringLiteral("name")).toString(), listWidget);
+      item->setData(Qt::UserRole, raw.value(QStringLiteral("id")).toString());
+    }
   }
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
   QPushButton *removeBtn = new QPushButton(i18n("Remove Selected"), &dialog);
   btnLayout->addWidget(removeBtn);
 
-  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+  QDialogButtonBox *buttonBox =
+      new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
   btnLayout->addWidget(buttonBox);
   layout.addLayout(btnLayout);
 
   connect(removeBtn, &QPushButton::clicked, [&]() {
-      auto items = listWidget->selectedItems();
-      if (items.isEmpty()) return;
+    auto items = listWidget->selectedItems();
+    if (items.isEmpty())
+      return;
 
-      QStringList toRemove;
-      for (auto item : items) {
-          toRemove.append(item->data(Qt::UserRole).toString());
-          delete listWidget->takeItem(listWidget->row(item));
-      }
+    QStringList toRemove;
+    for (auto item : items) {
+      toRemove.append(item->data(Qt::UserRole).toString());
+      delete listWidget->takeItem(listWidget->row(item));
+    }
 
-      for (const QString& id : toRemove) {
-          m_sourceModel->removeSource(id);
-      }
+    for (const QString &id : toRemove) {
+      m_sourceModel->removeSource(id);
+    }
   });
 
   connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);

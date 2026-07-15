@@ -384,8 +384,10 @@ void SourceModel::setSources(const QJsonArray &sources) {
             m_sources[j].toObject().value(QStringLiteral("name")).toString();
       if (normalizeSourceId(currentId) == normId) {
         QJsonObject existing = m_sources[j].toObject();
-        if (existing.contains(QStringLiteral("isCustom")) && !source.contains(QStringLiteral("github"))) {
-            source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
+        if (existing.contains(QStringLiteral("isCustom")) &&
+            !source.contains(QStringLiteral("github"))) {
+          source[QStringLiteral("isCustom")] =
+              existing.value(QStringLiteral("isCustom"));
         }
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] =
@@ -451,8 +453,10 @@ int SourceModel::addSources(const QJsonArray &sources) {
       if (normalizeSourceId(currentId) == normId) {
         exists = true;
         QJsonObject existing = m_sources[j].toObject();
-        if (existing.contains(QStringLiteral("isCustom")) && !source.contains(QStringLiteral("github"))) {
-            source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
+        if (existing.contains(QStringLiteral("isCustom")) &&
+            !source.contains(QStringLiteral("github"))) {
+          source[QStringLiteral("isCustom")] =
+              existing.value(QStringLiteral("isCustom"));
         }
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] =
@@ -582,8 +586,10 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
 
     if (normalizeSourceId(currentId) == normId) {
       QJsonObject existing = m_sources[i].toObject();
-      if (existing.contains(QStringLiteral("isCustom")) && !source.contains(QStringLiteral("github"))) {
-          source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
+      if (existing.contains(QStringLiteral("isCustom")) &&
+          !source.contains(QStringLiteral("github"))) {
+        source[QStringLiteral("isCustom")] =
+            existing.value(QStringLiteral("isCustom"));
       }
       if (existing.contains(QStringLiteral("local_lastUsed")))
         source[QStringLiteral("local_lastUsed")] =
