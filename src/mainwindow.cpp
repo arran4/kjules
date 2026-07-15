@@ -28,6 +28,7 @@
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include "utils.h"
+#include <QListWidget>
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
