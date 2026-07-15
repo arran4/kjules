@@ -564,6 +564,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               QJsonObject obj;
               obj[QStringLiteral("id")] = customSource;
               obj[QStringLiteral("name")] = customSource;
+              obj[QStringLiteral("isCustom")] = true;
               arr.append(obj);
               m_sourceModel->addSources(arr);
             }

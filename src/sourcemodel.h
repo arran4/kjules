@@ -45,6 +45,7 @@ public:
   void loadSources();
   void saveSources();
   void updateSource(const QJsonObject &sourceConst);
+  void removeSource(const QString &id);
   void toggleFavourite(const QString &id);
   void setFavouriteRank(const QString &id, int rank);
   void increaseFavouriteRank(const QString &id);
