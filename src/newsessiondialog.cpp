@@ -11,6 +11,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDebug>
 #include <QDialogButtonBox>
@@ -41,9 +42,6 @@
 #include <QTextListFormat>
 #include <QToolBar>
 #include <QVBoxLayout>
-#include <QApplication>
-#include <QClipboard>
-#include <QKeyEvent>
 
 PromptTextEdit::PromptTextEdit(QWidget *parent)
     : QTextEdit(parent), m_mode(WysiwygMarkdown) {
@@ -103,7 +101,8 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
 }
 
 void PromptTextEdit::keyPressEvent(QKeyEvent *e) {
-  if (e->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && e->key() == Qt::Key_V) {
+  if (e->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) &&
+      e->key() == Qt::Key_V) {
     if (const QMimeData *md = QApplication::clipboard()->mimeData()) {
       if (md->hasText()) {
         insertPlainText(md->text());

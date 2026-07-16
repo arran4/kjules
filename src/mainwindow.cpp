@@ -28,7 +28,6 @@
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include "utils.h"
-#include <QListWidget>
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -59,6 +58,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QListView>
+#include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
