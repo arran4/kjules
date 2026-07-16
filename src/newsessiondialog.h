@@ -36,6 +36,7 @@ public:
 
 protected:
   void insertFromMimeData(const QMimeData *source) override;
+  void keyPressEvent(QKeyEvent *e) override;
 
 private:
   Mode m_mode;
