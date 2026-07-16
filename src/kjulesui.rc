@@ -33,6 +33,8 @@
             <Action name="view_raw_data" />
             <Action name="source_settings" />
             <Separator />
+            <Action name="manage_custom_sources" />
+            <Separator />
             <Action name="archive_merged_following" />
             <Action name="archive_completed_following" />
             <Action name="archive_paused_following" />
