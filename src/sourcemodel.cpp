@@ -11,10 +11,14 @@
 #include <cmath>
 
 static QString normalizeSourceId(const QString &id) {
-  if (id.startsWith(QStringLiteral("sources/"))) {
-    return id.mid(8);
+  QString res = id;
+  if (res.startsWith(QStringLiteral("sources/"))) {
+    res = res.mid(8);
   }
-  return id;
+  if (res.startsWith(QStringLiteral("github/"))) {
+    res = res.mid(7);
+  }
+  return res;
 }
 
 SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) {
@@ -380,6 +384,11 @@ void SourceModel::setSources(const QJsonArray &sources) {
             m_sources[j].toObject().value(QStringLiteral("name")).toString();
       if (normalizeSourceId(currentId) == normId) {
         QJsonObject existing = m_sources[j].toObject();
+        if (existing.contains(QStringLiteral("isCustom")) &&
+            !source.contains(QStringLiteral("github"))) {
+          source[QStringLiteral("isCustom")] =
+              existing.value(QStringLiteral("isCustom"));
+        }
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] =
               existing[QStringLiteral("local_firstSeen")];
@@ -444,6 +453,11 @@ int SourceModel::addSources(const QJsonArray &sources) {
       if (normalizeSourceId(currentId) == normId) {
         exists = true;
         QJsonObject existing = m_sources[j].toObject();
+        if (existing.contains(QStringLiteral("isCustom")) &&
+            !source.contains(QStringLiteral("github"))) {
+          source[QStringLiteral("isCustom")] =
+              existing.value(QStringLiteral("isCustom"));
+        }
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] =
               existing[QStringLiteral("local_firstSeen")];
@@ -572,6 +586,11 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
 
     if (normalizeSourceId(currentId) == normId) {
       QJsonObject existing = m_sources[i].toObject();
+      if (existing.contains(QStringLiteral("isCustom")) &&
+          !source.contains(QStringLiteral("github"))) {
+        source[QStringLiteral("isCustom")] =
+            existing.value(QStringLiteral("isCustom"));
+      }
       if (existing.contains(QStringLiteral("local_lastUsed")))
         source[QStringLiteral("local_lastUsed")] =
             existing[QStringLiteral("local_lastUsed")];
@@ -609,6 +628,25 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
   m_sources.append(source);
   endInsertRows();
   saveSources();
+}
+
+void SourceModel::removeSource(const QString &id) {
+  QString normId = normalizeSourceId(id);
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QString currentId =
+        m_sources[i].toObject().value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId =
+          m_sources[i].toObject().value(QStringLiteral("name")).toString();
+    }
+    if (normalizeSourceId(currentId) == normId) {
+      beginRemoveRows(QModelIndex(), i, i);
+      m_sources.removeAt(i);
+      endRemoveRows();
+      saveSources();
+      return;
+    }
+  }
 }
 void SourceModel::recordSessionCreated(const QString &sourceId) {
   QString normSourceId = normalizeSourceId(sourceId);

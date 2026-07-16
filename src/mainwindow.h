@@ -73,6 +73,7 @@ private Q_SLOTS:
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
                             bool ignoreSelection = false);
   void showCreateRepoDialog();
+  void showManageCustomSourcesDialog();
   void showSettingsDialog();
   void onSessionCreated(const QMultiMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
@@ -260,6 +261,7 @@ private:
   QAction *m_viewRawDataAction;
   QAction *m_sourceSettingsAction;
   QAction *m_openUrlAction;
+  QAction *m_manageCustomSourcesAction;
   QAction *m_copyUrlAction;
   QAction *m_showActivityLogAction;
   QAction *m_backupDataAction;
