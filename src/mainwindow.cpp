@@ -2243,6 +2243,34 @@ void MainWindow::createSessionActions() {
 
     window->show();
   });
+  auto openJulesUrls = [this](const QString &emptyMessage, auto predicate) {
+    int count = 0;
+    const int rowCount = m_sessionModel->rowCount();
+    for (int i = 0; i < rowCount; ++i) {
+      const QModelIndex idx = m_sessionModel->index(i, 0);
+      const QString state =
+          m_sessionModel->data(idx, SessionModel::StateRole).toString();
+      const QString prUrl =
+          m_sessionModel->data(idx, SessionModel::PrUrlRole).toString();
+      if (predicate(state, prUrl)) {
+        const QString id =
+            m_sessionModel->data(idx, SessionModel::IdRole).toString();
+        if (!id.isEmpty()) {
+          QString urlStr =
+              QStringLiteral("https://jules.google.com/session/") + id;
+          Utils::openUrl(QUrl(urlStr));
+          count++;
+        }
+      }
+    }
+    if (count > 0) {
+      updateStatus(
+          i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
+    } else {
+      updateStatus(emptyMessage);
+    }
+  };
+
   m_openJulesUrlsAwaitingFeedbackAction =
       new QAction(i18n("Open Jules URLs Awaiting Feedback"), this);
   actionCollection()->addAction(
@@ -2252,30 +2280,11 @@ void MainWindow::createSessionActions() {
       m_openJulesUrlsAwaitingFeedbackAction,
       QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_O));
   connect(m_openJulesUrlsAwaitingFeedbackAction, &QAction::triggered, this,
-          [this]() {
-            int count = 0;
-            const int rowCount = m_sessionModel->rowCount();
-            for (int i = 0; i < rowCount; ++i) {
-              const QModelIndex idx = m_sessionModel->index(i, 0);
-              const QString state =
-                  m_sessionModel->data(idx, SessionModel::StateRole).toString();
-              if (state == QStringLiteral("WAITING_FEEDBACK")) {
-                const QString id =
-                    m_sessionModel->data(idx, SessionModel::IdRole).toString();
-                if (!id.isEmpty()) {
-                  QString urlStr =
-                      QStringLiteral("https://jules.google.com/session/") + id;
-                  Utils::openUrl(QUrl(urlStr));
-                  count++;
-                }
-              }
-            }
-            if (count > 0) {
-              updateStatus(
-                  i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
-            } else {
-              updateStatus(i18n("No Jules URLs awaiting feedback found."));
-            }
+          [this, openJulesUrls]() {
+            openJulesUrls(i18n("No Jules URLs awaiting feedback found."),
+                          [](const QString &state, const QString &) {
+                            return state == QStringLiteral("WAITING_FEEDBACK");
+                          });
           });
 
   m_openJulesUrlsCompletedNoPrAction =
@@ -2284,32 +2293,12 @@ void MainWindow::createSessionActions() {
       QStringLiteral("open_jules_urls_completed_no_pr"),
       m_openJulesUrlsCompletedNoPrAction);
   connect(m_openJulesUrlsCompletedNoPrAction, &QAction::triggered, this,
-          [this]() {
-            int count = 0;
-            const int rowCount = m_sessionModel->rowCount();
-            for (int i = 0; i < rowCount; ++i) {
-              const QModelIndex idx = m_sessionModel->index(i, 0);
-              const QString state =
-                  m_sessionModel->data(idx, SessionModel::StateRole).toString();
-              const QString prUrl =
-                  m_sessionModel->data(idx, SessionModel::PrUrlRole).toString();
-              if (state == QStringLiteral("DONE") && prUrl.isEmpty()) {
-                const QString id =
-                    m_sessionModel->data(idx, SessionModel::IdRole).toString();
-                if (!id.isEmpty()) {
-                  QString urlStr =
-                      QStringLiteral("https://jules.google.com/session/") + id;
-                  Utils::openUrl(QUrl(urlStr));
-                  count++;
-                }
-              }
-            }
-            if (count > 0) {
-              updateStatus(
-                  i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
-            } else {
-              updateStatus(i18n("No Jules URLs completed with no PR found."));
-            }
+          [this, openJulesUrls]() {
+            openJulesUrls(i18n("No Jules URLs completed with no PR found."),
+                          [](const QString &state, const QString &prUrl) {
+                            return state == QStringLiteral("DONE") &&
+                                   prUrl.isEmpty();
+                          });
           });
 
   m_openJulesUrlsCompletedNoPrOrFeedbackAction =
@@ -2318,33 +2307,13 @@ void MainWindow::createSessionActions() {
       QStringLiteral("open_jules_urls_completed_no_pr_or_feedback"),
       m_openJulesUrlsCompletedNoPrOrFeedbackAction);
   connect(m_openJulesUrlsCompletedNoPrOrFeedbackAction, &QAction::triggered,
-          this, [this]() {
-            int count = 0;
-            const int rowCount = m_sessionModel->rowCount();
-            for (int i = 0; i < rowCount; ++i) {
-              const QModelIndex idx = m_sessionModel->index(i, 0);
-              const QString state =
-                  m_sessionModel->data(idx, SessionModel::StateRole).toString();
-              const QString prUrl =
-                  m_sessionModel->data(idx, SessionModel::PrUrlRole).toString();
-              if ((state == QStringLiteral("DONE") && prUrl.isEmpty()) ||
-                  state == QStringLiteral("WAITING_FEEDBACK")) {
-                const QString id =
-                    m_sessionModel->data(idx, SessionModel::IdRole).toString();
-                if (!id.isEmpty()) {
-                  QString urlStr =
-                      QStringLiteral("https://jules.google.com/session/") + id;
-                  Utils::openUrl(QUrl(urlStr));
-                  count++;
-                }
-              }
-            }
-            if (count > 0) {
-              updateStatus(
-                  i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
-            } else {
-              updateStatus(i18n("No Jules URLs matching criteria found."));
-            }
+          this, [this, openJulesUrls]() {
+            openJulesUrls(i18n("No Jules URLs matching criteria found."),
+                          [](const QString &state, const QString &prUrl) {
+                            return (state == QStringLiteral("DONE") &&
+                                    prUrl.isEmpty()) ||
+                                   state == QStringLiteral("WAITING_FEEDBACK");
+                          });
           });
 
   m_openJulesUrlAction = new QAction(i18n("Open Jules URL"), this);
