@@ -11,6 +11,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDebug>
 #include <QDialogButtonBox>
@@ -95,8 +96,31 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
       insertPlainText(source->text());
       return;
     }
+  } else if (m_mode == WysiwygMarkdown) {
+    if (source->hasHtml()) {
+      QTextEdit temp;
+      temp.setHtml(source->html());
+      insertPlainText(temp.toMarkdown());
+      return;
+    }
   }
   QTextEdit::insertFromMimeData(source);
+}
+
+void PromptTextEdit::keyPressEvent(QKeyEvent *e) {
+  const Qt::KeyboardModifiers modifiers =
+      e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier |
+                        Qt::AltModifier | Qt::MetaModifier);
+  if (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) &&
+      e->key() == Qt::Key_V) {
+    if (const QMimeData *md = QApplication::clipboard()->mimeData()) {
+      if (md->hasText()) {
+        insertPlainText(md->text());
+        return;
+      }
+    }
+  }
+  QTextEdit::keyPressEvent(e);
 }
 
 class SourceSelectionProxyModel : public AdvancedFilterProxyModel {
