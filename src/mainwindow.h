@@ -279,6 +279,7 @@ private:
   QAction *m_duplicateFailedToQueueAndArchiveAction;
   QAction *m_purgeArchiveAction;
   QAction *m_openJulesUrlAction;
+  QAction *m_openJulesUrlsAwaitingFeedbackAction;
   QAction *m_openGithubUrlAction;
   QAction *m_configureConcurrencyLimitAction;
   QAction *m_viewFilterArchivedAction;

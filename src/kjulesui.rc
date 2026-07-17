@@ -46,6 +46,7 @@
             <Action name="purge_archive" />
             <Separator />
             <Action name="open_jules_url" />
+            <Action name="open_jules_urls_awaiting_feedback" />
             <Action name="open_github_url" />
             <Action name="open_url" />
             <Action name="copy_url" />

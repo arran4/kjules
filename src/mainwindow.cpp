@@ -2243,6 +2243,40 @@ void MainWindow::createSessionActions() {
 
     window->show();
   });
+  m_openJulesUrlsAwaitingFeedbackAction =
+      new QAction(i18n("Open Jules URLs Awaiting Feedback"), this);
+  actionCollection()->addAction(
+      QStringLiteral("open_jules_urls_awaiting_feedback"),
+      m_openJulesUrlsAwaitingFeedbackAction);
+  actionCollection()->setDefaultShortcut(
+      m_openJulesUrlsAwaitingFeedbackAction,
+      QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_O));
+  connect(m_openJulesUrlsAwaitingFeedbackAction, &QAction::triggered, this,
+          [this]() {
+            int count = 0;
+            QJsonArray allSessions = m_sessionModel->getAllSessions();
+            for (const QJsonValue &sessionValue : allSessions) {
+              const QJsonObject obj = sessionValue.toObject();
+              const QString state =
+                  obj.value(QStringLiteral("state")).toString();
+              if (state == QStringLiteral("WAITING_FEEDBACK")) {
+                const QString id = obj.value(QStringLiteral("id")).toString();
+                if (!id.isEmpty()) {
+                  QString urlStr =
+                      QStringLiteral("https://jules.google.com/session/") + id;
+                  Utils::openUrl(QUrl(urlStr));
+                  count++;
+                }
+              }
+            }
+            if (count > 0) {
+              updateStatus(
+                  i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
+            } else {
+              updateStatus(i18n("No Jules URLs awaiting feedback found."));
+            }
+          });
+
   m_openJulesUrlAction = new QAction(i18n("Open Jules URL"), this);
   actionCollection()->addAction(QStringLiteral("open_jules_url"),
                                 m_openJulesUrlAction);
