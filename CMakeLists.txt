@@ -77,6 +77,7 @@ set(kjules_SRCS
     src/blockedtreemodel.cpp
     src/errorsmodel.cpp
     src/newsessiondialog.cpp
+    src/sourcestatusdialog.cpp
     src/savedialog.cpp
     src/templateselectiondialog.cpp
     src/templateeditdialog.cpp

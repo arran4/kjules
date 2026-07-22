@@ -25,6 +25,7 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include "sourcesrefreshprogresswindow.h"
+#include "sourcestatusdialog.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include "utils.h"
@@ -445,6 +446,11 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
               window->show();
             }
           });
+          QAction *showStatusAction = menu.addAction(i18n("Show Status"));
+          connect(showStatusAction, &QAction::triggered, [this, id]() {
+            showSourceStatusDialog(id.split(QLatin1Char('/')).last());
+          });
+
           menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showFollowingNewSessionsAction);
@@ -3244,6 +3250,14 @@ void MainWindow::showCreateRepoDialog() {
   dialog->show();
 }
 
+void MainWindow::showSourceStatusDialog(const QString &sourceName) {
+  SourceStatusDialog *dialog =
+      new SourceStatusDialog(sourceName, m_sessionModel, m_queueModel,
+                             m_errorsModel, m_blockedTreeModel, this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->show();
+}
+
 void MainWindow::showManageCustomSourcesDialog() {
   QDialog dialog(this);
   dialog.setWindowTitle(i18n("Manage Custom Sources"));
@@ -4567,6 +4581,8 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
           &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
           [this](const QString &id) { m_apiManager->getSource(id); });
+  connect(window, &NewSessionDialog::showSourceStatusRequested, this,
+          &MainWindow::showSourceStatusDialog);
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
