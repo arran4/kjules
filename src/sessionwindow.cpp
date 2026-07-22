@@ -58,8 +58,10 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData,
 
   setupUi(m_sessionData);
   setupActions();
+  // clang-format off
   setupGUI(Default,
            QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionwindowui.rc"));
+  // clang-format on
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     QAction *closeAct =

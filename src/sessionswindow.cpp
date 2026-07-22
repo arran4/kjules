@@ -177,8 +177,10 @@ void SessionsWindow::setupUi() {
 
   setupActions();
 
+  // clang-format off
   setupGUI(Default,
            QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc"));
+  // clang-format on
 
   setupStatusBar();
 }

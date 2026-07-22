@@ -3141,7 +3141,9 @@ void MainWindow::createStandardActions() {
 
   setStandardToolBarMenuEnabled(true);
 
+  // clang-format off
   setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/kjulesui.rc"));
+  // clang-format on
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();

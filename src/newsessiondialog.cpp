@@ -1383,8 +1383,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     Q_EMIT refreshSourcesRequested();
   });
 
+  // clang-format off
   setupGUI(Default,
            QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
+  // clang-format on
 }
 
 void NewSessionDialog::onSubmitSession() {
