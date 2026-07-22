@@ -57,8 +57,7 @@ Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources,
                               const QString &prompt,
                               const QString &automationMode,
-                              bool requirePlanApproval,
-                              bool ignoreConcurrency);
+                              bool requirePlanApproval, bool ignoreConcurrency);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
