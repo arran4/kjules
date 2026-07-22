@@ -1,6 +1,8 @@
 #include "createrepodialog.h"
 #include "apimanager.h"
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -56,6 +58,37 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   m_requirePlanApprovalCheckBox =
       new QCheckBox(i18n("Require Plan Approval"), this);
   optionsLayout->addWidget(m_requirePlanApprovalCheckBox);
+
+  m_ignoreConcurrencyCheckBox =
+      new QCheckBox(i18n("Bypass concurrency limits"), this);
+  optionsLayout->addWidget(m_ignoreConcurrencyCheckBox);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
+                                       QStringLiteral("SourceConcurrency"));
+
+  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
+  if (currentQueueMode.isEmpty()) {
+    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
+                           ? QStringLiteral("one_at_a_time")
+                           : QStringLiteral("asap");
+  }
+
+  bool hasAnyConcurrencyLimits =
+      (currentQueueMode == QStringLiteral("one_at_a_time"));
+  if (!hasAnyConcurrencyLimits) {
+    const QStringList sources = sourceConcurrencyConfig.keyList();
+    for (const QString &source : sources) {
+      if (sourceConcurrencyConfig.readEntry(source, -1) > 0) {
+        hasAnyConcurrencyLimits = true;
+        break;
+      }
+    }
+  }
+
+  m_ignoreConcurrencyCheckBox->setVisible(hasAnyConcurrencyLimits);
+
   optionsLayout->addStretch();
 
   mainLayout->addLayout(optionsLayout);
@@ -135,8 +168,10 @@ void CreateRepoDialog::onSubmit() {
   QString prompt = m_promptEdit->getPromptText();
   QString automationMode = m_automationModeComboBox->currentData().toString();
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
+  bool ignoreConcurrency = m_ignoreConcurrencyCheckBox->isChecked();
 
   Q_EMIT createRepoAndSessionRequested(org, repoName, isPrivate, prompt,
-                                       automationMode, requirePlanApproval);
+                                       automationMode, requirePlanApproval,
+                                       ignoreConcurrency);
   close();
 }

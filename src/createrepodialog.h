@@ -23,7 +23,8 @@ Q_SIGNALS:
                                      const QString &repoName, bool isPrivate,
                                      const QString &prompt,
                                      const QString &automationMode,
-                                     bool requirePlanApproval);
+                                     bool requirePlanApproval,
+                                     bool ignoreConcurrency);
 
 public Q_SLOTS:
   void updateStatus(const QString &message);
@@ -45,6 +46,7 @@ private:
   PromptTextEdit *m_promptEdit;
   QComboBox *m_automationModeComboBox;
   QCheckBox *m_requirePlanApprovalCheckBox;
+  QCheckBox *m_ignoreConcurrencyCheckBox;
 
   QPushButton *m_createButton;
 };

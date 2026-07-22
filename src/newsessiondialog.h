@@ -57,7 +57,8 @@ Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources,
                               const QString &prompt,
                               const QString &automationMode,
-                              bool requirePlanApproval);
+                              bool requirePlanApproval,
+                              bool ignoreConcurrency);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
@@ -103,6 +104,7 @@ private:
   QCheckBox *m_requirePlanApprovalCheckBox;
   QCheckBox *m_keepOpenCheckBox;
   QCheckBox *m_keepSourceCheckBox;
+  QCheckBox *m_ignoreConcurrencyCheckBox;
   QPushButton *m_createButton;
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;

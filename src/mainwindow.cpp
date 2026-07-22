@@ -3311,7 +3311,8 @@ void MainWindow::onCreateRepoAndSession(const QString &org,
                                         const QString &repoName, bool isPrivate,
                                         const QString &prompt,
                                         const QString &automationMode,
-                                        bool requirePlanApproval) {
+                                        bool requirePlanApproval,
+                                        bool ignoreConcurrency) {
   QJsonObject repoReq;
   repoReq[QStringLiteral("_kjules_action")] =
       QStringLiteral("create_github_repo");
@@ -3329,6 +3330,9 @@ void MainWindow::onCreateRepoAndSession(const QString &org,
   sessionReq[QStringLiteral("prompt")] = prompt;
   if (requirePlanApproval) {
     sessionReq[QStringLiteral("requirePlanApproval")] = true;
+  }
+  if (ignoreConcurrency) {
+    sessionReq[QStringLiteral("ignoreConcurrency")] = true;
   }
   if (!automationMode.isEmpty()) {
     sessionReq[QStringLiteral("automationMode")] = automationMode;
@@ -3488,6 +3492,10 @@ void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState,
         req[QStringLiteral("automationMode")] =
             session.value(QStringLiteral("automationMode")).toString();
       }
+      if (session.contains(QStringLiteral("ignoreConcurrency"))) {
+        req[QStringLiteral("ignoreConcurrency")] =
+            session.value(QStringLiteral("ignoreConcurrency")).toBool();
+      }
 
       m_queueModel->enqueue(req);
 
@@ -3530,7 +3538,8 @@ void MainWindow::toggleQueueState() {
 void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
                                   const QString &prompt,
                                   const QString &automationMode,
-                                  bool requirePlanApproval) {
+                                  bool requirePlanApproval,
+                                  bool ignoreConcurrency) {
   for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
     req[QStringLiteral("source")] = it.key();
@@ -3538,6 +3547,9 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources,
     req[QStringLiteral("prompt")] = prompt;
     if (requirePlanApproval) {
       req[QStringLiteral("requirePlanApproval")] = true;
+    }
+    if (ignoreConcurrency) {
+      req[QStringLiteral("ignoreConcurrency")] = true;
     }
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
@@ -3674,6 +3686,17 @@ void MainWindow::processQueue() {
         m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
     if (prStatus != QStringLiteral("merged") &&
         prStatus != QStringLiteral("closed")) {
+      QJsonObject rawObject = m_sessionModel->getSession(j);
+      bool isNoAutomation =
+          rawObject.value(QStringLiteral("automationMode")).toString() ==
+          QStringLiteral("AUTOMATION_MODE_UNSPECIFIED");
+      bool isIgnoreConcurrency =
+          rawObject.value(QStringLiteral("ignoreConcurrency")).toBool();
+
+      if (isNoAutomation || isIgnoreConcurrency) {
+        continue;
+      }
+
       QString source =
           m_sessionModel->data(idx, SessionModel::SourceRole).toString();
       activeCountCache[source]++;
@@ -3707,6 +3730,16 @@ void MainWindow::processQueue() {
         (sourceLimit > 0) ? sourceLimit : globalOneAtATimeLimit;
 
     if (item.blockMetadata.value(QStringLiteral("forced")).toBool()) {
+      checkLimit = false;
+    }
+
+    bool isNoAutomation =
+        item.requestData.value(QStringLiteral("automationMode")).toString() ==
+        QStringLiteral("AUTOMATION_MODE_UNSPECIFIED");
+    bool isIgnoreConcurrency =
+        item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
+
+    if (isNoAutomation || isIgnoreConcurrency) {
       checkLimit = false;
     }
 
@@ -4338,15 +4371,16 @@ void MainWindow::editQueueItem(int row) {
   QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
 
   connectNewSessionDialog(window);
-  connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
-                                  const QString &p, const QString &a,
-                                  bool requirePlanApproval) {
-            if (persistentIndex.isValid()) {
-              m_queueModel->removeItem(persistentIndex.row());
-            }
-            onSessionCreated(sources, p, a, requirePlanApproval);
-          });
+  connect(
+      window, &NewSessionDialog::createSessionRequested,
+      [this, persistentIndex](
+          const QMultiMap<QString, QString> &sources, const QString &p,
+          const QString &a, bool requirePlanApproval, bool ignoreConcurrency) {
+        if (persistentIndex.isValid()) {
+          m_queueModel->removeItem(persistentIndex.row());
+        }
+        onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency);
+      });
 
   connect(window, &NewSessionDialog::saveDraftRequested,
           [this, persistentIndex](const QJsonObject &d) {
@@ -4481,15 +4515,16 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   QPersistentModelIndex persistentIndex(index);
 
   connectNewSessionDialog(window);
-  connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
-                                  const QString &p, const QString &a,
-                                  bool requirePlanApproval) {
-            onSessionCreated(sources, p, a, requirePlanApproval);
-            if (persistentIndex.isValid()) {
-              m_errorsModel->removeError(persistentIndex.row());
-            }
-          });
+  connect(
+      window, &NewSessionDialog::createSessionRequested,
+      [this, persistentIndex](
+          const QMultiMap<QString, QString> &sources, const QString &p,
+          const QString &a, bool requirePlanApproval, bool ignoreConcurrency) {
+        onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency);
+        if (persistentIndex.isValid()) {
+          m_errorsModel->removeError(persistentIndex.row());
+        }
+      });
 
   connect(window, &NewSessionDialog::saveDraftRequested,
           [this, persistentIndex](const QJsonObject &d) {
@@ -4513,15 +4548,16 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
   QPersistentModelIndex persistentIndex(index);
 
   connectNewSessionDialog(window);
-  connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMultiMap<QString, QString> &sources,
-                                  const QString &p, const QString &a,
-                                  bool requirePlanApproval) {
-            onSessionCreated(sources, p, a, requirePlanApproval);
-            if (persistentIndex.isValid()) {
-              m_draftsModel->removeDraft(persistentIndex.row());
-            }
-          });
+  connect(
+      window, &NewSessionDialog::createSessionRequested,
+      [this, persistentIndex](
+          const QMultiMap<QString, QString> &sources, const QString &p,
+          const QString &a, bool requirePlanApproval, bool ignoreConcurrency) {
+        onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency);
+        if (persistentIndex.isValid()) {
+          m_draftsModel->removeDraft(persistentIndex.row());
+        }
+      });
 
   connect(window, &NewSessionDialog::saveDraftRequested,
           [this, persistentIndex](const QJsonObject &d) {
