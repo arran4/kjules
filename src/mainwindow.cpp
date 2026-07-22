@@ -25,6 +25,7 @@
 #include "settingsdialog.h"
 #include "sourcemodel.h"
 #include "sourcesrefreshprogresswindow.h"
+#include "sourcestatusdialog.h"
 #include "templateeditdialog.h"
 #include "templatesmodel.h"
 #include "utils.h"
@@ -3246,6 +3247,14 @@ void MainWindow::showCreateRepoDialog() {
   CreateRepoDialog *dialog = new CreateRepoDialog(m_apiManager, this);
   connect(dialog, &CreateRepoDialog::createRepoAndSessionRequested, this,
           &MainWindow::onCreateRepoAndSession);
+  dialog->show();
+}
+
+void MainWindow::showSourceStatusDialog(const QString &sourceName) {
+  SourceStatusDialog *dialog =
+      new SourceStatusDialog(sourceName, m_sessionModel, m_queueModel,
+                             m_errorsModel, m_blockedTreeModel, this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
   dialog->show();
 }
 
