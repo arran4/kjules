@@ -78,11 +78,11 @@ private Q_SLOTS:
   void showSettingsDialog();
   void onSessionCreated(const QMultiMap<QString, QString> &sources,
                         const QString &prompt, const QString &automationMode,
-                        bool requirePlanApproval);
+                        bool requirePlanApproval, bool ignoreConcurrency);
   void onCreateRepoAndSession(const QString &org, const QString &repoName,
                               bool isPrivate, const QString &prompt,
                               const QString &automationMode,
-                              bool requirePlanApproval);
+                              bool requirePlanApproval, bool ignoreConcurrency);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onTemplateSaved(const QJsonObject &tmpl);

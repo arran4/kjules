@@ -826,6 +826,10 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
             sessionObj[QStringLiteral("sourceContext")] =
                 json.value(QStringLiteral("sourceContext")).toObject();
           }
+          if (requestData.contains(QStringLiteral("ignoreConcurrency"))) {
+            sessionObj[QStringLiteral("ignoreConcurrency")] =
+                requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
+          }
 
           Q_EMIT sessionCreated(sessionObj);
           Q_EMIT logMessage(QStringLiteral("Session created successfully."));

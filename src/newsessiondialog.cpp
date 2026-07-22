@@ -1175,6 +1175,37 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_requirePlanApprovalCheckBox->setChecked(false);
   optionsLayout->addWidget(m_requirePlanApprovalCheckBox);
 
+  m_ignoreConcurrencyCheckBox =
+      new QCheckBox(tr("Bypass concurrency limits"), this);
+  m_ignoreConcurrencyCheckBox->setChecked(false);
+  optionsLayout->addWidget(m_ignoreConcurrencyCheckBox);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(),
+                           QStringLiteral("Queue"));
+  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
+                                       QStringLiteral("SourceConcurrency"));
+
+  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
+  if (currentQueueMode.isEmpty()) {
+    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
+                           ? QStringLiteral("one_at_a_time")
+                           : QStringLiteral("asap");
+  }
+
+  bool hasAnyConcurrencyLimits =
+      (currentQueueMode == QStringLiteral("one_at_a_time"));
+  if (!hasAnyConcurrencyLimits) {
+    const QStringList sources = sourceConcurrencyConfig.keyList();
+    for (const QString &source : sources) {
+      if (sourceConcurrencyConfig.readEntry(source, -1) > 0) {
+        hasAnyConcurrencyLimits = true;
+        break;
+      }
+    }
+  }
+
+  m_ignoreConcurrencyCheckBox->setVisible(hasAnyConcurrencyLimits);
+
   m_keepOpenCheckBox = new QCheckBox(tr("Keep create new session open"), this);
   m_keepOpenCheckBox->setChecked(false);
   optionsLayout->addWidget(m_keepOpenCheckBox);
@@ -1385,6 +1416,11 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
         data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
+  if (data.contains(QStringLiteral("ignoreConcurrency"))) {
+    m_ignoreConcurrencyCheckBox->setChecked(
+        data.value(QStringLiteral("ignoreConcurrency")).toBool());
+  }
+
   if (data.contains(QStringLiteral("automationMode"))) {
     QString mode = data.value(QStringLiteral("automationMode")).toString();
     int idx = m_automationModeComboBox->findData(mode);
@@ -1484,6 +1520,11 @@ void NewSessionDialog::setTemplateData(const QJsonObject &data) {
         data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
+  if (data.contains(QStringLiteral("ignoreConcurrency"))) {
+    m_ignoreConcurrencyCheckBox->setChecked(
+        data.value(QStringLiteral("ignoreConcurrency")).toBool());
+  }
+
   if (data.contains(QStringLiteral("automationMode"))) {
     QString mode = data.value(QStringLiteral("automationMode")).toString();
     int idx = m_automationModeComboBox->findData(mode);
@@ -1578,9 +1619,10 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
   }
 
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
+  bool ignoreConcurrency = m_ignoreConcurrencyCheckBox->isChecked();
 
   Q_EMIT createSessionRequested(sources, prompt, automationMode,
-                                requirePlanApproval);
+                                requirePlanApproval, ignoreConcurrency);
 
   if (m_keepOpenCheckBox->isChecked()) {
     m_promptEdit->clear();
@@ -1619,6 +1661,8 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("prompt")] = m_promptEdit->getPromptText();
   draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
+  draft[QStringLiteral("ignoreConcurrency")] =
+      m_ignoreConcurrencyCheckBox->isChecked();
   draft[QStringLiteral("automationMode")] =
       m_automationModeComboBox->currentData().toString();
 
@@ -1654,6 +1698,8 @@ void NewSessionDialog::onSaveTemplate() {
   tmpl[QStringLiteral("name")] = dlg.nameOrComment();
   tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
+  tmpl[QStringLiteral("ignoreConcurrency")] =
+      m_ignoreConcurrencyCheckBox->isChecked();
   tmpl[QStringLiteral("automationMode")] =
       m_automationModeComboBox->currentData().toString();
 
