@@ -21,13 +21,17 @@ SourceFilterProxyModel::SourceFilterProxyModel(const QString &sourceName,
     : QSortFilterProxyModel(parent), m_sourceName(sourceName) {}
 
 void SourceFilterProxyModel::setFilterSource(const QString &sourceName) {
-  m_sourceName = sourceName;
-  beginResetModel();
-  endResetModel();
+  if (m_sourceName != sourceName) {
+    m_sourceName = sourceName;
+    invalidateFilter();
+  }
 }
 
 bool SourceFilterProxyModel::filterAcceptsRow(
     int source_row, const QModelIndex &source_parent) const {
+  if (!sourceModel()) {
+    return false;
+  }
   QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
   QJsonObject req =
       sourceModel()->data(index, QueueModel::RequestDataRole).toJsonObject();
@@ -49,6 +53,9 @@ SessionFilterProxyModel::SessionFilterProxyModel(const QString &sourceName,
 
 bool SessionFilterProxyModel::filterAcceptsRow(
     int source_row, const QModelIndex &source_parent) const {
+  if (!sourceModel()) {
+    return false;
+  }
   QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
   QString source =
       sourceModel()->data(index, SessionModel::SourceRole).toString();
@@ -65,6 +72,9 @@ ErrorFilterProxyModel::ErrorFilterProxyModel(const QString &sourceName,
 
 bool ErrorFilterProxyModel::filterAcceptsRow(
     int source_row, const QModelIndex &source_parent) const {
+  if (!sourceModel()) {
+    return false;
+  }
   QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
   QJsonObject req =
       sourceModel()->data(index, ErrorsModel::RequestRole).toJsonObject();
@@ -86,6 +96,9 @@ BlockedErrorProxyModel::BlockedErrorProxyModel(const QString &sourceName,
 
 bool BlockedErrorProxyModel::filterAcceptsRow(
     int source_row, const QModelIndex &source_parent) const {
+  if (!sourceModel()) {
+    return false;
+  }
   QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
   QString source =
       sourceModel()->data(index, BlockedTreeModel::SourceIdRole).toString();
