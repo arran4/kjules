@@ -445,6 +445,11 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
               window->show();
             }
           });
+          QAction *showStatusAction = menu.addAction(i18n("Show Status"));
+          connect(showStatusAction, &QAction::triggered, [this, id]() {
+            showSourceStatusDialog(id.split(QLatin1Char('/')).last());
+          });
+
           menu.addAction(m_refreshSourceAction);
           menu.addAction(m_viewSessionsAction);
           menu.addAction(m_showFollowingNewSessionsAction);
