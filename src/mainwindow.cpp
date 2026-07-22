@@ -4581,6 +4581,8 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
           &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
           [this](const QString &id) { m_apiManager->getSource(id); });
+  connect(window, &NewSessionDialog::showSourceStatusRequested, this,
+          &MainWindow::showSourceStatusDialog);
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {

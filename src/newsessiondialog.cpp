@@ -407,6 +407,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QString id =
             m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+        QAction *showStatusAction = menu.addAction(tr("Show Status"));
+        connect(showStatusAction, &QAction::triggered, this, [this, id]() {
+          Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last());
+        });
+
         QStringList parts = id.split(QLatin1Char('/'));
         QString owner;
         QString repo;
@@ -806,6 +811,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
         QString id =
             m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+        QAction *showStatusAction = menu.addAction(tr("Show Status"));
+        connect(showStatusAction, &QAction::triggered, this, [this, id]() {
+          Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last());
+        });
+
         QStringList parts = id.split(QLatin1Char('/'));
         QString owner;
         QString repo;
