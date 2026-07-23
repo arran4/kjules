@@ -15,6 +15,9 @@ class ActivityBrowser;
 class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
 
+Q_SIGNALS:
+  void openPreviousAttemptRequested(const QString &previousAttemptId);
+
 public:
   explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged = true,
                          QWidget *parent = nullptr);

@@ -656,8 +656,147 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
       QAction *archiveAction = menu.addAction(i18n("Archive"));
       QAction *deleteAction = menu.addAction(i18n("Delete"));
       menu.addSeparator();
+
+      bool hasErrorSession = false;
+      QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+        if (m_sessionModel->data(mappedIdx, SessionModel::StateRole).toString() == QStringLiteral("ERROR")) {
+          hasErrorSession = true;
+          break;
+        }
+      }
+
+      QAction *recreateHighPriorityAction = nullptr;
+      QAction *recreateEndQueueAction = nullptr;
+      if (hasErrorSession) {
+        recreateHighPriorityAction = menu.addAction(i18n("Recreate it in place (Highest Priority)"));
+        recreateEndQueueAction = menu.addAction(i18n("Recreate at end of queue"));
+        menu.addSeparator();
+      }
+
       QAction *newSessionFromSessionAction = menu.addAction(i18n("New Session From Session"));
       QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+
+      bool hasPreviousAttempt = false;
+      QString firstPreviousAttemptId;
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+        QJsonObject session = m_sessionModel->getSession(mappedIdx.row());
+        QJsonObject req = session.value(QStringLiteral("request")).toObject(); // Assuming APIManager stores it in request or root
+        if (session.contains(QStringLiteral("previousAttemptId"))) {
+          hasPreviousAttempt = true;
+          firstPreviousAttemptId = session.value(QStringLiteral("previousAttemptId")).toString();
+          break;
+        } else if (req.contains(QStringLiteral("previousAttemptId"))) {
+          hasPreviousAttempt = true;
+          firstPreviousAttemptId = req.value(QStringLiteral("previousAttemptId")).toString();
+          break;
+        }
+      }
+
+      QAction *openPreviousAttemptAction = nullptr;
+      if (hasPreviousAttempt && selectedRows.size() == 1) {
+        openPreviousAttemptAction = menu.addAction(i18n("Open Previous Attempt"));
+      }
+
+      if (hasPreviousAttempt && selectedRows.size() == 1) {
+        connect(openPreviousAttemptAction, &QAction::triggered, [this, firstPreviousAttemptId]() {
+          // Find in archive or session model
+          bool found = false;
+          for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+            if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+              QJsonObject session = m_archiveModel->getSession(i);
+              SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
+              connectSessionWindow(window);
+              window->show();
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+                QJsonObject session = m_sessionModel->getSession(i);
+                showSessionWindow(session);
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) {
+            updateStatus(i18n("Previous attempt session not found in active or archived sessions."));
+          }
+        });
+      }
+
+      if (hasErrorSession) {
+        connect(recreateHighPriorityAction, &QAction::triggered, [this]() {
+          QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+          const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+          QList<int> rowsToProcess = getUniqueSortedRows(selectedRows, m_sessionView);
+
+          for (int row : rowsToProcess) {
+            if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() == QStringLiteral("ERROR")) {
+              QJsonObject session = m_sessionModel->getSession(row);
+
+              QJsonObject req;
+              req[QStringLiteral("source")] =
+                  session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+              req[QStringLiteral("prompt")] = session.value(QStringLiteral("prompt")).toString();
+              if (session.contains(QStringLiteral("automationMode"))) {
+                req[QStringLiteral("automationMode")] = session.value(QStringLiteral("automationMode")).toString();
+              }
+              if (session.contains(QStringLiteral("ignoreConcurrency"))) {
+                req[QStringLiteral("ignoreConcurrency")] = session.value(QStringLiteral("ignoreConcurrency")).toBool();
+              }
+
+              req[QStringLiteral("previousAttemptId")] = session.value(QStringLiteral("id")).toString();
+
+              m_queueModel->insertItem(0, QueueItem::fromJson(req));
+
+              m_archiveModel->addSession(session);
+              m_sessionModel->removeSession(row);
+            }
+          }
+          m_archiveModel->saveSessions();
+          m_sessionModel->saveSessions();
+          updateStatus(i18n("Session recreated at highest priority and old session archived."));
+        });
+
+        connect(recreateEndQueueAction, &QAction::triggered, [this]() {
+          QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+          const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+          QList<int> rowsToProcess = getUniqueSortedRows(selectedRows, m_sessionView);
+
+          for (int row : rowsToProcess) {
+            if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() == QStringLiteral("ERROR")) {
+              QJsonObject session = m_sessionModel->getSession(row);
+
+              QJsonObject req;
+              req[QStringLiteral("source")] =
+                  session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+              req[QStringLiteral("prompt")] = session.value(QStringLiteral("prompt")).toString();
+              if (session.contains(QStringLiteral("automationMode"))) {
+                req[QStringLiteral("automationMode")] = session.value(QStringLiteral("automationMode")).toString();
+              }
+              if (session.contains(QStringLiteral("ignoreConcurrency"))) {
+                req[QStringLiteral("ignoreConcurrency")] = session.value(QStringLiteral("ignoreConcurrency")).toBool();
+              }
+
+              req[QStringLiteral("previousAttemptId")] = session.value(QStringLiteral("id")).toString();
+
+              m_queueModel->enqueueItem(QueueItem::fromJson(req));
+
+              m_archiveModel->addSession(session);
+              m_sessionModel->removeSession(row);
+            }
+          }
+          m_archiveModel->saveSessions();
+          m_sessionModel->saveSessions();
+          updateStatus(i18n("Session recreated at end of queue and old session archived."));
+        });
+      }
 
       connect(openSessionAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
@@ -958,6 +1097,58 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
       }
 
       QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+
+      bool hasPreviousAttempt = false;
+      QString firstPreviousAttemptId;
+      QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
+      for (const QModelIndex &idx : selectedRows) {
+        QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+        QJsonObject session = m_archiveModel->getSession(mappedIdx.row());
+        QJsonObject req = session.value(QStringLiteral("request")).toObject();
+        if (session.contains(QStringLiteral("previousAttemptId"))) {
+          hasPreviousAttempt = true;
+          firstPreviousAttemptId = session.value(QStringLiteral("previousAttemptId")).toString();
+          break;
+        } else if (req.contains(QStringLiteral("previousAttemptId"))) {
+          hasPreviousAttempt = true;
+          firstPreviousAttemptId = req.value(QStringLiteral("previousAttemptId")).toString();
+          break;
+        }
+      }
+
+      QAction *openPreviousAttemptAction = nullptr;
+      if (hasPreviousAttempt && selectedRows.size() == 1) {
+        openPreviousAttemptAction = menu.addAction(i18n("Open Previous Attempt"));
+      }
+
+      if (hasPreviousAttempt && selectedRows.size() == 1) {
+        connect(openPreviousAttemptAction, &QAction::triggered, [this, firstPreviousAttemptId]() {
+          bool found = false;
+          for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+            if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+              QJsonObject session = m_archiveModel->getSession(i);
+              SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
+              connectSessionWindow(window);
+              window->show();
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+              if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+                QJsonObject session = m_sessionModel->getSession(i);
+                showSessionWindow(session);
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) {
+            updateStatus(i18n("Previous attempt session not found in active or archived sessions."));
+          }
+        });
+      }
 
       connect(openSessionAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
@@ -3855,6 +4046,33 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
         window->close();
         break;
       }
+    }
+  });
+
+  connect(window, &SessionWindow::openPreviousAttemptRequested, this, [this](const QString &previousAttemptId) {
+    bool found = false;
+    for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+      if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() == previousAttemptId) {
+        QJsonObject session = m_archiveModel->getSession(i);
+        SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
+        connectSessionWindow(window);
+        window->show();
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+        if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == previousAttemptId) {
+          QJsonObject session = m_sessionModel->getSession(i);
+          showSessionWindow(session);
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      updateStatus(i18n("Previous attempt session not found in active or archived sessions."));
     }
   });
 

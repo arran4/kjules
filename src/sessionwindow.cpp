@@ -367,6 +367,21 @@ void SessionWindow::renderDetailsAndDiff() {
                  QStringLiteral("</a></td></tr>");
   detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") + QStringLiteral("</th><td>") + state.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
+
+  QString previousAttemptId;
+  QJsonObject req = m_sessionData.value(QStringLiteral("request")).toObject();
+  if (m_sessionData.contains(QStringLiteral("previousAttemptId"))) {
+    previousAttemptId = m_sessionData.value(QStringLiteral("previousAttemptId")).toString();
+  } else if (req.contains(QStringLiteral("previousAttemptId"))) {
+    previousAttemptId = req.value(QStringLiteral("previousAttemptId")).toString();
+  }
+
+  if (!previousAttemptId.isEmpty()) {
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Previous Attempt:") + QStringLiteral("</th><td><a href=\"previous://") +
+                   previousAttemptId.toHtmlEscaped() + QStringLiteral("\">") + previousAttemptId.toHtmlEscaped() +
+                   QStringLiteral("</a></td></tr>");
+  }
+
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") + QStringLiteral("</th><td>") + source.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
   if (!startingBranch.isEmpty()) {
@@ -503,7 +518,14 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   mainLayout->addWidget(m_tabWidget);
 
   m_detailsBrowser = new QTextBrowser(this);
-  m_detailsBrowser->setOpenExternalLinks(true);
+  m_detailsBrowser->setOpenExternalLinks(false);
+  connect(m_detailsBrowser, &QTextBrowser::anchorClicked, this, [this](const QUrl &link) {
+    if (link.scheme() == QStringLiteral("previous")) {
+      Q_EMIT openPreviousAttemptRequested(link.host());
+    } else {
+      QDesktopServices::openUrl(link);
+    }
+  });
 
   m_promptBrowser = new QTextBrowser(this);
 
