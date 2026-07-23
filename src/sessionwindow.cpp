@@ -377,9 +377,9 @@ void SessionWindow::renderDetailsAndDiff() {
   }
 
   if (!previousAttemptId.isEmpty()) {
-    detailsHtml += QStringLiteral("<tr><th>") + i18n("Previous Attempt:") + QStringLiteral("</th><td><a href=\"previous://") +
-                   previousAttemptId.toHtmlEscaped() + QStringLiteral("\">") + previousAttemptId.toHtmlEscaped() +
-                   QStringLiteral("</a></td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Previous Attempt:") +
+                   QStringLiteral("</th><td><a href=\"previous://") + previousAttemptId.toHtmlEscaped() +
+                   QStringLiteral("\">") + previousAttemptId.toHtmlEscaped() + QStringLiteral("</a></td></tr>");
   }
 
   detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") + QStringLiteral("</th><td>") + source.toHtmlEscaped() +

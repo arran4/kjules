@@ -683,7 +683,8 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
       for (const QModelIndex &idx : selectedRows) {
         QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
         QJsonObject session = m_sessionModel->getSession(mappedIdx.row());
-        QJsonObject req = session.value(QStringLiteral("request")).toObject(); // Assuming APIManager stores it in request or root
+        QJsonObject req =
+            session.value(QStringLiteral("request")).toObject(); // Assuming APIManager stores it in request or root
         if (session.contains(QStringLiteral("previousAttemptId"))) {
           hasPreviousAttempt = true;
           firstPreviousAttemptId = session.value(QStringLiteral("previousAttemptId")).toString();
@@ -705,7 +706,8 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
           // Find in archive or session model
           bool found = false;
           for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
-            if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+            if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
+                firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
               SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
               connectSessionWindow(window);
@@ -716,7 +718,8 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
           }
           if (!found) {
             for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-              if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+              if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() ==
+                  firstPreviousAttemptId) {
                 QJsonObject session = m_sessionModel->getSession(i);
                 showSessionWindow(session);
                 found = true;
@@ -737,7 +740,8 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
           QList<int> rowsToProcess = getUniqueSortedRows(selectedRows, m_sessionView);
 
           for (int row : rowsToProcess) {
-            if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() == QStringLiteral("ERROR")) {
+            if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() ==
+                QStringLiteral("ERROR")) {
               QJsonObject session = m_sessionModel->getSession(row);
 
               QJsonObject req;
@@ -770,7 +774,8 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
           QList<int> rowsToProcess = getUniqueSortedRows(selectedRows, m_sessionView);
 
           for (int row : rowsToProcess) {
-            if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() == QStringLiteral("ERROR")) {
+            if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() ==
+                QStringLiteral("ERROR")) {
               QJsonObject session = m_sessionModel->getSession(row);
 
               QJsonObject req;
@@ -1125,7 +1130,8 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
         connect(openPreviousAttemptAction, &QAction::triggered, [this, firstPreviousAttemptId]() {
           bool found = false;
           for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
-            if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+            if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
+                firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
               SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
               connectSessionWindow(window);
@@ -1136,7 +1142,8 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
           }
           if (!found) {
             for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-              if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == firstPreviousAttemptId) {
+              if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() ==
+                  firstPreviousAttemptId) {
                 QJsonObject session = m_sessionModel->getSession(i);
                 showSessionWindow(session);
                 found = true;
