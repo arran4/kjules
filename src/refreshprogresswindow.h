@@ -19,9 +19,7 @@ class RefreshProgressWindow : public QDialog {
   Q_OBJECT
 
 public:
-  explicit RefreshProgressWindow(const QStringList &sessionIds,
-                                 APIManager *apiManager,
-                                 SessionModel *sessionModel,
+  explicit RefreshProgressWindow(const QStringList &sessionIds, APIManager *apiManager, SessionModel *sessionModel,
                                  QWidget *parent = nullptr);
   ~RefreshProgressWindow() override;
 
@@ -39,8 +37,7 @@ private Q_SLOTS:
   void onSessionReloaded(const QJsonObject &session);
 
   void onSessionReloadFailed(const QString &sessionId, const QString &message);
-  void onGithubPullRequestInfoReceived(const QString &prUrl,
-                                       const QJsonObject &info);
+  void onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
   void onGithubPullRequestFailed(const QString &prUrl, const QString &message);
 
   void onSessionAutoArchived(const QString &id, const QString &reason);

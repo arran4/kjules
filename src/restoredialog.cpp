@@ -8,18 +8,16 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
-RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
-    : QDialog(parent) {
+RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent) : QDialog(parent) {
   setWindowTitle(i18n("Restore Data"));
   setModal(true);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
   // Explanatory text
-  QLabel *infoLabel =
-      new QLabel(i18n("This will restore your local data from a zip file. "
-                      "Please select the backup file and options below."),
-                 this);
+  QLabel *infoLabel = new QLabel(i18n("This will restore your local data from a zip file. "
+                                      "Please select the backup file and options below."),
+                                 this);
   infoLabel->setWordWrap(true);
   mainLayout->addWidget(infoLabel);
 
@@ -42,13 +40,11 @@ RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
   m_cbSources->setChecked(true);
   filesLayout->addRow(m_cbSources);
 
-  m_cbSessions =
-      new QCheckBox(i18n("Cached Sessions (cached_sessions.json)"), this);
+  m_cbSessions = new QCheckBox(i18n("Cached Sessions (cached_sessions.json)"), this);
   m_cbSessions->setChecked(true);
   filesLayout->addRow(m_cbSessions);
 
-  m_cbAllSessions =
-      new QCheckBox(i18n("All Sessions (cached_all_sessions.json)"), this);
+  m_cbAllSessions = new QCheckBox(i18n("All Sessions (cached_all_sessions.json)"), this);
   m_cbAllSessions->setChecked(true);
   filesLayout->addRow(m_cbAllSessions);
 
@@ -67,14 +63,12 @@ RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
   mainLayout->addLayout(filesLayout);
 
   // Options
-  m_mergeCheckBox = new QCheckBox(
-      i18n("Merge with existing data (overwrite if unchecked)"), this);
+  m_mergeCheckBox = new QCheckBox(i18n("Merge with existing data (overwrite if unchecked)"), this);
   m_mergeCheckBox->setChecked(true);
   mainLayout->addWidget(m_mergeCheckBox);
 
   // Buttons
-  QDialogButtonBox *buttonBox = new QDialogButtonBox(
-      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
   connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
   connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
   mainLayout->addWidget(buttonBox);
@@ -83,9 +77,8 @@ RestoreDialog::RestoreDialog(const QString &defaultDir, QWidget *parent)
 }
 
 void RestoreDialog::browseFile() {
-  QString file = QFileDialog::getOpenFileName(this, i18n("Select Backup File"),
-                                              m_fileEdit->text(),
-                                              i18n("Zip Archives (*.zip)"));
+  QString file =
+      QFileDialog::getOpenFileName(this, i18n("Select Backup File"), m_fileEdit->text(), i18n("Zip Archives (*.zip)"));
   if (!file.isEmpty()) {
     m_fileEdit->setText(file);
   }

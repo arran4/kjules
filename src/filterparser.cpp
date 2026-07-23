@@ -13,17 +13,16 @@ struct Token {
 
 static QList<Token> tokenize(const QString &query) {
   QList<Token> tokens;
-  QRegularExpression re(
-      QStringLiteral("\\s*(?:"
-                     "(\\()|"
-                     "(\\))|"
-                     "\\b(OR|AND|NOT|IN)\\b|"
-                     "([a-zA-Z0-9_-]+:)(?:\"([^\"]*)\"|([^\\s\\(\\)]+))|"
-                     "(=)\"([^\"]+)\"|"
-                     "(=)([^\\s\\(\\)]+)|"
-                     "(\"([^\"]+)\")|"
-                     "([^\\s\\(\\)]+)"
-                     ")\\s*"));
+  QRegularExpression re(QStringLiteral("\\s*(?:"
+                                       "(\\()|"
+                                       "(\\))|"
+                                       "\\b(OR|AND|NOT|IN)\\b|"
+                                       "([a-zA-Z0-9_-]+:)(?:\"([^\"]*)\"|([^\\s\\(\\)]+))|"
+                                       "(=)\"([^\"]+)\"|"
+                                       "(=)([^\\s\\(\\)]+)|"
+                                       "(\"([^\"]+)\")|"
+                                       "([^\\s\\(\\)]+)"
+                                       ")\\s*"));
 
   QRegularExpressionMatchIterator i = re.globalMatch(query);
   while (i.hasNext()) {
@@ -45,8 +44,7 @@ static QList<Token> tokenize(const QString &query) {
     } else if (!match.captured(4).isEmpty()) {
       QString key = match.captured(4);
       key.chop(1); // remove ':'
-      QString val =
-          match.captured(5).isEmpty() ? match.captured(6) : match.captured(5);
+      QString val = match.captured(5).isEmpty() ? match.captured(6) : match.captured(5);
       tokens.append({Token::KV, key, val});
     } else if (!match.captured(7).isEmpty()) {
       tokens.append({Token::WORD, match.captured(8), QString()});
@@ -140,8 +138,7 @@ private:
       if (!atEnd() && current().type == Token::IN) {
         next();
         QString valuesStr = QString();
-        if (!atEnd() &&
-            (current().type == Token::STR || current().type == Token::WORD)) {
+        if (!atEnd() && (current().type == Token::STR || current().type == Token::WORD)) {
           valuesStr = next().val1;
         }
         return QSharedPointer<ASTNode>(new InNode(tok.val1, valuesStr));
@@ -173,8 +170,7 @@ QString AndNode::toString() const {
   QStringList parts;
   for (const auto &child : m_children)
     parts.append(child->toString());
-  return QStringLiteral("(") + parts.join(QStringLiteral(" AND ")) +
-         QStringLiteral(")");
+  return QStringLiteral("(") + parts.join(QStringLiteral(" AND ")) + QStringLiteral(")");
 }
 
 bool OrNode::evaluate(const FilterDataAccessor &accessor) const {
@@ -188,16 +184,11 @@ QString OrNode::toString() const {
   QStringList parts;
   for (const auto &child : m_children)
     parts.append(child->toString());
-  return QStringLiteral("(") + parts.join(QStringLiteral(" OR ")) +
-         QStringLiteral(")");
+  return QStringLiteral("(") + parts.join(QStringLiteral(" OR ")) + QStringLiteral(")");
 }
 
-bool NotNode::evaluate(const FilterDataAccessor &accessor) const {
-  return !m_child->evaluate(accessor);
-}
-QString NotNode::toString() const {
-  return QStringLiteral("NOT ") + m_child->toString();
-}
+bool NotNode::evaluate(const FilterDataAccessor &accessor) const { return !m_child->evaluate(accessor); }
+QString NotNode::toString() const { return QStringLiteral("NOT ") + m_child->toString(); }
 
 bool InNode::evaluate(const FilterDataAccessor &accessor) const {
   if (m_values.isEmpty())
@@ -211,12 +202,9 @@ bool InNode::evaluate(const FilterDataAccessor &accessor) const {
   }
   return false;
 }
-QString InNode::toString() const {
-  return m_key + QStringLiteral(" IN \"") + m_valuesStr + QStringLiteral("\"");
-}
+QString InNode::toString() const { return m_key + QStringLiteral(" IN \"") + m_valuesStr + QStringLiteral("\""); }
 
-static bool checkDateFilter(const QString &filterVal, const QString &dateStr,
-                            bool isBefore) {
+static bool checkDateFilter(const QString &filterVal, const QString &dateStr, bool isBefore) {
   QDateTime filterDate = QDateTime::fromString(filterVal, Qt::ISODate);
   QDateTime dataDate = QDateTime::fromString(dateStr, Qt::ISODate);
   if (!filterDate.isValid() || !dataDate.isValid())
@@ -228,10 +216,8 @@ static bool checkDateFilter(const QString &filterVal, const QString &dateStr,
 
 bool KeyValueNode::evaluate(const FilterDataAccessor &accessor) const {
   QString lowerKey = m_key.toLower();
-  if (lowerKey == QStringLiteral("created-before") ||
-      lowerKey == QStringLiteral("updated-before") ||
-      lowerKey == QStringLiteral("created-after") ||
-      lowerKey == QStringLiteral("updated-after")) {
+  if (lowerKey == QStringLiteral("created-before") || lowerKey == QStringLiteral("updated-before") ||
+      lowerKey == QStringLiteral("created-after") || lowerKey == QStringLiteral("updated-after")) {
     QString dateStr;
     if (lowerKey.startsWith(QStringLiteral("created")))
       dateStr = accessor.getValue(QStringLiteral("createdat"));
@@ -241,11 +227,9 @@ bool KeyValueNode::evaluate(const FilterDataAccessor &accessor) const {
     return checkDateFilter(m_value, dateStr, isBefore);
   }
   QString val = accessor.getValue(m_key);
-  if (lowerKey == QStringLiteral("repo") ||
-      lowerKey == QStringLiteral("owner")) {
+  if (lowerKey == QStringLiteral("repo") || lowerKey == QStringLiteral("owner")) {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QRegularExpression re =
-        QRegularExpression::fromWildcard(m_value, Qt::CaseInsensitive);
+    QRegularExpression re = QRegularExpression::fromWildcard(m_value, Qt::CaseInsensitive);
     return re.match(val).hasMatch();
 #else
     QRegExp rx(m_value);
@@ -258,8 +242,7 @@ bool KeyValueNode::evaluate(const FilterDataAccessor &accessor) const {
 }
 QString KeyValueNode::toString() const {
   if (m_value.contains(QLatin1Char(' ')))
-    return m_key + QStringLiteral(":") + QStringLiteral("\"") + m_value +
-           QStringLiteral("\"");
+    return m_key + QStringLiteral(":") + QStringLiteral("\"") + m_value + QStringLiteral("\"");
   return m_key + QStringLiteral(":") + m_value;
 }
 

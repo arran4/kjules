@@ -12,12 +12,9 @@ class ErrorWindow : public QDialog {
   Q_OBJECT
 
 public:
-  explicit ErrorWindow(int queueRow, const QueueItem &item,
-                       QWidget *parent = nullptr);
-  explicit ErrorWindow(int errorRow, const QJsonObject &requestData,
-                       const QString &lastResponse, const QString &lastError,
-                       const QString &httpDetails = QString(),
-                       QWidget *parent = nullptr);
+  explicit ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent = nullptr);
+  explicit ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse,
+                       const QString &lastError, const QString &httpDetails = QString(), QWidget *parent = nullptr);
 
 Q_SIGNALS:
   void editRequested(int row);

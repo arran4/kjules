@@ -15,17 +15,14 @@
 #include <limits>
 
 qint64 QueueModel::maxBackoffSeconds() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  qint64 maxWait =
-      queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  qint64 maxWait = queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
   if (maxWait < 0)
     maxWait = 8 * 60 * 60; // Failsafe
   return maxWait;
 }
 
-static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase,
-                                          int errorCount) {
+static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase, int errorCount) {
   int power = qMax(0, errorCount - 1);
   if (power > 20)
     power = 20; // Prevent huge shifts
@@ -39,8 +36,7 @@ static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase,
     multiplier *= expBase;
   }
 
-  if (overflow ||
-      initialWait > std::numeric_limits<qint64>::max() / multiplier) {
+  if (overflow || initialWait > std::numeric_limits<qint64>::max() / multiplier) {
     return std::numeric_limits<qint64>::max();
   }
   return initialWait * multiplier;
@@ -58,12 +54,10 @@ static qint64 calculateRandomBackoff(KConfigGroup &queueConfig) {
 static qint64 calculateFixedBackoff(qint64 initialWait) { return initialWait; }
 
 qint64 QueueModel::calculateBackoff(int errorCount) {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
 
   QString type = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  qint64 initialWait =
-      queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
+  qint64 initialWait = queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
   qint64 waitSeconds;
 
   if (type == QStringLiteral("exponential")) {
@@ -72,8 +66,7 @@ qint64 QueueModel::calculateBackoff(int errorCount) {
   } else if (type == QStringLiteral("random")) {
     waitSeconds = calculateRandomBackoff(queueConfig);
   } else if (type == QStringLiteral("predict")) {
-    KConfigGroup generalConfig(KSharedConfig::openConfig(),
-                               QStringLiteral("General"));
+    KConfigGroup generalConfig(KSharedConfig::openConfig(), QStringLiteral("General"));
     waitSeconds = generalConfig.readEntry("WaitTime", 3600);
   } else {
     waitSeconds = calculateFixedBackoff(initialWait);
@@ -114,19 +107,16 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   item.lastError = obj.value(QStringLiteral("lastError")).toString();
   item.lastResponse = obj.value(QStringLiteral("lastResponse")).toString();
   if (obj.contains(QStringLiteral("lastTry"))) {
-    item.lastTry = QDateTime::fromString(
-        obj.value(QStringLiteral("lastTry")).toString(), Qt::ISODate);
+    item.lastTry = QDateTime::fromString(obj.value(QStringLiteral("lastTry")).toString(), Qt::ISODate);
   }
   if (obj.contains(QStringLiteral("pastErrors"))) {
     item.pastErrors = obj.value(QStringLiteral("pastErrors")).toArray();
   }
   item.isWaitItem = obj.value(QStringLiteral("isWaitItem")).toBool();
-  item.isDailyLimitWait =
-      obj.value(QStringLiteral("isDailyLimitWait")).toBool();
+  item.isDailyLimitWait = obj.value(QStringLiteral("isDailyLimitWait")).toBool();
   item.waitSeconds = obj.value(QStringLiteral("waitSeconds")).toInt();
   if (obj.contains(QStringLiteral("waitStartTime"))) {
-    item.waitStartTime = QDateTime::fromString(
-        obj.value(QStringLiteral("waitStartTime")).toString(), Qt::ISODate);
+    item.waitStartTime = QDateTime::fromString(obj.value(QStringLiteral("waitStartTime")).toString(), Qt::ISODate);
   }
   item.isBlocked = obj.value(QStringLiteral("isBlocked")).toBool();
   if (obj.contains(QStringLiteral("blockMetadata"))) {
@@ -158,13 +148,9 @@ Qt::ItemFlags QueueModel::flags(const QModelIndex &index) const {
   return defaultFlags | Qt::ItemIsDropEnabled;
 }
 
-Qt::DropActions QueueModel::supportedDropActions() const {
-  return Qt::MoveAction;
-}
+Qt::DropActions QueueModel::supportedDropActions() const { return Qt::MoveAction; }
 
-QStringList QueueModel::mimeTypes() const {
-  return {QStringLiteral("application/x-kjules-queue-item")};
-}
+QStringList QueueModel::mimeTypes() const { return {QStringLiteral("application/x-kjules-queue-item")}; }
 
 QMimeData *QueueModel::mimeData(const QModelIndexList &indexes) const {
   QMimeData *mimeData = new QMimeData();
@@ -188,13 +174,11 @@ QMimeData *QueueModel::mimeData(const QModelIndexList &indexes) const {
   for (int r : std::as_const(sourceRows))
     stream << r;
 
-  mimeData->setData(QStringLiteral("application/x-kjules-queue-item"),
-                    encodedData);
+  mimeData->setData(QStringLiteral("application/x-kjules-queue-item"), encodedData);
   return mimeData;
 }
 
-bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
-                              int row, int /*column*/,
+bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int /*column*/,
                               const QModelIndex &parent) {
   if (action == Qt::IgnoreAction)
     return true;
@@ -210,8 +194,7 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
   else
     destRow = rowCount(QModelIndex());
 
-  QByteArray encodedData =
-      data->data(QStringLiteral("application/x-kjules-queue-item"));
+  QByteArray encodedData = data->data(QStringLiteral("application/x-kjules-queue-item"));
   QDataStream stream(&encodedData, QIODevice::ReadOnly);
 
   QByteArray jsonData;
@@ -243,8 +226,7 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     std::sort(sourceRows.begin(), sourceRows.end());
 
     // Edge case: moving to same place
-    if (sourceRows.size() == 1 &&
-        (destRow == sourceRows.first() || destRow == sourceRows.first() + 1)) {
+    if (sourceRows.size() == 1 && (destRow == sourceRows.first() || destRow == sourceRows.first() + 1)) {
       return false;
     }
 
@@ -328,10 +310,8 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     if (item.isWaitItem) {
       return i18n("Wait for %1", Utils::formatDuration(item.waitSeconds));
     }
-    QString source =
-        item.requestData.value(QStringLiteral("source")).toString();
-    QString prompt =
-        item.requestData.value(QStringLiteral("prompt")).toString();
+    QString source = item.requestData.value(QStringLiteral("source")).toString();
+    QString prompt = item.requestData.value(QStringLiteral("prompt")).toString();
     // truncate prompt for summary
     if (prompt.length() > 50) {
       prompt = prompt.left(50) + QStringLiteral("...");
@@ -344,12 +324,10 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     }
     if (item.isWaitItem) {
       if (item.waitStartTime.isValid()) {
-        qint64 elapsed =
-            item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
+        qint64 elapsed = item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
         qint64 remaining = item.waitSeconds - elapsed;
         if (remaining > 0) {
-          return i18n("Waiting... %1 remaining",
-                      Utils::formatDuration(remaining));
+          return i18n("Waiting... %1 remaining", Utils::formatDuration(remaining));
         } else {
           return i18n("Wait complete");
         }
@@ -357,13 +335,10 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
       return i18n("Pending wait");
     }
     if (item.errorCount > 0) {
-      QString timeStr =
-          item.lastTry.isValid()
-              ? item.lastTry.toString(
-                    QLocale::system().dateFormat(QLocale::ShortFormat))
-              : i18n("Unknown time");
-      return i18n("Failed %1 times (Last: %2). Error: %3", item.errorCount,
-                  timeStr, item.lastError);
+      QString timeStr = item.lastTry.isValid()
+                            ? item.lastTry.toString(QLocale::system().dateFormat(QLocale::ShortFormat))
+                            : i18n("Unknown time");
+      return i18n("Failed %1 times (Last: %2). Error: %3", item.errorCount, timeStr, item.lastError);
     } else {
       return i18n("Pending");
     }
@@ -476,8 +451,7 @@ QueueItem QueueModel::peek() const {
   return m_items.first();
 }
 
-void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg,
-                               const QString &rawResponse) {
+void QueueModel::requeueFailed(const QueueItem &item, const QString &errorMsg, const QString &rawResponse) {
   // Usually we want failed items to stay at the front of the queue to be
   // retried
   QueueItem updatedItem = item;
@@ -511,21 +485,17 @@ QueueItem QueueModel::getItem(int index) const {
 }
 
 void QueueModel::moveItem(int from, int to) {
-  if (from < 0 || from >= m_items.size() || to < 0 || to >= m_items.size() ||
-      from == to) {
+  if (from < 0 || from >= m_items.size() || to < 0 || to >= m_items.size() || from == to) {
     return;
   }
 
   int destinationChild = (to > from) ? to + 1 : to;
 
-  if (beginMoveRows(QModelIndex(), from, from, QModelIndex(),
-                    destinationChild)) {
+  if (beginMoveRows(QModelIndex(), from, from, QModelIndex(), destinationChild)) {
     if (from < to)
-      std::rotate(m_items.begin() + from, m_items.begin() + from + 1,
-                  m_items.begin() + to + 1);
+      std::rotate(m_items.begin() + from, m_items.begin() + from + 1, m_items.begin() + to + 1);
     else
-      std::rotate(m_items.begin() + to, m_items.begin() + from,
-                  m_items.begin() + from + 1);
+      std::rotate(m_items.begin() + to, m_items.begin() + from, m_items.begin() + from + 1);
     endMoveRows();
     mergeWaitItems();
     save();
@@ -545,8 +515,7 @@ void QueueModel::refreshWaitItems() {
     }
   }
   if (start != -1) {
-    Q_EMIT dataChanged(index(start, 0), index(m_items.size() - 1, 0),
-                       {StatusRole});
+    Q_EMIT dataChanged(index(start, 0), index(m_items.size() - 1, 0), {StatusRole});
   }
 }
 
@@ -634,9 +603,7 @@ void QueueModel::clear() {
 }
 
 void QueueModel::load() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-      QStringLiteral("/") + m_filename;
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + m_filename;
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
     return;
@@ -649,16 +616,13 @@ void QueueModel::load() {
   if (doc.isObject()) {
     QJsonObject topObj = doc.object();
     if (topObj.contains(QStringLiteral("m_jobsSinceLastWait"))) {
-      m_jobsSinceLastWait =
-          topObj.value(QStringLiteral("m_jobsSinceLastWait")).toInt();
+      m_jobsSinceLastWait = topObj.value(QStringLiteral("m_jobsSinceLastWait")).toInt();
     }
     if (topObj.contains(QStringLiteral("m_runTimestamps"))) {
-      QJsonArray tsArr =
-          topObj.value(QStringLiteral("m_runTimestamps")).toArray();
+      QJsonArray tsArr = topObj.value(QStringLiteral("m_runTimestamps")).toArray();
       m_runTimestamps.clear();
       for (int i = 0; i < tsArr.size(); ++i) {
-        m_runTimestamps.append(
-            QDateTime::fromString(tsArr[i].toString(), Qt::ISODate));
+        m_runTimestamps.append(QDateTime::fromString(tsArr[i].toString(), Qt::ISODate));
       }
     }
     arr = topObj.value(QStringLiteral("items")).toArray();
@@ -712,8 +676,7 @@ void QueueModel::mergeWaitItems() {
 
 void QueueModel::removeTrailingWaitItems() {
   int firstWaitToRemove = m_items.size();
-  while (firstWaitToRemove > 0 &&
-         m_items.at(firstWaitToRemove - 1).isWaitItem) {
+  while (firstWaitToRemove > 0 && m_items.at(firstWaitToRemove - 1).isWaitItem) {
     firstWaitToRemove--;
   }
 
@@ -735,8 +698,7 @@ void QueueModel::save() {
   if (m_batchUpdating)
     return;
 
-  QString dirPath =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString dirPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(dirPath);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
@@ -745,8 +707,7 @@ void QueueModel::save() {
   QString path = dirPath + QStringLiteral("/") + m_filename;
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly)) {
-    qWarning() << "Failed to open queue.json for writing:"
-               << file.errorString();
+    qWarning() << "Failed to open queue.json for writing:" << file.errorString();
     return;
   }
 

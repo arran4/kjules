@@ -6,9 +6,7 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
-ErrorsModel::ErrorsModel(QObject *parent) : QAbstractListModel(parent) {
-  loadErrors();
-}
+ErrorsModel::ErrorsModel(QObject *parent) : QAbstractListModel(parent) { loadErrors(); }
 
 int ErrorsModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -33,16 +31,14 @@ QVariant ErrorsModel::data(const QModelIndex &index, int role) const {
     return error.value(QStringLiteral("httpDetails")).toString();
   case TimestampRole:
     if (error.contains(QStringLiteral("timestamp"))) {
-      QDateTime dt = QDateTime::fromString(
-          error.value(QStringLiteral("timestamp")).toString(), Qt::ISODate);
+      QDateTime dt = QDateTime::fromString(error.value(QStringLiteral("timestamp")).toString(), Qt::ISODate);
       if (dt.isValid()) {
         return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
       }
     }
     return QVariant();
   case Qt::DisplayRole:
-    return error.value(QStringLiteral("message"))
-        .toString(); // Display error message as title
+    return error.value(QStringLiteral("message")).toString(); // Display error message as title
   default:
     return QVariant();
   }
@@ -88,8 +84,7 @@ QJsonObject ErrorsModel::getError(int row) const {
 }
 
 void ErrorsModel::loadErrors() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QFile file(path + QStringLiteral("/errors.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -99,8 +94,7 @@ void ErrorsModel::loadErrors() {
 }
 
 void ErrorsModel::saveErrors() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));

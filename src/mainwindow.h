@@ -64,25 +64,20 @@ private Q_SLOTS:
 
   void switchToFollowingTab();
   void onSessionReloaded(const QJsonObject &session);
-  void addGithubLink(QMenu *githubMenu, const QString &urlStr,
-                     const QString &title, const QString &path);
+  void addGithubLink(QMenu *githubMenu, const QString &urlStr, const QString &title, const QString &path);
 
   void updateCompletions();
   void refreshSources();
   void refreshGithubDataForSources(const QStringList &sourceIds);
-  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(),
-                            bool ignoreSelection = false);
+  void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(), bool ignoreSelection = false);
   void showCreateRepoDialog();
   void showSourceStatusDialog(const QString &sourceName);
   void showManageCustomSourcesDialog();
   void showSettingsDialog();
-  void onSessionCreated(const QMultiMap<QString, QString> &sources,
-                        const QString &prompt, const QString &automationMode,
-                        bool requirePlanApproval, bool ignoreConcurrency);
-  void onCreateRepoAndSession(const QString &org, const QString &repoName,
-                              bool isPrivate, const QString &prompt,
-                              const QString &automationMode,
-                              bool requirePlanApproval, bool ignoreConcurrency);
+  void onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
+                        const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
+  void onCreateRepoAndSession(const QString &org, const QString &repoName, bool isPrivate, const QString &prompt,
+                              const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
   void onDraftSaved(const QJsonObject &draft);
   void onDraftActivated(const QModelIndex &index);
   void onTemplateSaved(const QJsonObject &tmpl);
@@ -93,9 +88,7 @@ private Q_SLOTS:
   void onHoldingContextMenu(const QPoint &pos);
   void onBlockedContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
-  void onSessionCreationFailed(const QJsonObject &request,
-                               const QJsonObject &response,
-                               const QString &errorString,
+  void onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response, const QString &errorString,
                                const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
@@ -109,10 +102,8 @@ private Q_SLOTS:
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished();
   void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
-  void onGithubBranchesReceived(const QString &sourceId,
-                                const QJsonArray &branches);
-  void onGithubPullRequestInfoReceived(const QString &prUrl,
-                                       const QJsonObject &info);
+  void onGithubBranchesReceived(const QString &sourceId, const QJsonArray &branches);
+  void onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
   void cancelSourcesRefresh();
   void updateSessionStats();
   void updateTrayToolTip();
@@ -130,11 +121,9 @@ private Q_SLOTS:
   void updateBlockedTabVisibility();
   void processErrorRetries();
 
-  void onSessionCreatedResult(bool success, const QJsonObject &session,
-                              const QString &errorMsg,
+  void onSessionCreatedResult(bool success, const QJsonObject &session, const QString &errorMsg,
                               const QString &rawResponse = QString());
-  void onGithubRepoCreatedResult(bool success, const QJsonObject &requestData,
-                                 const QJsonObject &response,
+  void onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
                                  const QString &errorMsg);
   void sendQueueItemNow(int row);
   void editQueueItem(int row);
@@ -148,8 +137,7 @@ private Q_SLOTS:
   void importTemplates();
   void copyTemplateToClipboard(const QModelIndex &index);
   void pasteTemplateFromClipboard();
-  void duplicateFollowingItemsToQueue(const QString &targetState,
-                                      const QString &stateName);
+  void duplicateFollowingItemsToQueue(const QString &targetState, const QString &stateName);
   void toggleQueueState();
   void loadQueueSettings();
   void updateTabTitles();
@@ -165,13 +153,10 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
-  QList<int> getUniqueSortedRows(const QModelIndexList &selectedRows,
-                                 const QAbstractItemView *view) const;
+  QList<int> getUniqueSortedRows(const QModelIndexList &selectedRows, const QAbstractItemView *view) const;
 
   void applyFavouriteAction(
-      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *,
-                         const QModelIndexList &, int)>
-          action);
+      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QModelIndexList &, int)> action);
 
   QStringList getSelectedSessionIds() const;
   QString urlFromSourceId(const QString &id) const;

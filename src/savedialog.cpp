@@ -8,8 +8,7 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-SaveDialog::SaveDialog(const QString &type, QWidget *parent)
-    : QDialog(parent), m_type(type) {
+SaveDialog::SaveDialog(const QString &type, QWidget *parent) : QDialog(parent), m_type(type) {
   setWindowTitle(QStringLiteral("Save as ") + type);
   resize(400, type == QStringLiteral("Template") ? 300 : 150);
 
@@ -45,8 +44,7 @@ SaveDialog::SaveDialog(const QString &type, QWidget *parent)
   mainLayout->addLayout(buttonLayout);
 }
 
-void SaveDialog::setInitialData(const QString &nameOrComment,
-                                const QString &description) {
+void SaveDialog::setInitialData(const QString &nameOrComment, const QString &description) {
   m_nameEdit->setText(nameOrComment);
   m_descEdit->setPlainText(description);
 }

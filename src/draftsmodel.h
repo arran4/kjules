@@ -9,18 +9,12 @@ class DraftsModel : public QAbstractListModel {
   Q_OBJECT
 
 public:
-  enum DraftRoles {
-    SourceRole = Qt::UserRole + 1,
-    PromptRole,
-    AutomationModeRole,
-    CommentRole
-  };
+  enum DraftRoles { SourceRole = Qt::UserRole + 1, PromptRole, AutomationModeRole, CommentRole };
 
   explicit DraftsModel(QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-  QVariant data(const QModelIndex &index,
-                int role = Qt::DisplayRole) const override;
+  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
   void addDraft(const QJsonObject &draft);

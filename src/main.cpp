@@ -22,30 +22,22 @@ int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
   KLocalizedString::setApplicationDomain("kjules");
 
-  KAboutData aboutData(
-      QStringLiteral("org.kde.kjules"), i18n("kJules"),
-      QStringLiteral(KJULES_VERSION),
-      i18n(
-          "A KDE native desktop client for tracking and managing GitHub tasks"),
-      KAboutLicense::GPL, i18n("(c) 2024"),
-      QStringLiteral("https://github.com/yourusername/kjules"),
-      QStringLiteral("submit@bugs.kde.org"));
+  KAboutData aboutData(QStringLiteral("org.kde.kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
+                       i18n("A KDE native desktop client for tracking and managing GitHub tasks"), KAboutLicense::GPL,
+                       i18n("(c) 2024"), QStringLiteral("https://github.com/yourusername/kjules"),
+                       QStringLiteral("submit@bugs.kde.org"));
 
-  aboutData.addAuthor(i18n("Jules"), i18n("Developer"),
-                      QStringLiteral("jules@kde.org"));
+  aboutData.addAuthor(i18n("Jules"), i18n("Developer"), QStringLiteral("jules@kde.org"));
   aboutData.setDesktopFileName(QStringLiteral("org.kde.kjules"));
   KAboutData::setApplicationData(aboutData);
 
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
 
-  QCommandLineOption autostartedOption(QStringList()
-                                           << QStringLiteral("autostarted"),
-                                       i18n("Launched via autostart"));
+  QCommandLineOption autostartedOption(QStringList() << QStringLiteral("autostarted"), i18n("Launched via autostart"));
   parser.addOption(autostartedOption);
 
-  QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"),
-                                   i18n("Use mock API at localhost:8080"));
+  QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"), i18n("Use mock API at localhost:8080"));
   parser.addOption(mockApiOption);
 
   parser.process(app);

@@ -10,8 +10,7 @@
 #include <QSortFilterProxyModel>
 #include <QVBoxLayout>
 
-TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel,
-                                                 QWidget *parent)
+TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel, QWidget *parent)
     : QDialog(parent), m_templatesModel(templatesModel) {
   setWindowTitle(tr("Select Template"));
   resize(500, 400);
@@ -50,14 +49,11 @@ TemplateSelectionDialog::TemplateSelectionDialog(TemplatesModel *templatesModel,
   mainLayout->addLayout(buttonLayout);
 
   connect(m_filterEdit, &QLineEdit::textChanged, this,
-          [this](const QString &text) {
-            m_proxyModel->setFilterFixedString(text);
-          });
+          [this](const QString &text) { m_proxyModel->setFilterFixedString(text); });
 
-  connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
-          this, &TemplateSelectionDialog::onSelectionChanged);
-  connect(m_listView, &QListView::doubleClicked, this,
-          &TemplateSelectionDialog::onDoubleClicked);
+  connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+          &TemplateSelectionDialog::onSelectionChanged);
+  connect(m_listView, &QListView::doubleClicked, this, &TemplateSelectionDialog::onDoubleClicked);
 }
 
 void TemplateSelectionDialog::onSelectionChanged() {
@@ -79,6 +75,4 @@ void TemplateSelectionDialog::onDoubleClicked() {
   }
 }
 
-QJsonObject TemplateSelectionDialog::selectedTemplate() const {
-  return m_selectedTemplate;
-}
+QJsonObject TemplateSelectionDialog::selectedTemplate() const { return m_selectedTemplate; }

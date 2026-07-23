@@ -32,10 +32,8 @@ public:
   QLineEdit *keyEdit;
   QWidget *valueWidget; // Can be QLineEdit, QComboBox, or QDateTimeEdit
 
-  FilterInputDialog(const QString &promptKey, bool requireKey,
-                    const QStringList &completions,
-                    const QString &itemKey = QString(),
-                    QWidget *parent = nullptr)
+  FilterInputDialog(const QString &promptKey, bool requireKey, const QStringList &completions,
+                    const QString &itemKey = QString(), QWidget *parent = nullptr)
       : QDialog(parent) {
     QVBoxLayout *layout = new QVBoxLayout(this);
     if (requireKey) {
@@ -49,14 +47,11 @@ public:
     layout->addWidget(new QLabel(promptKey, this));
 
     QString lowerKey = itemKey.toLower();
-    bool isDate = lowerKey.endsWith(QStringLiteral("before")) ||
-                  lowerKey.endsWith(QStringLiteral("after")) ||
-                  lowerKey == QStringLiteral("createdat") ||
-                  lowerKey == QStringLiteral("updatedat");
+    bool isDate = lowerKey.endsWith(QStringLiteral("before")) || lowerKey.endsWith(QStringLiteral("after")) ||
+                  lowerKey == QStringLiteral("createdat") || lowerKey == QStringLiteral("updatedat");
 
     if (isDate) {
-      QDateTimeEdit *dtEdit =
-          new QDateTimeEdit(QDateTime::currentDateTime(), this);
+      QDateTimeEdit *dtEdit = new QDateTimeEdit(QDateTime::currentDateTime(), this);
       dtEdit->setCalendarPopup(true);
       dtEdit->setDisplayFormat(QStringLiteral("yyyy-MM-ddTHH:mm:ss"));
       valueWidget = dtEdit;
@@ -101,19 +96,12 @@ public:
   }
 };
 
-enum FilterItemRoles {
-  NodeTypeRole = Qt::UserRole + 1,
-  NodeValueRole,
-  NodeKeyRole,
-  NodeChildCountRole
-};
+enum FilterItemRoles { NodeTypeRole = Qt::UserRole + 1, NodeValueRole, NodeKeyRole, NodeChildCountRole };
 
 enum NodeType { TypeAnd, TypeOr, TypeNot, TypeIn, TypeKV, TypeKeyword };
 
-static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
-                                                  const QString &type,
-                                                  const QString &value,
-                                                  bool isHide, bool &merged) {
+static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node, const QString &type,
+                                                  const QString &value, bool isHide, bool &merged) {
   if (!node)
     return QSharedPointer<ASTNode>();
 
@@ -126,8 +114,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
           orChildren.append(child);
           orChildren.append(QSharedPointer<KeyValueNode>::create(type, value));
           merged = true;
-          return QSharedPointer<NotNode>::create(
-              QSharedPointer<OrNode>::create(orChildren));
+          return QSharedPointer<NotNode>::create(QSharedPointer<OrNode>::create(orChildren));
         }
       } else if (auto orChild = qSharedPointerDynamicCast<OrNode>(child)) {
         bool allSameType = true;
@@ -140,11 +127,9 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
         }
         if (allSameType) {
           QList<QSharedPointer<ASTNode>> newOrChildren = orChild->children();
-          newOrChildren.append(
-              QSharedPointer<KeyValueNode>::create(type, value));
+          newOrChildren.append(QSharedPointer<KeyValueNode>::create(type, value));
           merged = true;
-          return QSharedPointer<NotNode>::create(
-              QSharedPointer<OrNode>::create(newOrChildren));
+          return QSharedPointer<NotNode>::create(QSharedPointer<OrNode>::create(newOrChildren));
         }
       }
     }
@@ -161,8 +146,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
       }
       if (allSameType) {
         QList<QSharedPointer<ASTNode>> newOrChildren = orNode->children();
-        newOrChildren.append(
-            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+        newOrChildren.append(QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
         merged = true;
         return QSharedPointer<ASTNode>(new OrNode(newOrChildren));
       }
@@ -170,8 +154,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
       if (kvNode->key() == type) {
         QList<QSharedPointer<ASTNode>> orChildren;
         orChildren.append(node);
-        orChildren.append(
-            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+        orChildren.append(QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
         merged = true;
         return QSharedPointer<ASTNode>(new OrNode(orChildren));
       }
@@ -182,8 +165,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
     QList<QSharedPointer<ASTNode>> newChildren;
     for (const auto &child : andNode->children()) {
       if (!merged) {
-        newChildren.append(
-            mergeFilterIntoAST(child, type, value, isHide, merged));
+        newChildren.append(mergeFilterIntoAST(child, type, value, isHide, merged));
       } else {
         newChildren.append(child);
       }
@@ -193,8 +175,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
     QList<QSharedPointer<ASTNode>> newChildren;
     for (const auto &child : orNode->children()) {
       if (!merged) {
-        newChildren.append(
-            mergeFilterIntoAST(child, type, value, isHide, merged));
+        newChildren.append(mergeFilterIntoAST(child, type, value, isHide, merged));
       } else {
         newChildren.append(child);
       }
@@ -202,8 +183,7 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
     return QSharedPointer<ASTNode>(new OrNode(newChildren));
   } else if (auto notNode = qSharedPointerDynamicCast<NotNode>(node)) {
     if (!merged) {
-      auto newChild =
-          mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
+      auto newChild = mergeFilterIntoAST(notNode->child(), type, value, isHide, merged);
       return QSharedPointer<ASTNode>(new NotNode(newChild));
     }
   }
@@ -211,9 +191,8 @@ static QSharedPointer<ASTNode> mergeFilterIntoAST(QSharedPointer<ASTNode> node,
   return node;
 }
 
-QString FilterEditor::applyQuickFilter(const QString &currentFilter,
-                                       const QString &type,
-                                       const QString &value, bool isHide) {
+QString FilterEditor::applyQuickFilter(const QString &currentFilter, const QString &type, const QString &value,
+                                       bool isHide) {
   QString current = currentFilter.trimmed();
   if (current.startsWith(QLatin1Char('='))) {
     current = current.mid(1).trimmed();
@@ -223,8 +202,7 @@ QString FilterEditor::applyQuickFilter(const QString &currentFilter,
 
   if (!ast || current.isEmpty()) {
     if (isHide) {
-      ast = QSharedPointer<ASTNode>(
-          new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
+      ast = QSharedPointer<ASTNode>(new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value))));
     } else {
       ast = QSharedPointer<ASTNode>(new KeyValueNode(type, value));
     }
@@ -241,11 +219,10 @@ QString FilterEditor::applyQuickFilter(const QString &currentFilter,
       }
 
       if (isHide) {
-        andChildren.append(QSharedPointer<ASTNode>(new NotNode(
-            QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
-      } else {
         andChildren.append(
-            QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
+            QSharedPointer<ASTNode>(new NotNode(QSharedPointer<ASTNode>(new KeyValueNode(type, value)))));
+      } else {
+        andChildren.append(QSharedPointer<ASTNode>(new KeyValueNode(type, value)));
       }
       ast = QSharedPointer<ASTNode>(new AndNode(andChildren));
     }
@@ -254,8 +231,7 @@ QString FilterEditor::applyQuickFilter(const QString &currentFilter,
   return QStringLiteral("=") + ast->toString();
 }
 
-FilterEditor::FilterEditor(QWidget *parent)
-    : QWidget(parent), m_updating(false), m_userDismissed(false) {
+FilterEditor::FilterEditor(QWidget *parent) : QWidget(parent), m_updating(false), m_userDismissed(false) {
   QHBoxLayout *layout = new QHBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(2);
@@ -291,23 +267,20 @@ FilterEditor::FilterEditor(QWidget *parent)
   m_paletteList->setDropIndicatorShown(false);
   m_paletteList->setDefaultDropAction(Qt::CopyAction);
 
-  QStringList paletteItems = {
-      QStringLiteral("AND"),           QStringLiteral("OR"),
-      QStringLiteral("NOT"),           QStringLiteral("IN"),
-      QStringLiteral("state:"),        QStringLiteral("repo:"),
-      QStringLiteral("owner:"),        QStringLiteral("language:"),
-      QStringLiteral("archived:"),     QStringLiteral("fork:"),
-      QStringLiteral("private:"),      QStringLiteral("created-before:"),
-      QStringLiteral("updated-after:")};
+  QStringList paletteItems = {QStringLiteral("AND"),           QStringLiteral("OR"),
+                              QStringLiteral("NOT"),           QStringLiteral("IN"),
+                              QStringLiteral("state:"),        QStringLiteral("repo:"),
+                              QStringLiteral("owner:"),        QStringLiteral("language:"),
+                              QStringLiteral("archived:"),     QStringLiteral("fork:"),
+                              QStringLiteral("private:"),      QStringLiteral("created-before:"),
+                              QStringLiteral("updated-after:")};
   for (const QString &itemText : paletteItems) {
     QListWidgetItem *item = new QListWidgetItem(itemText, m_paletteList);
-    item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsDragEnabled |
-                   Qt::ItemIsEnabled);
+    item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsDragEnabled | Qt::ItemIsEnabled);
   }
 
   m_popupFrame = new QFrame(this);
-  m_popupFrame->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint |
-                               Qt::WindowStaysOnTopHint);
+  m_popupFrame->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
   m_popupFrame->setAttribute(Qt::WA_ShowWithoutActivating);
   m_popupFrame->setFocusPolicy(Qt::NoFocus);
   m_popupFrame->setFrameShape(QFrame::StyledPanel);
@@ -350,8 +323,7 @@ FilterEditor::FilterEditor(QWidget *parent)
     }
   });
 
-  connect(dismissBtn, &QToolButton::clicked, this,
-          &FilterEditor::dismissFormulaBuilder);
+  connect(dismissBtn, &QToolButton::clicked, this, &FilterEditor::dismissFormulaBuilder);
 
   this->installEventFilter(this);
   if (parent) {
@@ -361,63 +333,53 @@ FilterEditor::FilterEditor(QWidget *parent)
     }
   }
 
-  connect(m_lineEdit, &QLineEdit::textChanged, this,
-          &FilterEditor::onTextChanged);
-  connect(m_lineEdit, &QLineEdit::returnPressed, this,
-          &FilterEditor::returnPressed);
-  connect(m_treeView, &QTreeView::customContextMenuRequested, this,
-          &FilterEditor::onTreeContextMenu);
-  connect(m_treeModel, &QStandardItemModel::itemChanged, this,
-          &FilterEditor::onTreeItemChanged);
-  connect(m_treeModel, &QStandardItemModel::rowsInserted, this,
-          [this](const QModelIndex &parent, int first, int last) {
-            if (m_updating)
-              return;
-            m_updating = true;
-            QStandardItem *parentItem = parent.isValid()
-                                            ? m_treeModel->itemFromIndex(parent)
-                                            : m_treeModel->invisibleRootItem();
-            for (int i = first; i <= last; ++i) {
-              QStandardItem *child = parentItem->child(i);
-              if (child && !child->data(NodeTypeRole).isValid()) {
-                QString text = child->text();
-                handleNewItem(child, text);
-              }
-            }
-            m_updating = false;
-            updateTextFromTree();
-          });
+  connect(m_lineEdit, &QLineEdit::textChanged, this, &FilterEditor::onTextChanged);
+  connect(m_lineEdit, &QLineEdit::returnPressed, this, &FilterEditor::returnPressed);
+  connect(m_treeView, &QTreeView::customContextMenuRequested, this, &FilterEditor::onTreeContextMenu);
+  connect(m_treeModel, &QStandardItemModel::itemChanged, this, &FilterEditor::onTreeItemChanged);
+  connect(m_treeModel, &QStandardItemModel::rowsInserted, this, [this](const QModelIndex &parent, int first, int last) {
+    if (m_updating)
+      return;
+    m_updating = true;
+    QStandardItem *parentItem =
+        parent.isValid() ? m_treeModel->itemFromIndex(parent) : m_treeModel->invisibleRootItem();
+    for (int i = first; i <= last; ++i) {
+      QStandardItem *child = parentItem->child(i);
+      if (child && !child->data(NodeTypeRole).isValid()) {
+        QString text = child->text();
+        handleNewItem(child, text);
+      }
+    }
+    m_updating = false;
+    updateTextFromTree();
+  });
   connect(m_treeModel, &QStandardItemModel::rowsRemoved, this, [this]() {
     if (!m_updating)
       updateTextFromTree();
   });
-  connect(m_paletteList, &QListWidget::itemDoubleClicked, this,
-          [this](QListWidgetItem *item) {
-            if (!item)
-              return;
-            QString text = item->text();
-            QModelIndexList sel =
-                m_treeView->selectionModel()->selectedIndexes();
-            QStandardItem *parent = m_treeModel->invisibleRootItem();
-            if (!sel.isEmpty()) {
-              QStandardItem *selItem = m_treeModel->itemFromIndex(sel.first());
-              if (selItem && (selItem->data(NodeTypeRole).toInt() == TypeAnd ||
-                              selItem->data(NodeTypeRole).toInt() == TypeOr ||
-                              selItem->data(NodeTypeRole).toInt() == TypeNot)) {
-                parent = selItem;
-              } else if (selItem) {
-                parent = selItem->parent() ? selItem->parent()
-                                           : m_treeModel->invisibleRootItem();
-              }
-            }
-            QStandardItem *newItem = new QStandardItem(text);
-            m_updating = true;
-            handleNewItem(newItem, text);
-            parent->appendRow(newItem);
-            m_updating = false;
-            updateTextFromTree();
-            m_treeView->expandAll();
-          });
+  connect(m_paletteList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
+    if (!item)
+      return;
+    QString text = item->text();
+    QModelIndexList sel = m_treeView->selectionModel()->selectedIndexes();
+    QStandardItem *parent = m_treeModel->invisibleRootItem();
+    if (!sel.isEmpty()) {
+      QStandardItem *selItem = m_treeModel->itemFromIndex(sel.first());
+      if (selItem && (selItem->data(NodeTypeRole).toInt() == TypeAnd || selItem->data(NodeTypeRole).toInt() == TypeOr ||
+                      selItem->data(NodeTypeRole).toInt() == TypeNot)) {
+        parent = selItem;
+      } else if (selItem) {
+        parent = selItem->parent() ? selItem->parent() : m_treeModel->invisibleRootItem();
+      }
+    }
+    QStandardItem *newItem = new QStandardItem(text);
+    m_updating = true;
+    handleNewItem(newItem, text);
+    parent->appendRow(newItem);
+    m_updating = false;
+    updateTextFromTree();
+    m_treeView->expandAll();
+  });
   connect(m_treeModel, &QStandardItemModel::rowsMoved, this, [this]() {
     if (!m_updating)
       updateTextFromTree();
@@ -428,24 +390,18 @@ QString FilterEditor::filterText() const { return m_lineEdit->text(); }
 
 void FilterEditor::focusInput() { m_lineEdit->setFocus(); }
 
-void FilterEditor::setCompletions(
-    const QMap<QString, QStringList> &completions) {
-  m_completions = completions;
-}
+void FilterEditor::setCompletions(const QMap<QString, QStringList> &completions) { m_completions = completions; }
 
 FilterEditor::~FilterEditor() {
   if (parentWidget()) {
     parentWidget()->removeEventFilter(this);
-    if (parentWidget()->window() &&
-        parentWidget()->window() != parentWidget()) {
+    if (parentWidget()->window() && parentWidget()->window() != parentWidget()) {
       parentWidget()->window()->removeEventFilter(this);
     }
   }
 }
 
-void FilterEditor::toggleFormulaBuilder() {
-  m_toggleButton->setChecked(!m_toggleButton->isChecked());
-}
+void FilterEditor::toggleFormulaBuilder() { m_toggleButton->setChecked(!m_toggleButton->isChecked()); }
 
 void FilterEditor::dismissFormulaBuilder() {
   m_userDismissed = true;
@@ -470,19 +426,15 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
       m_toggleButton->setChecked(true);
     } else if (event->type() == QEvent::FocusOut) {
       QWidget *reasonWidget = QApplication::focusWidget();
-      bool focusInPopup =
-          reasonWidget && (m_popupFrame->isAncestorOf(reasonWidget) ||
-                           reasonWidget == m_popupFrame);
-      if (!focusInPopup && reasonWidget != m_toggleButton &&
-          reasonWidget != this) {
+      bool focusInPopup = reasonWidget && (m_popupFrame->isAncestorOf(reasonWidget) || reasonWidget == m_popupFrame);
+      if (!focusInPopup && reasonWidget != m_toggleButton && reasonWidget != this) {
         m_popupFrame->hide();
         m_toggleButton->setChecked(false);
       }
     }
   }
 
-  if (event->type() == QEvent::Move || event->type() == QEvent::Resize ||
-      event->type() == QEvent::Show) {
+  if (event->type() == QEvent::Move || event->type() == QEvent::Resize || event->type() == QEvent::Show) {
     if (m_popupFrame->isVisible()) {
       updatePopupPosition();
     }
@@ -492,9 +444,7 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
 
 void FilterEditor::setFilterText(const QString &text) {
   m_updating = true;
-  QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' '))
-                        ? text
-                        : text + QLatin1Char(' ');
+  QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' ')) ? text : text + QLatin1Char(' ');
   m_lineEdit->setText(newText);
   m_toggleButton->setVisible(true);
   if (!m_userDismissed && m_lineEdit->hasFocus()) {
@@ -541,8 +491,7 @@ void FilterEditor::updateTreeFromText() {
   }
 }
 
-void FilterEditor::populateTree(QStandardItem *parentItem,
-                                QSharedPointer<ASTNode> node) {
+void FilterEditor::populateTree(QStandardItem *parentItem, QSharedPointer<ASTNode> node) {
   if (!node)
     return;
 
@@ -568,8 +517,7 @@ void FilterEditor::populateTree(QStandardItem *parentItem,
     item->setData(TypeNot, NodeTypeRole);
     populateTree(item, notNode->child());
   } else if (auto inNode = qSharedPointerDynamicCast<InNode>(node)) {
-    item->setText(inNode->key() + QStringLiteral(" IN \"") +
-                  inNode->valuesStr() + QStringLiteral("\""));
+    item->setText(inNode->key() + QStringLiteral(" IN \"") + inNode->valuesStr() + QStringLiteral("\""));
     item->setData(TypeIn, NodeTypeRole);
     item->setData(inNode->key(), NodeKeyRole);
     item->setData(inNode->valuesStr(), NodeValueRole);
@@ -618,8 +566,7 @@ void FilterEditor::onTreeContextMenu(const QPoint &pos) {
 
   if (type == TypeKV || type == TypeKeyword || type == TypeIn) {
     menu.addAction(tr("Exclude (NOT this)"), this, [this, item]() {
-      QStandardItem *parent =
-          item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
+      QStandardItem *parent = item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
       int row = item->row();
       QStandardItem *taken = parent->takeRow(row).first();
       QStandardItem *notItem = new QStandardItem(QStringLiteral("NOT"));
@@ -630,8 +577,7 @@ void FilterEditor::onTreeContextMenu(const QPoint &pos) {
     });
   } else if (type == TypeNot) {
     menu.addAction(tr("Include (Remove NOT)"), this, [this, item]() {
-      QStandardItem *parent =
-          item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
+      QStandardItem *parent = item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
       int row = item->row();
       if (item->rowCount() > 0) {
         QStandardItem *child = item->takeRow(0).first();
@@ -645,8 +591,7 @@ void FilterEditor::onTreeContextMenu(const QPoint &pos) {
   }
 
   menu.addAction(tr("Delete"), this, [this, item]() {
-    QStandardItem *parent =
-        item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
+    QStandardItem *parent = item->parent() ? item->parent() : m_treeModel->invisibleRootItem();
     parent->removeRow(item->row());
     updateTextFromTree();
   });
@@ -692,29 +637,26 @@ bool FilterEditor::handleNewItem(QStandardItem *newItem, const QString &text) {
   } else if (text == QStringLiteral("IN")) {
     newItem->setData(TypeIn, NodeTypeRole);
     newItem->setEditable(true);
-    FilterInputDialog dlg(tr("Enter values (comma separated):"), true,
-                          QStringList(), QString(), this);
+    FilterInputDialog dlg(tr("Enter values (comma separated):"), true, QStringList(), QString(), this);
     if (dlg.exec() == QDialog::Accepted) {
       QString key = dlg.getKey();
       QString value = dlg.getValue();
       newItem->setData(key, NodeKeyRole);
       newItem->setData(value, NodeValueRole);
-      newItem->setText(key + QStringLiteral(" IN \"") + value +
-                       QStringLiteral("\""));
+      newItem->setText(key + QStringLiteral(" IN \"") + value + QStringLiteral("\""));
     }
   } else if (text.endsWith(QLatin1Char(':'))) {
     newItem->setData(TypeKV, NodeTypeRole);
     newItem->setEditable(true);
     QString key = text.left(text.length() - 1);
     newItem->setData(key, NodeKeyRole);
-    FilterInputDialog dlg(tr("Enter value for ") + key + QStringLiteral(":"),
-                          false, m_completions.value(key.toLower()), key, this);
+    FilterInputDialog dlg(tr("Enter value for ") + key + QStringLiteral(":"), false, m_completions.value(key.toLower()),
+                          key, this);
     if (dlg.exec() == QDialog::Accepted) {
       QString value = dlg.getValue();
       newItem->setData(value, NodeValueRole);
       if (value.contains(QLatin1Char(' ')))
-        newItem->setText(text + QStringLiteral("\"") + value +
-                         QStringLiteral("\""));
+        newItem->setText(text + QStringLiteral("\"") + value + QStringLiteral("\""));
       else
         newItem->setText(text + value);
     }
@@ -764,20 +706,16 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
     return QSharedPointer<ASTNode>(new OrNode(children));
   } else if (type == TypeNot) {
     if (item->rowCount() > 0) {
-      return QSharedPointer<ASTNode>(
-          new NotNode(buildASTFromTree(item->child(0))));
+      return QSharedPointer<ASTNode>(new NotNode(buildASTFromTree(item->child(0))));
     }
   } else if (type == TypeIn) {
     return QSharedPointer<ASTNode>(
-        new InNode(item->data(NodeKeyRole).toString(),
-                   item->data(NodeValueRole).toString()));
+        new InNode(item->data(NodeKeyRole).toString(), item->data(NodeValueRole).toString()));
   } else if (type == TypeKV) {
     return QSharedPointer<ASTNode>(
-        new KeyValueNode(item->data(NodeKeyRole).toString(),
-                         item->data(NodeValueRole).toString()));
+        new KeyValueNode(item->data(NodeKeyRole).toString(), item->data(NodeValueRole).toString()));
   } else if (type == TypeKeyword) {
-    return QSharedPointer<ASTNode>(
-        new KeywordNode(item->data(NodeValueRole).toString()));
+    return QSharedPointer<ASTNode>(new KeywordNode(item->data(NodeValueRole).toString()));
   }
   return QSharedPointer<ASTNode>();
 }
@@ -785,11 +723,10 @@ QSharedPointer<ASTNode> FilterEditor::buildASTFromTree(QStandardItem *item) {
 void FilterEditor::setSimplifiedMode(bool simplified) {
   if (simplified) {
     m_paletteList->clear();
-    m_paletteList->addItems(QStringList{
-        QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
-        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
-        QStringLiteral("language:"), QStringLiteral("fork:"),
-        QStringLiteral("private:"), QStringLiteral("archived:")});
+    m_paletteList->addItems(QStringList{QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"),
+                                        QStringLiteral("IN"), QStringLiteral("repo:"), QStringLiteral("owner:"),
+                                        QStringLiteral("language:"), QStringLiteral("fork:"),
+                                        QStringLiteral("private:"), QStringLiteral("archived:")});
   } else {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{QStringLiteral("OR"),

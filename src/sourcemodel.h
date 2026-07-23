@@ -9,12 +9,7 @@ class SourceModel : public QAbstractTableModel {
   Q_OBJECT
 
 public:
-  enum SourceRoles {
-    NameRole = Qt::UserRole + 1,
-    IdRole,
-    RawDataRole,
-    FavouriteRole
-  };
+  enum SourceRoles { NameRole = Qt::UserRole + 1, IdRole, RawDataRole, FavouriteRole };
   enum Columns {
     ColName = 0,
     ColLastUsed,
@@ -34,10 +29,8 @@ public:
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
   int columnCount(const QModelIndex &parent = QModelIndex()) const override;
-  QVariant data(const QModelIndex &index,
-                int role = Qt::DisplayRole) const override;
-  QVariant headerData(int section, Qt::Orientation orientation,
-                      int role = Qt::DisplayRole) const override;
+  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+  QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
   void setSources(const QJsonArray &sources);

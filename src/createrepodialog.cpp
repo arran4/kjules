@@ -27,8 +27,7 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   QFormLayout *formLayout = new QFormLayout();
 
   m_orgEdit = new QLineEdit(this);
-  m_orgEdit->setPlaceholderText(
-      i18n("Leave blank to use your own user account"));
+  m_orgEdit->setPlaceholderText(i18n("Leave blank to use your own user account"));
   formLayout->addRow(i18n("Organization / User:"), m_orgEdit);
 
   m_repoNameEdit = new QLineEdit(this);
@@ -55,28 +54,22 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   optionsLayout->addWidget(new QLabel(i18n("Automation Mode:")));
   optionsLayout->addWidget(m_automationModeComboBox);
 
-  m_requirePlanApprovalCheckBox =
-      new QCheckBox(i18n("Require Plan Approval"), this);
+  m_requirePlanApprovalCheckBox = new QCheckBox(i18n("Require Plan Approval"), this);
   optionsLayout->addWidget(m_requirePlanApprovalCheckBox);
 
-  m_ignoreConcurrencyCheckBox =
-      new QCheckBox(i18n("Bypass concurrency limits"), this);
+  m_ignoreConcurrencyCheckBox = new QCheckBox(i18n("Bypass concurrency limits"), this);
   optionsLayout->addWidget(m_ignoreConcurrencyCheckBox);
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
-                                       QStringLiteral("SourceConcurrency"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
 
   QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
   if (currentQueueMode.isEmpty()) {
-    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
-                           ? QStringLiteral("one_at_a_time")
-                           : QStringLiteral("asap");
+    currentQueueMode =
+        queueConfig.readEntry("OneAtATimeMode", false) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
 
-  bool hasAnyConcurrencyLimits =
-      (currentQueueMode == QStringLiteral("one_at_a_time"));
+  bool hasAnyConcurrencyLimits = (currentQueueMode == QStringLiteral("one_at_a_time"));
   if (!hasAnyConcurrencyLimits) {
     const QStringList sources = sourceConcurrencyConfig.keyList();
     for (const QString &source : sources) {
@@ -94,14 +87,10 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   mainLayout->addLayout(optionsLayout);
 
   // Dialog buttons
-  QDialogButtonBox *buttonBox =
-      new QDialogButtonBox(QDialogButtonBox::Cancel, this);
-  m_createButton =
-      buttonBox->addButton(i18n("Create"), QDialogButtonBox::AcceptRole);
-  connect(buttonBox, &QDialogButtonBox::accepted, this,
-          &CreateRepoDialog::onSubmit);
-  connect(buttonBox, &QDialogButtonBox::rejected, this,
-          &CreateRepoDialog::close);
+  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
+  m_createButton = buttonBox->addButton(i18n("Create"), QDialogButtonBox::AcceptRole);
+  connect(buttonBox, &QDialogButtonBox::accepted, this, &CreateRepoDialog::onSubmit);
+  connect(buttonBox, &QDialogButtonBox::rejected, this, &CreateRepoDialog::close);
   mainLayout->addWidget(buttonBox);
 
   setCentralWidget(centralWidget);
@@ -109,26 +98,23 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
   QStatusBar *statusBar = new QStatusBar(this);
   setStatusBar(statusBar);
 
-  connect(m_apiManager, &APIManager::githubUsernameFetched, this,
-          &CreateRepoDialog::onGithubUsernameFetched);
-  connect(m_apiManager, &APIManager::githubConnectionTested, this,
-          [this](bool success, const QString &message) {
-            if (!success) {
-              updateStatus(i18n("GitHub check failed: %1", message));
-              m_createButton->setEnabled(true);
-            } else {
-              QString scopes = m_apiManager->githubScopes();
-              if (scopes.isEmpty() ||
-                  (!scopes.contains(QStringLiteral("repo")) &&
-                   !scopes.contains(QStringLiteral("public_repo")))) {
-                updateStatus(i18n("Warning: GitHub token may lack 'repo' scope "
-                                  "required to create repositories."));
-              } else {
-                updateStatus(i18n("Ready."));
-              }
-              m_createButton->setEnabled(true);
-            }
-          });
+  connect(m_apiManager, &APIManager::githubUsernameFetched, this, &CreateRepoDialog::onGithubUsernameFetched);
+  connect(m_apiManager, &APIManager::githubConnectionTested, this, [this](bool success, const QString &message) {
+    if (!success) {
+      updateStatus(i18n("GitHub check failed: %1", message));
+      m_createButton->setEnabled(true);
+    } else {
+      QString scopes = m_apiManager->githubScopes();
+      if (scopes.isEmpty() ||
+          (!scopes.contains(QStringLiteral("repo")) && !scopes.contains(QStringLiteral("public_repo")))) {
+        updateStatus(i18n("Warning: GitHub token may lack 'repo' scope "
+                          "required to create repositories."));
+      } else {
+        updateStatus(i18n("Ready."));
+      }
+      m_createButton->setEnabled(true);
+    }
+  });
 }
 
 void CreateRepoDialog::showEvent(QShowEvent *event) {
@@ -143,13 +129,9 @@ void CreateRepoDialog::showEvent(QShowEvent *event) {
   }
 }
 
-void CreateRepoDialog::onGithubUsernameFetched(const QString &username) {
-  Q_UNUSED(username);
-}
+void CreateRepoDialog::onGithubUsernameFetched(const QString &username) { Q_UNUSED(username); }
 
-void CreateRepoDialog::updateStatus(const QString &message) {
-  statusBar()->showMessage(message);
-}
+void CreateRepoDialog::updateStatus(const QString &message) { statusBar()->showMessage(message); }
 
 void CreateRepoDialog::onSubmit() {
   QString repoName = m_repoNameEdit->text().trimmed();
@@ -170,8 +152,7 @@ void CreateRepoDialog::onSubmit() {
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
   bool ignoreConcurrency = m_ignoreConcurrencyCheckBox->isChecked();
 
-  Q_EMIT createRepoAndSessionRequested(org, repoName, isPrivate, prompt,
-                                       automationMode, requirePlanApproval,
+  Q_EMIT createRepoAndSessionRequested(org, repoName, isPrivate, prompt, automationMode, requirePlanApproval,
                                        ignoreConcurrency);
   close();
 }

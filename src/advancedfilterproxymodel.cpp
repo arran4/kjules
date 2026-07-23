@@ -5,32 +5,24 @@
 
 class ModelDataAccessor : public FilterDataAccessor {
 public:
-  ModelDataAccessor(QAbstractItemModel *m, int r, const QModelIndex &p)
-      : model(m), row(r), parent(p) {}
+  ModelDataAccessor(QAbstractItemModel *m, int r, const QModelIndex &p) : model(m), row(r), parent(p) {}
 
   QString getValue(const QString &key) const override {
     QString lowerKey = key.toLower();
-    static const QHash<QString, int> keyToColumn = {
-        {QStringLiteral("language"), SourceModel::ColLanguages},
-        {QStringLiteral("fork"), SourceModel::ColFork},
-        {QStringLiteral("private"), SourceModel::ColPrivate},
-        {QStringLiteral("archived"), SourceModel::ColArchived}};
+    static const QHash<QString, int> keyToColumn = {{QStringLiteral("language"), SourceModel::ColLanguages},
+                                                    {QStringLiteral("fork"), SourceModel::ColFork},
+                                                    {QStringLiteral("private"), SourceModel::ColPrivate},
+                                                    {QStringLiteral("archived"), SourceModel::ColArchived}};
 
     if (qobject_cast<SourceModel *>(model) && keyToColumn.contains(lowerKey)) {
-      return model
-          ->data(model->index(row, keyToColumn.value(lowerKey), parent),
-                 Qt::DisplayRole)
-          .toString();
+      return model->data(model->index(row, keyToColumn.value(lowerKey), parent), Qt::DisplayRole).toString();
     }
 
     // Try to match column header with the key.
     for (int c = 0; c < model->columnCount(parent); ++c) {
-      QString header = model->headerData(c, Qt::Horizontal, Qt::DisplayRole)
-                           .toString()
-                           .remove(QLatin1Char(' '))
-                           .toLower();
-      if ((key.toLower() == QStringLiteral("repo") ||
-           key.toLower() == QStringLiteral("owner")) &&
+      QString header =
+          model->headerData(c, Qt::Horizontal, Qt::DisplayRole).toString().remove(QLatin1Char(' ')).toLower();
+      if ((key.toLower() == QStringLiteral("repo") || key.toLower() == QStringLiteral("owner")) &&
           header == QStringLiteral("name")) {
         QModelIndex idx = model->index(row, c, parent);
         QString fullName = model->data(idx, Qt::DisplayRole).toString();
@@ -45,9 +37,7 @@ public:
         return fullName;
       }
       if (header == key.toLower() ||
-          model->headerData(c, Qt::Horizontal, Qt::DisplayRole)
-                  .toString()
-                  .toLower() == key.toLower()) {
+          model->headerData(c, Qt::Horizontal, Qt::DisplayRole).toString().toLower() == key.toLower()) {
         QModelIndex idx = model->index(row, c, parent);
         return model->data(idx, Qt::DisplayRole).toString();
       }
@@ -71,8 +61,7 @@ private:
   QModelIndex parent;
 };
 
-AdvancedFilterProxyModel::AdvancedFilterProxyModel(QObject *parent)
-    : QSortFilterProxyModel(parent) {
+AdvancedFilterProxyModel::AdvancedFilterProxyModel(QObject *parent) : QSortFilterProxyModel(parent) {
   setFilterCaseSensitivity(Qt::CaseInsensitive);
 }
 
@@ -91,8 +80,7 @@ void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
 #endif
 }
 
-bool AdvancedFilterProxyModel::filterAcceptsRow(
-    int source_row, const QModelIndex &source_parent) const {
+bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
   if (m_query.isEmpty())
     return true;
 
@@ -114,8 +102,7 @@ bool AdvancedFilterProxyModel::filterAcceptsRow(
   return false;
 }
 
-bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left,
-                                        const QModelIndex &source_right) const {
+bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const {
   QAbstractItemModel *m = sourceModel();
 
   // Try to cast to SourceModel or SessionModel to see if it supports
