@@ -9,8 +9,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-FollowSessionDialog::FollowSessionDialog(APIManager *apiManager,
-                                         QWidget *parent)
+FollowSessionDialog::FollowSessionDialog(APIManager *apiManager, QWidget *parent)
     : QDialog(parent), m_apiManager(apiManager) {
   setWindowTitle(i18n("Follow Session"));
 
@@ -21,8 +20,7 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager,
 
   QHBoxLayout *inputLayout = new QHBoxLayout();
   m_inputEdit = new QLineEdit(this);
-  m_inputEdit->setPlaceholderText(i18n("e.g. 14074060995680401415 or %1...")
-                                      .arg(APIManager::julesSessionBaseUrl()));
+  m_inputEdit->setPlaceholderText(i18n("e.g. 14074060995680401415 or %1...").arg(APIManager::julesSessionBaseUrl()));
   inputLayout->addWidget(m_inputEdit);
 
   m_previewBtn = new QPushButton(i18n("Preview"), this);
@@ -35,25 +33,20 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager,
   m_previewLabel->hide();
   layout->addWidget(m_previewLabel);
 
-  QDialogButtonBox *buttonBox = new QDialogButtonBox(
-      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
   m_followBtn = buttonBox->button(QDialogButtonBox::Ok);
   m_followBtn->setText(i18n("Follow"));
   m_followBtn->setEnabled(false);
 
   layout->addWidget(buttonBox);
 
-  connect(m_inputEdit, &QLineEdit::textChanged, this,
-          &FollowSessionDialog::updateButtons);
-  connect(m_previewBtn, &QPushButton::clicked, this,
-          &FollowSessionDialog::onPreviewClicked);
+  connect(m_inputEdit, &QLineEdit::textChanged, this, &FollowSessionDialog::updateButtons);
+  connect(m_previewBtn, &QPushButton::clicked, this, &FollowSessionDialog::onPreviewClicked);
   connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
   connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-  connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
-          &FollowSessionDialog::onSessionReceived);
-  connect(m_apiManager, &APIManager::errorOccurred, this,
-          &FollowSessionDialog::onErrorOccurred);
+  connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &FollowSessionDialog::onSessionReceived);
+  connect(m_apiManager, &APIManager::errorOccurred, this, &FollowSessionDialog::onErrorOccurred);
 }
 
 QString FollowSessionDialog::extractSessionId(const QString &input) const {
@@ -85,9 +78,7 @@ QString FollowSessionDialog::extractSessionId(const QString &input) const {
   return text;
 }
 
-QString FollowSessionDialog::sessionId() const {
-  return extractSessionId(m_inputEdit->text());
-}
+QString FollowSessionDialog::sessionId() const { return extractSessionId(m_inputEdit->text()); }
 
 void FollowSessionDialog::updateButtons() {
   m_followBtn->setEnabled(!m_inputEdit->text().trimmed().isEmpty());

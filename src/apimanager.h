@@ -21,9 +21,7 @@ public:
   explicit APIManager(QObject *parent = nullptr);
   ~APIManager();
 
-  static QString julesSessionBaseUrl() {
-    return QStringLiteral("https://jules.google.com/session/");
-  }
+  static QString julesSessionBaseUrl() { return QStringLiteral("https://jules.google.com/session/"); }
 
   void setApiKey(const QString &key);
   QString apiKey() const;
@@ -59,43 +57,33 @@ public:
 
 Q_SIGNALS:
   void githubUsernameFetched(const QString &username);
-  void githubRepoCreated(const QJsonObject &requestData,
-                         const QJsonObject &response);
-  void githubRepoCreationFailed(const QJsonObject &requestData,
-                                const QJsonObject &response,
+  void githubRepoCreated(const QJsonObject &requestData, const QJsonObject &response);
+  void githubRepoCreationFailed(const QJsonObject &requestData, const QJsonObject &response,
                                 const QString &errorString);
 
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void githubInfoFailed(const QString &sourceId, const QString &message);
-  void githubBranchesReceived(const QString &sourceId,
-                              const QJsonArray &branches);
-  void githubPullRequestInfoReceived(const QString &prUrl,
-                                     const QJsonObject &info);
+  void githubBranchesReceived(const QString &sourceId, const QJsonArray &branches);
+  void githubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
   void githubPullRequestFailed(const QString &prUrl, const QString &message);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished();
   void sessionsRefreshFinished();
   void sessionCreated(const QJsonObject &session);
-  void sessionsReceived(const QJsonArray &sessions,
-                        const QString &nextPageToken);
+  void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
   void sessionReloaded(const QJsonObject &session);
   void sessionReloadFailed(const QString &sessionId, const QString &message);
   void sourceDetailsReceived(const QJsonObject &source);
-  void activitiesReceived(const QString &sessionId,
-                          const QJsonArray &activities);
+  void activitiesReceived(const QString &sessionId, const QJsonArray &activities);
   void connectionTested(bool success, const QString &message);
   void githubConnectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
-  void errorOccurredWithResponse(const QString &message,
-                                 const QString &response);
-  void sessionCreationFailed(const QJsonObject &request,
-                             const QJsonObject &response,
-                             const QString &errorString,
+  void errorOccurredWithResponse(const QString &message, const QString &response);
+  void sessionCreationFailed(const QJsonObject &request, const QJsonObject &response, const QString &errorString,
                              const QString &httpDetails);
   void messageSent(const QString &sessionId);
-  void messageSendFailed(const QString &sessionId, const QString &message,
-                         const QString &httpDetails);
+  void messageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails);
   void logMessage(const QString &message);
 
 private Q_SLOTS:
@@ -120,8 +108,7 @@ private:
   bool checkGithubRateLimit();
   void updateGithubRateLimit(QNetworkReply *reply);
 
-  QNetworkRequest createRequest(const QString &endpoint,
-                                const QString &overrideApiKey = QString());
+  QNetworkRequest createRequest(const QString &endpoint, const QString &overrideApiKey = QString());
 };
 
 #endif // APIMANAGER_H

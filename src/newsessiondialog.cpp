@@ -43,8 +43,7 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 
-PromptTextEdit::PromptTextEdit(QWidget *parent)
-    : QTextEdit(parent), m_mode(WysiwygMarkdown) {
+PromptTextEdit::PromptTextEdit(QWidget *parent) : QTextEdit(parent), m_mode(WysiwygMarkdown) {
   setAcceptRichText(true);
 }
 
@@ -109,10 +108,8 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
 
 void PromptTextEdit::keyPressEvent(QKeyEvent *e) {
   const Qt::KeyboardModifiers modifiers =
-      e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier |
-                        Qt::AltModifier | Qt::MetaModifier);
-  if (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) &&
-      e->key() == Qt::Key_V) {
+      e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+  if (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) && e->key() == Qt::Key_V) {
     if (const QMimeData *md = QApplication::clipboard()->mimeData()) {
       if (md->hasText()) {
         insertPlainText(md->text());
@@ -125,10 +122,9 @@ void PromptTextEdit::keyPressEvent(QKeyEvent *e) {
 
 class SourceSelectionProxyModel : public AdvancedFilterProxyModel {
 public:
-  SourceSelectionProxyModel(const QMultiMap<QString, QString> *selectedSources,
-                            bool showSelected, QObject *parent = nullptr)
-      : AdvancedFilterProxyModel(parent), m_selectedSources(selectedSources),
-        m_showSelected(showSelected) {}
+  SourceSelectionProxyModel(const QMultiMap<QString, QString> *selectedSources, bool showSelected,
+                            QObject *parent = nullptr)
+      : AdvancedFilterProxyModel(parent), m_selectedSources(selectedSources), m_showSelected(showSelected) {}
 
   void updateSelection() { invalidate(); }
 
@@ -137,33 +133,24 @@ public:
     invalidate();
   }
 
-  QVariant data(const QModelIndex &index,
-                int role = Qt::DisplayRole) const override {
+  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override {
     if (m_showSelected && role == Qt::DisplayRole) {
       QModelIndex sourceIdx = mapToSource(index);
-      QString name =
-          sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
+      QString name = sourceModel()->data(sourceIdx, SourceModel::NameRole).toString();
       if (m_selectedSources->contains(name)) {
         QStringList branches = m_selectedSources->values(name);
         branches.sort();
-        QString displayName =
-            sourceModel()
-                ->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
-                .toString();
-        return displayName + QStringLiteral(" (") +
-               branches.join(QStringLiteral(", ")) + QStringLiteral(")");
+        QString displayName = sourceModel()->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
+        return displayName + QStringLiteral(" (") + branches.join(QStringLiteral(", ")) + QStringLiteral(")");
       }
     }
     return AdvancedFilterProxyModel::data(index, role);
   }
 
 protected:
-  bool lessThan(const QModelIndex &source_left,
-                const QModelIndex &source_right) const override {
-    bool leftFav =
-        sourceModel()->data(source_left, SourceModel::FavouriteRole).toBool();
-    bool rightFav =
-        sourceModel()->data(source_right, SourceModel::FavouriteRole).toBool();
+  bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const override {
+    bool leftFav = sourceModel()->data(source_left, SourceModel::FavouriteRole).toBool();
+    bool rightFav = sourceModel()->data(source_right, SourceModel::FavouriteRole).toBool();
 
     if (leftFav != rightFav) {
       if (sortOrder() == Qt::AscendingOrder) {
@@ -177,8 +164,7 @@ protected:
 
   class ProxyFilterDataAccessor : public FilterDataAccessor {
   public:
-    ProxyFilterDataAccessor(const QModelIndex &index, const SourceModel *model)
-        : m_index(index), m_model(model) {}
+    ProxyFilterDataAccessor(const QModelIndex &index, const SourceModel *model) : m_index(index), m_model(model) {}
 
     QString getValue(const QString &key) const override {
       QString k = key.toLower();
@@ -191,43 +177,28 @@ protected:
           return parts[2];
         }
       } else if (k == QStringLiteral("title")) {
-        return m_model->data(m_index.siblingAtColumn(0), Qt::DisplayRole)
-            .toString();
+        return m_model->data(m_index.siblingAtColumn(0), Qt::DisplayRole).toString();
       }
 
-      QJsonObject rawData =
-          m_model->data(m_index, SourceModel::RawDataRole).toJsonObject();
+      QJsonObject rawData = m_model->data(m_index, SourceModel::RawDataRole).toJsonObject();
       QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
 
-      if (k == QStringLiteral("archived") ||
-          k == QStringLiteral("isarchived")) {
+      if (k == QStringLiteral("archived") || k == QStringLiteral("isarchived")) {
         if (rawData.contains(QStringLiteral("isArchived"))) {
-          return rawData.value(QStringLiteral("isArchived")).toBool()
-                     ? QStringLiteral("true")
-                     : QStringLiteral("false");
+          return rawData.value(QStringLiteral("isArchived")).toBool() ? QStringLiteral("true")
+                                                                      : QStringLiteral("false");
         }
-        return github.value(QStringLiteral("archived")).toBool()
-                   ? QStringLiteral("true")
-                   : QStringLiteral("false");
+        return github.value(QStringLiteral("archived")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
       } else if (k == QStringLiteral("fork") || k == QStringLiteral("isfork")) {
         if (rawData.contains(QStringLiteral("isFork"))) {
-          return rawData.value(QStringLiteral("isFork")).toBool()
-                     ? QStringLiteral("true")
-                     : QStringLiteral("false");
+          return rawData.value(QStringLiteral("isFork")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
         }
-        return github.value(QStringLiteral("fork")).toBool()
-                   ? QStringLiteral("true")
-                   : QStringLiteral("false");
-      } else if (k == QStringLiteral("private") ||
-                 k == QStringLiteral("isprivate")) {
+        return github.value(QStringLiteral("fork")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
+      } else if (k == QStringLiteral("private") || k == QStringLiteral("isprivate")) {
         if (rawData.contains(QStringLiteral("isPrivate"))) {
-          return rawData.value(QStringLiteral("isPrivate")).toBool()
-                     ? QStringLiteral("true")
-                     : QStringLiteral("false");
+          return rawData.value(QStringLiteral("isPrivate")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
         }
-        return github.value(QStringLiteral("private")).toBool()
-                   ? QStringLiteral("true")
-                   : QStringLiteral("false");
+        return github.value(QStringLiteral("private")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
       } else if (k == QStringLiteral("language")) {
         return github.value(QStringLiteral("language")).toString();
       }
@@ -238,8 +209,7 @@ protected:
     QList<QString> getAllValues() const override {
       QList<QString> values;
       values.append(m_model->data(m_index, SourceModel::NameRole).toString());
-      values.append(m_model->data(m_index.siblingAtColumn(0), Qt::DisplayRole)
-                        .toString());
+      values.append(m_model->data(m_index.siblingAtColumn(0), Qt::DisplayRole).toString());
       return values;
     }
 
@@ -248,20 +218,17 @@ protected:
     const SourceModel *m_model;
   };
 
-  bool filterAcceptsRow(int source_row,
-                        const QModelIndex &source_parent) const override {
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
 
     // First apply AST filtering if present
     if (m_ast) {
-      ProxyFilterDataAccessor accessor(
-          idx, qobject_cast<SourceModel *>(sourceModel()));
+      ProxyFilterDataAccessor accessor(idx, qobject_cast<SourceModel *>(sourceModel()));
       if (!m_ast->evaluate(accessor)) {
         return false;
       }
     } else {
-      if (!AdvancedFilterProxyModel::filterAcceptsRow(source_row,
-                                                      source_parent))
+      if (!AdvancedFilterProxyModel::filterAcceptsRow(source_row, source_parent))
         return false;
     }
 
@@ -285,18 +252,14 @@ private:
   QSharedPointer<ASTNode> m_ast;
 };
 
-NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
-                                   TemplatesModel *templatesModel,
-                                   bool hasApiKey, QWidget *parent)
-    : KXmlGuiWindow(parent), m_sourceModel(sourceModel),
-      m_templatesModel(templatesModel) {
+NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
+                                   QWidget *parent)
+    : KXmlGuiWindow(parent), m_sourceModel(sourceModel), m_templatesModel(templatesModel) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Create New Session"));
 
-  KConfigGroup config(KSharedConfig::openConfig(),
-                      QStringLiteral("NewSessionDialog"));
-  if (!restoreGeometry(
-          config.readEntry(QStringLiteral("Geometry"), QByteArray()))) {
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
+  if (!restoreGeometry(config.readEntry(QStringLiteral("Geometry"), QByteArray()))) {
     resize(700, 600);
   }
 
@@ -313,31 +276,27 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_filterEditor->setSimplifiedMode(true);
 
   QPushButton *refreshSourcesBtn =
-      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")),
-                      tr("Refresh Sources"), this);
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Sources"), this);
   connect(refreshSourcesBtn, &QPushButton::clicked, this, [this]() {
     statusBar()->showMessage(tr("Requested refresh of sources..."));
     Q_EMIT refreshSourcesRequested();
   });
 
   QPushButton *refreshGithubBtn =
-      new QPushButton(QIcon::fromTheme(QStringLiteral("network-server")),
-                      tr("Refresh GitHub"), this);
+      new QPushButton(QIcon::fromTheme(QStringLiteral("network-server")), tr("Refresh GitHub"), this);
   connect(refreshGithubBtn, &QPushButton::clicked, this, [this]() {
     statusBar()->showMessage(tr("Requested refresh of GitHub data..."));
     QStringList ids;
     for (const QString &name : m_selectedSources.keys()) {
-      QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0),
-                                                     SourceModel::NameRole,
-                                                     name, 1, Qt::MatchExactly);
+      QModelIndexList matches =
+          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1, Qt::MatchExactly);
       if (!matches.isEmpty()) {
         ids.append(matches.first().data(SourceModel::IdRole).toString());
       }
     }
     if (ids.isEmpty()) {
       for (int i = 0; i < m_unselectedProxy->rowCount() && i < 10; ++i) {
-        QModelIndex srcIdx =
-            m_unselectedProxy->mapToSource(m_unselectedProxy->index(i, 0));
+        QModelIndex srcIdx = m_unselectedProxy->mapToSource(m_unselectedProxy->index(i, 0));
         ids.append(srcIdx.data(SourceModel::IdRole).toString());
       }
     }
@@ -357,142 +316,115 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   unselectedLayout->addWidget(new QLabel(tr("Unselected Sources:"), this));
 
   m_unselectedView = new QListView(this);
-  m_unselectedProxy =
-      new SourceSelectionProxyModel(&m_selectedSources, false, this);
+  m_unselectedProxy = new SourceSelectionProxyModel(&m_selectedSources, false, this);
   m_unselectedProxy->setSourceModel(m_sourceModel);
   m_unselectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_unselectedProxy->setFilterRole(SourceModel::NameRole);
   m_unselectedProxy->sort(0, Qt::DescendingOrder);
   QString defaultFilter =
-      config.readEntry(QStringLiteral("DefaultFilter"),
-                       QStringLiteral("=NOT archived:") + i18n("Yes"));
+      config.readEntry(QStringLiteral("DefaultFilter"), QStringLiteral("=NOT archived:") + i18n("Yes"));
   m_filterEditor->setFilterText(defaultFilter);
   m_unselectedView->setModel(m_unselectedProxy);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_unselectedView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(
-      m_unselectedView, &QListView::customContextMenuRequested, this,
-      [this](const QPoint &pos) {
-        QPoint viewportPos =
-            m_unselectedView->viewport()->mapFrom(m_unselectedView, pos);
-        QModelIndex proxyIdx = m_unselectedView->indexAt(viewportPos);
-        if (!proxyIdx.isValid())
-          return;
+  connect(m_unselectedView, &QListView::customContextMenuRequested, this, [this](const QPoint &pos) {
+    QPoint viewportPos = m_unselectedView->viewport()->mapFrom(m_unselectedView, pos);
+    QModelIndex proxyIdx = m_unselectedView->indexAt(viewportPos);
+    if (!proxyIdx.isValid())
+      return;
 
-        QModelIndex sourceIdx = m_unselectedProxy->mapToSource(proxyIdx);
-        QString name =
-            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+    QModelIndex sourceIdx = m_unselectedProxy->mapToSource(proxyIdx);
+    QString name = m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
 
-        QMenu menu(this);
+    QMenu menu(this);
 
-        QAction *selectAction = menu.addAction(tr("Select"));
-        connect(selectAction, &QAction::triggered, this, [this, proxyIdx]() {
-          QModelIndexList selected =
-              m_unselectedView->selectionModel()->selectedIndexes();
-          if (!selected.contains(proxyIdx))
-            selected = {proxyIdx};
-          for (const QModelIndex &idx : selected) {
-            QString name = idx.data(SourceModel::NameRole).toString();
-            QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
-            m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
-          }
-          updateModels();
-        });
+    QAction *selectAction = menu.addAction(tr("Select"));
+    connect(selectAction, &QAction::triggered, this, [this, proxyIdx]() {
+      QModelIndexList selected = m_unselectedView->selectionModel()->selectedIndexes();
+      if (!selected.contains(proxyIdx))
+        selected = {proxyIdx};
+      for (const QModelIndex &idx : selected) {
+        QString name = idx.data(SourceModel::NameRole).toString();
+        QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+        m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
+      }
+      updateModels();
+    });
 
-        QAction *filterAction = menu.addAction(tr("Filter just this"));
-        connect(filterAction, &QAction::triggered, this, [this, name]() {
-          m_filterEditor->setFilterText(name);
+    QAction *filterAction = menu.addAction(tr("Filter just this"));
+    connect(filterAction, &QAction::triggered, this, [this, name]() {
+      m_filterEditor->setFilterText(name);
+      applyFilter();
+    });
+
+    QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+    QAction *showStatusAction = menu.addAction(tr("Show Status"));
+    connect(showStatusAction, &QAction::triggered, this,
+            [this, id]() { Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last()); });
+
+    QStringList parts = id.split(QLatin1Char('/'));
+    QString owner;
+    QString repo;
+    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+      owner = parts[2];
+      repo = parts[3];
+    }
+
+    if (!owner.isEmpty() && !repo.isEmpty()) {
+      QAction *hideRepoAction = menu.addAction(tr("Filter out repo '%1'").arg(repo));
+      QAction *onlyRepoAction = menu.addAction(tr("Filter only repo '%1'").arg(repo));
+      QAction *hideOwnerAction = menu.addAction(tr("Filter out owner '%1'").arg(owner));
+      QAction *onlyOwnerAction = menu.addAction(tr("Filter only owner '%1'").arg(owner));
+
+      connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("repo"), repo, true));
+        applyFilter();
+      });
+      connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("repo"), repo, false));
+        applyFilter();
+      });
+      connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("owner"), owner, true));
+        applyFilter();
+      });
+      connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("owner"), owner, false));
+        applyFilter();
+      });
+      menu.addSeparator();
+    }
+
+    QJsonObject rawData = m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+
+    if (rawData.contains(QStringLiteral("github"))) {
+      QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+      QString language = github.value(QStringLiteral("language")).toString();
+      if (!language.isEmpty()) {
+        QAction *hideLanguageAction = menu.addAction(tr("Filter out language '%1'").arg(language));
+        QAction *onlyLanguageAction = menu.addAction(tr("Filter only language '%1'").arg(language));
+        connect(hideLanguageAction, &QAction::triggered, [this, language]() {
+          m_filterEditor->setFilterText(
+              FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("language"), language, true));
           applyFilter();
         });
-
-        QString id =
-            m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
-        QAction *showStatusAction = menu.addAction(tr("Show Status"));
-        connect(showStatusAction, &QAction::triggered, this, [this, id]() {
-          Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last());
+        connect(onlyLanguageAction, &QAction::triggered, [this, language]() {
+          m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(m_filterEditor->filterText(),
+                                                                       QStringLiteral("language"), language, false));
+          applyFilter();
         });
+        menu.addSeparator();
+      }
+    }
 
-        QStringList parts = id.split(QLatin1Char('/'));
-        QString owner;
-        QString repo;
-        if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-          owner = parts[2];
-          repo = parts[3];
-        }
+    addFavouriteAction(menu, sourceIdx);
 
-        if (!owner.isEmpty() && !repo.isEmpty()) {
-          QAction *hideRepoAction =
-              menu.addAction(tr("Filter out repo '%1'").arg(repo));
-          QAction *onlyRepoAction =
-              menu.addAction(tr("Filter only repo '%1'").arg(repo));
-          QAction *hideOwnerAction =
-              menu.addAction(tr("Filter out owner '%1'").arg(owner));
-          QAction *onlyOwnerAction =
-              menu.addAction(tr("Filter only owner '%1'").arg(owner));
-
-          connect(hideRepoAction, &QAction::triggered, [this, repo]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
-                true));
-            applyFilter();
-          });
-          connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
-                false));
-            applyFilter();
-          });
-          connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
-                true));
-            applyFilter();
-          });
-          connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
-                false));
-            applyFilter();
-          });
-          menu.addSeparator();
-        }
-
-        QJsonObject rawData =
-            m_sourceModel->data(sourceIdx, SourceModel::RawDataRole)
-                .toJsonObject();
-
-        if (rawData.contains(QStringLiteral("github"))) {
-          QJsonObject github =
-              rawData.value(QStringLiteral("github")).toObject();
-          QString language =
-              github.value(QStringLiteral("language")).toString();
-          if (!language.isEmpty()) {
-            QAction *hideLanguageAction =
-                menu.addAction(tr("Filter out language '%1'").arg(language));
-            QAction *onlyLanguageAction =
-                menu.addAction(tr("Filter only language '%1'").arg(language));
-            connect(
-                hideLanguageAction, &QAction::triggered, [this, language]() {
-                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                      m_filterEditor->filterText(), QStringLiteral("language"),
-                      language, true));
-                  applyFilter();
-                });
-            connect(
-                onlyLanguageAction, &QAction::triggered, [this, language]() {
-                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                      m_filterEditor->filterText(), QStringLiteral("language"),
-                      language, false));
-                  applyFilter();
-                });
-            menu.addSeparator();
-          }
-        }
-
-        addFavouriteAction(menu, sourceIdx);
-
-        menu.exec(m_unselectedView->mapToGlobal(pos));
-      });
+    menu.exec(m_unselectedView->mapToGlobal(pos));
+  });
 
   unselectedLayout->addWidget(m_unselectedView);
 
@@ -502,23 +434,19 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   QPushButton *addBtn = new QPushButton(tr(">"), this);
   addBtn->setToolTip(tr("Add selected"));
-  connect(addBtn, &QPushButton::clicked, this,
-          &NewSessionDialog::onAddSelected);
+  connect(addBtn, &QPushButton::clicked, this, &NewSessionDialog::onAddSelected);
 
   QPushButton *addAllBtn = new QPushButton(tr(">>"), this);
   addAllBtn->setToolTip(tr("Add all"));
-  connect(addAllBtn, &QPushButton::clicked, this,
-          &NewSessionDialog::onSelectAll);
+  connect(addAllBtn, &QPushButton::clicked, this, &NewSessionDialog::onSelectAll);
 
   QPushButton *removeBtn = new QPushButton(tr("<"), this);
   removeBtn->setToolTip(tr("Remove selected"));
-  connect(removeBtn, &QPushButton::clicked, this,
-          &NewSessionDialog::onRemoveSelected);
+  connect(removeBtn, &QPushButton::clicked, this, &NewSessionDialog::onRemoveSelected);
 
   QPushButton *removeAllBtn = new QPushButton(tr("<<"), this);
   removeAllBtn->setToolTip(tr("Remove all"));
-  connect(removeAllBtn, &QPushButton::clicked, this,
-          &NewSessionDialog::onUnselectAll);
+  connect(removeAllBtn, &QPushButton::clicked, this, &NewSessionDialog::onUnselectAll);
 
   middleButtonsLayout->addWidget(addBtn);
   middleButtonsLayout->addWidget(addAllBtn);
@@ -531,8 +459,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   selectedLayout->addWidget(new QLabel(tr("Selected Sources:"), this));
 
   m_selectedView = new QListView(this);
-  m_selectedProxy =
-      new SourceSelectionProxyModel(&m_selectedSources, true, this);
+  m_selectedProxy = new SourceSelectionProxyModel(&m_selectedSources, true, this);
   m_selectedProxy->setSourceModel(m_sourceModel);
   m_selectedProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_selectedProxy->setFilterRole(SourceModel::NameRole);
@@ -540,93 +467,79 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_selectedView->setModel(m_selectedProxy);
   m_selectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_selectedView->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(
-      m_selectedView, &QListView::customContextMenuRequested, this,
-      [this](const QPoint &pos) {
-        QPoint viewportPos =
-            m_selectedView->viewport()->mapFrom(m_selectedView, pos);
-        QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
+  connect(m_selectedView, &QListView::customContextMenuRequested, this, [this](const QPoint &pos) {
+    QPoint viewportPos = m_selectedView->viewport()->mapFrom(m_selectedView, pos);
+    QModelIndex proxyIdx = m_selectedView->indexAt(viewportPos);
 
-        QMenu menu(this);
+    QMenu menu(this);
 
-        QAction *addCustomAction = menu.addAction(tr("Add Custom Source..."));
-        connect(addCustomAction, &QAction::triggered, this, [this]() {
-          QDialog dialog(this);
-          dialog.setWindowTitle(tr("Add Custom Source"));
-          QFormLayout layout(&dialog);
+    QAction *addCustomAction = menu.addAction(tr("Add Custom Source..."));
+    connect(addCustomAction, &QAction::triggered, this, [this]() {
+      QDialog dialog(this);
+      dialog.setWindowTitle(tr("Add Custom Source"));
+      QFormLayout layout(&dialog);
 
-          QLineEdit *sourceEdit = new QLineEdit(&dialog);
-          sourceEdit->setPlaceholderText(QStringLiteral("owner/repo"));
-          layout.addRow(tr("Source name:"), sourceEdit);
+      QLineEdit *sourceEdit = new QLineEdit(&dialog);
+      sourceEdit->setPlaceholderText(QStringLiteral("owner/repo"));
+      layout.addRow(tr("Source name:"), sourceEdit);
 
-          QComboBox *branchCombo = new QComboBox(&dialog);
-          branchCombo->setEditable(true);
-          branchCombo->addItem(QStringLiteral("main"));
-          branchCombo->addItem(QStringLiteral("master"));
-          layout.addRow(tr("Branch:"), branchCombo);
+      QComboBox *branchCombo = new QComboBox(&dialog);
+      branchCombo->setEditable(true);
+      branchCombo->addItem(QStringLiteral("main"));
+      branchCombo->addItem(QStringLiteral("master"));
+      layout.addRow(tr("Branch:"), branchCombo);
 
-          QDialogButtonBox *buttonBox = new QDialogButtonBox(
-              QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-          layout.addRow(buttonBox);
+      QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+      layout.addRow(buttonBox);
 
-          connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
-                  &QDialog::accept);
-          connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
-                  &QDialog::reject);
+      connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+      connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
-          if (dialog.exec() == QDialog::Accepted) {
-            QString customSource = sourceEdit->text().trimmed();
-            if (customSource.isEmpty())
-              return;
-
-            QModelIndexList matches = m_sourceModel->match(
-                m_sourceModel->index(0, 0), SourceModel::NameRole, customSource,
-                1, Qt::MatchExactly);
-
-            QString targetBranch = branchCombo->currentText().trimmed();
-            if (targetBranch.isEmpty()) {
-              targetBranch = QStringLiteral("main");
-            }
-
-            if (matches.isEmpty()) {
-              QJsonArray arr;
-              QJsonObject obj;
-              obj[QStringLiteral("id")] = customSource;
-              obj[QStringLiteral("name")] = customSource;
-              obj[QStringLiteral("isCustom")] = true;
-              arr.append(obj);
-              m_sourceModel->addSources(arr);
-            }
-
-            if (!m_selectedSources.values(customSource)
-                     .contains(targetBranch)) {
-              m_selectedSources.insert(customSource, targetBranch);
-              updateModels();
-            }
-          }
-        });
-
-        if (!proxyIdx.isValid()) {
-          menu.exec(m_selectedView->mapToGlobal(pos));
+      if (dialog.exec() == QDialog::Accepted) {
+        QString customSource = sourceEdit->text().trimmed();
+        if (customSource.isEmpty())
           return;
+
+        QModelIndexList matches =
+            m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, customSource, 1, Qt::MatchExactly);
+
+        QString targetBranch = branchCombo->currentText().trimmed();
+        if (targetBranch.isEmpty()) {
+          targetBranch = QStringLiteral("main");
         }
-        menu.addSeparator();
 
-        QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
-        QString name =
-            m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
-        QString displayName =
-            m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole)
-                .toString();
+        if (matches.isEmpty()) {
+          QJsonArray arr;
+          QJsonObject obj;
+          obj[QStringLiteral("id")] = customSource;
+          obj[QStringLiteral("name")] = customSource;
+          obj[QStringLiteral("isCustom")] = true;
+          arr.append(obj);
+          m_sourceModel->addSources(arr);
+        }
 
-        QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
-        connect(
-            selectBranchAction, &QAction::triggered, this,
-            [this, proxyIdx, name, displayName,
-             persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
+        if (!m_selectedSources.values(customSource).contains(targetBranch)) {
+          m_selectedSources.insert(customSource, targetBranch);
+          updateModels();
+        }
+      }
+    });
+
+    if (!proxyIdx.isValid()) {
+      menu.exec(m_selectedView->mapToGlobal(pos));
+      return;
+    }
+    menu.addSeparator();
+
+    QModelIndex sourceIdx = m_selectedProxy->mapToSource(proxyIdx);
+    QString name = m_sourceModel->data(sourceIdx, SourceModel::NameRole).toString();
+    QString displayName = m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString();
+
+    QAction *selectBranchAction = menu.addAction(tr("Select Branch..."));
+    connect(selectBranchAction, &QAction::triggered, this,
+            [this, proxyIdx, name, displayName, persistentSourceIdx = QPersistentModelIndex(sourceIdx)]() {
               QModelIndex sourceIdx = persistentSourceIdx;
-              QModelIndexList selected =
-                  m_selectedView->selectionModel()->selectedIndexes();
+              QModelIndexList selected = m_selectedView->selectionModel()->selectedIndexes();
               if (!selected.contains(proxyIdx))
                 selected = {proxyIdx};
 
@@ -638,11 +551,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               QVBoxLayout layout(&dialog);
 
               if (selected.size() > 1) {
-                layout.addWidget(new QLabel(tr(
-                    "Branch for %n selected source(s):", "", selected.size())));
+                layout.addWidget(new QLabel(tr("Branch for %n selected source(s):", "", selected.size())));
               } else {
-                layout.addWidget(
-                    new QLabel(tr("Branch for %1:").arg(displayName)));
+                layout.addWidget(new QLabel(tr("Branch for %1:").arg(displayName)));
               }
 
               // Single mode
@@ -665,8 +576,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               }
               comboBox->setEditable(true);
 
-              QPushButton *plusBtn =
-                  new QPushButton(QStringLiteral("+"), &dialog);
+              QPushButton *plusBtn = new QPushButton(QStringLiteral("+"), &dialog);
               plusBtn->setToolTip(tr("Switch to multiple branch selection"));
               plusBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
@@ -711,64 +621,51 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
                 singleModeWidget->hide();
                 multiModeWidget->show();
                 dialog.adjustSize();
-                if (listWidget->count() == 0 &&
-                    !comboBox->currentText().isEmpty()) {
+                if (listWidget->count() == 0 && !comboBox->currentText().isEmpty()) {
                   listWidget->addItem(comboBox->currentText());
                 }
               });
 
               connect(addBtn, &QPushButton::clicked, [&]() {
                 QString t = multiComboBox->currentText();
-                if (!t.isEmpty() &&
-                    listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
+                if (!t.isEmpty() && listWidget->findItems(t, Qt::MatchExactly).isEmpty()) {
                   listWidget->addItem(t);
                 }
               });
 
-              connect(removeBtn, &QPushButton::clicked,
-                      [&]() { qDeleteAll(listWidget->selectedItems()); });
+              connect(removeBtn, &QPushButton::clicked, [&]() { qDeleteAll(listWidget->selectedItems()); });
 
               QHBoxLayout *btnLayout = new QHBoxLayout();
-              QPushButton *refreshJulesBtn =
-                  new QPushButton(tr("Refresh Jules"), &dialog);
-              QPushButton *refreshGithubBtn =
-                  new QPushButton(tr("Refresh GitHub"), &dialog);
+              QPushButton *refreshJulesBtn = new QPushButton(tr("Refresh Jules"), &dialog);
+              QPushButton *refreshGithubBtn = new QPushButton(tr("Refresh GitHub"), &dialog);
               btnLayout->addWidget(refreshJulesBtn);
               btnLayout->addWidget(refreshGithubBtn);
               btnLayout->addStretch();
               layout.addLayout(btnLayout);
 
-              QDialogButtonBox *buttonBox = new QDialogButtonBox(
-                  QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+              QDialogButtonBox *buttonBox =
+                  new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
               layout.addWidget(buttonBox);
 
-              connect(buttonBox, &QDialogButtonBox::accepted, &dialog,
-                      &QDialog::accept);
-              connect(buttonBox, &QDialogButtonBox::rejected, &dialog,
-                      &QDialog::reject);
+              connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+              connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
               QStringList selectedIds;
               for (const QModelIndex &idx : selected) {
                 selectedIds.append(idx.data(SourceModel::IdRole).toString());
               }
 
-              connect(refreshJulesBtn, &QPushButton::clicked, this,
-                      [this, selectedIds]() {
-                        for (const QString &id : selectedIds) {
-                          Q_EMIT refreshSourceRequested(id);
-                        }
-                        updateStatus(
-                            tr("Requested Jules refresh for %n source(s)...",
-                               "", selectedIds.size()));
-                      });
+              connect(refreshJulesBtn, &QPushButton::clicked, this, [this, selectedIds]() {
+                for (const QString &id : selectedIds) {
+                  Q_EMIT refreshSourceRequested(id);
+                }
+                updateStatus(tr("Requested Jules refresh for %n source(s)...", "", selectedIds.size()));
+              });
 
-              connect(refreshGithubBtn, &QPushButton::clicked, this,
-                      [this, selectedIds]() {
-                        Q_EMIT refreshGithubRequested(selectedIds);
-                        updateStatus(
-                            tr("Requested GitHub refresh for %n source(s)...",
-                               "", selectedIds.size()));
-                      });
+              connect(refreshGithubBtn, &QPushButton::clicked, this, [this, selectedIds]() {
+                Q_EMIT refreshGithubRequested(selectedIds);
+                updateStatus(tr("Requested GitHub refresh for %n source(s)...", "", selectedIds.size()));
+              });
 
               if (dialog.exec() == QDialog::Accepted) {
                 QStringList newBranches;
@@ -784,8 +681,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
                 if (!newBranches.isEmpty()) {
                   for (const QModelIndex &idx : selected) {
-                    QString selName =
-                        idx.data(SourceModel::NameRole).toString();
+                    QString selName = idx.data(SourceModel::NameRole).toString();
                     m_selectedSources.remove(selName);
                     for (const QString &b : newBranches) {
                       m_selectedSources.insert(selName, b);
@@ -796,107 +692,85 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
               }
             });
 
-        QAction *unselectAction = menu.addAction(tr("Unselect"));
-        connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
-          QModelIndexList selected =
-              m_selectedView->selectionModel()->selectedIndexes();
-          if (!selected.contains(proxyIdx))
-            selected = {proxyIdx};
-          for (const QModelIndex &idx : selected) {
-            m_selectedSources.remove(
-                idx.data(SourceModel::NameRole).toString());
-          }
-          updateModels();
-        });
+    QAction *unselectAction = menu.addAction(tr("Unselect"));
+    connect(unselectAction, &QAction::triggered, this, [this, proxyIdx]() {
+      QModelIndexList selected = m_selectedView->selectionModel()->selectedIndexes();
+      if (!selected.contains(proxyIdx))
+        selected = {proxyIdx};
+      for (const QModelIndex &idx : selected) {
+        m_selectedSources.remove(idx.data(SourceModel::NameRole).toString());
+      }
+      updateModels();
+    });
 
-        QString id =
-            m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
-        QAction *showStatusAction = menu.addAction(tr("Show Status"));
-        connect(showStatusAction, &QAction::triggered, this, [this, id]() {
-          Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last());
-        });
+    QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+    QAction *showStatusAction = menu.addAction(tr("Show Status"));
+    connect(showStatusAction, &QAction::triggered, this,
+            [this, id]() { Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last()); });
 
-        QStringList parts = id.split(QLatin1Char('/'));
-        QString owner;
-        QString repo;
-        if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-          owner = parts[2];
-          repo = parts[3];
-        }
+    QStringList parts = id.split(QLatin1Char('/'));
+    QString owner;
+    QString repo;
+    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+      owner = parts[2];
+      repo = parts[3];
+    }
 
-        if (!owner.isEmpty() && !repo.isEmpty()) {
-          QAction *hideRepoAction =
-              menu.addAction(tr("Filter out repo '%1'").arg(repo));
-          QAction *onlyRepoAction =
-              menu.addAction(tr("Filter only repo '%1'").arg(repo));
-          QAction *hideOwnerAction =
-              menu.addAction(tr("Filter out owner '%1'").arg(owner));
-          QAction *onlyOwnerAction =
-              menu.addAction(tr("Filter only owner '%1'").arg(owner));
+    if (!owner.isEmpty() && !repo.isEmpty()) {
+      QAction *hideRepoAction = menu.addAction(tr("Filter out repo '%1'").arg(repo));
+      QAction *onlyRepoAction = menu.addAction(tr("Filter only repo '%1'").arg(repo));
+      QAction *hideOwnerAction = menu.addAction(tr("Filter out owner '%1'").arg(owner));
+      QAction *onlyOwnerAction = menu.addAction(tr("Filter only owner '%1'").arg(owner));
 
-          connect(hideRepoAction, &QAction::triggered, [this, repo]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
-                true));
-            applyFilter();
-          });
-          connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("repo"), repo,
-                false));
-            applyFilter();
-          });
-          connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
-                true));
-            applyFilter();
-          });
-          connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
-            m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                m_filterEditor->filterText(), QStringLiteral("owner"), owner,
-                false));
-            applyFilter();
-          });
-          menu.addSeparator();
-        }
-
-        QJsonObject rawData =
-            m_sourceModel->data(sourceIdx, SourceModel::RawDataRole)
-                .toJsonObject();
-
-        if (rawData.contains(QStringLiteral("github"))) {
-          QJsonObject github =
-              rawData.value(QStringLiteral("github")).toObject();
-          QString language =
-              github.value(QStringLiteral("language")).toString();
-          if (!language.isEmpty()) {
-            QAction *hideLanguageAction =
-                menu.addAction(tr("Filter out language '%1'").arg(language));
-            QAction *onlyLanguageAction =
-                menu.addAction(tr("Filter only language '%1'").arg(language));
-            connect(
-                hideLanguageAction, &QAction::triggered, [this, language]() {
-                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                      m_filterEditor->filterText(), QStringLiteral("language"),
-                      language, true));
-                  applyFilter();
-                });
-            connect(
-                onlyLanguageAction, &QAction::triggered, [this, language]() {
-                  m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(
-                      m_filterEditor->filterText(), QStringLiteral("language"),
-                      language, false));
-                  applyFilter();
-                });
-            menu.addSeparator();
-          }
-        }
-
-        addFavouriteAction(menu, sourceIdx);
-
-        menu.exec(m_selectedView->mapToGlobal(pos));
+      connect(hideRepoAction, &QAction::triggered, [this, repo]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("repo"), repo, true));
+        applyFilter();
       });
+      connect(onlyRepoAction, &QAction::triggered, [this, repo]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("repo"), repo, false));
+        applyFilter();
+      });
+      connect(hideOwnerAction, &QAction::triggered, [this, owner]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("owner"), owner, true));
+        applyFilter();
+      });
+      connect(onlyOwnerAction, &QAction::triggered, [this, owner]() {
+        m_filterEditor->setFilterText(
+            FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("owner"), owner, false));
+        applyFilter();
+      });
+      menu.addSeparator();
+    }
+
+    QJsonObject rawData = m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+
+    if (rawData.contains(QStringLiteral("github"))) {
+      QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+      QString language = github.value(QStringLiteral("language")).toString();
+      if (!language.isEmpty()) {
+        QAction *hideLanguageAction = menu.addAction(tr("Filter out language '%1'").arg(language));
+        QAction *onlyLanguageAction = menu.addAction(tr("Filter only language '%1'").arg(language));
+        connect(hideLanguageAction, &QAction::triggered, [this, language]() {
+          m_filterEditor->setFilterText(
+              FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("language"), language, true));
+          applyFilter();
+        });
+        connect(onlyLanguageAction, &QAction::triggered, [this, language]() {
+          m_filterEditor->setFilterText(FilterEditor::applyQuickFilter(m_filterEditor->filterText(),
+                                                                       QStringLiteral("language"), language, false));
+          applyFilter();
+        });
+        menu.addSeparator();
+      }
+    }
+
+    addFavouriteAction(menu, sourceIdx);
+
+    menu.exec(m_selectedView->mapToGlobal(pos));
+  });
 
   selectedLayout->addWidget(m_selectedView);
 
@@ -906,8 +780,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   sourceLayout->addLayout(splitViewLayout);
 
-  connect(m_filterEditor, &FilterEditor::filterChanged, this,
-          &NewSessionDialog::applyFilter);
+  connect(m_filterEditor, &FilterEditor::filterChanged, this, &NewSessionDialog::applyFilter);
 
   connect(m_filterEditor, &FilterEditor::returnPressed, this, [this]() {
     if (m_unselectedProxy->rowCount() == 1) {
@@ -923,22 +796,19 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     }
   });
 
-  connect(m_unselectedView, &QListView::activated, this,
-          [this](const QModelIndex &idx) {
-            QString name = idx.data(SourceModel::NameRole).toString();
-            QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
-            m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
-            updateModels();
-            m_unselectedView->clearSelection();
-          });
+  connect(m_unselectedView, &QListView::activated, this, [this](const QModelIndex &idx) {
+    QString name = idx.data(SourceModel::NameRole).toString();
+    QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
+    m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
+    updateModels();
+    m_unselectedView->clearSelection();
+  });
 
-  connect(m_selectedView, &QListView::activated, this,
-          [this](const QModelIndex &idx) {
-            m_selectedSources.remove(
-                idx.data(SourceModel::NameRole).toString());
-            updateModels();
-            m_selectedView->clearSelection();
-          });
+  connect(m_selectedView, &QListView::activated, this, [this](const QModelIndex &idx) {
+    m_selectedSources.remove(idx.data(SourceModel::NameRole).toString());
+    updateModels();
+    m_selectedView->clearSelection();
+  });
 
   formLayout->addRow(tr("Sources:"), m_sourceSelectionWidget);
 
@@ -951,8 +821,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_markdownModeComboBox->addItem(tr("WYSIWYG Markdown"));
   m_markdownModeComboBox->addItem(tr("Raw Markdown"));
 
-  KConfigGroup configPrompt(KSharedConfig::openConfig(),
-                            QStringLiteral("NewSessionDialog"));
+  KConfigGroup configPrompt(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
   int markdownMode = configPrompt.readEntry(QStringLiteral("MarkdownMode"), 0);
   if (markdownMode < 0 || markdownMode > 1) {
     markdownMode = 0;
@@ -965,18 +834,16 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     m_promptEdit->setFont(font);
   }
 
-  connect(m_markdownModeComboBox,
-          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          [this](int mode) {
-            m_promptEdit->setMarkdownMode(mode);
-            if (mode == PromptTextEdit::RawMarkdown) {
-              QFont font = m_promptEdit->font();
-              font.setFamilies({QStringLiteral("monospace")});
-              m_promptEdit->setFont(font);
-            } else {
-              m_promptEdit->setFont(QApplication::font());
-            }
-          });
+  connect(m_markdownModeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int mode) {
+    m_promptEdit->setMarkdownMode(mode);
+    if (mode == PromptTextEdit::RawMarkdown) {
+      QFont font = m_promptEdit->font();
+      font.setFamilies({QStringLiteral("monospace")});
+      m_promptEdit->setFont(font);
+    } else {
+      m_promptEdit->setFont(QApplication::font());
+    }
+  });
 
   promptHeaderLayout->addWidget(m_loadTemplateButton);
   promptHeaderLayout->addStretch();
@@ -984,38 +851,29 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   QToolBar *formatBar = new QToolBar(this);
   formatBar->setIconSize(QSize(16, 16));
-  QAction *actionBold = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("format-text-bold")), tr("Bold"));
+  QAction *actionBold = formatBar->addAction(QIcon::fromTheme(QStringLiteral("format-text-bold")), tr("Bold"));
   actionBold->setCheckable(true);
-  QAction *actionItalic = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("format-text-italic")), tr("Italic"));
+  QAction *actionItalic = formatBar->addAction(QIcon::fromTheme(QStringLiteral("format-text-italic")), tr("Italic"));
   actionItalic->setCheckable(true);
-  QAction *actionStrike = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("format-text-strikethrough")),
-      tr("Strikethrough"));
+  QAction *actionStrike =
+      formatBar->addAction(QIcon::fromTheme(QStringLiteral("format-text-strikethrough")), tr("Strikethrough"));
   actionStrike->setCheckable(true);
   formatBar->addSeparator();
-  QAction *actionBullet = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("format-list-unordered")),
-      tr("Unordered List"));
+  QAction *actionBullet =
+      formatBar->addAction(QIcon::fromTheme(QStringLiteral("format-list-unordered")), tr("Unordered List"));
   actionBullet->setCheckable(true);
-  QAction *actionOrdered = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("format-list-ordered")),
-      tr("Ordered List"));
+  QAction *actionOrdered =
+      formatBar->addAction(QIcon::fromTheme(QStringLiteral("format-list-ordered")), tr("Ordered List"));
   actionOrdered->setCheckable(true);
   formatBar->addSeparator();
-  QAction *actionHeader = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("format-text-heading")), tr("Heading"));
-  QAction *actionCode = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("code-context")), tr("Code Block"));
-  QAction *actionTable = formatBar->addAction(
-      QIcon::fromTheme(QStringLiteral("insert-table")), tr("Table"));
+  QAction *actionHeader = formatBar->addAction(QIcon::fromTheme(QStringLiteral("format-text-heading")), tr("Heading"));
+  QAction *actionCode = formatBar->addAction(QIcon::fromTheme(QStringLiteral("code-context")), tr("Code Block"));
+  QAction *actionTable = formatBar->addAction(QIcon::fromTheme(QStringLiteral("insert-table")), tr("Table"));
 
   connect(actionBold, &QAction::triggered, this, [this](bool checked) {
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
       QTextCursor cursor = m_promptEdit->textCursor();
-      cursor.insertText(QStringLiteral("**") + cursor.selectedText() +
-                        QStringLiteral("**"));
+      cursor.insertText(QStringLiteral("**") + cursor.selectedText() + QStringLiteral("**"));
       return;
     }
     m_promptEdit->setFontWeight(checked ? QFont::Bold : QFont::Normal);
@@ -1023,8 +881,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(actionItalic, &QAction::triggered, this, [this](bool checked) {
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
       QTextCursor cursor = m_promptEdit->textCursor();
-      cursor.insertText(QStringLiteral("*") + cursor.selectedText() +
-                        QStringLiteral("*"));
+      cursor.insertText(QStringLiteral("*") + cursor.selectedText() + QStringLiteral("*"));
       return;
     }
     m_promptEdit->setFontItalic(checked);
@@ -1032,8 +889,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(actionStrike, &QAction::triggered, this, [this](bool checked) {
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
       QTextCursor cursor = m_promptEdit->textCursor();
-      cursor.insertText(QStringLiteral("~~") + cursor.selectedText() +
-                        QStringLiteral("~~"));
+      cursor.insertText(QStringLiteral("~~") + cursor.selectedText() + QStringLiteral("~~"));
       return;
     }
     QTextCharFormat fmt;
@@ -1044,9 +900,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     QTextCursor cursor = m_promptEdit->textCursor();
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
       cursor.movePosition(QTextCursor::StartOfLine);
-      QString prefix = style == QTextListFormat::ListDisc
-                           ? QStringLiteral("- ")
-                           : QStringLiteral("1. ");
+      QString prefix = style == QTextListFormat::ListDisc ? QStringLiteral("- ") : QStringLiteral("1. ");
       cursor.insertText(prefix);
       return;
     }
@@ -1060,10 +914,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
     }
   };
 
-  connect(actionBullet, &QAction::triggered, this,
-          [toggleList](bool) { toggleList(QTextListFormat::ListDisc); });
-  connect(actionOrdered, &QAction::triggered, this,
-          [toggleList](bool) { toggleList(QTextListFormat::ListDecimal); });
+  connect(actionBullet, &QAction::triggered, this, [toggleList](bool) { toggleList(QTextListFormat::ListDisc); });
+  connect(actionOrdered, &QAction::triggered, this, [toggleList](bool) { toggleList(QTextListFormat::ListDecimal); });
 
   connect(actionHeader, &QAction::triggered, this, [this]() {
     QTextCursor cursor = m_promptEdit->textCursor();
@@ -1071,32 +923,25 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
       cursor.movePosition(QTextCursor::StartOfLine);
       QString currentText = cursor.block().text();
       int hashCount = 0;
-      while (hashCount < currentText.length() &&
-             currentText[hashCount] == QLatin1Char('#')) {
+      while (hashCount < currentText.length() && currentText[hashCount] == QLatin1Char('#')) {
         hashCount++;
       }
       int charsToRemove = hashCount;
-      if (hashCount > 0 && charsToRemove < currentText.length() &&
-          currentText[charsToRemove] == QLatin1Char(' ')) {
+      if (hashCount > 0 && charsToRemove < currentText.length() && currentText[charsToRemove] == QLatin1Char(' ')) {
         charsToRemove++;
       }
-      cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
-                          charsToRemove);
+      cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, charsToRemove);
       cursor.removeSelectedText();
 
-      int nextLevel = (hashCount == 0 || hashCount > 3)
-                          ? 1
-                          : (hashCount == 3 ? 0 : hashCount + 1);
+      int nextLevel = (hashCount == 0 || hashCount > 3) ? 1 : (hashCount == 3 ? 0 : hashCount + 1);
       if (nextLevel > 0) {
-        cursor.insertText(QString(nextLevel, QLatin1Char('#')) +
-                          QLatin1Char(' '));
+        cursor.insertText(QString(nextLevel, QLatin1Char('#')) + QLatin1Char(' '));
       }
       return;
     }
     QTextBlockFormat blockFmt = cursor.blockFormat();
     int currentLevel = blockFmt.headingLevel();
-    int nextLevel =
-        currentLevel == 0 ? 1 : (currentLevel == 3 ? 0 : currentLevel + 1);
+    int nextLevel = currentLevel == 0 ? 1 : (currentLevel == 3 ? 0 : currentLevel + 1);
     blockFmt.setHeadingLevel(nextLevel);
     cursor.mergeBlockFormat(blockFmt);
   });
@@ -1104,8 +949,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(actionCode, &QAction::triggered, this, [this]() {
     QTextCursor cursor = m_promptEdit->textCursor();
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
-      cursor.insertText(QStringLiteral("```\n") + cursor.selectedText() +
-                        QStringLiteral("\n```"));
+      cursor.insertText(QStringLiteral("```\n") + cursor.selectedText() + QStringLiteral("\n```"));
       return;
     }
     QTextCharFormat fmt;
@@ -1117,34 +961,29 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   connect(actionTable, &QAction::triggered, this, [this]() {
     QTextCursor cursor = m_promptEdit->textCursor();
     if (m_promptEdit->currentMode() == PromptTextEdit::RawMarkdown) {
-      cursor.insertText(QStringLiteral(
-          "| Header | Header |\n|--------|--------|\n| Cell   | Cell   |"));
+      cursor.insertText(QStringLiteral("| Header | Header |\n|--------|--------|\n| Cell   | Cell   |"));
       return;
     }
     cursor.insertTable(3, 3);
   });
 
-  connect(
-      m_promptEdit, &QTextEdit::currentCharFormatChanged, this,
-      [actionBold, actionItalic, actionStrike](const QTextCharFormat &format) {
-        actionBold->setChecked(format.fontWeight() >= QFont::Bold);
-        actionItalic->setChecked(format.fontItalic());
-        actionStrike->setChecked(format.fontStrikeOut());
-      });
-  connect(m_promptEdit, &QTextEdit::cursorPositionChanged, this,
-          [this, actionBullet, actionOrdered]() {
-            QTextCursor cursor = m_promptEdit->textCursor();
-            QTextList *list = cursor.currentList();
-            if (list) {
-              actionBullet->setChecked(list->format().style() ==
-                                       QTextListFormat::ListDisc);
-              actionOrdered->setChecked(list->format().style() ==
-                                        QTextListFormat::ListDecimal);
-            } else {
-              actionBullet->setChecked(false);
-              actionOrdered->setChecked(false);
-            }
+  connect(m_promptEdit, &QTextEdit::currentCharFormatChanged, this,
+          [actionBold, actionItalic, actionStrike](const QTextCharFormat &format) {
+            actionBold->setChecked(format.fontWeight() >= QFont::Bold);
+            actionItalic->setChecked(format.fontItalic());
+            actionStrike->setChecked(format.fontStrikeOut());
           });
+  connect(m_promptEdit, &QTextEdit::cursorPositionChanged, this, [this, actionBullet, actionOrdered]() {
+    QTextCursor cursor = m_promptEdit->textCursor();
+    QTextList *list = cursor.currentList();
+    if (list) {
+      actionBullet->setChecked(list->format().style() == QTextListFormat::ListDisc);
+      actionOrdered->setChecked(list->format().style() == QTextListFormat::ListDecimal);
+    } else {
+      actionBullet->setChecked(false);
+      actionOrdered->setChecked(false);
+    }
+  });
 
   QVBoxLayout *promptLayout = new QVBoxLayout();
   promptLayout->addLayout(promptHeaderLayout);
@@ -1152,48 +991,38 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
 
   promptLayout->addWidget(m_promptEdit);
 
-  connect(m_promptEdit, &QTextEdit::textChanged, this, [this]() {
-    m_loadTemplateButton->setVisible(
-        m_promptEdit->toPlainText().trimmed().isEmpty());
-  });
+  connect(m_promptEdit, &QTextEdit::textChanged, this,
+          [this]() { m_loadTemplateButton->setVisible(m_promptEdit->toPlainText().trimmed().isEmpty()); });
 
   formLayout->addRow(tr("Prompt:"), promptLayout);
 
   // Automation Mode
   m_automationModeComboBox = new QComboBox(this);
-  m_automationModeComboBox->addItem(tr("Auto Create PR"),
-                                    QStringLiteral("AUTO_CREATE_PR"));
-  m_automationModeComboBox->addItem(
-      tr("No Automation"), QStringLiteral("AUTOMATION_MODE_UNSPECIFIED"));
+  m_automationModeComboBox->addItem(tr("Auto Create PR"), QStringLiteral("AUTO_CREATE_PR"));
+  m_automationModeComboBox->addItem(tr("No Automation"), QStringLiteral("AUTOMATION_MODE_UNSPECIFIED"));
   formLayout->addRow(tr("Automation Mode:"), m_automationModeComboBox);
 
   // Options
   QHBoxLayout *optionsLayout = new QHBoxLayout();
 
-  m_requirePlanApprovalCheckBox =
-      new QCheckBox(tr("Require Plan Approval"), this);
+  m_requirePlanApprovalCheckBox = new QCheckBox(tr("Require Plan Approval"), this);
   m_requirePlanApprovalCheckBox->setChecked(false);
   optionsLayout->addWidget(m_requirePlanApprovalCheckBox);
 
-  m_ignoreConcurrencyCheckBox =
-      new QCheckBox(tr("Bypass concurrency limits"), this);
+  m_ignoreConcurrencyCheckBox = new QCheckBox(tr("Bypass concurrency limits"), this);
   m_ignoreConcurrencyCheckBox->setChecked(false);
   optionsLayout->addWidget(m_ignoreConcurrencyCheckBox);
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
-  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(),
-                                       QStringLiteral("SourceConcurrency"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
 
   QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
   if (currentQueueMode.isEmpty()) {
-    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
-                           ? QStringLiteral("one_at_a_time")
-                           : QStringLiteral("asap");
+    currentQueueMode =
+        queueConfig.readEntry("OneAtATimeMode", false) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
 
-  bool hasAnyConcurrencyLimits =
-      (currentQueueMode == QStringLiteral("one_at_a_time"));
+  bool hasAnyConcurrencyLimits = (currentQueueMode == QStringLiteral("one_at_a_time"));
   if (!hasAnyConcurrencyLimits) {
     const QStringList sources = sourceConcurrencyConfig.keyList();
     for (const QString &source : sources) {
@@ -1249,149 +1078,102 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel,
   m_selectedView->installEventFilter(this);
 
   // Setup Actions
-  QAction *closeAction =
-      actionCollection()->addAction(QStringLiteral("file_close"));
+  QAction *closeAction = actionCollection()->addAction(QStringLiteral("file_close"));
   closeAction->setText(tr("&Close"));
   closeAction->setIcon(QIcon::fromTheme(QStringLiteral("window-close")));
   actionCollection()->setDefaultShortcut(closeAction, QKeySequence::Close);
   connect(closeAction, &QAction::triggered, this, &QWidget::close);
   connect(cancelButton, &QPushButton::clicked, closeAction, &QAction::trigger);
 
-  QAction *loadTemplateAction =
-      actionCollection()->addAction(QStringLiteral("load_template"));
+  QAction *loadTemplateAction = actionCollection()->addAction(QStringLiteral("load_template"));
   loadTemplateAction->setText(tr("&Load from template"));
-  loadTemplateAction->setIcon(
-      QIcon::fromTheme(QStringLiteral("document-open")));
-  connect(loadTemplateAction, &QAction::triggered, this,
-          &NewSessionDialog::onLoadTemplate);
-  connect(m_loadTemplateButton, &QPushButton::clicked, loadTemplateAction,
-          &QAction::trigger);
+  loadTemplateAction->setIcon(QIcon::fromTheme(QStringLiteral("document-open")));
+  connect(loadTemplateAction, &QAction::triggered, this, &NewSessionDialog::onLoadTemplate);
+  connect(m_loadTemplateButton, &QPushButton::clicked, loadTemplateAction, &QAction::trigger);
 
-  QAction *saveTemplateAction =
-      actionCollection()->addAction(QStringLiteral("save_template"));
+  QAction *saveTemplateAction = actionCollection()->addAction(QStringLiteral("save_template"));
   saveTemplateAction->setText(tr("Save as &Template"));
-  saveTemplateAction->setIcon(
-      QIcon::fromTheme(QStringLiteral("document-save-as")));
-  connect(saveTemplateAction, &QAction::triggered, this,
-          &NewSessionDialog::onSaveTemplate);
-  connect(m_saveTemplateButton, &QPushButton::clicked, saveTemplateAction,
-          &QAction::trigger);
+  saveTemplateAction->setIcon(QIcon::fromTheme(QStringLiteral("document-save-as")));
+  connect(saveTemplateAction, &QAction::triggered, this, &NewSessionDialog::onSaveTemplate);
+  connect(m_saveTemplateButton, &QPushButton::clicked, saveTemplateAction, &QAction::trigger);
 
-  QAction *saveDraftAction =
-      actionCollection()->addAction(QStringLiteral("save_draft"));
+  QAction *saveDraftAction = actionCollection()->addAction(QStringLiteral("save_draft"));
   saveDraftAction->setText(tr("Save as &Draft"));
   saveDraftAction->setIcon(QIcon::fromTheme(QStringLiteral("document-save")));
-  connect(saveDraftAction, &QAction::triggered, this,
-          &NewSessionDialog::onSaveDraft);
-  connect(draftButton, &QPushButton::clicked, saveDraftAction,
-          &QAction::trigger);
+  connect(saveDraftAction, &QAction::triggered, this, &NewSessionDialog::onSaveDraft);
+  connect(draftButton, &QPushButton::clicked, saveDraftAction, &QAction::trigger);
 
-  QAction *createSessionAction =
-      actionCollection()->addAction(QStringLiteral("create_session"));
+  QAction *createSessionAction = actionCollection()->addAction(QStringLiteral("create_session"));
   createSessionAction->setText(tr("Create &Session"));
-  createSessionAction->setIcon(
-      QIcon::fromTheme(QStringLiteral("media-playback-start")));
+  createSessionAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
   actionCollection()->setDefaultShortcuts(
-      createSessionAction, {QKeySequence(Qt::CTRL | Qt::Key_Enter),
-                            QKeySequence(Qt::CTRL | Qt::Key_Return)});
-  connect(createSessionAction, &QAction::triggered, this,
-          &NewSessionDialog::onSubmitSession);
-  connect(m_createButton, &QPushButton::clicked, createSessionAction,
-          &QAction::trigger);
+      createSessionAction, {QKeySequence(Qt::CTRL | Qt::Key_Enter), QKeySequence(Qt::CTRL | Qt::Key_Return)});
+  connect(createSessionAction, &QAction::triggered, this, &NewSessionDialog::onSubmitSession);
+  connect(m_createButton, &QPushButton::clicked, createSessionAction, &QAction::trigger);
 
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
-    m_createButton->setToolTip(
-        tr("An API key is required to create a session."));
+    m_createButton->setToolTip(tr("An API key is required to create a session."));
     createSessionAction->setEnabled(false);
   }
 
-  QAction *hideSelectedSourcesAction =
-      actionCollection()->addAction(QStringLiteral("hide_selected_sources"));
+  QAction *hideSelectedSourcesAction = actionCollection()->addAction(QStringLiteral("hide_selected_sources"));
   hideSelectedSourcesAction->setText(tr("&Hide Selected Sources"));
   hideSelectedSourcesAction->setCheckable(true);
-  actionCollection()->setDefaultShortcut(hideSelectedSourcesAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_H));
-  connect(
-      hideSelectedSourcesAction, &QAction::toggled, this,
-      [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
+  actionCollection()->setDefaultShortcut(hideSelectedSourcesAction, QKeySequence(Qt::CTRL | Qt::Key_H));
+  connect(hideSelectedSourcesAction, &QAction::toggled, this,
+          [this](bool checked) { m_sourceSelectionWidget->setVisible(!checked); });
 
-  QAction *jumpToPromptAction =
-      actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
+  QAction *jumpToPromptAction = actionCollection()->addAction(QStringLiteral("jump_to_prompt"));
   jumpToPromptAction->setText(tr("Jump to &Prompt"));
-  actionCollection()->setDefaultShortcut(jumpToPromptAction,
-                                         QKeySequence(Qt::ALT | Qt::Key_P));
-  connect(jumpToPromptAction, &QAction::triggered, m_promptEdit,
-          qOverload<>(&QWidget::setFocus));
+  actionCollection()->setDefaultShortcut(jumpToPromptAction, QKeySequence(Qt::ALT | Qt::Key_P));
+  connect(jumpToPromptAction, &QAction::triggered, m_promptEdit, qOverload<>(&QWidget::setFocus));
 
   // Sync checkboxes with actions
-  QAction *requirePlanApprovalAction =
-      actionCollection()->addAction(QStringLiteral("require_plan_approval"));
+  QAction *requirePlanApprovalAction = actionCollection()->addAction(QStringLiteral("require_plan_approval"));
   requirePlanApprovalAction->setText(tr("Require &Plan Approval"));
   requirePlanApprovalAction->setCheckable(true);
-  requirePlanApprovalAction->setChecked(
-      m_requirePlanApprovalCheckBox->isChecked());
-  actionCollection()->setDefaultShortcut(requirePlanApprovalAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_P));
-  connect(requirePlanApprovalAction, &QAction::toggled,
-          m_requirePlanApprovalCheckBox, &QCheckBox::setChecked);
-  connect(m_requirePlanApprovalCheckBox, &QCheckBox::toggled,
-          requirePlanApprovalAction, &QAction::setChecked);
+  requirePlanApprovalAction->setChecked(m_requirePlanApprovalCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(requirePlanApprovalAction, QKeySequence(Qt::CTRL | Qt::Key_P));
+  connect(requirePlanApprovalAction, &QAction::toggled, m_requirePlanApprovalCheckBox, &QCheckBox::setChecked);
+  connect(m_requirePlanApprovalCheckBox, &QCheckBox::toggled, requirePlanApprovalAction, &QAction::setChecked);
 
-  QAction *keepOpenAction =
-      actionCollection()->addAction(QStringLiteral("keep_open_after_saving"));
+  QAction *keepOpenAction = actionCollection()->addAction(QStringLiteral("keep_open_after_saving"));
   keepOpenAction->setText(tr("&Keep window open after saving"));
   keepOpenAction->setCheckable(true);
   keepOpenAction->setChecked(m_keepOpenCheckBox->isChecked());
-  actionCollection()->setDefaultShortcut(keepOpenAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_K));
-  connect(keepOpenAction, &QAction::toggled, m_keepOpenCheckBox,
-          &QCheckBox::setChecked);
-  connect(m_keepOpenCheckBox, &QCheckBox::toggled, keepOpenAction,
-          &QAction::setChecked);
+  actionCollection()->setDefaultShortcut(keepOpenAction, QKeySequence(Qt::CTRL | Qt::Key_K));
+  connect(keepOpenAction, &QAction::toggled, m_keepOpenCheckBox, &QCheckBox::setChecked);
+  connect(m_keepOpenCheckBox, &QCheckBox::toggled, keepOpenAction, &QAction::setChecked);
 
-  QAction *keepSourceAction =
-      actionCollection()->addAction(QStringLiteral("keep_source_selected"));
+  QAction *keepSourceAction = actionCollection()->addAction(QStringLiteral("keep_source_selected"));
   keepSourceAction->setText(tr("Keep &source selected after saving"));
   keepSourceAction->setCheckable(true);
   keepSourceAction->setChecked(m_keepSourceCheckBox->isChecked());
-  actionCollection()->setDefaultShortcut(keepSourceAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_L));
-  connect(keepSourceAction, &QAction::toggled, m_keepSourceCheckBox,
-          &QCheckBox::setChecked);
-  connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction,
-          &QAction::setChecked);
+  actionCollection()->setDefaultShortcut(keepSourceAction, QKeySequence(Qt::CTRL | Qt::Key_L));
+  connect(keepSourceAction, &QAction::toggled, m_keepSourceCheckBox, &QCheckBox::setChecked);
+  connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction, &QAction::setChecked);
 
-  QAction *setDefaultFilterAction =
-      actionCollection()->addAction(QStringLiteral("set_default_filter"));
+  QAction *setDefaultFilterAction = actionCollection()->addAction(QStringLiteral("set_default_filter"));
   setDefaultFilterAction->setText(tr("Save Current Filter as Default"));
   connect(setDefaultFilterAction, &QAction::triggered, this, [this]() {
-    KConfigGroup config(KSharedConfig::openConfig(),
-                        QStringLiteral("NewSessionDialog"));
-    config.writeEntry(QStringLiteral("DefaultFilter"),
-                      m_filterEditor->filterText());
+    KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
+    config.writeEntry(QStringLiteral("DefaultFilter"), m_filterEditor->filterText());
     config.sync();
   });
 
-  QAction *refreshSourcesAction =
-      actionCollection()->addAction(QStringLiteral("refresh_sources"));
+  QAction *refreshSourcesAction = actionCollection()->addAction(QStringLiteral("refresh_sources"));
   refreshSourcesAction->setText(tr("Refresh Sources"));
-  refreshSourcesAction->setIcon(
-      QIcon::fromTheme(QStringLiteral("view-refresh")));
+  refreshSourcesAction->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
   connect(refreshSourcesAction, &QAction::triggered, this, [this]() {
     statusBar()->showMessage(tr("Refresh requested..."), 3000);
     Q_EMIT refreshSourcesRequested();
   });
 
-  // clang-format off
-  setupGUI(Default,
-           QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
-  // clang-format on
+  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
 }
 
-void NewSessionDialog::onSubmitSession() {
-  onSubmit(m_automationModeComboBox->currentData().toString());
-}
+void NewSessionDialog::onSubmitSession() { onSubmit(m_automationModeComboBox->currentData().toString()); }
 
 void NewSessionDialog::onLoadTemplate() {
   TemplateSelectionDialog dlg(m_templatesModel, this);
@@ -1414,13 +1196,11 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   QString prompt = data.value(QStringLiteral("prompt")).toString();
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
-    m_requirePlanApprovalCheckBox->setChecked(
-        data.value(QStringLiteral("requirePlanApproval")).toBool());
+    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
   if (data.contains(QStringLiteral("ignoreConcurrency"))) {
-    m_ignoreConcurrencyCheckBox->setChecked(
-        data.value(QStringLiteral("ignoreConcurrency")).toBool());
+    m_ignoreConcurrencyCheckBox->setChecked(data.value(QStringLiteral("ignoreConcurrency")).toBool());
   }
 
   if (data.contains(QStringLiteral("automationMode"))) {
@@ -1449,9 +1229,8 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
         m_selectedSources.insert(name, branch);
       } else {
         QString name = val.toString();
-        QModelIndexList matches = m_sourceModel->match(
-            m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1,
-            Qt::MatchExactly);
+        QModelIndexList matches =
+            m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1, Qt::MatchExactly);
         if (!matches.isEmpty()) {
           m_selectedSources.insert(name, getDefaultBranch(matches.first()));
         } else {
@@ -1460,13 +1239,8 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
       }
     }
   } else if (data.contains(QStringLiteral("sourceContext")) &&
-             data.value(QStringLiteral("sourceContext"))
-                 .toObject()
-                 .contains(QStringLiteral("sources"))) {
-    QJsonArray arr = data.value(QStringLiteral("sourceContext"))
-                         .toObject()
-                         .value(QStringLiteral("sources"))
-                         .toArray();
+             data.value(QStringLiteral("sourceContext")).toObject().contains(QStringLiteral("sources"))) {
+    QJsonArray arr = data.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("sources")).toArray();
     for (const auto &val : arr) {
       QJsonObject sObj = val.toObject();
       QString name = sObj.value(QStringLiteral("name")).toString();
@@ -1477,9 +1251,8 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
     QString name = data.value(QStringLiteral("source")).toString();
     QString branch = data.value(QStringLiteral("startingBranch")).toString();
     if (branch.isEmpty()) {
-      QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0),
-                                                     SourceModel::NameRole,
-                                                     name, 1, Qt::MatchExactly);
+      QModelIndexList matches =
+          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1, Qt::MatchExactly);
       if (!matches.isEmpty()) {
         branch = getDefaultBranch(matches.first());
       } else {
@@ -1492,13 +1265,11 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
     if (sc.contains(QStringLiteral("source"))) {
       QString s = sc.value(QStringLiteral("source")).toString();
       if (s.startsWith(QStringLiteral("sources/"))) {
-        s = s.mid(
-            8); // Remove "sources/" prefix to match the NameRole in SourceModel
+        s = s.mid(8); // Remove "sources/" prefix to match the NameRole in SourceModel
       }
       QString branch = QStringLiteral("main");
       if (sc.contains(QStringLiteral("githubRepoContext"))) {
-        QJsonObject ghCtx =
-            sc.value(QStringLiteral("githubRepoContext")).toObject();
+        QJsonObject ghCtx = sc.value(QStringLiteral("githubRepoContext")).toObject();
         if (ghCtx.contains(QStringLiteral("startingBranch"))) {
           branch = ghCtx.value(QStringLiteral("startingBranch")).toString();
         }
@@ -1518,13 +1289,11 @@ void NewSessionDialog::setTemplateData(const QJsonObject &data) {
   m_promptEdit->setPromptText(prompt);
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
-    m_requirePlanApprovalCheckBox->setChecked(
-        data.value(QStringLiteral("requirePlanApproval")).toBool());
+    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
   }
 
   if (data.contains(QStringLiteral("ignoreConcurrency"))) {
-    m_ignoreConcurrencyCheckBox->setChecked(
-        data.value(QStringLiteral("ignoreConcurrency")).toBool());
+    m_ignoreConcurrencyCheckBox->setChecked(data.value(QStringLiteral("ignoreConcurrency")).toBool());
   }
 
   if (data.contains(QStringLiteral("automationMode"))) {
@@ -1557,15 +1326,12 @@ void NewSessionDialog::applyFilter() {
   m_unselectedProxy->setFilterQuery(filterString);
 
   bool applyToSelected = m_selectedSources.size() >= 10;
-  m_selectedProxy->setFilterAST(applyToSelected ? ast
-                                                : QSharedPointer<ASTNode>());
-  m_selectedProxy->setFilterQuery(applyToSelected ? filterString
-                                                  : QStringLiteral(""));
+  m_selectedProxy->setFilterAST(applyToSelected ? ast : QSharedPointer<ASTNode>());
+  m_selectedProxy->setFilterQuery(applyToSelected ? filterString : QStringLiteral(""));
 }
 
 void NewSessionDialog::onAddSelected() {
-  QModelIndexList selection =
-      m_unselectedView->selectionModel()->selectedIndexes();
+  QModelIndexList selection = m_unselectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &idx : selection) {
     QString name = idx.data(SourceModel::NameRole).toString();
     QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
@@ -1576,8 +1342,7 @@ void NewSessionDialog::onAddSelected() {
 }
 
 void NewSessionDialog::onRemoveSelected() {
-  QModelIndexList selection =
-      m_selectedView->selectionModel()->selectedIndexes();
+  QModelIndexList selection = m_selectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &idx : selection) {
     m_selectedSources.remove(idx.data(SourceModel::NameRole).toString());
   }
@@ -1605,8 +1370,7 @@ void NewSessionDialog::onUnselectAll() {
 
 void NewSessionDialog::onSubmit(const QString &automationMode) {
   if (m_selectedSources.isEmpty()) {
-    QMessageBox::warning(this, tr("Missing Source"),
-                         tr("Please select at least one source."));
+    QMessageBox::warning(this, tr("Missing Source"), tr("Please select at least one source."));
     return;
   }
 
@@ -1615,16 +1379,14 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
   QString prompt = m_promptEdit->getPromptText();
 
   if (prompt.isEmpty()) {
-    QMessageBox::warning(this, tr("Missing Prompt"),
-                         tr("Please enter a prompt."));
+    QMessageBox::warning(this, tr("Missing Prompt"), tr("Please enter a prompt."));
     return;
   }
 
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
   bool ignoreConcurrency = m_ignoreConcurrencyCheckBox->isChecked();
 
-  Q_EMIT createSessionRequested(sources, prompt, automationMode,
-                                requirePlanApproval, ignoreConcurrency);
+  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency);
 
   if (m_keepOpenCheckBox->isChecked()) {
     m_promptEdit->clear();
@@ -1647,8 +1409,7 @@ void NewSessionDialog::onSaveDraft() {
   }
 
   QJsonArray sourcesArr;
-  for (auto it = m_selectedSources.constBegin();
-       it != m_selectedSources.constEnd(); ++it) {
+  for (auto it = m_selectedSources.constBegin(); it != m_selectedSources.constEnd(); ++it) {
     QJsonObject sObj;
     sObj[QStringLiteral("name")] = it.key();
     sObj[QStringLiteral("branch")] = it.value();
@@ -1663,10 +1424,8 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("prompt")] = m_promptEdit->getPromptText();
   draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
-  draft[QStringLiteral("ignoreConcurrency")] =
-      m_ignoreConcurrencyCheckBox->isChecked();
-  draft[QStringLiteral("automationMode")] =
-      m_automationModeComboBox->currentData().toString();
+  draft[QStringLiteral("ignoreConcurrency")] = m_ignoreConcurrencyCheckBox->isChecked();
+  draft[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveDraftRequested(draft);
   close();
@@ -1679,8 +1438,7 @@ void NewSessionDialog::onSaveTemplate() {
   }
 
   QJsonArray sourcesArr;
-  for (auto it = m_selectedSources.constBegin();
-       it != m_selectedSources.constEnd(); ++it) {
+  for (auto it = m_selectedSources.constBegin(); it != m_selectedSources.constEnd(); ++it) {
     QJsonObject sObj;
     sObj[QStringLiteral("name")] = it.key();
     sObj[QStringLiteral("branch")] = it.value();
@@ -1700,10 +1458,8 @@ void NewSessionDialog::onSaveTemplate() {
   tmpl[QStringLiteral("name")] = dlg.nameOrComment();
   tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
-  tmpl[QStringLiteral("ignoreConcurrency")] =
-      m_ignoreConcurrencyCheckBox->isChecked();
-  tmpl[QStringLiteral("automationMode")] =
-      m_automationModeComboBox->currentData().toString();
+  tmpl[QStringLiteral("ignoreConcurrency")] = m_ignoreConcurrencyCheckBox->isChecked();
+  tmpl[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveTemplateRequested(tmpl);
   // We do not close the dialog when saving a template, it can be used multiple
@@ -1722,11 +1478,9 @@ void NewSessionDialog::showEvent(QShowEvent *event) {
 
 void NewSessionDialog::hideEvent(QHideEvent *event) {
   KXmlGuiWindow::hideEvent(event);
-  KConfigGroup config(KSharedConfig::openConfig(),
-                      QStringLiteral("NewSessionDialog"));
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("NewSessionDialog"));
   config.writeEntry(QStringLiteral("Geometry"), saveGeometry());
-  config.writeEntry(QStringLiteral("MarkdownMode"),
-                    m_markdownModeComboBox->currentIndex());
+  config.writeEntry(QStringLiteral("MarkdownMode"), m_markdownModeComboBox->currentIndex());
 }
 
 bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
@@ -1775,14 +1529,11 @@ bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
 }
 
 QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
-  QJsonObject rawData =
-      m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+  QJsonObject rawData = m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
 
-  QJsonObject githubRepo =
-      rawData.value(QStringLiteral("githubRepo")).toObject();
+  QJsonObject githubRepo = rawData.value(QStringLiteral("githubRepo")).toObject();
   if (githubRepo.contains(QStringLiteral("defaultBranch"))) {
-    QJsonObject db =
-        githubRepo.value(QStringLiteral("defaultBranch")).toObject();
+    QJsonObject db = githubRepo.value(QStringLiteral("defaultBranch")).toObject();
     if (db.contains(QStringLiteral("displayName"))) {
       return db.value(QStringLiteral("displayName")).toString();
     }
@@ -1798,12 +1549,10 @@ QString NewSessionDialog::getDefaultBranch(const QModelIndex &sourceIdx) {
   return QStringLiteral("main");
 }
 
-QStringList
-NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
+QStringList NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
   QStringList branches;
   QSet<QString> seen;
-  QJsonObject rawData =
-      m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
+  QJsonObject rawData = m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
 
   auto addUnique = [&](const QJsonArray &arr) {
     for (const QJsonValue &v : arr) {
@@ -1826,8 +1575,7 @@ NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
     }
   };
 
-  QJsonObject githubRepo =
-      rawData.value(QStringLiteral("githubRepo")).toObject();
+  QJsonObject githubRepo = rawData.value(QStringLiteral("githubRepo")).toObject();
   addUniqueObjs(githubRepo.value(QStringLiteral("branches")).toArray());
 
   // Extract from github info if available
@@ -1866,32 +1614,23 @@ NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {
   return branches;
 }
 
-void NewSessionDialog::updateStatus(const QString &message) {
-  statusBar()->showMessage(message);
-}
+void NewSessionDialog::updateStatus(const QString &message) { statusBar()->showMessage(message); }
 
-void NewSessionDialog::addFavouriteAction(QMenu &menu,
-                                          const QModelIndex &sourceIdx) {
+void NewSessionDialog::addFavouriteAction(QMenu &menu, const QModelIndex &sourceIdx) {
   QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
-  QMenu *favMenu = menu.addMenu(
-      QIcon::fromTheme(QStringLiteral("emblem-favorite")), tr("Favourite"));
+  QMenu *favMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")), tr("Favourite"));
   QAction *toggleFavAction = favMenu->addAction(tr("Toggle Favourite"));
-  connect(toggleFavAction, &QAction::triggered, this,
-          [this, id]() { m_sourceModel->toggleFavourite(id); });
+  connect(toggleFavAction, &QAction::triggered, this, [this, id]() { m_sourceModel->toggleFavourite(id); });
   QAction *incFavAction = favMenu->addAction(tr("Increase Rank"));
-  connect(incFavAction, &QAction::triggered, this,
-          [this, id]() { m_sourceModel->increaseFavouriteRank(id); });
+  connect(incFavAction, &QAction::triggered, this, [this, id]() { m_sourceModel->increaseFavouriteRank(id); });
   QAction *decFavAction = favMenu->addAction(tr("Decrease Rank"));
-  connect(decFavAction, &QAction::triggered, this,
-          [this, id]() { m_sourceModel->decreaseFavouriteRank(id); });
+  connect(decFavAction, &QAction::triggered, this, [this, id]() { m_sourceModel->decreaseFavouriteRank(id); });
   QAction *setFavAction = favMenu->addAction(tr("Set Rank..."));
   connect(setFavAction, &QAction::triggered, this, [this, id, sourceIdx]() {
     bool ok;
-    QVariant currentRankVal =
-        m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole);
+    QVariant currentRankVal = m_sourceModel->data(sourceIdx, SourceModel::FavouriteRole);
     int initialRank = currentRankVal.isValid() ? currentRankVal.toInt() : 1;
-    int rank = QInputDialog::getInt(this, tr("Set Favourite Rank"), tr("Rank:"),
-                                    initialRank, 1, 10000, 1, &ok);
+    int rank = QInputDialog::getInt(this, tr("Set Favourite Rank"), tr("Rank:"), initialRank, 1, 10000, 1, &ok);
     if (ok) {
       m_sourceModel->setFavouriteRank(id, rank);
     }

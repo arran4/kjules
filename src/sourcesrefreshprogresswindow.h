@@ -15,8 +15,7 @@ class SourcesRefreshProgressWindow : public QDialog {
   Q_OBJECT
 
 public:
-  explicit SourcesRefreshProgressWindow(APIManager *apiManager,
-                                        QWidget *parent = nullptr);
+  explicit SourcesRefreshProgressWindow(APIManager *apiManager, QWidget *parent = nullptr);
 
   void appendLog(const QString &msg);
   void setProgress(int current, int total);

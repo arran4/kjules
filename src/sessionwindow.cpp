@@ -28,88 +28,63 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-SessionWindow::SessionWindow(const QJsonObject &sessionData,
-                             APIManager *apiManager, bool isManaged,
-                             QWidget *parent)
-    : KXmlGuiWindow(parent), m_sessionData(sessionData),
-      m_apiManager(apiManager), m_isManaged(isManaged), m_tabWidget(nullptr),
-      m_statusLabel(nullptr), m_autoRefreshTimer(nullptr),
-      m_autoRefreshCombo(nullptr), m_detailsBrowser(nullptr),
-      m_promptBrowser(nullptr), m_diffBrowser(nullptr),
-      m_activityBrowser(nullptr), m_rawActivitiesBrowser(nullptr) {
-  setObjectName(QStringLiteral("SessionWindow_%1")
-                    .arg(sessionData.value(QStringLiteral("id")).toString()));
+SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged, QWidget *parent)
+    : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged),
+      m_tabWidget(nullptr), m_statusLabel(nullptr), m_autoRefreshTimer(nullptr), m_autoRefreshCombo(nullptr),
+      m_detailsBrowser(nullptr), m_promptBrowser(nullptr), m_diffBrowser(nullptr), m_activityBrowser(nullptr),
+      m_rawActivitiesBrowser(nullptr) {
+  setObjectName(QStringLiteral("SessionWindow_%1").arg(sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
 
   m_autoRefreshTimer = new QTimer(this);
-  connect(m_autoRefreshTimer, &QTimer::timeout, this,
-          &SessionWindow::refreshSession);
+  connect(m_autoRefreshTimer, &QTimer::timeout, this, &SessionWindow::refreshSession);
 
   if (m_apiManager) {
-    connect(m_apiManager, &APIManager::sessionReloaded, this,
-            &SessionWindow::onSessionReloaded);
-    connect(m_apiManager, &APIManager::activitiesReceived, this,
-            &SessionWindow::onActivitiesReceived);
-    connect(m_apiManager, &APIManager::messageSent, this,
-            &SessionWindow::onMessageSent);
-    connect(m_apiManager, &APIManager::messageSendFailed, this,
-            &SessionWindow::onMessageSendFailed);
+    connect(m_apiManager, &APIManager::sessionReloaded, this, &SessionWindow::onSessionReloaded);
+    connect(m_apiManager, &APIManager::activitiesReceived, this, &SessionWindow::onActivitiesReceived);
+    connect(m_apiManager, &APIManager::messageSent, this, &SessionWindow::onMessageSent);
+    connect(m_apiManager, &APIManager::messageSendFailed, this, &SessionWindow::onMessageSendFailed);
   }
 
   setupUi(m_sessionData);
   setupActions();
-  // clang-format off
-  setupGUI(Default,
-           QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionwindowui.rc"));
-  // clang-format on
+  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionwindowui.rc"));
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
-    QAction *closeAct =
-        actionCollection()->action(QStringLiteral("close_window"));
+    QAction *closeAct = actionCollection()->action(QStringLiteral("close_window"));
     tb->insertWidget(closeAct, new QLabel(i18n(" Auto Refresh: "), this));
     tb->insertWidget(closeAct, m_autoRefreshCombo);
     tb->insertSeparator(closeAct);
     tb->show();
   }
 
-  KConfigGroup config(KSharedConfig::openConfig(),
-                      QStringLiteral("SessionWindow"));
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);
   m_autoRefreshCombo->setCurrentIndex(autoRefreshIndex);
   updateAutoRefresh();
 }
 
 SessionWindow::~SessionWindow() {
-  KConfigGroup config(KSharedConfig::openConfig(),
-                      QStringLiteral("SessionWindow"));
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   config.writeEntry("AutoRefreshIndex", m_autoRefreshCombo->currentIndex());
   config.sync();
 }
 
 void SessionWindow::setupActions() {
   // Add core actions to actionCollection
-  QAction *refreshAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
-  actionCollection()->addAction(QStringLiteral("refresh_session"),
-                                refreshAction);
-  actionCollection()->setDefaultShortcut(refreshAction,
-                                         QKeySequence(Qt::Key_F5));
-  connect(refreshAction, &QAction::triggered, this,
-          &SessionWindow::refreshSession);
+  QAction *refreshAction = new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
+  actionCollection()->addAction(QStringLiteral("refresh_session"), refreshAction);
+  actionCollection()->setDefaultShortcut(refreshAction, QKeySequence(Qt::Key_F5));
+  connect(refreshAction, &QAction::triggered, this, &SessionWindow::refreshSession);
 
   QAction *duplicateAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("edit-copy")),
-                  i18n("Duplicate Session"), this);
-  actionCollection()->addAction(QStringLiteral("duplicate_session"),
-                                duplicateAction);
-  connect(duplicateAction, &QAction::triggered, this,
-          &SessionWindow::duplicateSession);
+      new QAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Duplicate Session"), this);
+  actionCollection()->addAction(QStringLiteral("duplicate_session"), duplicateAction);
+  connect(duplicateAction, &QAction::triggered, this, &SessionWindow::duplicateSession);
 
-  QAction *closeAction = new QAction(
-      QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), this);
+  QAction *closeAction = new QAction(QIcon::fromTheme(QStringLiteral("window-close")), i18n("Close"), this);
   actionCollection()->addAction(QStringLiteral("close_window"), closeAction);
-  actionCollection()->setDefaultShortcut(closeAction,
-                                         QKeySequence(Qt::CTRL | Qt::Key_W));
+  actionCollection()->setDefaultShortcut(closeAction, QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
   m_autoRefreshCombo = new QComboBox(this);
@@ -118,27 +93,20 @@ void SessionWindow::setupActions() {
   m_autoRefreshCombo->addItem(i18n("30 seconds"), 30);
   m_autoRefreshCombo->addItem(i18n("1 minute"), 60);
   m_autoRefreshCombo->addItem(i18n("5 minutes"), 300);
-  connect(m_autoRefreshCombo,
-          QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+  connect(m_autoRefreshCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
           &SessionWindow::updateAutoRefresh);
 
   QAction *saveTemplateAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")),
-                  i18n("Save prompt as template"), this);
+      new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Save prompt as template"), this);
   connect(saveTemplateAction, &QAction::triggered, this, [this]() {
     QJsonObject templateData;
-    templateData[QStringLiteral("prompt")] =
-        m_sessionData.value(QStringLiteral("prompt")).toString();
-    templateData[QStringLiteral("automationMode")] =
-        m_sessionData.value(QStringLiteral("automationMode")).toString();
+    templateData[QStringLiteral("prompt")] = m_sessionData.value(QStringLiteral("prompt")).toString();
+    templateData[QStringLiteral("automationMode")] = m_sessionData.value(QStringLiteral("automationMode")).toString();
     Q_EMIT templateRequested(templateData);
   });
-  actionCollection()->addAction(QStringLiteral("save_template"),
-                                saveTemplateAction);
+  actionCollection()->addAction(QStringLiteral("save_template"), saveTemplateAction);
 
-  QAction *watchAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("visibility")),
-                  i18n("Follow Session"), this);
+  QAction *watchAction = new QAction(QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"), this);
   connect(watchAction, &QAction::triggered, this, [this, watchAction]() {
     Q_EMIT watchRequested(m_sessionData);
     m_isManaged = true;
@@ -149,27 +117,18 @@ void SessionWindow::setupActions() {
     watchAction->setEnabled(false);
   }
 
-  QAction *archiveAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("archive")),
-                  i18n("Archive Session"), this);
-  connect(archiveAction, &QAction::triggered, this, [this]() {
-    Q_EMIT archiveRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
-  });
-  actionCollection()->addAction(QStringLiteral("archive_session"),
-                                archiveAction);
+  QAction *archiveAction = new QAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"), this);
+  connect(archiveAction, &QAction::triggered, this,
+          [this]() { Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString()); });
+  actionCollection()->addAction(QStringLiteral("archive_session"), archiveAction);
   if (!m_isManaged) {
     archiveAction->setEnabled(false);
   }
 
-  QAction *deleteAction =
-      new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")),
-                  i18n("Unmanage Session"), this);
+  QAction *deleteAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage Session"), this);
   deleteAction->setShortcut(QKeySequence::Delete);
-  connect(deleteAction, &QAction::triggered, this, [this]() {
-    Q_EMIT deleteRequested(
-        m_sessionData.value(QStringLiteral("id")).toString());
-  });
+  connect(deleteAction, &QAction::triggered, this,
+          [this]() { Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString()); });
   actionCollection()->addAction(QStringLiteral("delete_session"), deleteAction);
   if (!m_isManaged) {
     deleteAction->setEnabled(false);
@@ -178,16 +137,14 @@ void SessionWindow::setupActions() {
   QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
   connect(openJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
-    Utils::openUrl(
-        QUrl(QStringLiteral("https://jules.google.com/session/") + id));
+    Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
   });
   actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
   QAction *copyJulesAction = new QAction(i18n("Copy Jules URL"), this);
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
-    QGuiApplication::clipboard()->setText(
-        QStringLiteral("https://jules.google.com/session/") + id);
+    QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/session/") + id);
   });
   actionCollection()->addAction(QStringLiteral("copy_jules"), copyJulesAction);
 
@@ -196,32 +153,23 @@ void SessionWindow::setupActions() {
   for (int i = 0; i < outputs.size(); ++i) {
     QJsonObject outObj = outputs[i].toObject();
     if (outObj.contains(QStringLiteral("pullRequest"))) {
-      prUrlStr = outObj.value(QStringLiteral("pullRequest"))
-                     .toObject()
-                     .value(QStringLiteral("url"))
-                     .toString();
+      prUrlStr = outObj.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
     }
   }
 
   if (!prUrlStr.isEmpty()) {
     QAction *openPrAction = new QAction(i18n("Open Pull Request URL"), this);
-    connect(openPrAction, &QAction::triggered, this,
-            [prUrlStr]() { Utils::openUrl(QUrl(prUrlStr)); });
+    connect(openPrAction, &QAction::triggered, this, [prUrlStr]() { Utils::openUrl(QUrl(prUrlStr)); });
     actionCollection()->addAction(QStringLiteral("open_pr"), openPrAction);
 
     QAction *copyPrAction = new QAction(i18n("Copy Pull Request URL"), this);
-    connect(copyPrAction, &QAction::triggered, this,
-            [prUrlStr]() { QGuiApplication::clipboard()->setText(prUrlStr); });
+    connect(copyPrAction, &QAction::triggered, this, [prUrlStr]() { QGuiApplication::clipboard()->setText(prUrlStr); });
     actionCollection()->addAction(QStringLiteral("copy_pr"), copyPrAction);
 
     if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
-      QJsonObject prInfo =
-          m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+      QJsonObject prInfo = m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
       if (prInfo.contains(QStringLiteral("head"))) {
-        QString branchName = prInfo.value(QStringLiteral("head"))
-                                 .toObject()
-                                 .value(QStringLiteral("ref"))
-                                 .toString();
+        QString branchName = prInfo.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
         QString branchUrl = prInfo.value(QStringLiteral("head"))
                                 .toObject()
                                 .value(QStringLiteral("repo"))
@@ -231,17 +179,13 @@ void SessionWindow::setupActions() {
                             QStringLiteral("/tree/") + branchName;
 
         QAction *openBranchAction = new QAction(i18n("Open Branch URL"), this);
-        connect(openBranchAction, &QAction::triggered, this,
-                [branchUrl]() { Utils::openUrl(QUrl(branchUrl)); });
-        actionCollection()->addAction(QStringLiteral("open_branch"),
-                                      openBranchAction);
+        connect(openBranchAction, &QAction::triggered, this, [branchUrl]() { Utils::openUrl(QUrl(branchUrl)); });
+        actionCollection()->addAction(QStringLiteral("open_branch"), openBranchAction);
 
         QAction *copyBranchAction = new QAction(i18n("Copy Branch URL"), this);
-        connect(copyBranchAction, &QAction::triggered, this, [branchUrl]() {
-          QGuiApplication::clipboard()->setText(branchUrl);
-        });
-        actionCollection()->addAction(QStringLiteral("copy_branch"),
-                                      copyBranchAction);
+        connect(copyBranchAction, &QAction::triggered, this,
+                [branchUrl]() { QGuiApplication::clipboard()->setText(branchUrl); });
+        actionCollection()->addAction(QStringLiteral("copy_branch"), copyBranchAction);
       }
     }
   }
@@ -277,8 +221,7 @@ void SessionWindow::onSessionReloaded(const QJsonObject &session) {
 
   if (currentId == incomingId) {
     m_sessionData = session;
-    m_sessionData[QStringLiteral("lastRefreshed")] =
-        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     renderDetailsAndDiff();
 
@@ -311,9 +254,7 @@ void SessionWindow::onMessageSent(const QString &sessionId) {
   }
 }
 
-void SessionWindow::onMessageSendFailed(const QString &sessionId,
-                                        const QString &message,
-                                        const QString &httpDetails) {
+void SessionWindow::onMessageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails) {
   QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
   if (currentId != sessionId)
     return;
@@ -331,8 +272,7 @@ void SessionWindow::onMessageSendFailed(const QString &sessionId,
   if (m_statusLabel) {
     QString errorText = message;
     if (!httpDetails.isEmpty()) {
-      errorText +=
-          QStringLiteral(" <a href=\"#show_error_details\">[Details]</a>");
+      errorText += QStringLiteral(" <a href=\"#show_error_details\">[Details]</a>");
     }
     m_statusLabel->setText(i18n("Failed to send message: %1", errorText));
     m_statusLabel->setTextFormat(Qt::RichText);
@@ -348,8 +288,7 @@ void SessionWindow::onMessageSendFailed(const QString &sessionId,
   }
 }
 
-void SessionWindow::onActivitiesReceived(const QString &sessionId,
-                                         const QJsonArray &activities) {
+void SessionWindow::onActivitiesReceived(const QString &sessionId, const QJsonArray &activities) {
   QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
   if (currentId != sessionId)
     return;
@@ -372,13 +311,10 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId,
   m_activityBrowser->setActivities(turns);
 
   QJsonDocument activitiesDoc(turns);
-  m_rawActivitiesBrowser->setPlainText(
-      QString::fromUtf8(activitiesDoc.toJson(QJsonDocument::Indented)));
+  m_rawActivitiesBrowser->setPlainText(QString::fromUtf8(activitiesDoc.toJson(QJsonDocument::Indented)));
 
-  m_statusLabel->setText(
-      i18n("Refreshed at %1",
-           QDateTime::currentDateTime().toString(
-               QLocale::system().dateFormat(QLocale::ShortFormat))));
+  m_statusLabel->setText(i18n(
+      "Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
 }
 
 void SessionWindow::renderDetailsAndDiff() {
@@ -388,91 +324,67 @@ void SessionWindow::renderDetailsAndDiff() {
 
   QString title = m_sessionData.value(QStringLiteral("title")).toString();
   QString sessionId = m_sessionData.value(QStringLiteral("id")).toString();
-  QString lastRefreshed =
-      m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
+  QString lastRefreshed = m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
   QString state = m_sessionData.value(QStringLiteral("state")).toString();
-  QJsonObject sourceContext =
-      m_sessionData.value(QStringLiteral("sourceContext")).toObject();
+  QJsonObject sourceContext = m_sessionData.value(QStringLiteral("sourceContext")).toObject();
   QString source = sourceContext.value(QStringLiteral("source")).toString();
-  bool environmentVariablesEnabled =
-      sourceContext.value(QStringLiteral("environmentVariablesEnabled"))
-          .toBool();
-  QString startingBranch =
-      sourceContext.value(QStringLiteral("githubRepoContext"))
-          .toObject()
-          .value(QStringLiteral("startingBranch"))
-          .toString();
-  QString createTime =
-      m_sessionData.value(QStringLiteral("createTime")).toString();
-  QString updateTime =
-      m_sessionData.value(QStringLiteral("updateTime")).toString();
+  bool environmentVariablesEnabled = sourceContext.value(QStringLiteral("environmentVariablesEnabled")).toBool();
+  QString startingBranch = sourceContext.value(QStringLiteral("githubRepoContext"))
+                               .toObject()
+                               .value(QStringLiteral("startingBranch"))
+                               .toString();
+  QString createTime = m_sessionData.value(QStringLiteral("createTime")).toString();
+  QString updateTime = m_sessionData.value(QStringLiteral("updateTime")).toString();
   QString promptText = m_sessionData.value(QStringLiteral("prompt")).toString();
 
   if (!createTime.isEmpty()) {
     QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
     if (dt.isValid()) {
-      createTime = dt.toLocalTime().toString(
-          QLocale::system().dateFormat(QLocale::ShortFormat));
+      createTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
     }
   }
   if (!updateTime.isEmpty()) {
     QDateTime dt = QDateTime::fromString(updateTime, Qt::ISODate);
     if (dt.isValid()) {
-      updateTime = dt.toLocalTime().toString(
-          QLocale::system().dateFormat(QLocale::ShortFormat));
+      updateTime = dt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat));
     }
   }
 
-  QString detailsHtml =
-      QStringLiteral("<html><head><style>") +
-      QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
-                     "line-height: 1.6; }") +
-      QStringLiteral(
-          "th { text-align: left; padding-right: 15px; color: #555; }") +
-      QStringLiteral("a { color: #3498db; text-decoration: none; }") +
-      QStringLiteral("a:hover { text-decoration: underline; }") +
-      QStringLiteral("</style></head><body><h2>") + i18n("Session Details") +
-      QStringLiteral("</h2><table>");
+  QString detailsHtml = QStringLiteral("<html><head><style>") +
+                        QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                                       "line-height: 1.6; }") +
+                        QStringLiteral("th { text-align: left; padding-right: 15px; color: #555; }") +
+                        QStringLiteral("a { color: #3498db; text-decoration: none; }") +
+                        QStringLiteral("a:hover { text-decoration: underline; }") +
+                        QStringLiteral("</style></head><body><h2>") + i18n("Session Details") +
+                        QStringLiteral("</h2><table>");
 
-  QString julesUrl =
-      QStringLiteral("https://jules.google.com/session/") + sessionId;
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") +
-                 QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
+  QString julesUrl = QStringLiteral("https://jules.google.com/session/") + sessionId;
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("ID:") + QStringLiteral("</th><td>") + sessionId.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Jules URL:") +
-                 QStringLiteral("</th><td><a href=\"") +
-                 julesUrl.toHtmlEscaped() + QStringLiteral("\">") +
-                 julesUrl.toHtmlEscaped() + QStringLiteral("</a></td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") +
-                 QStringLiteral("</th><td>") + state.toHtmlEscaped() +
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Jules URL:") + QStringLiteral("</th><td><a href=\"") +
+                 julesUrl.toHtmlEscaped() + QStringLiteral("\">") + julesUrl.toHtmlEscaped() +
+                 QStringLiteral("</a></td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("State:") + QStringLiteral("</th><td>") + state.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") +
-                 QStringLiteral("</th><td>") + source.toHtmlEscaped() +
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Source:") + QStringLiteral("</th><td>") + source.toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
   if (!startingBranch.isEmpty()) {
-    detailsHtml += QStringLiteral("<tr><th>") + i18n("Starting Branch:") +
-                   QStringLiteral("</th><td>") +
-                   startingBranch.toHtmlEscaped() +
-                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Starting Branch:") + QStringLiteral("</th><td>") +
+                   startingBranch.toHtmlEscaped() + QStringLiteral("</td></tr>");
   }
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Env Vars Enabled:") +
-                 QStringLiteral("</th><td>") +
-                 (environmentVariablesEnabled ? i18n("Yes") : i18n("No")) +
-                 QStringLiteral("</td></tr>");
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Env Vars Enabled:") + QStringLiteral("</th><td>") +
+                 (environmentVariablesEnabled ? i18n("Yes") : i18n("No")) + QStringLiteral("</td></tr>");
   if (!createTime.isEmpty()) {
-    detailsHtml += QStringLiteral("<tr><th>") + i18n("Create Time:") +
-                   QStringLiteral("</th><td>") + createTime.toHtmlEscaped() +
-                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Create Time:") + QStringLiteral("</th><td>") +
+                   createTime.toHtmlEscaped() + QStringLiteral("</td></tr>");
   }
   if (!updateTime.isEmpty()) {
-    detailsHtml += QStringLiteral("<tr><th>") + i18n("Update Time:") +
-                   QStringLiteral("</th><td>") + updateTime.toHtmlEscaped() +
-                   QStringLiteral("</td></tr>");
+    detailsHtml += QStringLiteral("<tr><th>") + i18n("Update Time:") + QStringLiteral("</th><td>") +
+                   updateTime.toHtmlEscaped() + QStringLiteral("</td></tr>");
   }
-  detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") +
-                 QStringLiteral("</th><td>") +
-                 (lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed)
-                     .toHtmlEscaped() +
+  detailsHtml += QStringLiteral("<tr><th>") + i18n("Last Refreshed:") + QStringLiteral("</th><td>") +
+                 (lastRefreshed.isEmpty() ? i18n("Never") : lastRefreshed).toHtmlEscaped() +
                  QStringLiteral("</td></tr>");
   detailsHtml += QStringLiteral("</table>");
 
@@ -481,27 +393,21 @@ void SessionWindow::renderDetailsAndDiff() {
   for (int i = 0; i < outputs.size(); ++i) {
     QJsonObject outObj = outputs[i].toObject();
     if (outObj.contains(QStringLiteral("pullRequest"))) {
-      QJsonObject prObj =
-          outObj.value(QStringLiteral("pullRequest")).toObject();
+      QJsonObject prObj = outObj.value(QStringLiteral("pullRequest")).toObject();
       QString prUrl = prObj.value(QStringLiteral("url")).toString();
       QString prTitle = prObj.value(QStringLiteral("title")).toString();
-      detailsHtml += QStringLiteral("<hr/><h3>") + i18n("Pull Request") +
-                     QStringLiteral("</h3><table>");
-      detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
-                     QStringLiteral("</th><td>") + prTitle.toHtmlEscaped() +
-                     QStringLiteral("</td></tr>");
-      detailsHtml += QStringLiteral("<tr><th>") + i18n("URL:") +
-                     QStringLiteral("</th><td><a href=\"") +
-                     prUrl.toHtmlEscaped() + QStringLiteral("\">") +
-                     prUrl.toHtmlEscaped() + QStringLiteral("</a></td></tr>");
+      detailsHtml += QStringLiteral("<hr/><h3>") + i18n("Pull Request") + QStringLiteral("</h3><table>");
+      detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") +
+                     prTitle.toHtmlEscaped() + QStringLiteral("</td></tr>");
+      detailsHtml += QStringLiteral("<tr><th>") + i18n("URL:") + QStringLiteral("</th><td><a href=\"") +
+                     prUrl.toHtmlEscaped() + QStringLiteral("\">") + prUrl.toHtmlEscaped() +
+                     QStringLiteral("</a></td></tr>");
       detailsHtml += QStringLiteral("</table>");
     }
     if (outObj.contains(QStringLiteral("changeSet"))) {
-      QJsonObject changeSet =
-          outObj.value(QStringLiteral("changeSet")).toObject();
+      QJsonObject changeSet = outObj.value(QStringLiteral("changeSet")).toObject();
       if (changeSet.contains(QStringLiteral("gitPatch"))) {
-        QJsonObject gitPatch =
-            changeSet.value(QStringLiteral("gitPatch")).toObject();
+        QJsonObject gitPatch = changeSet.value(QStringLiteral("gitPatch")).toObject();
         diffText = gitPatch.value(QStringLiteral("unidiffPatch")).toString();
       }
     }
@@ -512,72 +418,53 @@ void SessionWindow::renderDetailsAndDiff() {
   m_detailsBrowser->setHtml(detailsHtml);
 
   if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
-    QJsonObject prInfo =
-        m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
-    QString prHtml =
-        QStringLiteral("<html><head><style>") +
-        QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
-                       "line-height: 1.6; }") +
-        QStringLiteral(
-            "th { text-align: left; padding-right: 15px; color: #555; }") +
-        QStringLiteral("a { color: #3498db; text-decoration: none; }") +
-        QStringLiteral("a:hover { text-decoration: underline; }") +
-        QStringLiteral("</style></head><body><h2>") +
-        i18n("Pull Request Summary") + QStringLiteral("</h2><table>");
+    QJsonObject prInfo = m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+    QString prHtml = QStringLiteral("<html><head><style>") +
+                     QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
+                                    "line-height: 1.6; }") +
+                     QStringLiteral("th { text-align: left; padding-right: 15px; color: #555; }") +
+                     QStringLiteral("a { color: #3498db; text-decoration: none; }") +
+                     QStringLiteral("a:hover { text-decoration: underline; }") +
+                     QStringLiteral("</style></head><body><h2>") + i18n("Pull Request Summary") +
+                     QStringLiteral("</h2><table>");
 
-    prHtml += QStringLiteral("<tr><th>") + i18n("Title:") +
-              QStringLiteral("</th><td>") +
-              prInfo.value(QStringLiteral("title")).toString().toHtmlEscaped() +
-              QStringLiteral("</td></tr>");
+    prHtml += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") +
+              prInfo.value(QStringLiteral("title")).toString().toHtmlEscaped() + QStringLiteral("</td></tr>");
     QString state = prInfo.value(QStringLiteral("state")).toString();
     if (prInfo.value(QStringLiteral("merged_at")).isString()) {
       state = QStringLiteral("merged");
     }
-    prHtml += QStringLiteral("<tr><th>") + i18n("State:") +
-              QStringLiteral("</th><td>") + state.toHtmlEscaped() +
+    prHtml += QStringLiteral("<tr><th>") + i18n("State:") + QStringLiteral("</th><td>") + state.toHtmlEscaped() +
               QStringLiteral("</td></tr>");
 
     QJsonArray labels = prInfo.value(QStringLiteral("labels")).toArray();
     if (!labels.isEmpty()) {
       QStringList labelNames;
       for (int i = 0; i < labels.size(); ++i) {
-        labelNames.append(
-            labels[i].toObject().value(QStringLiteral("name")).toString());
+        labelNames.append(labels[i].toObject().value(QStringLiteral("name")).toString());
       }
-      prHtml += QStringLiteral("<tr><th>") + i18n("Labels:") +
-                QStringLiteral("</th><td>") +
-                labelNames.join(QStringLiteral(", ")).toHtmlEscaped() +
-                QStringLiteral("</td></tr>");
+      prHtml += QStringLiteral("<tr><th>") + i18n("Labels:") + QStringLiteral("</th><td>") +
+                labelNames.join(QStringLiteral(", ")).toHtmlEscaped() + QStringLiteral("</td></tr>");
     }
 
     if (prInfo.contains(QStringLiteral("user"))) {
-      prHtml += QStringLiteral("<tr><th>") + i18n("Author:") +
-                QStringLiteral("</th><td>") +
-                prInfo.value(QStringLiteral("user"))
-                    .toObject()
-                    .value(QStringLiteral("login"))
-                    .toString()
-                    .toHtmlEscaped() +
-                QStringLiteral("</td></tr>");
+      prHtml +=
+          QStringLiteral("<tr><th>") + i18n("Author:") + QStringLiteral("</th><td>") +
+          prInfo.value(QStringLiteral("user")).toObject().value(QStringLiteral("login")).toString().toHtmlEscaped() +
+          QStringLiteral("</td></tr>");
     }
 
     if (prInfo.contains(QStringLiteral("head"))) {
-      QString branchName = prInfo.value(QStringLiteral("head"))
-                               .toObject()
-                               .value(QStringLiteral("ref"))
-                               .toString();
-      prHtml += QStringLiteral("<tr><th>") + i18n("Branch:") +
-                QStringLiteral("</th><td>") + branchName.toHtmlEscaped() +
-                QStringLiteral("</td></tr>");
+      QString branchName = prInfo.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
+      prHtml += QStringLiteral("<tr><th>") + i18n("Branch:") + QStringLiteral("</th><td>") +
+                branchName.toHtmlEscaped() + QStringLiteral("</td></tr>");
     }
 
-    prHtml += QStringLiteral("</table><hr/><h3>") + i18n("Body") +
-              QStringLiteral("</h3>");
+    prHtml += QStringLiteral("</table><hr/><h3>") + i18n("Body") + QStringLiteral("</h3>");
 
     QString body = prInfo.value(QStringLiteral("body")).toString();
     if (body.isEmpty()) {
-      prHtml += QStringLiteral("<p><i>") + i18n("No body provided.") +
-                QStringLiteral("</i></p>");
+      prHtml += QStringLiteral("<p><i>") + i18n("No body provided.") + QStringLiteral("</i></p>");
     } else {
       // Very basic formatting for body
       prHtml += QStringLiteral("<pre style=\"white-space: pre-wrap; "
@@ -604,9 +491,7 @@ void SessionWindow::renderDetailsAndDiff() {
   }
 }
 
-void SessionWindow::duplicateSession() {
-  Q_EMIT duplicateRequested(m_sessionData);
-}
+void SessionWindow::duplicateSession() { Q_EMIT duplicateRequested(m_sessionData); }
 
 void SessionWindow::setupUi(const QJsonObject &sessionData) {
   QWidget *centralWidget = new QWidget(this);
@@ -630,8 +515,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
   m_rawActivitiesBrowser = new QTextBrowser(this);
   m_activityBrowser = new ActivityBrowser(this);
-  connect(m_activityBrowser, &ActivityBrowser::duplicateRequested, this,
-          &SessionWindow::duplicateSession);
+  connect(m_activityBrowser, &ActivityBrowser::duplicateRequested, this, &SessionWindow::duplicateSession);
   m_textBrowser = new QTextBrowser(this);
 
   m_activityTabWidget = new QWidget(this);
@@ -641,8 +525,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   QHBoxLayout *chatInputLayout = new QHBoxLayout();
   m_chatInput = new QLineEdit(this);
   m_chatInput->setPlaceholderText(i18n("Type a message..."));
-  m_sendButton = new QPushButton(QIcon::fromTheme(QStringLiteral("mail-send")),
-                                 i18n("Send"), this);
+  m_sendButton = new QPushButton(QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send"), this);
   chatInputLayout->addWidget(m_chatInput);
   chatInputLayout->addWidget(m_sendButton);
   activityLayout->addLayout(chatInputLayout);
@@ -664,8 +547,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
     m_apiManager->sendMessage(id, text);
   });
-  connect(m_chatInput, &QLineEdit::returnPressed, m_sendButton,
-          &QPushButton::click);
+  connect(m_chatInput, &QLineEdit::returnPressed, m_sendButton, &QPushButton::click);
 
   m_tabWidget->addTab(m_detailsBrowser, i18n("Details"));
   m_tabWidget->addTab(m_prBrowser, i18n("PR Details"));

@@ -13,13 +13,10 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
-RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
-                                             APIManager *apiManager,
-                                             SessionModel *sessionModel,
-                                             QWidget *parent)
-    : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()),
-      m_currentIndex(0), m_processedCount(0), m_apiManager(apiManager),
-      m_sessionModel(sessionModel), m_isFinished(false) {
+RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds, APIManager *apiManager,
+                                             SessionModel *sessionModel, QWidget *parent)
+    : QDialog(parent), m_queue(sessionIds), m_totalCount(sessionIds.size()), m_currentIndex(0), m_processedCount(0),
+      m_apiManager(apiManager), m_sessionModel(sessionModel), m_isFinished(false) {
   setWindowTitle(i18n("Refresh Progress"));
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -35,8 +32,7 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
 
   m_textBrowser = new QTextBrowser(this);
   m_textBrowser->setOpenLinks(false);
-  connect(m_textBrowser, &QTextBrowser::anchorClicked, this,
-          &RefreshProgressWindow::onAnchorClicked);
+  connect(m_textBrowser, &QTextBrowser::anchorClicked, this, &RefreshProgressWindow::onAnchorClicked);
   layout->addWidget(m_textBrowser);
 
   m_actionButton = new QToolButton(this);
@@ -49,8 +45,7 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
   m_actionButton->setMenu(menu);
 
   connect(m_actionButton, &QToolButton::clicked, this, &QDialog::hide);
-  connect(cancelAction, &QAction::triggered, this,
-          &RefreshProgressWindow::cancel);
+  connect(cancelAction, &QAction::triggered, this, &RefreshProgressWindow::cancel);
 
   m_closeButton = new QPushButton(i18n("Close"), this);
   m_closeButton->setEnabled(false); // Disable until finished
@@ -60,24 +55,19 @@ RefreshProgressWindow::RefreshProgressWindow(const QStringList &sessionIds,
   layout->addWidget(m_actionButton);
   layout->addWidget(m_closeButton);
 
-  connect(m_apiManager, &APIManager::sessionReloaded, this,
-          &RefreshProgressWindow::onSessionReloaded);
-  connect(m_apiManager, &APIManager::sessionReloadFailed, this,
-          &RefreshProgressWindow::onSessionReloadFailed);
+  connect(m_apiManager, &APIManager::sessionReloaded, this, &RefreshProgressWindow::onSessionReloaded);
+  connect(m_apiManager, &APIManager::sessionReloadFailed, this, &RefreshProgressWindow::onSessionReloadFailed);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this,
           &RefreshProgressWindow::onGithubPullRequestInfoReceived);
-  connect(m_apiManager, &APIManager::githubPullRequestFailed, this,
-          &RefreshProgressWindow::onGithubPullRequestFailed);
+  connect(m_apiManager, &APIManager::githubPullRequestFailed, this, &RefreshProgressWindow::onGithubPullRequestFailed);
 
   MainWindow *mainWindow = qobject_cast<MainWindow *>(parent);
   if (mainWindow) {
-    connect(mainWindow, &MainWindow::sessionAutoArchived, this,
-            &RefreshProgressWindow::onSessionAutoArchived);
+    connect(mainWindow, &MainWindow::sessionAutoArchived, this, &RefreshProgressWindow::onSessionAutoArchived);
   }
 
   // Start processing asynchronously so the UI can show up
-  QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
-                            Qt::QueuedConnection);
+  QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext, Qt::QueuedConnection);
 }
 
 RefreshProgressWindow::~RefreshProgressWindow() {}
@@ -93,8 +83,7 @@ void RefreshProgressWindow::addSessionIds(const QStringList &ids) {
     m_closeButton->setEnabled(false);
     m_closeButton->hide();
     m_actionButton->show();
-    QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext,
-                              Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &RefreshProgressWindow::processNext, Qt::QueuedConnection);
   }
 }
 
@@ -179,25 +168,20 @@ QString RefreshProgressWindow::getSessionLink(const QString &id) const {
 
   const QString name = m_sessionModel->getSessionName(id);
   if (name.isEmpty()) {
-    return QStringLiteral("<a href=\"session:%1\">%2</a>")
-        .arg(escapedId, escapedId);
+    return QStringLiteral("<a href=\"session:%1\">%2</a>").arg(escapedId, escapedId);
   }
-  return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>")
-      .arg(escapedId, name.toHtmlEscaped(), escapedId);
+  return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>").arg(escapedId, name.toHtmlEscaped(), escapedId);
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
-  QString id = APIManager::cleanSessionId(
-      session.value(QStringLiteral("id")).toString());
+  QString id = APIManager::cleanSessionId(session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
     QString link = getSessionLink(id);
-    m_textBrowser->append(i18n(
-        "<font color='green'>Successfully reloaded session %1.</font>", link));
+    m_textBrowser->append(i18n("<font color='green'>Successfully reloaded session %1.</font>", link));
 
     QString prUrl;
     if (session.contains(QStringLiteral("pullRequest"))) {
-      QJsonObject prObj =
-          session.value(QStringLiteral("pullRequest")).toObject();
+      QJsonObject prObj = session.value(QStringLiteral("pullRequest")).toObject();
       prUrl = prObj.value(QStringLiteral("url")).toString();
     }
 
@@ -211,43 +195,32 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
   }
 }
 
-void RefreshProgressWindow::onSessionAutoArchived(const QString &id,
-                                                  const QString &reason) {
+void RefreshProgressWindow::onSessionAutoArchived(const QString &id, const QString &reason) {
   QString link = getSessionLink(id);
-  m_textBrowser->append(
-      i18n("<font color='orange'>Session %1 auto-archived: %2</font>", link,
-           reason));
+  m_textBrowser->append(i18n("<font color='orange'>Session %1 auto-archived: %2</font>", link, reason));
 }
 
-void RefreshProgressWindow::onGithubPullRequestInfoReceived(
-    const QString &prUrl, const QJsonObject & /*info*/) {
+void RefreshProgressWindow::onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject & /*info*/) {
   QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
   for (const QString &id : idsToFinish) {
-    m_textBrowser->append(i18n(
-        "<font color='green'>Successfully fetched PR info for %1.</font>", id));
+    m_textBrowser->append(i18n("<font color='green'>Successfully fetched PR info for %1.</font>", id));
     finishCurrentTask(id);
   }
 }
 
-void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl,
-                                                      const QString &message) {
+void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl, const QString &message) {
   QList<QString> idsToFinish = m_activeTasksPrUrls.values(prUrl);
   for (const QString &id : idsToFinish) {
     QString link = getSessionLink(id);
-    m_textBrowser->append(
-        i18n("<font color='orange'>GitHub fetch failed for %1: %2</font>", link,
-             message));
+    m_textBrowser->append(i18n("<font color='orange'>GitHub fetch failed for %1: %2</font>", link, message));
     finishCurrentTask(id);
   }
 }
 
-void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId,
-                                                  const QString &message) {
+void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId, const QString &message) {
   QString cleanId = APIManager::cleanSessionId(sessionId);
   if (m_activeTasks.contains(cleanId)) {
-    m_textBrowser->append(
-        i18n("<font color='red'>Failed to reload session %1: %2</font>",
-             cleanId, message));
+    m_textBrowser->append(i18n("<font color='red'>Failed to reload session %1: %2</font>", cleanId, message));
     finishCurrentTask(cleanId);
   }
 }

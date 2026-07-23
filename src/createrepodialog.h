@@ -19,12 +19,8 @@ public:
   explicit CreateRepoDialog(APIManager *apiManager, QWidget *parent = nullptr);
 
 Q_SIGNALS:
-  void createRepoAndSessionRequested(const QString &org,
-                                     const QString &repoName, bool isPrivate,
-                                     const QString &prompt,
-                                     const QString &automationMode,
-                                     bool requirePlanApproval,
-                                     bool ignoreConcurrency);
+  void createRepoAndSessionRequested(const QString &org, const QString &repoName, bool isPrivate, const QString &prompt,
+                                     const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
 
 public Q_SLOTS:
   void updateStatus(const QString &message);

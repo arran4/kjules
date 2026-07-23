@@ -5,9 +5,7 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
-DraftsModel::DraftsModel(QObject *parent) : QAbstractListModel(parent) {
-  loadDrafts();
-}
+DraftsModel::DraftsModel(QObject *parent) : QAbstractListModel(parent) { loadDrafts(); }
 
 int DraftsModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -24,8 +22,7 @@ QVariant DraftsModel::data(const QModelIndex &index, int role) const {
   switch (role) {
   case SourceRole: {
     if (draft.contains(QStringLiteral("sources"))) {
-      QJsonArray sourcesArray =
-          draft.value(QStringLiteral("sources")).toArray();
+      QJsonArray sourcesArray = draft.value(QStringLiteral("sources")).toArray();
       QStringList sourcesList;
       for (const QJsonValue &val : sourcesArray) {
         sourcesList.append(val.toString());
@@ -89,8 +86,7 @@ QJsonObject DraftsModel::getDraft(int row) const {
 }
 
 void DraftsModel::loadDrafts() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QFile file(path + QStringLiteral("/drafts.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -100,8 +96,7 @@ void DraftsModel::loadDrafts() {
 }
 
 void DraftsModel::saveDrafts() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));

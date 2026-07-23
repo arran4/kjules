@@ -56,8 +56,7 @@ private:
 
 class InNode : public ASTNode {
 public:
-  InNode(const QString &key, const QString &valuesStr)
-      : m_key(key), m_valuesStr(valuesStr) {
+  InNode(const QString &key, const QString &valuesStr) : m_key(key), m_valuesStr(valuesStr) {
     QStringList parts = valuesStr.split(QLatin1Char(','), Qt::SkipEmptyParts);
     for (const QString &p : parts) {
       QString trimmed = p.trimmed();
@@ -79,8 +78,7 @@ private:
 
 class KeyValueNode : public ASTNode {
 public:
-  KeyValueNode(const QString &key, const QString &value)
-      : m_key(key), m_value(value) {}
+  KeyValueNode(const QString &key, const QString &value) : m_key(key), m_value(value) {}
   bool evaluate(const FilterDataAccessor &accessor) const override;
   QString toString() const override;
   QString key() const { return m_key; }

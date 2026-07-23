@@ -3,29 +3,19 @@
 #include "sourcemodel.h"
 #include <KLocalizedString>
 
-BlockedTreeModel::BlockedTreeModel(SourceModel *sourceModel,
-                                   QueueModel *queueModel, QObject *parent)
-    : QAbstractItemModel(parent),
-      m_rootNode(new Node{false, QString(), -1, QString(), {}, nullptr}),
+BlockedTreeModel::BlockedTreeModel(SourceModel *sourceModel, QueueModel *queueModel, QObject *parent)
+    : QAbstractItemModel(parent), m_rootNode(new Node{false, QString(), -1, QString(), {}, nullptr}),
       m_sourceModel(sourceModel), m_queueModel(queueModel) {
 
-  connect(m_sourceModel, &QAbstractTableModel::dataChanged, this,
-          &BlockedTreeModel::onSourceModelChanged);
-  connect(m_sourceModel, &QAbstractTableModel::modelReset, this,
-          &BlockedTreeModel::onSourceModelChanged);
-  connect(m_sourceModel, &QAbstractTableModel::rowsInserted, this,
-          &BlockedTreeModel::onSourceModelChanged);
-  connect(m_sourceModel, &QAbstractTableModel::rowsRemoved, this,
-          &BlockedTreeModel::onSourceModelChanged);
+  connect(m_sourceModel, &QAbstractTableModel::dataChanged, this, &BlockedTreeModel::onSourceModelChanged);
+  connect(m_sourceModel, &QAbstractTableModel::modelReset, this, &BlockedTreeModel::onSourceModelChanged);
+  connect(m_sourceModel, &QAbstractTableModel::rowsInserted, this, &BlockedTreeModel::onSourceModelChanged);
+  connect(m_sourceModel, &QAbstractTableModel::rowsRemoved, this, &BlockedTreeModel::onSourceModelChanged);
 
-  connect(m_queueModel, &QAbstractListModel::dataChanged, this,
-          &BlockedTreeModel::onQueueModelChanged);
-  connect(m_queueModel, &QAbstractListModel::modelReset, this,
-          &BlockedTreeModel::onQueueModelChanged);
-  connect(m_queueModel, &QAbstractListModel::rowsInserted, this,
-          &BlockedTreeModel::onQueueModelChanged);
-  connect(m_queueModel, &QAbstractListModel::rowsRemoved, this,
-          &BlockedTreeModel::onQueueModelChanged);
+  connect(m_queueModel, &QAbstractListModel::dataChanged, this, &BlockedTreeModel::onQueueModelChanged);
+  connect(m_queueModel, &QAbstractListModel::modelReset, this, &BlockedTreeModel::onQueueModelChanged);
+  connect(m_queueModel, &QAbstractListModel::rowsInserted, this, &BlockedTreeModel::onQueueModelChanged);
+  connect(m_queueModel, &QAbstractListModel::rowsRemoved, this, &BlockedTreeModel::onQueueModelChanged);
 
   rebuildTree();
 }
@@ -52,8 +42,7 @@ void BlockedTreeModel::rebuildTree() {
     QModelIndex idx = m_sourceModel->index(j, 0);
     QString sourceId = m_sourceModel->data(idx, SourceModel::IdRole).toString();
     if (!sourceNames.contains(sourceId)) {
-      sourceNames.insert(
-          sourceId, m_sourceModel->data(idx, SourceModel::NameRole).toString());
+      sourceNames.insert(sourceId, m_sourceModel->data(idx, SourceModel::NameRole).toString());
     }
   }
 
@@ -63,10 +52,8 @@ void BlockedTreeModel::rebuildTree() {
       continue;
     }
 
-    QString source = item.requestData.value(QStringLiteral("sourceContext"))
-                         .toObject()
-                         .value(QStringLiteral("source"))
-                         .toString();
+    QString source =
+        item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
     if (source.isEmpty()) {
       source = item.requestData.value(QStringLiteral("source")).toString();
     }
@@ -80,8 +67,7 @@ void BlockedTreeModel::rebuildTree() {
     }
 
     Node *parentNode = sourceNodes.value(source);
-    QString prompt =
-        item.requestData.value(QStringLiteral("prompt")).toString();
+    QString prompt = item.requestData.value(QStringLiteral("prompt")).toString();
     if (prompt.length() > 50) {
       prompt = prompt.left(50) + QStringLiteral("...");
     }
@@ -94,8 +80,7 @@ void BlockedTreeModel::rebuildTree() {
   Q_EMIT layoutChanged();
 }
 
-QModelIndex BlockedTreeModel::index(int row, int column,
-                                    const QModelIndex &parent) const {
+QModelIndex BlockedTreeModel::index(int row, int column, const QModelIndex &parent) const {
   if (!hasIndex(row, column, parent)) {
     return QModelIndex();
   }
@@ -162,9 +147,7 @@ int BlockedTreeModel::totalBlockedItemsCount() const {
   return count;
 }
 
-int BlockedTreeModel::columnCount(const QModelIndex & /*parent*/) const {
-  return 1;
-}
+int BlockedTreeModel::columnCount(const QModelIndex & /*parent*/) const { return 1; }
 
 QVariant BlockedTreeModel::data(const QModelIndex &index, int role) const {
   if (!index.isValid()) {
@@ -175,9 +158,7 @@ QVariant BlockedTreeModel::data(const QModelIndex &index, int role) const {
 
   if (role == Qt::DisplayRole) {
     if (node->isSource) {
-      return QStringLiteral("%1 (%2)")
-          .arg(node->display)
-          .arg(node->children.size());
+      return QStringLiteral("%1 (%2)").arg(node->display).arg(node->children.size());
     }
     return node->display;
   } else if (role == IsSourceRole) {

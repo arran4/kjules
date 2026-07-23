@@ -11,10 +11,9 @@
 
 #include <QTimer>
 
-SourcesRefreshProgressWindow::SourcesRefreshProgressWindow(
-    APIManager *apiManager, QWidget *parent)
-    : QDialog(parent), m_apiManager(apiManager), m_totalGithubRequests(0),
-      m_finishedGithubRequests(0), m_activeWorkers(0), m_isFinished(false) {
+SourcesRefreshProgressWindow::SourcesRefreshProgressWindow(APIManager *apiManager, QWidget *parent)
+    : QDialog(parent), m_apiManager(apiManager), m_totalGithubRequests(0), m_finishedGithubRequests(0),
+      m_activeWorkers(0), m_isFinished(false) {
   setWindowTitle(tr("Sources Refresh Progress"));
   resize(600, 400);
 
@@ -41,8 +40,7 @@ SourcesRefreshProgressWindow::SourcesRefreshProgressWindow(
   m_actionButton->setMenu(menu);
 
   connect(m_actionButton, &QToolButton::clicked, this, &QDialog::hide);
-  connect(cancelAction, &QAction::triggered, this,
-          &SourcesRefreshProgressWindow::cancel);
+  connect(cancelAction, &QAction::triggered, this, &SourcesRefreshProgressWindow::cancel);
 
   m_closeButton = new QPushButton(tr("Close"), this);
   m_closeButton->hide(); // Hide initially
@@ -53,21 +51,16 @@ SourcesRefreshProgressWindow::SourcesRefreshProgressWindow(
 
   connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
 
-  connect(m_apiManager, &APIManager::sourcesReceived, this,
-          &SourcesRefreshProgressWindow::onSourcesReceived);
-  connect(m_apiManager, &APIManager::githubInfoReceived, this,
-          &SourcesRefreshProgressWindow::onGithubInfoReceived);
-  connect(m_apiManager, &APIManager::githubInfoFailed, this,
-          &SourcesRefreshProgressWindow::onGithubInfoFailed);
+  connect(m_apiManager, &APIManager::sourcesReceived, this, &SourcesRefreshProgressWindow::onSourcesReceived);
+  connect(m_apiManager, &APIManager::githubInfoReceived, this, &SourcesRefreshProgressWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubInfoFailed, this, &SourcesRefreshProgressWindow::onGithubInfoFailed);
   connect(m_apiManager, &APIManager::sourcesRefreshFinished, this,
           &SourcesRefreshProgressWindow::onSourcesRefreshFinished);
-  connect(m_apiManager, &APIManager::logMessage, this,
-          &SourcesRefreshProgressWindow::appendLog);
+  connect(m_apiManager, &APIManager::logMessage, this, &SourcesRefreshProgressWindow::appendLog);
 }
 
 void SourcesRefreshProgressWindow::appendLog(const QString &msg) {
-  QString timeStr =
-      QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
+  QString timeStr = QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
   m_textBrowser->append(QStringLiteral("[%1] %2").arg(timeStr, msg));
 }
 
@@ -89,16 +82,12 @@ void SourcesRefreshProgressWindow::reset() {
   m_closeButton->hide();
 
   m_apiManager->disconnect(this);
-  connect(m_apiManager, &APIManager::sourcesReceived, this,
-          &SourcesRefreshProgressWindow::onSourcesReceived);
-  connect(m_apiManager, &APIManager::githubInfoReceived, this,
-          &SourcesRefreshProgressWindow::onGithubInfoReceived);
-  connect(m_apiManager, &APIManager::githubInfoFailed, this,
-          &SourcesRefreshProgressWindow::onGithubInfoFailed);
+  connect(m_apiManager, &APIManager::sourcesReceived, this, &SourcesRefreshProgressWindow::onSourcesReceived);
+  connect(m_apiManager, &APIManager::githubInfoReceived, this, &SourcesRefreshProgressWindow::onGithubInfoReceived);
+  connect(m_apiManager, &APIManager::githubInfoFailed, this, &SourcesRefreshProgressWindow::onGithubInfoFailed);
   connect(m_apiManager, &APIManager::sourcesRefreshFinished, this,
           &SourcesRefreshProgressWindow::onSourcesRefreshFinished);
-  connect(m_apiManager, &APIManager::logMessage, this,
-          &SourcesRefreshProgressWindow::appendLog);
+  connect(m_apiManager, &APIManager::logMessage, this, &SourcesRefreshProgressWindow::appendLog);
 
   appendLog(tr("Starting refresh..."));
 }
@@ -112,8 +101,7 @@ void SourcesRefreshProgressWindow::cancel() {
   m_closeButton->show();
 }
 
-void SourcesRefreshProgressWindow::onSourcesReceived(
-    const QJsonArray &sources) {
+void SourcesRefreshProgressWindow::onSourcesReceived(const QJsonArray &sources) {
   if (m_isFinished)
     return;
   appendLog(tr("Loaded page with %1 sources.").arg(sources.size()));
@@ -124,8 +112,7 @@ void SourcesRefreshProgressWindow::onSourcesReceived(
       if (id.isEmpty()) {
         id = source.value(QStringLiteral("name")).toString();
       }
-      if (id.startsWith(QStringLiteral("sources/github/")) ||
-          id.startsWith(QStringLiteral("github/"))) {
+      if (id.startsWith(QStringLiteral("sources/github/")) || id.startsWith(QStringLiteral("github/"))) {
         m_totalGithubRequests++;
         m_githubQueue.append(id);
       }
@@ -140,15 +127,13 @@ void SourcesRefreshProgressWindow::processNextGithub() {
     return;
 
   if (m_githubQueue.isEmpty()) {
-    if (m_totalGithubRequests > 0 &&
-        m_finishedGithubRequests == m_totalGithubRequests) {
+    if (m_totalGithubRequests > 0 && m_finishedGithubRequests == m_totalGithubRequests) {
       m_isFinished = true;
       appendLog(tr("All GitHub API requests completed."));
       setProgress(m_finishedGithubRequests, m_totalGithubRequests);
       m_actionButton->hide();
       m_closeButton->show();
-      Q_EMIT progressSummary(tr("All %1 GitHub API requests completed.")
-                                 .arg(m_totalGithubRequests));
+      Q_EMIT progressSummary(tr("All %1 GitHub API requests completed.").arg(m_totalGithubRequests));
     } else if (m_totalGithubRequests == 0 && m_isFinished) {
       // It finished but there was nothing in the github queue
       m_actionButton->hide();
@@ -167,35 +152,29 @@ void SourcesRefreshProgressWindow::processNextGithub() {
   m_apiManager->fetchGithubInfo(id);
 
   // Stagger next requests by 1000ms
-  QTimer::singleShot(1000, this,
-                     &SourcesRefreshProgressWindow::processNextGithub);
+  QTimer::singleShot(1000, this, &SourcesRefreshProgressWindow::processNextGithub);
 }
 
-void SourcesRefreshProgressWindow::onGithubInfoReceived(
-    const QString &sourceId, const QJsonObject & /*info*/) {
+void SourcesRefreshProgressWindow::onGithubInfoReceived(const QString &sourceId, const QJsonObject & /*info*/) {
   m_finishedGithubRequests++;
   m_activeWorkers--;
   appendLog(tr("Fetched GitHub info for %1 successfully.").arg(sourceId));
   setProgress(m_finishedGithubRequests, m_totalGithubRequests);
   if (m_totalGithubRequests > 0 && m_finishedGithubRequests % 30 == 0) {
-    Q_EMIT progressSummary(tr("Fetched GitHub info for %1 of %2 sources.")
-                               .arg(m_finishedGithubRequests)
-                               .arg(m_totalGithubRequests));
+    Q_EMIT progressSummary(
+        tr("Fetched GitHub info for %1 of %2 sources.").arg(m_finishedGithubRequests).arg(m_totalGithubRequests));
   }
   processNextGithub();
 }
 
-void SourcesRefreshProgressWindow::onGithubInfoFailed(const QString &sourceId,
-                                                      const QString &message) {
+void SourcesRefreshProgressWindow::onGithubInfoFailed(const QString &sourceId, const QString &message) {
   m_finishedGithubRequests++;
   m_activeWorkers--;
-  appendLog(tr("ERROR: Failed to fetch GitHub info for %1: %2")
-                .arg(sourceId, message));
+  appendLog(tr("ERROR: Failed to fetch GitHub info for %1: %2").arg(sourceId, message));
   setProgress(m_finishedGithubRequests, m_totalGithubRequests);
   if (m_totalGithubRequests > 0 && m_finishedGithubRequests % 30 == 0) {
-    Q_EMIT progressSummary(tr("Fetched GitHub info for %1 of %2 sources.")
-                               .arg(m_finishedGithubRequests)
-                               .arg(m_totalGithubRequests));
+    Q_EMIT progressSummary(
+        tr("Fetched GitHub info for %1 of %2 sources.").arg(m_finishedGithubRequests).arg(m_totalGithubRequests));
   }
   processNextGithub();
 }

@@ -13,8 +13,7 @@ class TemplateSelectionDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit TemplateSelectionDialog(TemplatesModel *templatesModel,
-                                   QWidget *parent = nullptr);
+  explicit TemplateSelectionDialog(TemplatesModel *templatesModel, QWidget *parent = nullptr);
 
   QJsonObject selectedTemplate() const;
 

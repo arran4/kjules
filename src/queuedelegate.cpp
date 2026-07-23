@@ -8,8 +8,7 @@
 
 QueueDelegate::QueueDelegate(QObject *parent) : QStyledItemDelegate(parent) {}
 
-void QueueDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
-                          const QModelIndex &index) const {
+void QueueDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
   QStyleOptionViewItem opt = option;
   initStyleOption(&opt, index);
 
@@ -52,7 +51,6 @@ void QueueDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
   painter->restore();
 }
 
-QSize QueueDelegate::sizeHint(const QStyleOptionViewItem & /*option*/,
-                              const QModelIndex & /*index*/) const {
+QSize QueueDelegate::sizeHint(const QStyleOptionViewItem & /*option*/, const QModelIndex & /*index*/) const {
   return QSize(200, 50); // fixed size for simplicity
 }

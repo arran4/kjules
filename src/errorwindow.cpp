@@ -13,18 +13,16 @@
 #include <QVBoxLayout>
 
 ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
-    : QDialog(parent), m_row(queueRow), m_requestData(item.requestData),
-      m_lastResponse(item.lastResponse), m_lastError(item.lastError) {
+    : QDialog(parent), m_row(queueRow), m_requestData(item.requestData), m_lastResponse(item.lastResponse),
+      m_lastError(item.lastError) {
   setWindowTitle(i18n("Queue Error Details"));
   setupUi();
 }
 
-ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData,
-                         const QString &lastResponse, const QString &lastError,
-                         const QString &httpDetails, QWidget *parent)
-    : QDialog(parent), m_row(errorRow), m_requestData(requestData),
-      m_lastResponse(lastResponse), m_lastError(lastError),
-      m_httpDetails(httpDetails) {
+ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse,
+                         const QString &lastError, const QString &httpDetails, QWidget *parent)
+    : QDialog(parent), m_row(errorRow), m_requestData(requestData), m_lastResponse(lastResponse),
+      m_lastError(lastError), m_httpDetails(httpDetails) {
   setWindowTitle(i18n("Error Details"));
   setupUi();
 }
@@ -56,18 +54,15 @@ void ErrorWindow::setupUi() {
   QHBoxLayout *actionsLayout = new QHBoxLayout();
   actionsLayout->addStretch();
 
-  QPushButton *editBtn = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"), this);
+  QPushButton *editBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"), this);
   connect(editBtn, &QPushButton::clicked, [this]() {
     Q_EMIT editRequested(m_row);
     accept();
   });
 
-  QPushButton *deleteBtn = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
+  QPushButton *deleteBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
   connect(deleteBtn, &QPushButton::clicked, [this]() {
-    if (QMessageBox::question(this, i18n("Remove Task"),
-                              i18n("Remove this task from the queue?")) ==
+    if (QMessageBox::question(this, i18n("Remove Task"), i18n("Remove this task from the queue?")) ==
         QMessageBox::Yes) {
       Q_EMIT deleteRequested(m_row);
       accept();
@@ -75,37 +70,32 @@ void ErrorWindow::setupUi() {
   });
 
   QPushButton *draftBtn =
-      new QPushButton(QIcon::fromTheme(QStringLiteral("document-save-as")),
-                      i18n("Convert to Draft"), this);
+      new QPushButton(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Convert to Draft"), this);
   connect(draftBtn, &QPushButton::clicked, [this]() {
     Q_EMIT draftRequested(m_row);
     accept();
   });
 
   QPushButton *templateBtn =
-      new QPushButton(QIcon::fromTheme(QStringLiteral("edit-copy")),
-                      i18n("Copy as Template"), this);
+      new QPushButton(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"), this);
   connect(templateBtn, &QPushButton::clicked, [this]() {
     Q_EMIT templateRequested(m_row);
     accept();
   });
 
-  QPushButton *sendNowBtn = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"), this);
+  QPushButton *sendNowBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("mail-send")), i18n("Send Now"), this);
   connect(sendNowBtn, &QPushButton::clicked, [this]() {
     Q_EMIT sendNowRequested(m_row);
     accept();
   });
 
-  QPushButton *requeueBtn = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Requeue"), this);
+  QPushButton *requeueBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Requeue"), this);
   connect(requeueBtn, &QPushButton::clicked, [this]() {
     Q_EMIT requeueRequested(m_row);
     accept();
   });
 
-  QPushButton *copyErrorBtn = new QPushButton(
-      QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy Error"), this);
+  QPushButton *copyErrorBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy Error"), this);
   connect(copyErrorBtn, &QPushButton::clicked, this, &ErrorWindow::onCopyError);
 
   actionsLayout->addWidget(editBtn);
@@ -127,8 +117,7 @@ void ErrorWindow::setupUi() {
   QLabel *reqLabel = new QLabel(i18n("Raw Request:"), this);
   m_rawRequestEdit = new QTextEdit(this);
   m_rawRequestEdit->setReadOnly(true);
-  m_rawRequestEdit->setPlainText(QString::fromUtf8(
-      QJsonDocument(m_requestData).toJson(QJsonDocument::Indented)));
+  m_rawRequestEdit->setPlainText(QString::fromUtf8(QJsonDocument(m_requestData).toJson(QJsonDocument::Indented)));
 
   QLabel *resLabel = new QLabel(i18n("Raw Response:"), this);
   m_rawResponseEdit = new QTextEdit(this);

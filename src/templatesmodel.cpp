@@ -9,9 +9,7 @@
 #include <QUrl>
 #include <QUuid>
 
-TemplatesModel::TemplatesModel(QObject *parent) : QAbstractListModel(parent) {
-  loadTemplates();
-}
+TemplatesModel::TemplatesModel(QObject *parent) : QAbstractListModel(parent) { loadTemplates(); }
 
 int TemplatesModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -100,8 +98,7 @@ QJsonObject TemplatesModel::getTemplate(int row) const {
 }
 
 void TemplatesModel::loadTemplates() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QFile file(path + QStringLiteral("/templates.json"));
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -113,8 +110,7 @@ void TemplatesModel::loadTemplates() {
 }
 
 void TemplatesModel::saveTemplates() {
-  QString path =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
@@ -144,14 +140,11 @@ Qt::ItemFlags TemplatesModel::flags(const QModelIndex &index) const {
   }
 }
 
-Qt::DropActions TemplatesModel::supportedDropActions() const {
-  return Qt::CopyAction | Qt::MoveAction;
-}
+Qt::DropActions TemplatesModel::supportedDropActions() const { return Qt::CopyAction | Qt::MoveAction; }
 
 QStringList TemplatesModel::mimeTypes() const {
   QStringList types;
-  types << QStringLiteral("application/json") << QStringLiteral("text/plain")
-        << QStringLiteral("text/uri-list");
+  types << QStringLiteral("application/json") << QStringLiteral("text/plain") << QStringLiteral("text/uri-list");
   return types;
 }
 
@@ -168,10 +161,8 @@ QMimeData *TemplatesModel::mimeData(const QModelIndexList &indexes) const {
   mimeData->setData(QStringLiteral("application/json"), jsonData);
   mimeData->setText(QString::fromUtf8(jsonData));
 
-  QString tempFilePath =
-      QDir::tempPath() + QStringLiteral("/kjules_templates_export_") +
-      QUuid::createUuid().toString(QUuid::WithoutBraces).left(8) +
-      QStringLiteral(".json");
+  QString tempFilePath = QDir::tempPath() + QStringLiteral("/kjules_templates_export_") +
+                         QUuid::createUuid().toString(QUuid::WithoutBraces).left(8) + QStringLiteral(".json");
   QFile tempFile(tempFilePath);
   if (tempFile.open(QIODevice::WriteOnly)) {
     tempFile.write(jsonData);
@@ -182,14 +173,12 @@ QMimeData *TemplatesModel::mimeData(const QModelIndexList &indexes) const {
   return mimeData;
 }
 
-bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
-                                  int row, int /*column*/,
+bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int /*column*/,
                                   const QModelIndex &parent) {
   if (action == Qt::IgnoreAction)
     return true;
 
-  if (!data->hasFormat(QStringLiteral("application/json")) &&
-      !data->hasText() && !data->hasUrls())
+  if (!data->hasFormat(QStringLiteral("application/json")) && !data->hasText() && !data->hasUrls())
     return false;
 
   QByteArray jsonData;
@@ -212,9 +201,7 @@ bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
   if (!doc.isArray() && !doc.isObject())
     return false;
 
-  int beginRow =
-      (row != -1) ? row
-                  : (parent.isValid() ? parent.row() : rowCount(QModelIndex()));
+  int beginRow = (row != -1) ? row : (parent.isValid() ? parent.row() : rowCount(QModelIndex()));
 
   if (doc.isArray()) {
     QJsonArray importArray = doc.array();
@@ -227,8 +214,7 @@ bool TemplatesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     if (objectsToInsert.isEmpty())
       return false;
 
-    beginInsertRows(QModelIndex(), beginRow,
-                    beginRow + objectsToInsert.size() - 1);
+    beginInsertRows(QModelIndex(), beginRow, beginRow + objectsToInsert.size() - 1);
     for (int i = 0; i < objectsToInsert.size(); ++i) {
       m_templates.insert(beginRow + i, objectsToInsert[i]);
     }

@@ -12,8 +12,7 @@ class APIManager;
 class FollowSessionDialog : public QDialog {
   Q_OBJECT
 public:
-  explicit FollowSessionDialog(APIManager *apiManager,
-                               QWidget *parent = nullptr);
+  explicit FollowSessionDialog(APIManager *apiManager, QWidget *parent = nullptr);
   QString sessionId() const;
   QJsonObject sessionData() const;
 

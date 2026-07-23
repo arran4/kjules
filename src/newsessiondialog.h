@@ -46,18 +46,15 @@ class NewSessionDialog : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit NewSessionDialog(SourceModel *sourceModel,
-                            TemplatesModel *templatesModel, bool hasApiKey,
+  explicit NewSessionDialog(SourceModel *sourceModel, TemplatesModel *templatesModel, bool hasApiKey,
                             QWidget *parent = nullptr);
   void setInitialData(const QJsonObject &data);
   void setTemplateData(const QJsonObject &data);
   void setEditMode(bool isEdit);
 
 Q_SIGNALS:
-  void createSessionRequested(const QMultiMap<QString, QString> &sources,
-                              const QString &prompt,
-                              const QString &automationMode,
-                              bool requirePlanApproval, bool ignoreConcurrency);
+  void createSessionRequested(const QMultiMap<QString, QString> &sources, const QString &prompt,
+                              const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();

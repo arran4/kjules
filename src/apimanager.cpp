@@ -16,15 +16,12 @@ namespace {
 QMutex s_sessionCacheMutex;
 } // namespace
 
-const QString DEFAULT_BASE_URL =
-    QStringLiteral("https://jules.googleapis.com/v1alpha");
+const QString DEFAULT_BASE_URL = QStringLiteral("https://jules.googleapis.com/v1alpha");
 
 APIManager::APIManager(QObject *parent)
-    : QObject(parent), m_nam(new QNetworkAccessManager(this)),
-      m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr), m_tokenFailed(false),
-      m_githubTokenFailed(false), m_githubRateLimitReset(0),
-      m_githubRateLimitRemaining(-1), m_listSourcesReply(nullptr),
-      m_listSessionsReply(nullptr) {
+    : QObject(parent), m_nam(new QNetworkAccessManager(this)), m_baseUrl(DEFAULT_BASE_URL), m_wallet(nullptr),
+      m_tokenFailed(false), m_githubTokenFailed(false), m_githubRateLimitReset(0), m_githubRateLimitRemaining(-1),
+      m_listSourcesReply(nullptr), m_listSessionsReply(nullptr) {
   loadApiKeyFromWallet();
 }
 
@@ -63,11 +60,9 @@ void APIManager::setGithubToken(const QString &token) {
 QString APIManager::githubToken() const { return m_githubToken; }
 
 void APIManager::loadApiKeyFromWallet() {
-  m_wallet = KWallet::Wallet::openWallet(KWallet::Wallet::LocalWallet(), 0,
-                                         KWallet::Wallet::Asynchronous);
+  m_wallet = KWallet::Wallet::openWallet(KWallet::Wallet::LocalWallet(), 0, KWallet::Wallet::Asynchronous);
   if (m_wallet) {
-    connect(m_wallet, &KWallet::Wallet::walletOpened, this,
-            &APIManager::onWalletOpened);
+    connect(m_wallet, &KWallet::Wallet::walletOpened, this, &APIManager::onWalletOpened);
   }
 }
 
@@ -105,11 +100,9 @@ void APIManager::onWalletOpened(bool success) {
   }
 }
 
-QNetworkRequest APIManager::createRequest(const QString &endpoint,
-                                          const QString &overrideApiKey) {
+QNetworkRequest APIManager::createRequest(const QString &endpoint, const QString &overrideApiKey) {
   QNetworkRequest request(QUrl(m_baseUrl + endpoint));
-  request.setHeader(QNetworkRequest::ContentTypeHeader,
-                    QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
   QString key = overrideApiKey.isEmpty() ? m_apiKey : overrideApiKey;
   key.remove(QLatin1Char('\n')).remove(QLatin1Char('\r'));
   if (!key.isEmpty()) {
@@ -118,9 +111,7 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint,
   return request;
 }
 
-bool APIManager::canConnect() const {
-  return !m_apiKey.isEmpty() && !m_tokenFailed;
-}
+bool APIManager::canConnect() const { return !m_apiKey.isEmpty() && !m_tokenFailed; }
 
 QString APIManager::githubUsername() const { return m_githubUsername; }
 
@@ -129,8 +120,7 @@ QString APIManager::githubScopes() const { return m_githubScopes; }
 void APIManager::testGithubConnection(const QString &token) {
   QString tk = token.isEmpty() ? m_githubToken : token;
   if (tk.isEmpty()) {
-    Q_EMIT githubConnectionTested(false,
-                                  QStringLiteral("No GitHub token provided."));
+    Q_EMIT githubConnectionTested(false, QStringLiteral("No GitHub token provided."));
     return;
   }
 
@@ -146,17 +136,15 @@ void APIManager::testGithubConnection(const QString &token) {
                               "not be able to fetch private repositories.");
       }
     } else {
-      msg += QStringLiteral(
-          "\nWarning: No scopes detected. If this is a fine-grained token, "
-          "ensure repository read permissions are granted.");
+      msg += QStringLiteral("\nWarning: No scopes detected. If this is a fine-grained token, "
+                            "ensure repository read permissions are granted.");
     }
     Q_EMIT githubConnectionTested(true, msg);
     return;
   }
 
   QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/user")));
-  request.setHeader(QNetworkRequest::UserAgentHeader,
-                    QVariant(QStringLiteral("kjules")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + tk;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -181,25 +169,20 @@ void APIManager::testGithubConnection(const QString &token) {
       if (!scopes.isEmpty()) {
         msg += QStringLiteral("\nToken scopes: ") + scopes;
         if (!scopes.contains(QStringLiteral("repo"))) {
-          msg +=
-              QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
-                             "not be able to fetch private repositories.");
+          msg += QStringLiteral("\nWarning: The 'repo' scope is missing. You may "
+                                "not be able to fetch private repositories.");
         }
       } else {
-        msg += QStringLiteral(
-            "\nWarning: No scopes detected. If this is a fine-grained token, "
-            "ensure repository read permissions are granted.");
+        msg += QStringLiteral("\nWarning: No scopes detected. If this is a fine-grained token, "
+                              "ensure repository read permissions are granted.");
       }
       Q_EMIT githubConnectionTested(true, msg);
       if (tk == m_githubToken) {
         m_githubTokenFailed = false;
       }
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-      Q_EMIT githubConnectionTested(
-          false,
-          QStringLiteral("GitHub connection failed: ") + reply->errorString());
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      Q_EMIT githubConnectionTested(false, QStringLiteral("GitHub connection failed: ") + reply->errorString());
       if ((statusCode == 401 || statusCode == 403) && tk == m_githubToken) {
         m_githubTokenFailed = true;
       }
@@ -211,9 +194,7 @@ void APIManager::testGithubConnection(const QString &token) {
 void APIManager::testConnection(const QString &apiKey) {
   // If apiKey is empty, we are using the stored key.
   if (apiKey.isEmpty() && !canConnect()) {
-    Q_EMIT connectionTested(
-        false,
-        QStringLiteral("Connection skipped: No token or previous failure."));
+    Q_EMIT connectionTested(false, QStringLiteral("Connection skipped: No token or previous failure."));
     return;
   }
   QNetworkRequest request = createRequest(QStringLiteral("/sources"), apiKey);
@@ -226,20 +207,17 @@ void APIManager::testConnection(const QString &apiKey) {
       if (doc.object().contains(QStringLiteral("sources"))) {
         Q_EMIT connectionTested(true, QStringLiteral("Connection successful."));
       } else {
-        Q_EMIT connectionTested(
-            false, QStringLiteral("Connection successful but no sources found "
-                                  "or invalid response."));
+        Q_EMIT connectionTested(false, QStringLiteral("Connection successful but no sources found "
+                                                      "or invalid response."));
       }
     } else {
       if (apiKey.isEmpty()) {
-        int statusCode =
-            reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (statusCode == 401 || statusCode == 403) {
           m_tokenFailed = true;
         }
       }
-      Q_EMIT connectionTested(false, QStringLiteral("Connection failed: ") +
-                                         reply->errorString());
+      Q_EMIT connectionTested(false, QStringLiteral("Connection failed: ") + reply->errorString());
     }
     reply->deleteLater();
   });
@@ -247,22 +225,18 @@ void APIManager::testConnection(const QString &apiKey) {
 
 void APIManager::sendMessage(const QString &sessionId, const QString &message) {
   if (!canConnect()) {
-    Q_EMIT messageSendFailed(
-        sessionId, QStringLiteral("No token or previous failure."), QString());
+    Q_EMIT messageSendFailed(sessionId, QStringLiteral("No token or previous failure."), QString());
     return;
   }
 
   QString cleanId = cleanSessionId(sessionId);
 
-  if (cleanId.contains(QStringLiteral("..")) ||
-      cleanId.contains(QStringLiteral("/"))) {
-    Q_EMIT messageSendFailed(sessionId, QStringLiteral("Invalid session ID."),
-                             QString());
+  if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
+    Q_EMIT messageSendFailed(sessionId, QStringLiteral("Invalid session ID."), QString());
     return;
   }
 
-  QString endpoint =
-      QStringLiteral("/sessions/") + cleanId + QStringLiteral("/messages");
+  QString endpoint = QStringLiteral("/sessions/") + cleanId + QStringLiteral("/messages");
 
   QNetworkRequest request = createRequest(endpoint);
 
@@ -271,81 +245,66 @@ void APIManager::sendMessage(const QString &sessionId, const QString &message) {
   QByteArray data = QJsonDocument(json).toJson();
 
   QNetworkReply *reply = m_nam->post(request, data);
-  connect(reply, &QNetworkReply::finished, this,
-          [this, reply, sessionId, request, data]() {
-            if (reply->error() == QNetworkReply::NoError) {
-              Q_EMIT messageSent(sessionId);
-              Q_EMIT logMessage(QStringLiteral("Message sent successfully."));
-            } else {
-              int statusCode =
-                  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
-                      .toInt();
-              if (statusCode == 401 || statusCode == 403) {
-                m_tokenFailed = true;
-              }
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId, request, data]() {
+    if (reply->error() == QNetworkReply::NoError) {
+      Q_EMIT messageSent(sessionId);
+      Q_EMIT logMessage(QStringLiteral("Message sent successfully."));
+    } else {
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_tokenFailed = true;
+      }
 
-              QString method = QStringLiteral("POST");
-              QString url = reply->url().toString();
-              QString httpReq =
-                  method + QStringLiteral(" ") + url + QStringLiteral("\n");
-              const auto reqHeaders = request.rawHeaderList();
-              for (const QByteArray &h : reqHeaders) {
-                if (h.toLower() != "x-goog-api-key" &&
-                    h.toLower() != "authorization") {
-                  httpReq += QString::fromUtf8(h) + QStringLiteral(": ") +
-                             QString::fromUtf8(request.rawHeader(h)) +
-                             QStringLiteral("\n");
-                } else {
-                  httpReq +=
-                      QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
-                }
-              }
-              httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
+      QString method = QStringLiteral("POST");
+      QString url = reply->url().toString();
+      QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
+      const auto reqHeaders = request.rawHeaderList();
+      for (const QByteArray &h : reqHeaders) {
+        if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
+          httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) +
+                     QStringLiteral("\n");
+        } else {
+          httpReq += QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
+        }
+      }
+      httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
 
-              QString httpRes = QStringLiteral("HTTP %1 %2\n")
-                                    .arg(statusCode)
-                                    .arg(reply->errorString());
-              const auto resHeaders = reply->rawHeaderList();
-              for (const QByteArray &h : resHeaders) {
-                httpRes += QString::fromUtf8(h) + QStringLiteral(": ") +
-                           QString::fromUtf8(reply->rawHeader(h)) +
-                           QStringLiteral("\n");
-              }
+      QString httpRes = QStringLiteral("HTTP %1 %2\n").arg(statusCode).arg(reply->errorString());
+      const auto resHeaders = reply->rawHeaderList();
+      for (const QByteArray &h : resHeaders) {
+        httpRes +=
+            QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(reply->rawHeader(h)) + QStringLiteral("\n");
+      }
 
-              QByteArray responseData = reply->readAll();
-              httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
+      QByteArray responseData = reply->readAll();
+      httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
 
-              QString httpDetails =
-                  QStringLiteral("=== Request ===\n") + httpReq +
-                  QStringLiteral("\n\n=== Response ===\n") + httpRes;
+      QString httpDetails =
+          QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
 
-              QString reason = reply->errorString();
-              QString errorMsg =
-                  QStringLiteral("Failed to send message: ") + reason;
-              Q_EMIT messageSendFailed(sessionId, reason, httpDetails);
-              Q_EMIT errorOccurred(errorMsg);
-            }
-            reply->deleteLater();
-          });
+      QString reason = reply->errorString();
+      QString errorMsg = QStringLiteral("Failed to send message: ") + reason;
+      Q_EMIT messageSendFailed(sessionId, reason, httpDetails);
+      Q_EMIT errorOccurred(errorMsg);
+    }
+    reply->deleteLater();
+  });
 }
 
 void APIManager::listActivities(const QString &sessionId) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral(
-        "Cannot fetch activities: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot fetch activities: No token or previous failure."));
     return;
   }
 
   QString cleanId = cleanSessionId(sessionId);
 
-  if (cleanId.contains(QStringLiteral("..")) ||
-      cleanId.contains(QStringLiteral("/"))) {
+  if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
     return;
   }
 
-  QString endpoint =
-      QStringLiteral("/sessions/") + cleanId + QStringLiteral("/activities");
+  QString endpoint = QStringLiteral("/sessions/") + cleanId + QStringLiteral("/activities");
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
@@ -354,21 +313,18 @@ void APIManager::listActivities(const QString &sessionId) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
       QJsonArray activities;
-      if (doc.isObject() &&
-          doc.object().contains(QStringLiteral("activities"))) {
+      if (doc.isObject() && doc.object().contains(QStringLiteral("activities"))) {
         activities = doc.object().value(QStringLiteral("activities")).toArray();
       } else if (doc.isArray()) {
         activities = doc.array();
       }
       Q_EMIT activitiesReceived(sessionId, activities);
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to fetch activities: ") +
-                           reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to fetch activities: ") + reply->errorString());
     }
     reply->deleteLater();
   });
@@ -392,22 +348,17 @@ QString APIManager::cleanSessionId(const QString &sessionId) {
 
 void APIManager::reloadSession(const QString &sessionId) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral(
-        "Cannot reload session details: No token or previous failure."));
-    Q_EMIT sessionReloadFailed(
-        sessionId,
-        QStringLiteral(
-            "Cannot reload session details: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot reload session details: No token or previous failure."));
+    Q_EMIT sessionReloadFailed(sessionId,
+                               QStringLiteral("Cannot reload session details: No token or previous failure."));
     return;
   }
 
   QString cleanId = cleanSessionId(sessionId);
 
-  if (cleanId.contains(QStringLiteral("..")) ||
-      cleanId.contains(QStringLiteral("/"))) {
+  if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
-    Q_EMIT sessionReloadFailed(sessionId,
-                               QStringLiteral("Invalid session ID."));
+    Q_EMIT sessionReloadFailed(sessionId, QStringLiteral("Invalid session ID."));
     return;
   }
 
@@ -421,13 +372,11 @@ void APIManager::reloadSession(const QString &sessionId) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       Q_EMIT sessionReloaded(doc.object());
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      QString errorMsg = QStringLiteral("Failed to reload session details: ") +
-                         reply->errorString();
+      QString errorMsg = QStringLiteral("Failed to reload session details: ") + reply->errorString();
       Q_EMIT errorOccurred(errorMsg);
       Q_EMIT sessionReloadFailed(sessionId, errorMsg);
     }
@@ -437,8 +386,7 @@ void APIManager::reloadSession(const QString &sessionId) {
 
 void APIManager::getSource(const QString &sourceId) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral(
-        "Cannot get source details: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot get source details: No token or previous failure."));
     return;
   }
 
@@ -466,13 +414,11 @@ void APIManager::getSource(const QString &sourceId) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       Q_EMIT sourceDetailsReceived(doc.object());
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") +
-                           reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") + reply->errorString());
     }
     reply->deleteLater();
   });
@@ -480,8 +426,7 @@ void APIManager::getSource(const QString &sourceId) {
 
 void APIManager::listSources(const QString &pageToken) {
   if (!canConnect()) {
-    Q_EMIT logMessage(
-        QStringLiteral("Skipping listSources: No token or previous failure."));
+    Q_EMIT logMessage(QStringLiteral("Skipping listSources: No token or previous failure."));
     Q_EMIT sourcesRefreshFinished();
     return;
   }
@@ -493,8 +438,7 @@ void APIManager::listSources(const QString &pageToken) {
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("API"));
   int pageSize = config.readEntry("PageSize", 30);
-  QString endpoint =
-      QStringLiteral("/sources?pageSize=") + QString::number(pageSize);
+  QString endpoint = QStringLiteral("/sources?pageSize=") + QString::number(pageSize);
   if (!pageToken.isEmpty()) {
     endpoint += QStringLiteral("&pageToken=") + pageToken;
   }
@@ -515,8 +459,7 @@ void APIManager::listSources(const QString &pageToken) {
       QJsonArray sources = obj.value(QStringLiteral("sources")).toArray();
       Q_EMIT sourcesReceived(sources);
 
-      QString nextPageToken =
-          obj.value(QStringLiteral("nextPageToken")).toString();
+      QString nextPageToken = obj.value(QStringLiteral("nextPageToken")).toString();
       if (!nextPageToken.isEmpty()) {
         // Fetch next page automatically
         listSources(nextPageToken);
@@ -527,13 +470,11 @@ void APIManager::listSources(const QString &pageToken) {
     } else if (reply->error() == QNetworkReply::OperationCanceledError) {
       Q_EMIT sourcesRefreshFinished();
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") +
-                           reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString());
       Q_EMIT sourcesRefreshFinished();
     }
     reply->deleteLater();
@@ -550,14 +491,11 @@ void APIManager::cancelListSources() {
 
 void APIManager::fetchGithubPullRequest(const QString &prUrl) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
-    Q_EMIT githubPullRequestFailed(
-        prUrl,
-        QStringLiteral("GitHub token authentication failed previously."));
+    Q_EMIT githubPullRequestFailed(prUrl, QStringLiteral("GitHub token authentication failed previously."));
     return;
   }
   if (!checkGithubRateLimit()) {
-    Q_EMIT githubPullRequestFailed(prUrl,
-                                   QStringLiteral("Rate limit exhausted"));
+    Q_EMIT githubPullRequestFailed(prUrl, QStringLiteral("Rate limit exhausted"));
     return;
   }
 
@@ -572,15 +510,12 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
     return;
   }
 
-  QString apiUrl = QStringLiteral("https://api.github.com/repos/") + parts[0] +
-                   QLatin1Char('/') + parts[1] + QStringLiteral("/pulls/") +
-                   parts[3];
+  QString apiUrl = QStringLiteral("https://api.github.com/repos/") + parts[0] + QLatin1Char('/') + parts[1] +
+                   QStringLiteral("/pulls/") + parts[3];
 
   QNetworkRequest request((QUrl(apiUrl)));
-  request.setHeader(QNetworkRequest::ContentTypeHeader,
-                    QVariant(QStringLiteral("application/json")));
-  request.setHeader(QNetworkRequest::UserAgentHeader,
-                    QVariant(QStringLiteral("kjules")));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -595,18 +530,15 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
       if (doc.isObject()) {
         Q_EMIT githubPullRequestInfoReceived(prUrl, doc.object());
       } else {
-        Q_EMIT githubPullRequestFailed(prUrl,
-                                       QStringLiteral("Invalid JSON response"));
+        Q_EMIT githubPullRequestFailed(prUrl, QStringLiteral("Invalid JSON response"));
       }
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_githubTokenFailed = true;
-        Q_EMIT logMessage(
-            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
-                           "requests blocked until token is updated.")
-                .arg(statusCode));
+        Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                                         "requests blocked until token is updated.")
+                              .arg(statusCode));
       }
       Q_EMIT githubPullRequestFailed(prUrl, reply->errorString());
     }
@@ -618,8 +550,7 @@ bool APIManager::checkGithubRateLimit() {
     qint64 currentEpoch = QDateTime::currentSecsSinceEpoch();
     if (currentEpoch < m_githubRateLimitReset) {
       Q_EMIT logMessage(
-          QStringLiteral("GitHub API rate limit exhausted. Waiting until %1...")
-              .arg(m_githubRateLimitReset));
+          QStringLiteral("GitHub API rate limit exhausted. Waiting until %1...").arg(m_githubRateLimitReset));
       return false;
     } else {
       // Reset passed, allow requests to test and fetch new headers
@@ -631,39 +562,30 @@ bool APIManager::checkGithubRateLimit() {
 
 void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
-    Q_EMIT githubRepoCreationFailed(
-        requestData, QJsonObject(),
-        QStringLiteral(
-            "GitHub token authentication failed previously or not provided."));
+    Q_EMIT githubRepoCreationFailed(requestData, QJsonObject(),
+                                    QStringLiteral("GitHub token authentication failed previously or not provided."));
     return;
   }
   if (!checkGithubRateLimit()) {
-    Q_EMIT githubRepoCreationFailed(requestData, QJsonObject(),
-                                    QStringLiteral("Rate limit exhausted"));
+    Q_EMIT githubRepoCreationFailed(requestData, QJsonObject(), QStringLiteral("Rate limit exhausted"));
     return;
   }
 
   QString org = requestData.value(QStringLiteral("org")).toString();
-  QString endpoint =
-      org.isEmpty()
-          ? QStringLiteral("https://api.github.com/user/repos")
-          : QStringLiteral("https://api.github.com/orgs/%1/repos").arg(org);
+  QString endpoint = org.isEmpty() ? QStringLiteral("https://api.github.com/user/repos")
+                                   : QStringLiteral("https://api.github.com/orgs/%1/repos").arg(org);
 
   QNetworkRequest request;
   request.setUrl(QUrl(endpoint));
-  request.setHeader(QNetworkRequest::UserAgentHeader,
-                    QVariant(QStringLiteral("kjules")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
-  request.setHeader(QNetworkRequest::ContentTypeHeader,
-                    QStringLiteral("application/json"));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
 
   QJsonObject payload;
-  payload[QStringLiteral("name")] =
-      requestData.value(QStringLiteral("repoName")).toString();
-  payload[QStringLiteral("private")] =
-      requestData.value(QStringLiteral("private")).toBool(true);
+  payload[QStringLiteral("name")] = requestData.value(QStringLiteral("repoName")).toString();
+  payload[QStringLiteral("private")] = requestData.value(QStringLiteral("private")).toBool(true);
   payload[QStringLiteral("auto_init")] = true;
 
   QJsonDocument payloadDoc(payload);
@@ -678,18 +600,14 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
     if (reply->error() == QNetworkReply::NoError) {
       Q_EMIT githubRepoCreated(requestData, response);
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_githubTokenFailed = true;
-        Q_EMIT errorOccurred(
-            QStringLiteral(
-                "GitHub API authentication failed (HTTP %1). Future "
-                "requests will be blocked until the token is verified.")
-                .arg(statusCode));
+        Q_EMIT errorOccurred(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                                            "requests will be blocked until the token is verified.")
+                                 .arg(statusCode));
       }
-      Q_EMIT githubRepoCreationFailed(requestData, response,
-                                      reply->errorString());
+      Q_EMIT githubRepoCreationFailed(requestData, response, reply->errorString());
     }
     reply->deleteLater();
   });
@@ -697,8 +615,7 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
 
 void APIManager::updateGithubRateLimit(QNetworkReply *reply) {
   if (reply->hasRawHeader("x-ratelimit-remaining")) {
-    m_githubRateLimitRemaining =
-        reply->rawHeader("x-ratelimit-remaining").toInt();
+    m_githubRateLimitRemaining = reply->rawHeader("x-ratelimit-remaining").toInt();
   }
   if (reply->hasRawHeader("x-ratelimit-reset")) {
     m_githubRateLimitReset = reply->rawHeader("x-ratelimit-reset").toLongLong();
@@ -708,9 +625,7 @@ void APIManager::updateGithubRateLimit(QNetworkReply *reply) {
 void APIManager::fetchGithubInfo(const QString &sourceId) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     if (m_githubTokenFailed) {
-      Q_EMIT githubInfoFailed(
-          sourceId,
-          QStringLiteral("GitHub token authentication failed previously."));
+      Q_EMIT githubInfoFailed(sourceId, QStringLiteral("GitHub token authentication failed previously."));
     }
     return;
   }
@@ -729,12 +644,9 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
     return; // Not a github source
   }
 
-  QNetworkRequest request(
-      QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
-  request.setHeader(QNetworkRequest::ContentTypeHeader,
-                    QVariant(QStringLiteral("application/json")));
-  request.setHeader(QNetworkRequest::UserAgentHeader,
-                    QVariant(QStringLiteral("kjules")));
+  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -749,18 +661,15 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
       if (doc.isObject()) {
         Q_EMIT githubInfoReceived(sourceId, doc.object());
       } else {
-        Q_EMIT githubInfoFailed(sourceId,
-                                QStringLiteral("Invalid JSON response"));
+        Q_EMIT githubInfoFailed(sourceId, QStringLiteral("Invalid JSON response"));
       }
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_githubTokenFailed = true;
-        Q_EMIT logMessage(
-            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
-                           "requests blocked until token is updated.")
-                .arg(statusCode));
+        Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                                         "requests blocked until token is updated.")
+                              .arg(statusCode));
       }
       Q_EMIT githubInfoFailed(sourceId, reply->errorString());
     }
@@ -769,20 +678,17 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
 
 void APIManager::createSessionAsync(const QJsonObject &requestData) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(
-        QStringLiteral("Cannot create session: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot create session: No token or previous failure."));
     return;
   }
 
   QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
   QJsonObject json;
-  json[QStringLiteral("prompt")] =
-      requestData.value(QStringLiteral("prompt")).toString();
+  json[QStringLiteral("prompt")] = requestData.value(QStringLiteral("prompt")).toString();
 
   QJsonObject sourceContext;
   QString sourceStr = requestData.value(QStringLiteral("source")).toString();
-  if (!sourceStr.startsWith(QStringLiteral("sources/")) &&
-      !sourceStr.isEmpty()) {
+  if (!sourceStr.startsWith(QStringLiteral("sources/")) && !sourceStr.isEmpty()) {
     sourceStr = QStringLiteral("sources/") + sourceStr;
   }
   sourceContext[QStringLiteral("source")] = sourceStr;
@@ -793,8 +699,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       githubRepoContext[QStringLiteral("startingBranch")] =
           requestData.value(QStringLiteral("startingBranch")).toString();
     } else {
-      githubRepoContext[QStringLiteral("startingBranch")] =
-          QStringLiteral("main");
+      githubRepoContext[QStringLiteral("startingBranch")] = QStringLiteral("main");
     }
     sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
   }
@@ -802,123 +707,103 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   json[QStringLiteral("sourceContext")] = sourceContext;
 
   if (requestData.contains(QStringLiteral("requirePlanApproval"))) {
-    json[QStringLiteral("requirePlanApproval")] =
-        requestData.value(QStringLiteral("requirePlanApproval")).toBool();
+    json[QStringLiteral("requirePlanApproval")] = requestData.value(QStringLiteral("requirePlanApproval")).toBool();
   }
 
   if (requestData.contains(QStringLiteral("automationMode"))) {
-    json[QStringLiteral("automationMode")] =
-        requestData.value(QStringLiteral("automationMode")).toString();
+    json[QStringLiteral("automationMode")] = requestData.value(QStringLiteral("automationMode")).toString();
   }
 
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
-  connect(
-      reply, &QNetworkReply::finished, this,
-      [this, reply, request, json, data, requestData]() {
-        QByteArray responseData = reply->readAll();
-        if (reply->error() == QNetworkReply::NoError) {
-          QJsonDocument doc = QJsonDocument::fromJson(responseData);
-          QJsonObject sessionObj = doc.object();
+  connect(reply, &QNetworkReply::finished, this, [this, reply, request, json, data, requestData]() {
+    QByteArray responseData = reply->readAll();
+    if (reply->error() == QNetworkReply::NoError) {
+      QJsonDocument doc = QJsonDocument::fromJson(responseData);
+      QJsonObject sessionObj = doc.object();
 
-          if (!sessionObj.contains(QStringLiteral("sourceContext"))) {
-            sessionObj[QStringLiteral("sourceContext")] =
-                json.value(QStringLiteral("sourceContext")).toObject();
-          }
-          if (requestData.contains(QStringLiteral("ignoreConcurrency"))) {
-            sessionObj[QStringLiteral("ignoreConcurrency")] =
-                requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
-          }
+      if (!sessionObj.contains(QStringLiteral("sourceContext"))) {
+        sessionObj[QStringLiteral("sourceContext")] = json.value(QStringLiteral("sourceContext")).toObject();
+      }
+      if (requestData.contains(QStringLiteral("ignoreConcurrency"))) {
+        sessionObj[QStringLiteral("ignoreConcurrency")] =
+            requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
+      }
 
-          Q_EMIT sessionCreated(sessionObj);
-          Q_EMIT logMessage(QStringLiteral("Session created successfully."));
+      Q_EMIT sessionCreated(sessionObj);
+      Q_EMIT logMessage(QStringLiteral("Session created successfully."));
 
-          // Cache session locally
-          QString path =
-              QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-          auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
-            QMutexLocker locker(&s_sessionCacheMutex);
-            QDir().mkpath(path);
-            QString filePath = path + QStringLiteral("/cached_sessions.json");
-            QFile file(filePath);
-            QJsonArray cachedSessions;
-            if (file.open(QIODevice::ReadOnly)) {
-              QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-              cachedSessions = doc.array();
-              file.close();
-            }
-            cachedSessions.append(sessionObj);
-
-            QSaveFile saveFile(filePath);
-            if (saveFile.open(QIODevice::WriteOnly)) {
-              QJsonDocument writeDoc(cachedSessions);
-              saveFile.write(writeDoc.toJson());
-              saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-              saveFile.commit();
-            }
-          });
-          Q_UNUSED(cacheFuture)
-        } else {
-          int statusCode =
-              reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
-                  .toInt();
-          if (statusCode == 401 || statusCode == 403) {
-            m_tokenFailed = true;
-          }
-          QString method = QStringLiteral("POST");
-          QString url = reply->url().toString();
-          QString httpReq =
-              method + QStringLiteral(" ") + url + QStringLiteral("\n");
-          const auto reqHeaders = request.rawHeaderList();
-          for (const QByteArray &h : reqHeaders) {
-            if (h.toLower() != "x-goog-api-key" &&
-                h.toLower() != "authorization") {
-              httpReq += QString::fromUtf8(h) + QStringLiteral(": ") +
-                         QString::fromUtf8(request.rawHeader(h)) +
-                         QStringLiteral("\n");
-            } else {
-              httpReq +=
-                  QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
-            }
-          }
-          httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
-
-          QString httpRes = QStringLiteral("HTTP %1 %2\n")
-                                .arg(statusCode)
-                                .arg(reply->errorString());
-          const auto resHeaders = reply->rawHeaderList();
-          for (const QByteArray &h : resHeaders) {
-            httpRes += QString::fromUtf8(h) + QStringLiteral(": ") +
-                       QString::fromUtf8(reply->rawHeader(h)) +
-                       QStringLiteral("\n");
-          }
-
-          QString errorStr = reply->errorString();
-          // Do not readAll() again, use responseData
-          httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
-
-          QString httpDetails = QStringLiteral("=== Request ===\n") + httpReq +
-                                QStringLiteral("\n\n=== Response ===\n") +
-                                httpRes;
-
-          QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
-          Q_EMIT sessionCreationFailed(requestData, errDoc.object(), errorStr,
-                                       httpDetails);
-          QString errorMsg = QStringLiteral("Failed to create session: ") +
-                             reply->errorString();
-          Q_EMIT errorOccurred(errorMsg);
-          Q_EMIT errorOccurredWithResponse(errorMsg,
-                                           QString::fromUtf8(responseData));
+      // Cache session locally
+      QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+      auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
+        QMutexLocker locker(&s_sessionCacheMutex);
+        QDir().mkpath(path);
+        QString filePath = path + QStringLiteral("/cached_sessions.json");
+        QFile file(filePath);
+        QJsonArray cachedSessions;
+        if (file.open(QIODevice::ReadOnly)) {
+          QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+          cachedSessions = doc.array();
+          file.close();
         }
-        reply->deleteLater();
+        cachedSessions.append(sessionObj);
+
+        QSaveFile saveFile(filePath);
+        if (saveFile.open(QIODevice::WriteOnly)) {
+          QJsonDocument writeDoc(cachedSessions);
+          saveFile.write(writeDoc.toJson());
+          saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+          saveFile.commit();
+        }
       });
+      Q_UNUSED(cacheFuture)
+    } else {
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_tokenFailed = true;
+      }
+      QString method = QStringLiteral("POST");
+      QString url = reply->url().toString();
+      QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
+      const auto reqHeaders = request.rawHeaderList();
+      for (const QByteArray &h : reqHeaders) {
+        if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
+          httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) +
+                     QStringLiteral("\n");
+        } else {
+          httpReq += QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
+        }
+      }
+      httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
+
+      QString httpRes = QStringLiteral("HTTP %1 %2\n").arg(statusCode).arg(reply->errorString());
+      const auto resHeaders = reply->rawHeaderList();
+      for (const QByteArray &h : resHeaders) {
+        httpRes +=
+            QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(reply->rawHeader(h)) + QStringLiteral("\n");
+      }
+
+      QString errorStr = reply->errorString();
+      // Do not readAll() again, use responseData
+      httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
+
+      QString httpDetails =
+          QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
+
+      QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
+      Q_EMIT sessionCreationFailed(requestData, errDoc.object(), errorStr, httpDetails);
+      QString errorMsg = QStringLiteral("Failed to create session: ") + reply->errorString();
+      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData));
+    }
+    reply->deleteLater();
+  });
 }
 
 void APIManager::listSessions(const QString &pageToken) {
   if (!canConnect()) {
-    Q_EMIT logMessage(
-        QStringLiteral("Skipping listSessions: No token or previous failure."));
+    Q_EMIT logMessage(QStringLiteral("Skipping listSessions: No token or previous failure."));
     Q_EMIT sessionsRefreshFinished();
     return;
   }
@@ -948,8 +833,7 @@ void APIManager::listSessions(const QString &pageToken) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       QJsonObject obj = doc.object();
       QJsonArray sessions = obj.value(QStringLiteral("sessions")).toArray();
-      QString nextPageToken =
-          obj.value(QStringLiteral("nextPageToken")).toString();
+      QString nextPageToken = obj.value(QStringLiteral("nextPageToken")).toString();
 
       Q_EMIT sessionsReceived(sessions, nextPageToken);
 
@@ -958,13 +842,11 @@ void APIManager::listSessions(const QString &pageToken) {
     } else if (reply->error() == QNetworkReply::OperationCanceledError) {
       Q_EMIT sessionsRefreshFinished();
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") +
-                           reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString());
       Q_EMIT sessionsRefreshFinished();
     }
     reply->deleteLater();
@@ -979,8 +861,7 @@ void APIManager::cancelListSessions() {
 
 void APIManager::getSession(const QString &sessionId) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral(
-        "Cannot get session details: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot get session details: No token or previous failure."));
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
@@ -993,8 +874,7 @@ void APIManager::getSession(const QString &sessionId) {
     cleanId = cleanId.mid(1);
   }
 
-  if (cleanId.contains(QStringLiteral("..")) ||
-      cleanId.contains(QStringLiteral("/"))) {
+  if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
     return;
   }
@@ -1009,21 +889,18 @@ void APIManager::getSession(const QString &sessionId) {
       QJsonDocument doc = QJsonDocument::fromJson(data);
       Q_EMIT sessionDetailsReceived(doc.object());
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to get session details: ") +
-                           reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to get session details: ") + reply->errorString());
     }
     reply->deleteLater();
   });
 }
 
 void APIManager::fetchGithubBranches(const QString &sourceId) {
-  if (m_githubToken.isEmpty() || m_githubTokenFailed ||
-      !checkGithubRateLimit()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
     return;
   }
 
@@ -1036,12 +913,10 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
     return; // Not a github source
   }
 
-  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/repos/") +
-                               cleanId + QStringLiteral("/branches")));
-  request.setHeader(QNetworkRequest::ContentTypeHeader,
-                    QVariant(QStringLiteral("application/json")));
-  request.setHeader(QNetworkRequest::UserAgentHeader,
-                    QVariant(QStringLiteral("kjules")));
+  QNetworkRequest request(
+      QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId + QStringLiteral("/branches")));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
@@ -1057,14 +932,12 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
         Q_EMIT githubBranchesReceived(sourceId, doc.array());
       }
     } else {
-      int statusCode =
-          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_githubTokenFailed = true;
-        Q_EMIT logMessage(
-            QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
-                           "requests blocked until token is updated.")
-                .arg(statusCode));
+        Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                                         "requests blocked until token is updated.")
+                              .arg(statusCode));
       }
     }
   });

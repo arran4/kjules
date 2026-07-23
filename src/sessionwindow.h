@@ -16,8 +16,8 @@ class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager,
-                         bool isManaged = true, QWidget *parent = nullptr);
+  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged = true,
+                         QWidget *parent = nullptr);
   ~SessionWindow();
 
 private:
@@ -25,11 +25,9 @@ private:
   void setupActions();
   void refreshSession();
   void onSessionReloaded(const QJsonObject &session);
-  void onActivitiesReceived(const QString &sessionId,
-                            const QJsonArray &activities);
+  void onActivitiesReceived(const QString &sessionId, const QJsonArray &activities);
   void onMessageSent(const QString &sessionId);
-  void onMessageSendFailed(const QString &sessionId, const QString &message,
-                           const QString &httpDetails);
+  void onMessageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails);
   void duplicateSession();
   void updateAutoRefresh();
   void renderDetailsAndDiff();

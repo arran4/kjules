@@ -11,18 +11,15 @@ class BlockedTreeModel : public QAbstractItemModel {
   Q_OBJECT
 
 public:
-  explicit BlockedTreeModel(SourceModel *sourceModel, QueueModel *queueModel,
-                            QObject *parent = nullptr);
+  explicit BlockedTreeModel(SourceModel *sourceModel, QueueModel *queueModel, QObject *parent = nullptr);
 
-  QModelIndex index(int row, int column,
-                    const QModelIndex &parent = QModelIndex()) const override;
+  QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override;
   QModelIndex parent(const QModelIndex &index) const override;
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
   int columnCount(const QModelIndex &parent = QModelIndex()) const override;
   int blockedSourcesCount() const;
   int totalBlockedItemsCount() const;
-  QVariant data(const QModelIndex &index,
-                int role = Qt::DisplayRole) const override;
+  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 
   enum Roles { IsSourceRole = Qt::UserRole + 1, SourceIdRole, QueueIndexRole };
 

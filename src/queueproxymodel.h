@@ -9,8 +9,7 @@ class QueueProxyModel : public QSortFilterProxyModel {
 public:
   explicit QueueProxyModel(QObject *parent = nullptr);
 
-  bool filterAcceptsRow(int source_row,
-                        const QModelIndex &source_parent) const override;
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
 };
 
 #endif // QUEUEPROXYMODEL_H

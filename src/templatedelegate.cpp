@@ -4,12 +4,9 @@
 #include <QPainter>
 #include <QStyleOptionViewItem>
 
-TemplateDelegate::TemplateDelegate(QObject *parent)
-    : QStyledItemDelegate(parent) {}
+TemplateDelegate::TemplateDelegate(QObject *parent) : QStyledItemDelegate(parent) {}
 
-void TemplateDelegate::paint(QPainter *painter,
-                             const QStyleOptionViewItem &option,
-                             const QModelIndex &index) const {
+void TemplateDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
   QStyleOptionViewItem opt = option;
   initStyleOption(&opt, index);
 
@@ -23,8 +20,7 @@ void TemplateDelegate::paint(QPainter *painter,
   }
 
   QString prompt = index.data(TemplatesModel::PromptRole).toString();
-  QString automationMode =
-      index.data(TemplatesModel::AutomationModeRole).toString();
+  QString automationMode = index.data(TemplatesModel::AutomationModeRole).toString();
 
   QRect r = opt.rect.adjusted(5, 5, -5, -5);
 
@@ -50,15 +46,13 @@ void TemplateDelegate::paint(QPainter *painter,
   int yOffset = painter->fontMetrics().height() + 5;
   r.adjust(0, yOffset, 0, 0);
 
-  QString modeText = automationMode.isEmpty() ? QStringLiteral("Standard Mode")
-                                              : automationMode;
+  QString modeText = automationMode.isEmpty() ? QStringLiteral("Standard Mode") : automationMode;
   painter->drawText(r, Qt::AlignLeft | Qt::AlignTop, modeText);
 
   painter->restore();
 }
 
-QSize TemplateDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                 const QModelIndex & /*index*/) const {
+QSize TemplateDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex & /*index*/) const {
   QFontMetrics fm(option.font);
   return QSize(200, fm.height() * 2 + 15);
 }

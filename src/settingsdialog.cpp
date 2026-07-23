@@ -17,8 +17,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
-SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
-    : QDialog(parent), m_apiManager(apiManager) {
+SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialog(parent), m_apiManager(apiManager) {
   setWindowTitle(i18n("Settings"));
   resize(500, 450);
 
@@ -34,8 +33,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_apiKeyEdit->setEchoMode(QLineEdit::Password);
   m_apiKeyEdit->setText(m_apiManager->apiKey());
   QPushButton *testJulesBtn = new QPushButton(i18n("Test API Key"), this);
-  connect(testJulesBtn, &QPushButton::clicked, this,
-          &SettingsDialog::onTestConnection);
+  connect(testJulesBtn, &QPushButton::clicked, this, &SettingsDialog::onTestConnection);
   julesKeyLayout->addWidget(m_apiKeyEdit);
   julesKeyLayout->addWidget(testJulesBtn);
   generalLayout->addRow(i18n("Google Jules API Key:"), julesKeyLayout);
@@ -45,9 +43,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_githubTokenEdit->setEchoMode(QLineEdit::Password);
   m_githubTokenEdit->setText(m_apiManager->githubToken());
   QPushButton *testGithubBtn = new QPushButton(i18n("Test Github Token"), this);
-  connect(testGithubBtn, &QPushButton::clicked, this, [this]() {
-    m_apiManager->testGithubConnection(m_githubTokenEdit->text());
-  });
+  connect(testGithubBtn, &QPushButton::clicked, this,
+          [this]() { m_apiManager->testGithubConnection(m_githubTokenEdit->text()); });
   githubTokenLayout->addWidget(m_githubTokenEdit);
   githubTokenLayout->addWidget(testGithubBtn);
   generalLayout->addRow(i18n("GitHub Token (Optional):"), githubTokenLayout);
@@ -61,8 +58,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_autostartEdit->setChecked(config.readEntry("Autostart", false));
   generalLayout->addRow(QString(), m_autostartEdit);
 
-  m_autostartTrayEdit = new QCheckBox(
-      i18n("When opening automatically start in system tray"), this);
+  m_autostartTrayEdit = new QCheckBox(i18n("When opening automatically start in system tray"), this);
   m_autostartTrayEdit->setChecked(config.readEntry("AutostartTray", false));
   generalLayout->addRow(QString(), m_autostartTrayEdit);
 
@@ -70,8 +66,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QWidget *queueTab = new QWidget(this);
   QFormLayout *queueLayout = new QFormLayout(queueTab);
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
 
   m_queueIntervalEdit = new QSpinBox(this);
   m_queueIntervalEdit->setRange(1, 1440); // 1 min to 24 hours
@@ -80,17 +75,14 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   queueLayout->addRow(i18n("Queue processing interval:"), m_queueIntervalEdit);
 
   m_queueModeCombo = new QComboBox(this);
-  m_queueModeCombo->addItem(i18n("ASAP (Process all sequentially)"),
-                            QStringLiteral("asap"));
-  m_queueModeCombo->addItem(i18n("Per Source Concurrency"),
-                            QStringLiteral("one_at_a_time"));
+  m_queueModeCombo->addItem(i18n("ASAP (Process all sequentially)"), QStringLiteral("asap"));
+  m_queueModeCombo->addItem(i18n("Per Source Concurrency"), QStringLiteral("one_at_a_time"));
 
   QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
   if (currentQueueMode.isEmpty()) {
     // Backwards compatibility
-    currentQueueMode = queueConfig.readEntry("OneAtATimeMode", false)
-                           ? QStringLiteral("one_at_a_time")
-                           : QStringLiteral("asap");
+    currentQueueMode =
+        queueConfig.readEntry("OneAtATimeMode", false) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
 
   int modeIndex = m_queueModeCombo->findData(currentQueueMode);
@@ -106,31 +98,26 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QWidget *limitContainer = new QWidget(this);
   QHBoxLayout *limitLayout = new QHBoxLayout(limitContainer);
   limitLayout->setContentsMargins(0, 0, 0, 0);
-  QLabel *limitLabel =
-      new QLabel(i18n("Max active sessions per source:"), limitContainer);
+  QLabel *limitLabel = new QLabel(i18n("Max active sessions per source:"), limitContainer);
   limitLayout->addWidget(limitLabel);
   limitLayout->addWidget(m_oneAtATimeLimitEdit);
   limitLayout->addStretch();
   queueLayout->addRow(QString(), limitContainer);
 
   auto updateLimitVisibility = [this, limitContainer]() {
-    bool show = m_queueModeCombo->currentData().toString() ==
-                QStringLiteral("one_at_a_time");
+    bool show = m_queueModeCombo->currentData().toString() == QStringLiteral("one_at_a_time");
     limitContainer->setVisible(show);
   };
-  connect(m_queueModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, updateLimitVisibility);
+  connect(m_queueModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, updateLimitVisibility);
   updateLimitVisibility();
 
   m_backoffTypeCombo = new QComboBox(this);
   m_backoffTypeCombo->addItem(i18n("Fixed"), QStringLiteral("fixed"));
-  m_backoffTypeCombo->addItem(i18n("Exponential"),
-                              QStringLiteral("exponential"));
+  m_backoffTypeCombo->addItem(i18n("Exponential"), QStringLiteral("exponential"));
   m_backoffTypeCombo->addItem(i18n("Random"), QStringLiteral("random"));
   m_backoffTypeCombo->addItem(i18n("Predict"), QStringLiteral("predict"));
 
-  QString currentBackoffType =
-      queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
+  QString currentBackoffType = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
   int backoffTypeIndex = m_backoffTypeCombo->findData(currentBackoffType);
   if (backoffTypeIndex >= 0) {
     m_backoffTypeCombo->setCurrentIndex(backoffTypeIndex);
@@ -148,10 +135,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QFormLayout *expLayout = new QFormLayout(expTab);
   m_queueBackoffExpBaseEdit = new QSpinBox(this);
   m_queueBackoffExpBaseEdit->setRange(1, 100);
-  m_queueBackoffExpBaseEdit->setValue(
-      queueConfig.readEntry("BackoffExpBase", 2));
-  expLayout->addRow(i18n("Queue failure exponential base:"),
-                    m_queueBackoffExpBaseEdit);
+  m_queueBackoffExpBaseEdit->setValue(queueConfig.readEntry("BackoffExpBase", 2));
+  expLayout->addRow(i18n("Queue failure exponential base:"), m_queueBackoffExpBaseEdit);
   m_backoffTabWidget->addTab(expTab, i18n("Exponential"));
 
   // Random Tab
@@ -160,18 +145,14 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffRandomMinEdit = new QSpinBox(this);
   m_queueBackoffRandomMinEdit->setRange(1, 10080);
   m_queueBackoffRandomMinEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffRandomMinEdit->setValue(
-      queueConfig.readEntry("BackoffRandomMin", 10));
-  randomLayout->addRow(i18n("Queue failure random min:"),
-                       m_queueBackoffRandomMinEdit);
+  m_queueBackoffRandomMinEdit->setValue(queueConfig.readEntry("BackoffRandomMin", 10));
+  randomLayout->addRow(i18n("Queue failure random min:"), m_queueBackoffRandomMinEdit);
 
   m_queueBackoffRandomMaxEdit = new QSpinBox(this);
   m_queueBackoffRandomMaxEdit->setRange(1, 10080);
   m_queueBackoffRandomMaxEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffRandomMaxEdit->setValue(
-      queueConfig.readEntry("BackoffRandomMax", 60));
-  randomLayout->addRow(i18n("Queue failure random max:"),
-                       m_queueBackoffRandomMaxEdit);
+  m_queueBackoffRandomMaxEdit->setValue(queueConfig.readEntry("BackoffRandomMax", 60));
+  randomLayout->addRow(i18n("Queue failure random max:"), m_queueBackoffRandomMaxEdit);
   m_backoffTabWidget->addTab(randomTab, i18n("Random"));
 
   // Fixed + Exponential Tab
@@ -181,8 +162,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
   m_queueBackoffEdit->setSuffix(i18n(" minutes"));
   m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  fixedExpLayout->addRow(i18n("Queue failure fixed/initial backoff:"),
-                         m_queueBackoffEdit);
+  fixedExpLayout->addRow(i18n("Queue failure fixed/initial backoff:"), m_queueBackoffEdit);
   m_backoffTabWidget->addTab(fixedExpTab, i18n("Fixed + Exponential"));
 
   // Global Limits Tab
@@ -191,8 +171,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_queueBackoffMaxEdit = new QSpinBox(this);
   m_queueBackoffMaxEdit->setRange(1, 10080); // Up to 1 week
   m_queueBackoffMaxEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffMaxEdit->setValue(
-      queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
+  m_queueBackoffMaxEdit->setValue(queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
   allLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
   m_backoffTabWidget->addTab(allTab, i18n("Global Limits"));
 
@@ -207,8 +186,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_refreshWorkersEdit = new QSpinBox(this);
   m_refreshWorkersEdit->setRange(1, 100);
   m_refreshWorkersEdit->setValue(config.readEntry("RefreshWorkers", 3));
-  generalLayout->addRow(i18n("Concurrent refresh workers:"),
-                        m_refreshWorkersEdit);
+  generalLayout->addRow(i18n("Concurrent refresh workers:"), m_refreshWorkersEdit);
 
   m_pageSizeEdit = new QSpinBox(this);
   m_pageSizeEdit->setRange(10, 100);
@@ -236,18 +214,15 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   QWidget *sessionTab = new QWidget(this);
   QFormLayout *sessionLayout = new QFormLayout(sessionTab);
 
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
-                             QStringLiteral("SessionWindow"));
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
   m_globalAutoRefreshCombo = new QComboBox(this);
   m_globalAutoRefreshCombo->addItem(i18n("Off"), 0);
   m_globalAutoRefreshCombo->addItem(i18n("10 seconds"), 10);
   m_globalAutoRefreshCombo->addItem(i18n("30 seconds"), 30);
   m_globalAutoRefreshCombo->addItem(i18n("1 minute"), 60);
   m_globalAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
-  m_globalAutoRefreshCombo->setCurrentIndex(
-      sessionConfig.readEntry("AutoRefreshIndex", 0));
-  sessionLayout->addRow(i18n("Default session auto-refresh:"),
-                        m_globalAutoRefreshCombo);
+  m_globalAutoRefreshCombo->setCurrentIndex(sessionConfig.readEntry("AutoRefreshIndex", 0));
+  sessionLayout->addRow(i18n("Default session auto-refresh:"), m_globalAutoRefreshCombo);
 
   m_followingAutoRefreshCombo = new QComboBox(this);
   m_followingAutoRefreshCombo->addItem(i18n("Off"), 0);
@@ -257,12 +232,10 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
 
-  int followingInterval =
-      sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
+  int followingInterval = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
   // Migrate the legacy MergeRefreshAndQueue checkbox state to the new combo box
   // item if applicable
-  bool legacyMergeRefresh =
-      sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  bool legacyMergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
   if (legacyMergeRefresh && followingInterval != -1) {
     followingInterval = -1;
     // We clean up the old setting on save.
@@ -272,28 +245,22 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
   if (followingIndex >= 0) {
     m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
   }
-  sessionLayout->addRow(i18n("Following auto-refresh:"),
-                        m_followingAutoRefreshCombo);
+  sessionLayout->addRow(i18n("Following auto-refresh:"), m_followingAutoRefreshCombo);
 
-  m_autoArchiveCheckbox = new QCheckBox(
-      i18n("Automatically archive following managed sessions"), this);
-  m_autoArchiveCheckbox->setChecked(
-      sessionConfig.readEntry("AutoArchiveEnabled", true));
+  m_autoArchiveCheckbox = new QCheckBox(i18n("Automatically archive following managed sessions"), this);
+  m_autoArchiveCheckbox->setChecked(sessionConfig.readEntry("AutoArchiveEnabled", true));
   sessionLayout->addRow(QString(), m_autoArchiveCheckbox);
 
   m_autoArchiveDaysEdit = new QSpinBox(this);
   m_autoArchiveDaysEdit->setRange(1, 3650);
   m_autoArchiveDaysEdit->setSuffix(i18n(" days after creation"));
-  m_autoArchiveDaysEdit->setValue(
-      sessionConfig.readEntry("AutoArchiveDays", 30));
+  m_autoArchiveDaysEdit->setValue(sessionConfig.readEntry("AutoArchiveDays", 30));
   sessionLayout->addRow(i18n("Archive after:"), m_autoArchiveDaysEdit);
 
-  m_prMergeArchiveCheckbox =
-      new QCheckBox(i18n("When a following job has a PR that is merged move it "
-                         "to the archive"),
-                    this);
-  m_prMergeArchiveCheckbox->setChecked(
-      sessionConfig.readEntry("PrMergeArchiveEnabled", true));
+  m_prMergeArchiveCheckbox = new QCheckBox(i18n("When a following job has a PR that is merged move it "
+                                                "to the archive"),
+                                           this);
+  m_prMergeArchiveCheckbox->setChecked(sessionConfig.readEntry("PrMergeArchiveEnabled", true));
   sessionLayout->addRow(QString(), m_prMergeArchiveCheckbox);
 
   mainTabWidget->addTab(sessionTab, i18n("Sessions"));
@@ -314,30 +281,24 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent)
 
   mainLayout->addLayout(buttonLayout);
 
-  connect(m_apiManager, &APIManager::connectionTested, this,
-          [this](bool success, const QString &message) {
-            if (success) {
-              QMessageBox::information(this, i18n("Connection Test"), message);
-            } else {
-              QMessageBox::warning(this, i18n("Connection Test"), message);
-            }
-          });
+  connect(m_apiManager, &APIManager::connectionTested, this, [this](bool success, const QString &message) {
+    if (success) {
+      QMessageBox::information(this, i18n("Connection Test"), message);
+    } else {
+      QMessageBox::warning(this, i18n("Connection Test"), message);
+    }
+  });
 
-  connect(m_apiManager, &APIManager::githubConnectionTested, this,
-          [this](bool success, const QString &message) {
-            if (success) {
-              QMessageBox::information(this, i18n("GitHub Connection Test"),
-                                       message);
-            } else {
-              QMessageBox::warning(this, i18n("GitHub Connection Test"),
-                                   message);
-            }
-          });
+  connect(m_apiManager, &APIManager::githubConnectionTested, this, [this](bool success, const QString &message) {
+    if (success) {
+      QMessageBox::information(this, i18n("GitHub Connection Test"), message);
+    } else {
+      QMessageBox::warning(this, i18n("GitHub Connection Test"), message);
+    }
+  });
 }
 
-void SettingsDialog::onTestConnection() {
-  m_apiManager->testConnection(m_apiKeyEdit->text());
-}
+void SettingsDialog::onTestConnection() { m_apiManager->testConnection(m_apiKeyEdit->text()); }
 
 void SettingsDialog::onSave() {
   m_apiManager->setApiKey(m_apiKeyEdit->text());
@@ -357,14 +318,12 @@ void SettingsDialog::onSave() {
   apiConfigOut.sync();
 
   QString autostartPath =
-      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
-      QStringLiteral("/autostart");
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/autostart");
   QDir dir(autostartPath);
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
-  QString desktopFilePath =
-      dir.filePath(QStringLiteral("org.kde.kjules.desktop"));
+  QString desktopFilePath = dir.filePath(QStringLiteral("org.kde.kjules.desktop"));
 
   if (m_autostartEdit->isChecked()) {
     QFile file(desktopFilePath);
@@ -380,34 +339,25 @@ void SettingsDialog::onSave() {
     QFile::remove(desktopFilePath);
   }
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(),
-                           QStringLiteral("Queue"));
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
-  queueConfig.writeEntry("QueueMode",
-                         m_queueModeCombo->currentData().toString());
+  queueConfig.writeEntry("QueueMode", m_queueModeCombo->currentData().toString());
   queueConfig.writeEntry("OneAtATimeLimit", m_oneAtATimeLimitEdit->value());
   QString backoffType = m_backoffTypeCombo->currentData().toString();
   queueConfig.writeEntry("BackoffType", backoffType);
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
   queueConfig.writeEntry("BackoffExpBase", m_queueBackoffExpBaseEdit->value());
-  queueConfig.writeEntry("BackoffRandomMin",
-                         m_queueBackoffRandomMinEdit->value());
-  queueConfig.writeEntry("BackoffRandomMax",
-                         m_queueBackoffRandomMaxEdit->value());
+  queueConfig.writeEntry("BackoffRandomMin", m_queueBackoffRandomMinEdit->value());
+  queueConfig.writeEntry("BackoffRandomMax", m_queueBackoffRandomMaxEdit->value());
   queueConfig.writeEntry("BackoffMax", m_queueBackoffMaxEdit->value());
   queueConfig.sync();
 
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(),
-                             QStringLiteral("SessionWindow"));
-  sessionConfig.writeEntry("AutoRefreshIndex",
-                           m_globalAutoRefreshCombo->currentIndex());
-  sessionConfig.writeEntry("FollowingAutoRefreshInterval",
-                           m_followingAutoRefreshCombo->currentData().toInt());
-  sessionConfig.writeEntry("AutoArchiveEnabled",
-                           m_autoArchiveCheckbox->isChecked());
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  sessionConfig.writeEntry("AutoRefreshIndex", m_globalAutoRefreshCombo->currentIndex());
+  sessionConfig.writeEntry("FollowingAutoRefreshInterval", m_followingAutoRefreshCombo->currentData().toInt());
+  sessionConfig.writeEntry("AutoArchiveEnabled", m_autoArchiveCheckbox->isChecked());
   sessionConfig.writeEntry("AutoArchiveDays", m_autoArchiveDaysEdit->value());
-  sessionConfig.writeEntry("PrMergeArchiveEnabled",
-                           m_prMergeArchiveCheckbox->isChecked());
+  sessionConfig.writeEntry("PrMergeArchiveEnabled", m_prMergeArchiveCheckbox->isChecked());
   sessionConfig.deleteEntry("MergeRefreshAndQueue"); // Cleanup legacy option
   sessionConfig.sync();
 
