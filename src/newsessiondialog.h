@@ -16,7 +16,7 @@ class QListView;
 class QComboBox;
 class QSortFilterProxyModel;
 class QCheckBox;
-
+class QSpinBox;
 class QPushButton;
 
 class SourceSelectionProxyModel;
@@ -54,7 +54,9 @@ public:
 
 Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources, const QString &prompt,
-                              const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
+                              const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                              int priority);
+  void previewQueuePositionRequested(int priority);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
   void loadTemplateRequested();
@@ -101,6 +103,7 @@ private:
   QCheckBox *m_keepOpenCheckBox;
   QCheckBox *m_keepSourceCheckBox;
   QCheckBox *m_ignoreConcurrencyCheckBox;
+  QSpinBox *m_prioritySpinBox;
   QPushButton *m_createButton;
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;

@@ -1,7 +1,7 @@
 #include "sourcemodel.h"
-#include <KLocalizedString>
 #include "queuemodel.h"
 #include "sessionmodel.h"
+#include <KLocalizedString>
 
 #include <QDateTime>
 #include <QDir>
@@ -142,11 +142,15 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
       int inProgressCount = source.value(QStringLiteral("local_inProgressCount")).toInt();
 
       QStringList parts;
-      if (blockedCount > 0) parts.append(i18n("%1 Blocked", blockedCount));
-      if (inProgressCount > 0) parts.append(i18n("%1 In Progress", inProgressCount));
-      if (pendingCount > 0) parts.append(i18n("%1 Pending", pendingCount));
+      if (blockedCount > 0)
+        parts.append(i18n("%1 Blocked", blockedCount));
+      if (inProgressCount > 0)
+        parts.append(i18n("%1 In Progress", inProgressCount));
+      if (pendingCount > 0)
+        parts.append(i18n("%1 Pending", pendingCount));
 
-      if (parts.isEmpty()) return QStringLiteral("-");
+      if (parts.isEmpty())
+        return QStringLiteral("-");
       return parts.join(QStringLiteral(", "));
     }
     return QVariant();
@@ -780,9 +784,9 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
   }
 }
 
-
 void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *sessionModel) {
-  if (!queueModel || !sessionModel) return;
+  if (!queueModel || !sessionModel)
+    return;
 
   QHash<QString, int> blockedCounts;
   QHash<QString, int> pendingCounts;
@@ -790,11 +794,13 @@ void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *se
 
   for (int i = 0; i < queueModel->rowCount(); ++i) {
     QueueItem item = queueModel->getItem(i);
-    QString source = item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+    QString source =
+        item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
     if (source.isEmpty()) {
       source = item.requestData.value(QStringLiteral("source")).toString();
     }
-    if (source.isEmpty()) continue;
+    if (source.isEmpty())
+      continue;
 
     QString normSourceId = normalizeSourceId(source);
     if (item.isBlocked) {

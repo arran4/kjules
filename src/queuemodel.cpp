@@ -384,6 +384,9 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 
   qint64 waitTime = config.readEntry("WaitTime", 3600);
 
+  int priority = item.requestData.value(QStringLiteral("priority")).toInt(0);
+  int insertPos = calculateInsertPosition(priority);
+
   if (!m_isHolding) {
     if (m_jobsSinceLastWait >= jobsBeforeWait) {
       beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
@@ -397,11 +400,33 @@ void QueueModel::enqueueItem(const QueueItem &item) {
     m_jobsSinceLastWait++;
   }
 
-  beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-  m_items.append(item);
+  // Recalculate if we appended a wait item (although wait items are typically added at the very end and
+  // calculateInsertPosition ignores them, they shouldn't shift insertPos unless insertPos was exactly at the end).
+  if (insertPos == m_items.size() - 1 && m_items.last().isWaitItem) {
+    insertPos = m_items.size();
+  } else {
+    insertPos = calculateInsertPosition(priority);
+  }
+
+  beginInsertRows(QModelIndex(), insertPos, insertPos);
+  m_items.insert(insertPos, item);
   endInsertRows();
 
   save();
+}
+
+int QueueModel::calculateInsertPosition(int priority) const {
+  for (int i = 0; i < m_items.size(); ++i) {
+    const QueueItem &existingItem = m_items.at(i);
+    if (existingItem.isWaitItem || existingItem.isDailyLimitWait) {
+      continue;
+    }
+    int existingPriority = existingItem.requestData.value(QStringLiteral("priority")).toInt(0);
+    if (priority > existingPriority) {
+      return i;
+    }
+  }
+  return m_items.size();
 }
 
 void QueueModel::insertItem(int index, const QueueItem &item) {
