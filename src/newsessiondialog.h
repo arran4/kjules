@@ -102,6 +102,7 @@ private:
   QCheckBox *m_requirePlanApprovalCheckBox;
   QCheckBox *m_keepOpenCheckBox;
   QCheckBox *m_keepSourceCheckBox;
+  QCheckBox *m_keepPromptCheckBox;
   QCheckBox *m_ignoreConcurrencyCheckBox;
   QSpinBox *m_prioritySpinBox;
   QPushButton *m_createButton;

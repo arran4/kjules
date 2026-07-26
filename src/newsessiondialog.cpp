@@ -1057,6 +1057,10 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   m_keepSourceCheckBox->setChecked(false);
   optionsLayout->addWidget(m_keepSourceCheckBox);
 
+  m_keepPromptCheckBox = new QCheckBox(tr("Don't clear prompt"), this);
+  m_keepPromptCheckBox->setChecked(false);
+  optionsLayout->addWidget(m_keepPromptCheckBox);
+
   optionsLayout->addStretch();
   formLayout->addRow(tr("Options:"), optionsLayout);
 
@@ -1167,6 +1171,14 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   actionCollection()->setDefaultShortcut(keepSourceAction, QKeySequence(Qt::CTRL | Qt::Key_L));
   connect(keepSourceAction, &QAction::toggled, m_keepSourceCheckBox, &QCheckBox::setChecked);
   connect(m_keepSourceCheckBox, &QCheckBox::toggled, keepSourceAction, &QAction::setChecked);
+
+  QAction *keepPromptAction = actionCollection()->addAction(QStringLiteral("keep_prompt_after_saving"));
+  keepPromptAction->setText(tr("Don't clear &prompt after saving"));
+  keepPromptAction->setCheckable(true);
+  keepPromptAction->setChecked(m_keepPromptCheckBox->isChecked());
+  actionCollection()->setDefaultShortcut(keepPromptAction, QKeySequence(Qt::CTRL | Qt::Key_M));
+  connect(keepPromptAction, &QAction::toggled, m_keepPromptCheckBox, &QCheckBox::setChecked);
+  connect(m_keepPromptCheckBox, &QCheckBox::toggled, keepPromptAction, &QAction::setChecked);
 
   QAction *setDefaultFilterAction = actionCollection()->addAction(QStringLiteral("set_default_filter"));
   setDefaultFilterAction->setText(tr("Save Current Filter as Default"));
@@ -1412,7 +1424,9 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
   Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority);
 
   if (m_keepOpenCheckBox->isChecked()) {
-    m_promptEdit->clear();
+    if (!m_keepPromptCheckBox->isChecked()) {
+      m_promptEdit->clear();
+    }
     if (!m_keepSourceCheckBox->isChecked()) {
       m_selectedSources.clear();
       updateModels();
