@@ -166,8 +166,23 @@ MainWindow::MainWindow(QWidget *parent)
     updateTrayToolTip();
   };
 
+  auto updateQueueStats = [this]() {
+    m_sourceModel->recalculateQueueStats(m_queueModel, m_sessionModel);
+  };
+
   connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
+  connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateQueueStats);
   connect(m_archiveModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
+
+  connect(m_queueModel, &QAbstractItemModel::dataChanged, this, updateQueueStats);
+  connect(m_queueModel, &QAbstractItemModel::rowsInserted, this, updateQueueStats);
+  connect(m_queueModel, &QAbstractItemModel::rowsRemoved, this, updateQueueStats);
+  connect(m_queueModel, &QAbstractItemModel::modelReset, this, updateQueueStats);
+
+  connect(m_sessionModel, &QAbstractItemModel::dataChanged, this, updateQueueStats);
+  connect(m_sessionModel, &QAbstractItemModel::rowsInserted, this, updateQueueStats);
+  connect(m_sessionModel, &QAbstractItemModel::rowsRemoved, this, updateQueueStats);
+  connect(m_sessionModel, &QAbstractItemModel::modelReset, this, updateQueueStats);
 
   m_sessionModel->loadSessions();
   m_archiveModel->loadSessions();

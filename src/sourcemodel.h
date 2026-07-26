@@ -5,6 +5,9 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
+class QueueModel;
+class SessionModel;
+
 class SourceModel : public QAbstractTableModel {
   Q_OBJECT
 
@@ -22,6 +25,7 @@ public:
     ColFork,
     ColPrivate,
     ColLanguages,
+    ColQueueStatus,
     ColCount
   };
 
@@ -46,6 +50,7 @@ public:
   void clear();
   void recordSessionCreated(const QString &sourceId);
   void recalculateStatsFromSessions(const QJsonArray &allSessions);
+  void recalculateQueueStats(QueueModel *queueModel, SessionModel *sessionModel);
 
 private:
   QJsonArray m_sources;

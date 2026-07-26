@@ -1,5 +1,8 @@
 #include "sourcemodel.h"
 #include <KLocalizedString>
+#include "queuemodel.h"
+#include "sessionmodel.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -133,6 +136,18 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
         return source.value(QStringLiteral("language")).toString();
       }
       return source.value(QStringLiteral("github")).toObject().value(QStringLiteral("language")).toString();
+    } else if (index.column() == ColQueueStatus) {
+      int blockedCount = source.value(QStringLiteral("local_blockedCount")).toInt();
+      int pendingCount = source.value(QStringLiteral("local_pendingCount")).toInt();
+      int inProgressCount = source.value(QStringLiteral("local_inProgressCount")).toInt();
+
+      QStringList parts;
+      if (blockedCount > 0) parts.append(i18n("%1 Blocked", blockedCount));
+      if (inProgressCount > 0) parts.append(i18n("%1 In Progress", inProgressCount));
+      if (pendingCount > 0) parts.append(i18n("%1 Pending", pendingCount));
+
+      if (parts.isEmpty()) return QStringLiteral("-");
+      return parts.join(QStringLiteral(", "));
     }
     return QVariant();
   } else if (role == Qt::DecorationRole) {
@@ -210,6 +225,8 @@ QVariant SourceModel::headerData(int section, Qt::Orientation orientation, int r
     return i18n("Private");
   } else if (section == ColLanguages) {
     return i18n("Languages");
+  } else if (section == ColQueueStatus) {
+    return i18n("Queue Status");
   }
   return QVariant();
 }
@@ -760,5 +777,72 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
   if (changed) {
     Q_EMIT dataChanged(createIndex(0, 0), createIndex(m_sources.size() - 1, ColCount - 1));
     saveSources();
+  }
+}
+
+
+void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *sessionModel) {
+  if (!queueModel || !sessionModel) return;
+
+  QHash<QString, int> blockedCounts;
+  QHash<QString, int> pendingCounts;
+  QHash<QString, int> inProgressCounts;
+
+  for (int i = 0; i < queueModel->rowCount(); ++i) {
+    QueueItem item = queueModel->getItem(i);
+    QString source = item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+    if (source.isEmpty()) {
+      source = item.requestData.value(QStringLiteral("source")).toString();
+    }
+    if (source.isEmpty()) continue;
+
+    QString normSourceId = normalizeSourceId(source);
+    if (item.isBlocked) {
+      blockedCounts[normSourceId]++;
+    } else {
+      pendingCounts[normSourceId]++;
+    }
+  }
+
+  for (int i = 0; i < sessionModel->rowCount(); ++i) {
+    QJsonObject session = sessionModel->getSession(i);
+    QString state = session.value(QStringLiteral("state")).toString();
+    if (state == QStringLiteral("IN_PROGRESS")) {
+      QString sourceId;
+      if (session.contains(QStringLiteral("sourceContext"))) {
+        sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+      }
+      if (sourceId.isEmpty()) {
+        sourceId = session.value(QStringLiteral("source")).toString();
+      }
+      if (!sourceId.isEmpty()) {
+        inProgressCounts[normalizeSourceId(sourceId)]++;
+      }
+    }
+  }
+
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject source = m_sources[i].toObject();
+    QString id = source.value(QStringLiteral("id")).toString();
+    if (id.isEmpty()) {
+      id = source.value(QStringLiteral("name")).toString();
+    }
+    QString normSourceId = normalizeSourceId(id);
+
+    int newBlocked = blockedCounts.value(normSourceId, 0);
+    int newPending = pendingCounts.value(normSourceId, 0);
+    int newInProgress = inProgressCounts.value(normSourceId, 0);
+
+    if (source.value(QStringLiteral("local_blockedCount")).toInt() != newBlocked ||
+        source.value(QStringLiteral("local_pendingCount")).toInt() != newPending ||
+        source.value(QStringLiteral("local_inProgressCount")).toInt() != newInProgress) {
+
+      source[QStringLiteral("local_blockedCount")] = newBlocked;
+      source[QStringLiteral("local_pendingCount")] = newPending;
+      source[QStringLiteral("local_inProgressCount")] = newInProgress;
+      m_sources[i] = source;
+      QModelIndex idx = index(i, ColQueueStatus);
+      Q_EMIT dataChanged(idx, idx);
+    }
   }
 }

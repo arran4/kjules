@@ -1,6 +1,6 @@
 add_executable(test_dummy test_dummy.cpp)
 add_executable(test_filter test_filter.cpp ../src/filterparser.cpp ../src/filtereditor.cpp)
-add_executable(test_advancedfilterproxymodel test_advancedfilterproxymodel.cpp ../src/advancedfilterproxymodel.cpp ../src/filterparser.cpp ../src/sessionmodel.cpp ../src/sourcemodel.cpp)
+add_executable(test_advancedfilterproxymodel test_advancedfilterproxymodel.cpp ../src/advancedfilterproxymodel.cpp ../src/filterparser.cpp ../src/sessionmodel.cpp ../src/sourcemodel.cpp ../src/queuemodel.cpp)
 
 target_link_libraries(test_dummy Qt6::Test)
 target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core)
