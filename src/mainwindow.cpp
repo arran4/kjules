@@ -166,9 +166,7 @@ MainWindow::MainWindow(QWidget *parent)
     updateTrayToolTip();
   };
 
-  auto updateQueueStats = [this]() {
-    m_sourceModel->recalculateQueueStats(m_queueModel, m_sessionModel);
-  };
+  auto updateQueueStats = [this]() { m_sourceModel->recalculateQueueStats(m_queueModel, m_sessionModel); };
 
   connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateSourceStats);
   connect(m_sessionModel, &SessionModel::sessionsLoadedOrUpdated, this, updateQueueStats);
@@ -3066,7 +3064,8 @@ void MainWindow::toggleQueueState() {
 }
 
 void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
-                                  const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority) {
+                                  const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                                  int priority) {
   for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
     req[QStringLiteral("source")] = it.key();
@@ -4026,11 +4025,11 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
           [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::showSourceStatusRequested, this, &MainWindow::showSourceStatusDialog);
-  connect(window, &NewSessionDialog::previewQueuePositionRequested, this,
-          [this, window](int priority) {
-            int pos = m_queueModel->calculateInsertPosition(priority);
-            QMessageBox::information(window, i18n("Queue Position Preview"), i18n("This session would be placed at position %1 in the queue.", pos + 1));
-          });
+  connect(window, &NewSessionDialog::previewQueuePositionRequested, this, [this, window](int priority) {
+    int pos = m_queueModel->calculateInsertPosition(priority);
+    QMessageBox::information(window, i18n("Queue Position Preview"),
+                             i18n("This session would be placed at position %1 in the queue.", pos + 1));
+  });
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {

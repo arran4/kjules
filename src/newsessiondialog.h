@@ -54,7 +54,8 @@ public:
 
 Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources, const QString &prompt,
-                              const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority);
+                              const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                              int priority);
   void previewQueuePositionRequested(int priority);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);

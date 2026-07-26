@@ -403,9 +403,9 @@ void QueueModel::enqueueItem(const QueueItem &item) {
   // Recalculate if we appended a wait item (although wait items are typically added at the very end and
   // calculateInsertPosition ignores them, they shouldn't shift insertPos unless insertPos was exactly at the end).
   if (insertPos == m_items.size() - 1 && m_items.last().isWaitItem) {
-      insertPos = m_items.size();
+    insertPos = m_items.size();
   } else {
-      insertPos = calculateInsertPosition(priority);
+    insertPos = calculateInsertPosition(priority);
   }
 
   beginInsertRows(QModelIndex(), insertPos, insertPos);

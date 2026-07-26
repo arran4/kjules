@@ -1021,9 +1021,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   priorityLayout->addWidget(new QLabel(tr("Priority:"), this));
   priorityLayout->addWidget(m_prioritySpinBox);
   QPushButton *previewButton = new QPushButton(tr("Preview Position"), this);
-  connect(previewButton, &QPushButton::clicked, this, [this]() {
-    Q_EMIT previewQueuePositionRequested(m_prioritySpinBox->value());
-  });
+  connect(previewButton, &QPushButton::clicked, this,
+          [this]() { Q_EMIT previewQueuePositionRequested(m_prioritySpinBox->value()); });
   priorityLayout->addWidget(previewButton);
   priorityLayout->addStretch();
   formLayout->addRow(priorityLayout);
