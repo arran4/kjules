@@ -32,6 +32,7 @@
 #include <QSet>
 #include <QShortcut>
 #include <QSortFilterProxyModel>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTextBlockFormat>
@@ -1013,6 +1014,20 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   m_ignoreConcurrencyCheckBox->setChecked(false);
   optionsLayout->addWidget(m_ignoreConcurrencyCheckBox);
 
+  QHBoxLayout *priorityLayout = new QHBoxLayout();
+  m_prioritySpinBox = new QSpinBox(this);
+  m_prioritySpinBox->setRange(-100, 100);
+  m_prioritySpinBox->setValue(0);
+  priorityLayout->addWidget(new QLabel(tr("Priority:"), this));
+  priorityLayout->addWidget(m_prioritySpinBox);
+  QPushButton *previewButton = new QPushButton(tr("Preview Position"), this);
+  connect(previewButton, &QPushButton::clicked, this, [this]() {
+    Q_EMIT previewQueuePositionRequested(m_prioritySpinBox->value());
+  });
+  priorityLayout->addWidget(previewButton);
+  priorityLayout->addStretch();
+  formLayout->addRow(priorityLayout);
+
   KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
 
@@ -1203,6 +1218,10 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
     m_ignoreConcurrencyCheckBox->setChecked(data.value(QStringLiteral("ignoreConcurrency")).toBool());
   }
 
+  if (data.contains(QStringLiteral("priority"))) {
+    m_prioritySpinBox->setValue(data.value(QStringLiteral("priority")).toInt());
+  }
+
   if (data.contains(QStringLiteral("automationMode"))) {
     QString mode = data.value(QStringLiteral("automationMode")).toString();
     int idx = m_automationModeComboBox->findData(mode);
@@ -1296,6 +1315,10 @@ void NewSessionDialog::setTemplateData(const QJsonObject &data) {
     m_ignoreConcurrencyCheckBox->setChecked(data.value(QStringLiteral("ignoreConcurrency")).toBool());
   }
 
+  if (data.contains(QStringLiteral("priority"))) {
+    m_prioritySpinBox->setValue(data.value(QStringLiteral("priority")).toInt());
+  }
+
   if (data.contains(QStringLiteral("automationMode"))) {
     QString mode = data.value(QStringLiteral("automationMode")).toString();
     int idx = m_automationModeComboBox->findData(mode);
@@ -1385,8 +1408,9 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
 
   bool requirePlanApproval = m_requirePlanApprovalCheckBox->isChecked();
   bool ignoreConcurrency = m_ignoreConcurrencyCheckBox->isChecked();
+  int priority = m_prioritySpinBox->value();
 
-  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency);
+  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority);
 
   if (m_keepOpenCheckBox->isChecked()) {
     m_promptEdit->clear();
@@ -1425,6 +1449,7 @@ void NewSessionDialog::onSaveDraft() {
   draft[QStringLiteral("comment")] = dlg.nameOrComment();
   draft[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
   draft[QStringLiteral("ignoreConcurrency")] = m_ignoreConcurrencyCheckBox->isChecked();
+  draft[QStringLiteral("priority")] = m_prioritySpinBox->value();
   draft[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveDraftRequested(draft);
@@ -1459,6 +1484,7 @@ void NewSessionDialog::onSaveTemplate() {
   tmpl[QStringLiteral("description")] = dlg.description();
   tmpl[QStringLiteral("requirePlanApproval")] = requirePlanApproval;
   tmpl[QStringLiteral("ignoreConcurrency")] = m_ignoreConcurrencyCheckBox->isChecked();
+  tmpl[QStringLiteral("priority")] = m_prioritySpinBox->value();
   tmpl[QStringLiteral("automationMode")] = m_automationModeComboBox->currentData().toString();
 
   Q_EMIT saveTemplateRequested(tmpl);

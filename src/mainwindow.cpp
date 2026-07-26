@@ -3066,7 +3066,7 @@ void MainWindow::toggleQueueState() {
 }
 
 void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
-                                  const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency) {
+                                  const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority) {
   for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
     req[QStringLiteral("source")] = it.key();
@@ -3077,6 +3077,9 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
     }
     if (ignoreConcurrency) {
       req[QStringLiteral("ignoreConcurrency")] = true;
+    }
+    if (priority != 0) {
+      req[QStringLiteral("priority")] = priority;
     }
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
@@ -3806,11 +3809,11 @@ void MainWindow::editQueueItem(int row) {
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency) {
+                                  bool requirePlanApproval, bool ignoreConcurrency, int priority) {
             if (persistentIndex.isValid()) {
               m_queueModel->removeItem(persistentIndex.row());
             }
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency);
+            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority);
           });
 
   connect(window, &NewSessionDialog::saveDraftRequested, [this, persistentIndex](const QJsonObject &d) {
@@ -3938,8 +3941,8 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency) {
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency);
+                                  bool requirePlanApproval, bool ignoreConcurrency, int priority) {
+            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority);
             if (persistentIndex.isValid()) {
               m_errorsModel->removeError(persistentIndex.row());
             }
@@ -3967,8 +3970,8 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency) {
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency);
+                                  bool requirePlanApproval, bool ignoreConcurrency, int priority) {
+            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority);
             if (persistentIndex.isValid()) {
               m_draftsModel->removeDraft(persistentIndex.row());
             }
@@ -4023,6 +4026,11 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
           [this](const QString &id) { m_apiManager->getSource(id); });
   connect(window, &NewSessionDialog::showSourceStatusRequested, this, &MainWindow::showSourceStatusDialog);
+  connect(window, &NewSessionDialog::previewQueuePositionRequested, this,
+          [this, window](int priority) {
+            int pos = m_queueModel->calculateInsertPosition(priority);
+            QMessageBox::information(window, i18n("Queue Position Preview"), i18n("This session would be placed at position %1 in the queue.", pos + 1));
+          });
 }
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {

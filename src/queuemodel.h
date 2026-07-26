@@ -72,6 +72,8 @@ public:
   int size() const;
   void refreshWaitItems();
 
+  int calculateInsertPosition(int priority) const;
+
   QueueItem getItem(int index) const;
   void moveItem(int from, int to);
 

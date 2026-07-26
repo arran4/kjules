@@ -75,7 +75,7 @@ private Q_SLOTS:
   void showManageCustomSourcesDialog();
   void showSettingsDialog();
   void onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
-                        const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
+                        const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority = 0);
   void onCreateRepoAndSession(const QString &org, const QString &repoName, bool isPrivate, const QString &prompt,
                               const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
   void onDraftSaved(const QJsonObject &draft);
