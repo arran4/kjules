@@ -108,17 +108,43 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
 }
 
 void PromptTextEdit::keyPressEvent(QKeyEvent *e) {
-  const Qt::KeyboardModifiers modifiers =
-      e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
-  if (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) && e->key() == Qt::Key_V) {
-    if (const QMimeData *md = QApplication::clipboard()->mimeData()) {
-      if (md->hasText()) {
-        insertPlainText(md->text());
-        return;
-      }
+  QTextEdit::keyPressEvent(e);
+}
+
+void PromptTextEdit::contextMenuEvent(QContextMenuEvent *e) {
+  QMenu *menu = createStandardContextMenu();
+
+  if (const QMimeData *md = QApplication::clipboard()->mimeData()) {
+    if (md->hasText()) {
+      QString clipboardText = md->text();
+      menu->addSeparator();
+
+      QAction *pasteNoFormat = menu->addAction(tr("Paste Without Formatting"));
+      pasteNoFormat->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+      connect(pasteNoFormat, &QAction::triggered, this, [this, clipboardText]() { insertPlainText(clipboardText); });
+
+      QAction *pasteQuoted = menu->addAction(tr("Paste as Quoted Text"));
+      connect(pasteQuoted, &QAction::triggered, this, [this, clipboardText]() {
+        QStringList lines = clipboardText.split(QLatin1Char('\n'));
+        for (QString &line : lines) {
+          line.prepend(QStringLiteral("> "));
+        }
+        insertPlainText(lines.join(QLatin1Char('\n')));
+      });
+
+      QAction *pasteCode = menu->addAction(tr("Paste as Code"));
+      connect(pasteCode, &QAction::triggered, this, [this, clipboardText]() {
+        QString text = clipboardText;
+        if (!text.endsWith(QLatin1Char('\n'))) {
+          text.append(QLatin1Char('\n'));
+        }
+        insertPlainText(QStringLiteral("```\n") + text + QStringLiteral("```\n"));
+      });
     }
   }
-  QTextEdit::keyPressEvent(e);
+
+  menu->exec(e->globalPos());
+  delete menu;
 }
 
 class SourceSelectionProxyModel : public AdvancedFilterProxyModel {
@@ -815,6 +841,17 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   // Prompt
   m_promptEdit = new PromptTextEdit(this);
+
+  QAction *pasteNoFormatAction = new QAction(tr("Paste Without Formatting"), this);
+  pasteNoFormatAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+  connect(pasteNoFormatAction, &QAction::triggered, m_promptEdit, [this]() {
+    if (const QMimeData *md = QApplication::clipboard()->mimeData()) {
+      if (md->hasText()) {
+        m_promptEdit->insertPlainText(md->text());
+      }
+    }
+  });
+  m_promptEdit->addAction(pasteNoFormatAction);
 
   QHBoxLayout *promptHeaderLayout = new QHBoxLayout();
   m_loadTemplateButton = new QPushButton(tr("Load from template"), this);
