@@ -22,6 +22,7 @@
       <Action name="require_plan_approval"/>
       <Action name="keep_open_after_saving"/>
       <Action name="keep_source_selected"/>
+      <Action name="keep_prompt_after_saving"/>
     </Menu>
     <Menu name="view"><text>&amp;View</text>
       <Action name="hide_selected_sources"/>
