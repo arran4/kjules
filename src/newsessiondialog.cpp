@@ -107,7 +107,9 @@ void PromptTextEdit::insertFromMimeData(const QMimeData *source) {
   QTextEdit::insertFromMimeData(source);
 }
 
-void PromptTextEdit::keyPressEvent(QKeyEvent *e) { QTextEdit::keyPressEvent(e); }
+void PromptTextEdit::keyPressEvent(QKeyEvent *e) {
+  QTextEdit::keyPressEvent(e);
+}
 
 void PromptTextEdit::contextMenuEvent(QContextMenuEvent *e) {
   QMenu *menu = createStandardContextMenu();

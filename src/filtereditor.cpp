@@ -451,11 +451,18 @@ void FilterEditor::setFilterText(const QString &text) {
   QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' ')) ? text : text + QLatin1Char(' ');
   m_lineEdit->setText(newText);
   m_toggleButton->setVisible(true);
-  if (!m_userDismissed && m_lineEdit->hasFocus()) {
-    updatePopupPosition();
-    m_popupFrame->show();
-    m_toggleButton->setChecked(true);
+
+  if (newText.isEmpty() || newText.startsWith(QLatin1String("="))) {
+    if (!m_userDismissed && m_lineEdit->hasFocus()) {
+      updatePopupPosition();
+      m_popupFrame->show();
+      m_toggleButton->setChecked(true);
+    }
+  } else {
+    m_popupFrame->hide();
+    m_toggleButton->setChecked(false);
   }
+
   if (newText.startsWith(QLatin1String("="))) {
     updateTreeFromText();
   } else {
@@ -471,11 +478,18 @@ void FilterEditor::onTextChanged(const QString &text) {
 
   m_updating = true;
   m_toggleButton->setVisible(true);
-  if (!m_userDismissed && m_lineEdit->hasFocus()) {
-    updatePopupPosition();
-    m_popupFrame->show();
-    m_toggleButton->setChecked(true);
+
+  if (text.isEmpty() || text.startsWith(QLatin1String("="))) {
+    if (!m_userDismissed && m_lineEdit->hasFocus()) {
+      updatePopupPosition();
+      m_popupFrame->show();
+      m_toggleButton->setChecked(true);
+    }
+  } else {
+    m_popupFrame->hide();
+    m_toggleButton->setChecked(false);
   }
+
   if (text.startsWith(QLatin1String("="))) {
     updateTreeFromText();
   } else {
