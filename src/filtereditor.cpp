@@ -2,6 +2,8 @@
 #include "filterparser.h"
 
 #include <QAction>
+#include <QCoreApplication>
+#include <QKeyEvent>
 #include <QContextMenuEvent>
 #include <QDebug>
 #include <QDialog>
@@ -240,7 +242,6 @@ FilterEditor::FilterEditor(QWidget *parent) : QWidget(parent), m_updating(false)
   m_lineEdit->setPlaceholderText(tr("Search... Use '=' prefix for formula "
                                     "(e.g. =\"Update all\" state:PAUSED)"));
   m_lineEdit->setClearButtonEnabled(true);
-  m_lineEdit->installEventFilter(this);
   layout->addWidget(m_lineEdit);
 
   m_toggleButton = new QToolButton(this);
@@ -325,12 +326,8 @@ FilterEditor::FilterEditor(QWidget *parent) : QWidget(parent), m_updating(false)
 
   connect(dismissBtn, &QToolButton::clicked, this, &FilterEditor::dismissFormulaBuilder);
 
-  this->installEventFilter(this);
-  if (parent) {
-    parent->installEventFilter(this);
-    if (parent->window() && parent->window() != parent) {
-      parent->window()->installEventFilter(this);
-    }
+  if (QCoreApplication::instance()) {
+    QCoreApplication::instance()->installEventFilter(this);
   }
 
   connect(m_lineEdit, &QLineEdit::textChanged, this, &FilterEditor::onTextChanged);
@@ -393,11 +390,8 @@ void FilterEditor::focusInput() { m_lineEdit->setFocus(); }
 void FilterEditor::setCompletions(const QMap<QString, QStringList> &completions) { m_completions = completions; }
 
 FilterEditor::~FilterEditor() {
-  if (parentWidget()) {
-    parentWidget()->removeEventFilter(this);
-    if (parentWidget()->window() && parentWidget()->window() != parentWidget()) {
-      parentWidget()->window()->removeEventFilter(this);
-    }
+  if (QCoreApplication::instance()) {
+    QCoreApplication::instance()->removeEventFilter(this);
   }
 }
 
@@ -418,6 +412,14 @@ void FilterEditor::updatePopupPosition() {
 }
 
 bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
+  if (event->type() == QEvent::KeyPress) {
+    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+    if (keyEvent->key() == Qt::Key_Escape && m_popupFrame->isVisible()) {
+      dismissFormulaBuilder();
+      return true;
+    }
+  }
+
   if (obj == m_lineEdit) {
     if (event->type() == QEvent::FocusIn) {
       m_userDismissed = false;
@@ -434,9 +436,11 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
     }
   }
 
-  if (event->type() == QEvent::Move || event->type() == QEvent::Resize || event->type() == QEvent::Show) {
-    if (m_popupFrame->isVisible()) {
-      updatePopupPosition();
+  if (obj == this || obj == parentWidget() || (parentWidget() && obj == parentWidget()->window())) {
+    if (event->type() == QEvent::Move || event->type() == QEvent::Resize || event->type() == QEvent::Show) {
+      if (m_popupFrame->isVisible()) {
+        updatePopupPosition();
+      }
     }
   }
   return QWidget::eventFilter(obj, event);
