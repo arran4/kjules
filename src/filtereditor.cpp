@@ -2,9 +2,8 @@
 #include "filterparser.h"
 
 #include <QAction>
-#include <QCoreApplication>
-#include <QKeyEvent>
 #include <QContextMenuEvent>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDialog>
 #include <QFrame>
@@ -12,6 +11,7 @@
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
