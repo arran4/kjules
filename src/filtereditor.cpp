@@ -446,7 +446,7 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
   return QWidget::eventFilter(obj, event);
 }
 
-void FilterEditor::clearLastToken() {
+void FilterEditor::clearLastTextToken() {
   QString text = m_lineEdit->text();
   if (text.isEmpty() || text.endsWith(QLatin1Char(' '))) {
     return;
