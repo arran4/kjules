@@ -446,19 +446,19 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
   return QWidget::eventFilter(obj, event);
 }
 
-void FilterEditor::clearLastWord() {
+void FilterEditor::clearLastToken() {
   QString text = m_lineEdit->text();
   if (text.isEmpty() || text.endsWith(QLatin1Char(' '))) {
     return;
   }
 
   int lastSpace = text.lastIndexOf(QLatin1Char(' '));
-  QString lastWord = lastSpace == -1 ? text : text.mid(lastSpace + 1);
+  QString lastToken = lastSpace == -1 ? text : text.mid(lastSpace + 1);
 
   bool isFreeText = true;
   if (text.startsWith(QLatin1String("="))) {
-    if (lastWord.contains(QLatin1Char(':')) || lastWord == QStringLiteral("AND") || lastWord == QStringLiteral("OR") ||
-        lastWord == QStringLiteral("NOT") || lastWord == QStringLiteral("IN")) {
+    if (lastToken.contains(QLatin1Char(':')) || lastToken == QStringLiteral("AND") ||
+        lastToken == QStringLiteral("OR") || lastToken == QStringLiteral("NOT") || lastToken == QStringLiteral("IN")) {
       isFreeText = false;
     }
   }
