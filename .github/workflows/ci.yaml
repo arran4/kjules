@@ -196,7 +196,7 @@ jobs:
       - run: zypper rr repo-openh264 || true
       - run: zypper refresh
       - run: |
-          zypper install -y cmake ninja gcc-c++ clang-tools cppcheck \
+          zypper install -y cmake ninja gcc-c++ clang cppcheck \
           kf6-extra-cmake-modules qt6-base-devel qt6-tools-devel qt6-declarative-devel \
           kf6-kcoreaddons-devel kf6-ki18n-devel kf6-kwallet-devel kf6-knotifications-devel \
           kf6-kxmlgui-devel kf6-kconfig-devel kf6-kwidgetsaddons-devel kf6-kauth-devel kf6-karchive-devel kf6-kglobalaccel-devel \
@@ -220,7 +220,7 @@ jobs:
       - run: zypper rr repo-openh264 || true
       - run: zypper refresh
       - run: |
-          zypper install -y cmake ninja gcc-c++ appstream \
+          zypper install -y cmake ninja gcc-c++ AppStream \
           kf6-extra-cmake-modules qt6-base-devel qt6-tools-devel qt6-declarative-devel \
           kf6-kcoreaddons-devel kf6-ki18n-devel kf6-kwallet-devel kf6-knotifications-devel \
           kf6-kxmlgui-devel kf6-kconfig-devel kf6-kwidgetsaddons-devel kf6-kauth-devel kf6-karchive-devel kf6-kglobalaccel-devel \
