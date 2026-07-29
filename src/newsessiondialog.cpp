@@ -660,6 +660,32 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
               connect(removeBtn, &QPushButton::clicked, [&]() { qDeleteAll(listWidget->selectedItems()); });
 
+              connect(m_sourceModel, &SourceModel::dataChanged, &dialog,
+                      [this, sourceIdx, comboBox, multiComboBox](const QModelIndex &topLeft,
+                                                                 const QModelIndex &bottomLeft) {
+                        if (sourceIdx.row() >= topLeft.row() && sourceIdx.row() <= bottomLeft.row()) {
+                          QStringList newBranches = getAvailableBranches(sourceIdx);
+
+                          auto updateCombo = [](QComboBox *cb, const QStringList &items) {
+                            QString current = cb->currentText();
+                            cb->clear();
+                            cb->addItems(items);
+                            if (!current.isEmpty()) {
+                              int idx = items.indexOf(current);
+                              if (idx >= 0) {
+                                cb->setCurrentIndex(idx);
+                              } else {
+                                cb->insertItem(0, current);
+                                cb->setCurrentIndex(0);
+                              }
+                            }
+                          };
+
+                          updateCombo(comboBox, newBranches);
+                          updateCombo(multiComboBox, newBranches);
+                        }
+                      });
+
               QHBoxLayout *btnLayout = new QHBoxLayout();
               QPushButton *refreshJulesBtn = new QPushButton(tr("Refresh Jules"), &dialog);
               QPushButton *refreshGithubBtn = new QPushButton(tr("Refresh GitHub"), &dialog);
