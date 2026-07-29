@@ -1,0 +1,2 @@
+Checks: 'bugprone-*,performance-*,readability-*,-readability-implicit-bool-conversion,-readability-function-cognitive-complexity'
+HeaderFilterRegex: 'src/.*'

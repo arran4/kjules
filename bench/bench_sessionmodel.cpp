@@ -37,8 +37,7 @@ private Q_SLOTS:
     for (int i = 0; i < count; ++i) {
       QString idToFind = QStringLiteral("id_%1").arg(i);
       for (int j = 0; j < oldSessions.size(); ++j) {
-        if (oldSessions[j].toObject().value(QStringLiteral("id")).toString() ==
-            idToFind) {
+        if (oldSessions[j].toObject().value(QStringLiteral("id")).toString() == idToFind) {
           oldWayHits++;
           break;
         }

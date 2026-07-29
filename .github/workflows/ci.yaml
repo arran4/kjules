@@ -182,7 +182,7 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang-format
       - name: Format check
-        run: find src -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
+        run: find src tests bench -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
 
   cpp-qt-lint:
     name: C++ Lint
@@ -202,11 +202,11 @@ jobs:
           kf6-kxmlgui-devel kf6-kconfig-devel kf6-kwidgetsaddons-devel kf6-kauth-devel kf6-karchive-devel kf6-kglobalaccel-devel \
           kf6-kcodecs-devel kf6-kconfigwidgets-devel kf6-kitemviews-devel kf6-kiconthemes-devel
       - name: Cppcheck
-        run: cppcheck --enable=warning,style,performance,portability --error-exitcode=1 . || true
+        run: cppcheck --enable=warning,style,performance,portability --inline-suppr --error-exitcode=1 -I src src tests bench || true
       - name: Configure CMake
         run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=6 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
       - name: Clang-Tidy
-        run: run-clang-tidy -p build src || true
+        run: run-clang-tidy -p build -extra-arg=-Wno-unknown-argument src tests bench || true
 
   cpp-qt-build-test:
     name: Qt/C++ build
@@ -220,7 +220,7 @@ jobs:
       - run: zypper rr repo-openh264 || true
       - run: zypper refresh
       - run: |
-          zypper install -y cmake ninja gcc-c++ \
+          zypper install -y cmake ninja gcc-c++ appstream \
           kf6-extra-cmake-modules qt6-base-devel qt6-tools-devel qt6-declarative-devel \
           kf6-kcoreaddons-devel kf6-ki18n-devel kf6-kwallet-devel kf6-knotifications-devel \
           kf6-kxmlgui-devel kf6-kconfig-devel kf6-kwidgetsaddons-devel kf6-kauth-devel kf6-karchive-devel kf6-kglobalaccel-devel \
@@ -258,7 +258,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ needs.discover.outputs.has_qt_cpp }}" == "true" ]]; then
-            find src -name "*.h" -o -name "*.cpp" | xargs -r clang-format -i || true
+            find src tests bench -name "*.h" -o -name "*.cpp" | xargs -r clang-format -i || true
           fi
 
       - name: Create PR if changes exist

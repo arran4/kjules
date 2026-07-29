@@ -332,14 +332,19 @@ void APIManager::listActivities(const QString &sessionId) {
 
 QString APIManager::cleanSessionId(const QString &sessionId) {
   QString cleanId = sessionId;
-  if (cleanId.startsWith(QStringLiteral("sessions/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/sessions/"))) {
-    cleanId = cleanId.mid(10);
-  } else if (cleanId.startsWith(QStringLiteral("session/"))) {
-    cleanId = cleanId.mid(8);
-  } else if (cleanId.startsWith(QStringLiteral("/session/"))) {
-    cleanId = cleanId.mid(9);
+  static const QString s_sessions = QStringLiteral("sessions/");
+  static const QString s_slashSessions = QStringLiteral("/sessions/");
+  static const QString s_session = QStringLiteral("session/");
+  static const QString s_slashSession = QStringLiteral("/session/");
+
+  if (cleanId.startsWith(s_sessions)) {
+    cleanId = cleanId.mid(s_sessions.length());
+  } else if (cleanId.startsWith(s_slashSessions)) {
+    cleanId = cleanId.mid(s_slashSessions.length());
+  } else if (cleanId.startsWith(s_session)) {
+    cleanId = cleanId.mid(s_session.length());
+  } else if (cleanId.startsWith(s_slashSession)) {
+    cleanId = cleanId.mid(s_slashSession.length());
   } else if (cleanId.startsWith(QStringLiteral("/"))) {
     cleanId = cleanId.mid(1);
   }

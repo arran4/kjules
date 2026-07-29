@@ -45,10 +45,8 @@ private Q_SLOTS:
     QJsonArray cachedSessions;
     for (int i = 0; i < 1000; ++i) {
       QJsonObject sessionObj;
-      sessionObj[QStringLiteral("id")] =
-          QStringLiteral("session_") + QString::number(i);
-      sessionObj[QStringLiteral("sourceContext")] =
-          QJsonObject{{QStringLiteral("info"), QStringLiteral("dummy data")}};
+      sessionObj[QStringLiteral("id")] = QStringLiteral("session_") + QString::number(i);
+      sessionObj[QStringLiteral("sourceContext")] = QJsonObject{{QStringLiteral("info"), QStringLiteral("dummy data")}};
       cachedSessions.append(sessionObj);
     }
 
@@ -82,16 +80,15 @@ private Q_SLOTS:
     for (int i = 0; i < 50; ++i) {
       QByteArray jsonBytes = QJsonDocument(cachedSessions).toJson();
       QString threadFilePath = filePath + QString::number(i);
-      QThread *thread =
-          QThread::create([threadFilePath, jsonBytes, &finishedCount]() {
-            QFile file(threadFilePath);
-            if (file.open(QIODevice::WriteOnly)) {
-              file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-              file.write(jsonBytes);
-              file.close();
-            }
-            finishedCount++;
-          });
+      QThread *thread = QThread::create([threadFilePath, jsonBytes, &finishedCount]() {
+        QFile file(threadFilePath);
+        if (file.open(QIODevice::WriteOnly)) {
+          file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+          file.write(jsonBytes);
+          file.close();
+        }
+        finishedCount++;
+      });
       if (thread) {
         connect(thread, &QThread::finished, thread, &QObject::deleteLater);
         thread->start();
@@ -108,13 +105,10 @@ private Q_SLOTS:
     }
 
     qDebug() << "Sync Write - Total Time for 50 writes (ns):" << elapsedSync;
-    qDebug() << "Sync Write - Average time per write (ms):"
-             << (elapsedSync / 50.0) / 1e6;
+    qDebug() << "Sync Write - Average time per write (ms):" << (elapsedSync / 50.0) / 1e6;
 
-    qDebug() << "Async Write - Total Main Thread Time for 50 offloads (ns):"
-             << elapsedAsyncMainThread;
-    qDebug() << "Async Write - Average main thread time per offload (ms):"
-             << (elapsedAsyncMainThread / 50.0) / 1e6;
+    qDebug() << "Async Write - Total Main Thread Time for 50 offloads (ns):" << elapsedAsyncMainThread;
+    qDebug() << "Async Write - Average main thread time per offload (ms):" << (elapsedAsyncMainThread / 50.0) / 1e6;
 
     // Verification
     QVERIFY(elapsedAsyncMainThread < elapsedSync);

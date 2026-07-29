@@ -25,8 +25,7 @@ private Q_SLOTS:
         rowsToDeleteList.append(row);
       }
     }
-    std::sort(rowsToDeleteList.begin(), rowsToDeleteList.end(),
-              std::greater<int>());
+    std::sort(rowsToDeleteList.begin(), rowsToDeleteList.end(), std::greater<int>());
     qint64 listTime = timer.nsecsElapsed();
 
     // Benchmark QSet
@@ -36,14 +35,11 @@ private Q_SLOTS:
       uniqueRows.insert(row);
     }
     QList<int> rowsToDeleteSet(uniqueRows.begin(), uniqueRows.end());
-    std::sort(rowsToDeleteSet.begin(), rowsToDeleteSet.end(),
-              std::greater<int>());
+    std::sort(rowsToDeleteSet.begin(), rowsToDeleteSet.end(), std::greater<int>());
     qint64 setTime = timer.nsecsElapsed();
 
-    qDebug() << "List hits (unique):" << rowsToDeleteList.size()
-             << "Time (ns):" << listTime;
-    qDebug() << "Set hits (unique):" << rowsToDeleteSet.size()
-             << "Time (ns):" << setTime;
+    qDebug() << "List hits (unique):" << rowsToDeleteList.size() << "Time (ns):" << listTime;
+    qDebug() << "Set hits (unique):" << rowsToDeleteSet.size() << "Time (ns):" << setTime;
     qDebug() << "Improvement:" << (double)listTime / setTime << "x";
 
     QCOMPARE(rowsToDeleteList, rowsToDeleteSet);
