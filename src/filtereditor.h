@@ -22,6 +22,7 @@ public:
   QString filterText() const;
   QLineEdit *lineEdit() const;
   void setFilterText(const QString &text);
+  void clearLastWord();
   void setCompletions(const QMap<QString, QStringList> &completions);
   void setSimplifiedMode(bool simplified);
 

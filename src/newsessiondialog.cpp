@@ -814,7 +814,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
       QModelIndex sourceIdx = m_unselectedProxy->mapToSource(idx);
       m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
       updateModels();
-      m_filterEditor->setFilterText(QStringLiteral(""));
+      m_filterEditor->clearLastWord();
     } else if (m_unselectedProxy->rowCount() > 1) {
       m_unselectedView->setFocus();
       m_unselectedView->setCurrentIndex(m_unselectedProxy->index(0, 0));
@@ -827,6 +827,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
     m_selectedSources.insert(name, getDefaultBranch(sourceIdx));
     updateModels();
     m_unselectedView->clearSelection();
+    m_filterEditor->clearLastWord();
   });
 
   connect(m_selectedView, &QListView::activated, this, [this](const QModelIndex &idx) {
