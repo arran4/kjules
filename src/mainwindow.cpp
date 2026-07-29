@@ -749,7 +749,6 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
       if (hasErrorSession) {
         connect(recreateHighPriorityAction, &QAction::triggered, [this]() {
           QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
-          const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
           QList<int> rowsToProcess = getUniqueSortedRows(selectedRows, m_sessionView);
 
           for (int row : rowsToProcess) {
@@ -783,7 +782,6 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
 
         connect(recreateEndQueueAction, &QAction::triggered, [this]() {
           QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
-          const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
           QList<int> rowsToProcess = getUniqueSortedRows(selectedRows, m_sessionView);
 
           for (int row : rowsToProcess) {

@@ -22,7 +22,8 @@ SourceFilterProxyModel::SourceFilterProxyModel(const QString &sourceName, QObjec
 void SourceFilterProxyModel::setFilterSource(const QString &sourceName) {
   if (m_sourceName != sourceName) {
     m_sourceName = sourceName;
-    invalidateFilter();
+    beginResetModel();
+    endResetModel();
   }
 }
 
