@@ -446,6 +446,36 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
   return QWidget::eventFilter(obj, event);
 }
 
+void FilterEditor::clearLastTextToken() {
+  QString text = m_lineEdit->text();
+  if (text.isEmpty() || text.endsWith(QLatin1Char(' '))) {
+    return;
+  }
+
+  int lastSpace = text.lastIndexOf(QLatin1Char(' '));
+  QString lastToken = lastSpace == -1 ? text : text.mid(lastSpace + 1);
+
+  bool isFreeText = true;
+  if (text.startsWith(QLatin1String("="))) {
+    if (lastToken.contains(QLatin1Char(':')) || lastToken == QStringLiteral("AND") ||
+        lastToken == QStringLiteral("OR") || lastToken == QStringLiteral("NOT") || lastToken == QStringLiteral("IN")) {
+      isFreeText = false;
+    }
+  }
+
+  if (isFreeText) {
+    if (lastSpace == -1) {
+      if (text.startsWith(QLatin1String("="))) {
+        setFilterText(QStringLiteral("="));
+      } else {
+        setFilterText(QStringLiteral(""));
+      }
+    } else {
+      setFilterText(text.left(lastSpace + 1));
+    }
+  }
+}
+
 void FilterEditor::setFilterText(const QString &text) {
   m_updating = true;
   QString newText = text.isEmpty() || text.endsWith(QLatin1Char(' ')) ? text : text + QLatin1Char(' ');
