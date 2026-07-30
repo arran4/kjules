@@ -1,9 +1,0 @@
---- src/advancedfilterproxymodel.cpp
-+++ src/advancedfilterproxymodel.cpp
-@@ -1,5 +1,7 @@
- #include "advancedfilterproxymodel.h"
- #include "sessionmodel.h"
- #include "sourcemodel.h"
- #include <QStringList>
-+#include <QJsonObject>
-+#include <QJsonArray>
