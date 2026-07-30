@@ -1876,6 +1876,13 @@ void MainWindow::setupTrayIcon() {
 
   m_trayMenu->addSeparator();
 
+  QAction *refreshSessionsAction = new QAction(i18n("Refresh Sessions"), this);
+  connect(refreshSessionsAction, &QAction::triggered, this, [this]() { m_refreshFollowingAction->trigger(); });
+  m_trayMenu->addAction(refreshSessionsAction);
+  m_trayMenu->addAction(m_refreshSourcesAction);
+
+  m_trayMenu->addSeparator();
+
   m_trayMenu->addAction(m_viewSessionsAction);
 
   m_trayMenu->addSeparator();
