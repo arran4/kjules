@@ -541,6 +541,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
   followingLayout->addWidget(m_sessionView);
 
   AdvancedFilterProxyModel *sessionProxyModel = new AdvancedFilterProxyModel(this);
+  sessionProxyModel->setGlobalSourceModel(m_sourceModel);
   sessionProxyModel->setSourceModel(m_sessionModel);
   m_sessionView->setModel(sessionProxyModel);
   m_sessionView->setSortingEnabled(true);
@@ -1006,6 +1007,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
   m_archiveView = new QTreeView(this);
   archLayout->addWidget(m_archiveView);
   AdvancedFilterProxyModel *archiveProxyModel = new AdvancedFilterProxyModel(this);
+  archiveProxyModel->setGlobalSourceModel(m_sourceModel);
   archiveProxyModel->setSourceModel(m_archiveModel);
   m_archiveView->setModel(archiveProxyModel);
   m_archiveView->setSortingEnabled(true);
