@@ -231,6 +231,24 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
         view->clearSelection();
       }
     }
+  } else if (event->modifiers() & Qt::ControlModifier) {
+    if (event->key() == Qt::Key_PageDown && m_tabWidget) {
+      int count = m_tabWidget->count();
+      if (count > 0) {
+        int currentIndex = m_tabWidget->currentIndex();
+        m_tabWidget->setCurrentIndex((currentIndex + 1) % count);
+      }
+      event->accept();
+      return;
+    } else if (event->key() == Qt::Key_PageUp && m_tabWidget) {
+      int count = m_tabWidget->count();
+      if (count > 0) {
+        int currentIndex = m_tabWidget->currentIndex();
+        m_tabWidget->setCurrentIndex((currentIndex - 1 + count) % count);
+      }
+      event->accept();
+      return;
+    }
   }
   KXmlGuiWindow::keyPressEvent(event);
 }
