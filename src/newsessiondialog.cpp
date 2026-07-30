@@ -224,6 +224,12 @@ protected:
           return rawData.value(QStringLiteral("isPrivate")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
         }
         return github.value(QStringLiteral("private")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
+      } else if (k == QStringLiteral("public") || k == QStringLiteral("ispublic")) {
+        if (rawData.contains(QStringLiteral("isPrivate"))) {
+          return !rawData.value(QStringLiteral("isPrivate")).toBool() ? QStringLiteral("true")
+                                                                      : QStringLiteral("false");
+        }
+        return !github.value(QStringLiteral("private")).toBool() ? QStringLiteral("true") : QStringLiteral("false");
       } else if (k == QStringLiteral("language")) {
         return github.value(QStringLiteral("language")).toString();
       }
