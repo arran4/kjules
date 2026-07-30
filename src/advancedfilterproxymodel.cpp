@@ -5,7 +5,8 @@
 
 class ModelDataAccessor : public FilterDataAccessor {
 public:
-  ModelDataAccessor(QAbstractItemModel *m, int r, const QModelIndex &p) : model(m), row(r), parent(p) {}
+  ModelDataAccessor(QAbstractItemModel *m, int r, const QModelIndex &p, SourceModel *gsm)
+      : model(m), row(r), parent(p), globalSourceModel(gsm) {}
 
   QString getValue(const QString &key) const override {
     QString lowerKey = key.toLower();
@@ -16,6 +17,17 @@ public:
 
     if (qobject_cast<SourceModel *>(model) && keyToColumn.contains(lowerKey)) {
       return model->data(model->index(row, keyToColumn.value(lowerKey), parent), Qt::DisplayRole).toString();
+    } else if (qobject_cast<SessionModel *>(model) && keyToColumn.contains(lowerKey) && globalSourceModel) {
+      QString sourceId =
+          model->data(model->index(row, SessionModel::ColTitle, parent), SessionModel::SourceRole).toString();
+      QModelIndexList matches = globalSourceModel->match(globalSourceModel->index(0, SourceModel::ColName),
+                                                         SourceModel::IdRole, sourceId, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        QModelIndex sourceIdx = matches.first();
+        return globalSourceModel
+            ->data(globalSourceModel->index(sourceIdx.row(), keyToColumn.value(lowerKey)), Qt::DisplayRole)
+            .toString();
+      }
     }
 
     // Try to match column header with the key.
@@ -59,11 +71,14 @@ private:
   QAbstractItemModel *model;
   int row;
   QModelIndex parent;
+  SourceModel *globalSourceModel;
 };
 
 AdvancedFilterProxyModel::AdvancedFilterProxyModel(QObject *parent) : QSortFilterProxyModel(parent) {
   setFilterCaseSensitivity(Qt::CaseInsensitive);
 }
+
+void AdvancedFilterProxyModel::setGlobalSourceModel(SourceModel *sourceModel) { m_globalSourceModel = sourceModel; }
 
 void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
   m_query = query.trimmed();
@@ -85,7 +100,7 @@ bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelInde
     return true;
 
   if (m_query.startsWith(QLatin1String("=")) && m_ast) {
-    ModelDataAccessor accessor(sourceModel(), source_row, source_parent);
+    ModelDataAccessor accessor(sourceModel(), source_row, source_parent, m_globalSourceModel);
     return m_ast->evaluate(accessor);
   }
 
