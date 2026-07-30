@@ -3697,6 +3697,10 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   }
 
   QAction *editAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
+  QAction *priorityAction = nullptr;
+  if (!item.isWaitItem && !item.isDailyLimitWait) {
+    priorityAction = menu.addAction(QIcon::fromTheme(QStringLiteral("view-sort-descending")), i18n("Change Priority"));
+  }
   QAction *deleteAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
   QAction *draftAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Convert to Draft"));
   QAction *copyTemplateAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
@@ -3714,6 +3718,30 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     showErrorDetails(row, m_queueModel);
   } else if (selected == editAction) {
     editQueueItem(row);
+  } else if (priorityAction && selected == priorityAction) {
+    bool ok;
+    int currentPriority = item.requestData.value(QStringLiteral("priority")).toInt(0);
+    int newPriority =
+        QInputDialog::getInt(this, i18n("Change Priority"), i18n("Priority:"), currentPriority, -100, 100, 1, &ok);
+    if (ok) {
+      QModelIndexList selectedRows = m_queueView->selectionModel()->selectedRows();
+      QList<int> rowsToUpdate = getUniqueSortedRows(selectedRows, m_queueView);
+      QList<QueueItem> itemsToUpdate;
+      // Extract items in reverse order to maintain stable indices during removal
+      for (int i = rowsToUpdate.size() - 1; i >= 0; --i) {
+        itemsToUpdate.append(m_queueModel->getItem(rowsToUpdate[i]));
+        m_queueModel->removeItem(rowsToUpdate[i]);
+      }
+      for (QueueItem &extractedItem : itemsToUpdate) {
+        if (newPriority != 0) {
+          extractedItem.requestData[QStringLiteral("priority")] = newPriority;
+        } else {
+          extractedItem.requestData.remove(QStringLiteral("priority"));
+        }
+        m_queueModel->enqueueItem(extractedItem);
+      }
+      updateStatus(i18np("Priority updated for 1 task.", "Priority updated for %1 tasks.", rowsToUpdate.size()));
+    }
   } else if (selected == deleteAction) {
     if (m_deleteQueueItemsLambda) {
       m_deleteQueueItemsLambda();

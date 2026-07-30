@@ -316,6 +316,10 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
     if (prompt.length() > 50) {
       prompt = prompt.left(50) + QStringLiteral("...");
     }
+    int priority = item.requestData.value(QStringLiteral("priority")).toInt(0);
+    if (priority != 0) {
+      return QStringLiteral("[Priority: %1] %2: %3").arg(priority).arg(source, prompt);
+    }
     return QStringLiteral("%1: %2").arg(source, prompt);
   }
   case StatusRole: {
