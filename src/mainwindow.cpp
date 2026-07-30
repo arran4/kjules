@@ -3721,7 +3721,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   } else if (priorityAction && selected == priorityAction) {
     bool ok;
     int currentPriority = item.requestData.value(QStringLiteral("priority")).toInt(0);
-    int newPriority = QInputDialog::getInt(this, i18n("Change Priority"), i18n("Priority:"), currentPriority, -100, 100, 1, &ok);
+    int newPriority =
+        QInputDialog::getInt(this, i18n("Change Priority"), i18n("Priority:"), currentPriority, -100, 100, 1, &ok);
     if (ok) {
       QModelIndexList selectedRows = m_queueView->selectionModel()->selectedRows();
       QList<int> rowsToUpdate = getUniqueSortedRows(selectedRows, m_queueView);
