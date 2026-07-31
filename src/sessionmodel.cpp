@@ -344,6 +344,7 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       QString oldPrStatus = m_sessions[row].prStatus;
       QString oldTitle = m_sessions[row].title;
       bool oldHasChangeSet = m_sessions[row].hasChangeSet;
+      QDateTime oldUpdateTime = m_sessions[row].updateTime;
 
       SessionData data = parseSessionData(obj);
       data.favouriteRank = isFav;
@@ -364,7 +365,8 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       data.id = id; // Ensure ID matches
 
       bool isUnread = wasUnread || (oldState != data.state) || (oldPrStatus != data.prStatus) ||
-                      (oldTitle != data.title) || (oldHasChangeSet != data.hasChangeSet);
+                      (oldTitle != data.title) || (oldHasChangeSet != data.hasChangeSet) ||
+                      (oldUpdateTime != data.updateTime && data.updateTime.isValid());
       data.hasUnreadChanges = isUnread;
 
       m_sessions[row] = data;
@@ -415,6 +417,7 @@ void SessionModel::updateSession(const QJsonObject &session) {
     QString oldPrStatus = m_sessions[i].prStatus;
     QString oldTitle = m_sessions[i].title;
     bool oldHasChangeSet = m_sessions[i].hasChangeSet;
+    QDateTime oldUpdateTime = m_sessions[i].updateTime;
 
     SessionData data = parseSessionData(sessionWithRefresh);
     data.favouriteRank = isFav;
@@ -436,7 +439,8 @@ void SessionModel::updateSession(const QJsonObject &session) {
 
     bool isSubstantiallyChanged = false;
     if (m_sessions[i].state != data.state || m_sessions[i].prStatus != data.prStatus ||
-        m_sessions[i].title != data.title || (oldHasChangeSet != data.hasChangeSet)) {
+        m_sessions[i].title != data.title || (oldHasChangeSet != data.hasChangeSet) ||
+        (oldUpdateTime != data.updateTime && data.updateTime.isValid())) {
       isSubstantiallyChanged = true;
     }
 
