@@ -25,7 +25,6 @@ private:
   SourceModel *m_globalSourceModel = nullptr;
 };
 
-
 class FollowingFilterProxyModel : public AdvancedFilterProxyModel {
   Q_OBJECT
 public:
