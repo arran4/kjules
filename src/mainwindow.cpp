@@ -4755,6 +4755,16 @@ void MainWindow::updateCompletions() {
   completions[QStringLiteral("repo")] = repos;
   completions[QStringLiteral("owner")] = repos; // just dummy for now
 
+  QStringList labels;
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    labels.append(m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrLabelsRole).toStringList());
+  }
+  for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+    labels.append(m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::PrLabelsRole).toStringList());
+  }
+  labels.removeDuplicates();
+  completions[QStringLiteral("label")] = labels;
+
   m_sourcesFilterEditor->setCompletions(completions);
   m_followingFilterEditor->setCompletions(completions);
   m_archiveFilterEditor->setCompletions(completions);
