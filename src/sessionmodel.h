@@ -30,6 +30,7 @@ struct SessionData {
   QStringList prLabels;
   QJsonObject rawObject;
   bool hasUnreadChanges = false;
+  QDateTime snoozeUntil;
 };
 
 class SessionModel : public QAbstractTableModel {
@@ -50,7 +51,8 @@ public:
     PrStatusRole,
     PrLabelsRole,
     FavouriteRole,
-    UnreadChangesRole
+    UnreadChangesRole,
+    SnoozeUntilRole
   };
 
   enum Columns {
@@ -66,6 +68,7 @@ public:
     ColRepo,
     ColId,
     ColLastRefreshed,
+    ColSnoozeUntil,
     ColCount
   };
 
@@ -88,6 +91,8 @@ public:
   void setFavouriteRank(const QString &id, int rank);
   void increaseFavouriteRank(const QString &id);
   void decreaseFavouriteRank(const QString &id);
+  void setSnoozeUntil(const QString &id, const QDateTime &snoozeUntil);
+  void clearSnooze(const QString &id);
   void removeSession(int row);
   QJsonObject getSession(int row) const;
   QString getSessionName(const QString &id) const;

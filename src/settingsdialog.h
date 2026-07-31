@@ -46,6 +46,7 @@ private:
   QCheckBox *m_autoArchiveCheckbox;
   QSpinBox *m_autoArchiveDaysEdit;
   QCheckBox *m_prMergeArchiveCheckbox;
+  QLineEdit *m_snoozePresetsEdit;
 };
 
 #endif // SETTINGSDIALOG_H

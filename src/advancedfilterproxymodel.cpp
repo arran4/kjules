@@ -188,3 +188,38 @@ bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left, const QM
 
   return QSortFilterProxyModel::lessThan(source_left, source_right);
 }
+
+FollowingFilterProxyModel::FollowingFilterProxyModel(QObject *parent)
+    : AdvancedFilterProxyModel(parent), m_tabType(FollowingTab) {}
+
+void FollowingFilterProxyModel::setTabType(TabType type) {
+  m_tabType = type;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  invalidate();
+#else
+  invalidateFilter();
+#endif
+}
+
+bool FollowingFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
+  QAbstractItemModel *m = sourceModel();
+  if (m) {
+    QModelIndex index = m->index(source_row, 0, source_parent);
+    QVariant snoozeVar = m->data(index, SessionModel::SnoozeUntilRole);
+    bool isSnoozed = false;
+    if (snoozeVar.isValid()) {
+      QDateTime snoozeUntil = snoozeVar.toDateTime();
+      if (snoozeUntil.isValid() && snoozeUntil > QDateTime::currentDateTimeUtc()) {
+        isSnoozed = true;
+      }
+    }
+
+    if (m_tabType == FollowingTab && isSnoozed) {
+      return false;
+    } else if (m_tabType == SnoozedTab && !isSnoozed) {
+      return false;
+    }
+  }
+
+  return AdvancedFilterProxyModel::filterAcceptsRow(source_row, source_parent);
+}

@@ -387,6 +387,28 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
       favMenu->addAction(i18n("Increase Rank"), this, &MainWindow::increaseFavouriteRank);
       favMenu->addAction(i18n("Decrease Rank"), this, &MainWindow::decreaseFavouriteRank);
       favMenu->addAction(i18n("Set Rank..."), this, &MainWindow::setFavouriteRank);
+      QMenu *snoozeMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("preferences-system-time")), i18n("Snooze..."));
+      KConfigGroup mwConfig(KSharedConfig::openConfig(), QStringLiteral("MainWindow"));
+      QString presetsStr = mwConfig.readEntry(QStringLiteral("SnoozePresets"), QStringLiteral("1, 24, 168"));
+      QStringList presets = presetsStr.split(QLatin1Char(','));
+      for (const QString &preset : presets) {
+        bool ok;
+        int hours = preset.trimmed().toInt(&ok);
+        if (ok && hours > 0) {
+          QString title = hours == 1 ? i18n("1 Hour") : i18n("%1 Hours", hours);
+          QAction *presetAction = snoozeMenu->addAction(title);
+          connect(presetAction, &QAction::triggered, this, [this, hours]() {
+            snoozeSelectedFollowingSessions(QDateTime::currentDateTimeUtc().addSecs(hours * 3600));
+          });
+        }
+      }
+      snoozeMenu->addSeparator();
+      QAction *chooseAction = snoozeMenu->addAction(i18n("Choose Date/Time..."));
+      connect(chooseAction, &QAction::triggered, this, &MainWindow::snoozeSelectedFollowingSessionsCustom);
+
+      snoozeMenu->addSeparator();
+      QAction *clearSnoozeAction = snoozeMenu->addAction(i18n("Clear Snooze"));
+      connect(clearSnoozeAction, &QAction::triggered, this, &MainWindow::clearSnoozeSelectedFollowingSessions);
       QAction *newSessionActionLocal = menu.addAction(i18n("New Session"));
       connect(newSessionActionLocal, &QAction::triggered, [this, sourceIndex]() {
         QModelIndexList selection = m_sourceView->selectionModel()->selectedIndexes();
@@ -4928,11 +4950,84 @@ void MainWindow::setFavouriteRank() {
   });
 }
 
-void MainWindow::deleteFollowingSessions() {
-  QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+#include <QDateTimeEdit>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QVBoxLayout>
+
+void MainWindow::snoozeSelectedFollowingSessionsCustom() {
+  QDialog dialog(this);
+  dialog.setWindowTitle(i18n("Choose Snooze Date & Time"));
+  QVBoxLayout layout(&dialog);
+
+  QDateTimeEdit *dateTimeEdit = new QDateTimeEdit(QDateTime::currentDateTime(), &dialog);
+  dateTimeEdit->setMinimumDateTime(QDateTime::currentDateTime());
+  layout.addWidget(dateTimeEdit);
+
+  QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  layout.addWidget(buttonBox);
+
+  connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+  if (dialog.exec() == QDialog::Accepted) {
+    snoozeSelectedFollowingSessions(dateTimeEdit->dateTime().toUTC());
+  }
+}
+
+void MainWindow::snoozeSelectedFollowingSessions(const QDateTime &until) {
+  QModelIndexList selectedRows;
+  if (m_tabWidget->currentWidget() == m_sessionView->parentWidget()) {
+    selectedRows = m_sessionView->selectionModel()->selectedRows();
+  } else if (m_tabWidget->currentWidget() == m_snoozedView->parentWidget()) {
+    selectedRows = m_snoozedView->selectionModel()->selectedRows();
+  }
+
   if (selectedRows.isEmpty())
     return;
-  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_sessionView);
+
+  QList<int> rows = getUniqueSortedRows(
+      selectedRows, m_tabWidget->currentWidget() == m_sessionView->parentWidget() ? m_sessionView : m_snoozedView);
+  for (int row : rows) {
+    QString id = m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::IdRole).toString();
+    m_sessionModel->setSnoozeUntil(id, until);
+  }
+  m_sessionModel->saveSessions();
+}
+
+void MainWindow::clearSnoozeSelectedFollowingSessions() {
+  QModelIndexList selectedRows;
+  if (m_tabWidget->currentWidget() == m_sessionView->parentWidget()) {
+    selectedRows = m_sessionView->selectionModel()->selectedRows();
+  } else if (m_tabWidget->currentWidget() == m_snoozedView->parentWidget()) {
+    selectedRows = m_snoozedView->selectionModel()->selectedRows();
+  }
+
+  if (selectedRows.isEmpty())
+    return;
+
+  QList<int> rows = getUniqueSortedRows(
+      selectedRows, m_tabWidget->currentWidget() == m_sessionView->parentWidget() ? m_sessionView : m_snoozedView);
+  for (int row : rows) {
+    QString id = m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::IdRole).toString();
+    m_sessionModel->clearSnooze(id);
+  }
+  m_sessionModel->saveSessions();
+}
+
+void MainWindow::deleteFollowingSessions() {
+  QModelIndexList selectedRows;
+  if (m_tabWidget->currentWidget() == m_sessionView->parentWidget()) {
+    selectedRows = m_sessionView->selectionModel()->selectedRows();
+  } else if (m_tabWidget->currentWidget() == m_snoozedView->parentWidget()) {
+    selectedRows = m_snoozedView->selectionModel()->selectedRows();
+  }
+
+  if (selectedRows.isEmpty())
+    return;
+
+  QList<int> rowsToDelete = getUniqueSortedRows(
+      selectedRows, m_tabWidget->currentWidget() == m_sessionView->parentWidget() ? m_sessionView : m_snoozedView);
 
   for (int row : rowsToDelete) {
     m_sessionModel->removeSession(row);
