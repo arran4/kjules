@@ -43,6 +43,11 @@ public:
       return QString();
     };
 
+    if (qobject_cast<SessionModel *>(model) &&
+        (lowerKey == QStringLiteral("label") || lowerKey == QStringLiteral("labels"))) {
+      return model->data(model->index(row, SessionModel::ColPRLabels, parent), Qt::DisplayRole).toString();
+    }
+
     if (qobject_cast<SourceModel *>(model) && keyToColumn.contains(lowerKey)) {
       if (lowerKey == QStringLiteral("private") || lowerKey == QStringLiteral("public") ||
           lowerKey == QStringLiteral("fork") || lowerKey == QStringLiteral("archived")) {
