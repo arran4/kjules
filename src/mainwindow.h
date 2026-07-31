@@ -55,6 +55,9 @@ protected:
 
 private Q_SLOTS:
   void deleteFollowingSessions();
+  void snoozeSelectedFollowingSessions(const QDateTime &until);
+  void snoozeSelectedFollowingSessionsCustom();
+  void clearSnoozeSelectedFollowingSessions();
   void archiveSelectedSessions();
   void deleteArchiveSessions();
   void deleteDrafts();
@@ -167,6 +170,7 @@ private:
 
   void setupSourcesTab(QWidget *tab);
   void setupFollowingTab(QWidget *tab);
+  void setupSnoozedTab(QWidget *tab);
   void setupArchiveTab(QWidget *tab);
   void setupDraftsTab(QWidget *tab);
   void setupTemplatesTab(QWidget *tab);
@@ -209,6 +213,7 @@ private:
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;
+  QTreeView *m_snoozedView;
   QTreeView *m_archiveView;
   QListView *m_draftsView;
   QListView *m_templatesView;
@@ -222,6 +227,7 @@ private:
   QMenu *m_favouritesMenu = nullptr;
   FilterEditor *m_sourcesFilterEditor;
   FilterEditor *m_followingFilterEditor;
+  FilterEditor *m_snoozedFilterEditor;
   FilterEditor *m_archiveFilterEditor;
   QLineEdit *m_draftsFilter;
   QLineEdit *m_templatesFilter;

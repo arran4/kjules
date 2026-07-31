@@ -50,6 +50,11 @@ SessionData parseSessionData(const QJsonObject &obj) {
     data.favouriteRank = std::nullopt;
   }
 
+  QJsonValue snoozeVal = obj.value(QStringLiteral("local_snooze_until"));
+  if (!snoozeVal.isUndefined() && snoozeVal.isString()) {
+    data.snoozeUntil = QDateTime::fromString(snoozeVal.toString(), Qt::ISODate);
+  }
+
   data.hasChangeSet = false;
   QJsonArray outputs = obj.value(QStringLiteral("outputs")).toArray();
   for (int i = 0; i < outputs.size(); ++i) {
@@ -194,6 +199,8 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.prLabels;
   case FavouriteRole:
     return session.favouriteRank.has_value() ? QVariant(session.favouriteRank.value()) : QVariant();
+  case SnoozeUntilRole:
+    return session.snoozeUntil.isValid() ? QVariant(session.snoozeUntil) : QVariant();
   case UnreadChangesRole:
     return session.hasUnreadChanges;
   default:
@@ -243,6 +250,7 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
   roles[StateRole] = "state";
   roles[LastRefreshedRole] = "lastRefreshed";
   roles[FavouriteRole] = "favourite";
+  roles[SnoozeUntilRole] = "snoozeUntil";
   return roles;
 }
 
@@ -344,6 +352,15 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       } else {
         data.rawObject.remove(QStringLiteral("local_favourite"));
       }
+
+      // Preserve local_snooze_until
+      QDateTime snoozeUntil = m_sessions[row].snoozeUntil;
+      data.snoozeUntil = snoozeUntil;
+      if (snoozeUntil.isValid()) {
+        data.rawObject[QStringLiteral("local_snooze_until")] = snoozeUntil.toString(Qt::ISODate);
+      } else {
+        data.rawObject.remove(QStringLiteral("local_snooze_until"));
+      }
       data.id = id; // Ensure ID matches
 
       bool isUnread = wasUnread || (oldState != data.state) || (oldPrStatus != data.prStatus) ||
@@ -406,6 +423,15 @@ void SessionModel::updateSession(const QJsonObject &session) {
     } else {
       data.rawObject.remove(QStringLiteral("local_favourite"));
     }
+
+    // Preserve local_snooze_until
+    QDateTime snoozeUntil = m_sessions[i].snoozeUntil;
+    data.snoozeUntil = snoozeUntil;
+    if (snoozeUntil.isValid()) {
+      data.rawObject[QStringLiteral("local_snooze_until")] = snoozeUntil.toString(Qt::ISODate);
+    } else {
+      data.rawObject.remove(QStringLiteral("local_snooze_until"));
+    }
     data.id = id; // Ensure ID matches
 
     bool isSubstantiallyChanged = false;
@@ -446,6 +472,28 @@ QJsonArray SessionModel::getAllSessions() const {
     arr.append(data.rawObject);
   }
   return arr;
+}
+
+void SessionModel::setSnoozeUntil(const QString &id, const QDateTime &snoozeUntil) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    data.snoozeUntil = snoozeUntil;
+    data.rawObject[QStringLiteral("local_snooze_until")] = snoozeUntil.toString(Qt::ISODate);
+    QModelIndex index = this->index(i, 0);
+    Q_EMIT dataChanged(index, index, {SnoozeUntilRole});
+  }
+}
+
+void SessionModel::clearSnooze(const QString &id) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    data.snoozeUntil = QDateTime();
+    data.rawObject.remove(QStringLiteral("local_snooze_until"));
+    QModelIndex index = this->index(i, 0);
+    Q_EMIT dataChanged(index, index, {SnoozeUntilRole});
+  }
 }
 
 void SessionModel::clear() {

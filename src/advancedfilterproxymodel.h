@@ -25,4 +25,20 @@ private:
   SourceModel *m_globalSourceModel = nullptr;
 };
 
+
+class FollowingFilterProxyModel : public AdvancedFilterProxyModel {
+  Q_OBJECT
+public:
+  enum TabType { FollowingTab, SnoozedTab };
+  explicit FollowingFilterProxyModel(QObject *parent = nullptr);
+
+  void setTabType(TabType type);
+
+protected:
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
+
+private:
+  TabType m_tabType = FollowingTab;
+};
+
 #endif // ADVANCEDFILTERPROXYMODEL_H
