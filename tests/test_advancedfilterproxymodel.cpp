@@ -50,15 +50,29 @@ public:
   int columnCount(const QModelIndex &parent = QModelIndex()) const override {
     if (parent.isValid())
       return 0;
-    return 1;
+    return SessionModel::ColId + 1; // Assuming ColId is the last one in the enum
   }
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override {
     if (!index.isValid() || index.row() >= m_favourites.size())
       return QVariant();
+
     if (role == SessionModel::FavouriteRole)
       return m_favourites[index.row()];
+
+    if (index.column() == SessionModel::ColPRLabels && role == Qt::DisplayRole) {
+      if (index.row() == 0)
+        return QStringLiteral("bug, urgent");
+      if (index.row() == 1)
+        return QStringLiteral("enhancement");
+    }
+
+    if (index.column() == SessionModel::ColTitle && role == Qt::DisplayRole) {
+      return QStringLiteral("Session %1").arg(index.row() + 1);
+    }
+
     if (role == Qt::DisplayRole)
       return QStringLiteral("Item %1").arg(index.row());
+
     return QVariant();
   }
   void setFavourites(const QList<QVariant> &favs) {
@@ -153,6 +167,24 @@ private Q_SLOTS:
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(1, 0)).row(), 0);
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 1);
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 3);
+  }
+
+  void testLabelFiltering() {
+    MockSessionModel sessionModel;
+    sessionModel.setFavourites(QList<QVariant>() << 0 << 0); // 2 items
+
+    AdvancedFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&sessionModel);
+
+    proxyModel.setFilterQuery(QStringLiteral("=label:\"bug\""));
+    QCOMPARE(proxyModel.rowCount(), 1);
+    QModelIndex idx = proxyModel.index(0, SessionModel::ColTitle);
+    QCOMPARE(proxyModel.data(idx).toString(), QStringLiteral("Session 1"));
+
+    proxyModel.setFilterQuery(QStringLiteral("=NOT label:\"bug\""));
+    QCOMPARE(proxyModel.rowCount(), 1);
+    idx = proxyModel.index(0, SessionModel::ColTitle);
+    QCOMPARE(proxyModel.data(idx).toString(), QStringLiteral("Session 2"));
   }
 
   void testLessThanSessionModel() {

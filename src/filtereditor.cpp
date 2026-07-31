@@ -773,8 +773,8 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{
         QStringLiteral("OR"), QStringLiteral("AND"), QStringLiteral("NOT"), QStringLiteral("IN"),
-        QStringLiteral("repo:"), QStringLiteral("owner:"), QStringLiteral("language:"), QStringLiteral("fork:"),
-        QStringLiteral("private:"), QStringLiteral("public:"), QStringLiteral("archived:")});
+        QStringLiteral("repo:"), QStringLiteral("owner:"), QStringLiteral("language:"), QStringLiteral("label:"),
+        QStringLiteral("fork:"), QStringLiteral("private:"), QStringLiteral("public:"), QStringLiteral("archived:")});
   } else {
     m_paletteList->clear();
     m_paletteList->addItems(QStringList{QStringLiteral("OR"),
@@ -784,6 +784,7 @@ void FilterEditor::setSimplifiedMode(bool simplified) {
                                         QStringLiteral("repo:"),
                                         QStringLiteral("owner:"),
                                         QStringLiteral("language:"),
+                                        QStringLiteral("label:"),
                                         QStringLiteral("archived:"),
                                         QStringLiteral("fork:"),
                                         QStringLiteral("private:"),

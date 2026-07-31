@@ -704,6 +704,24 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
                 m_followingFilterEditor->filterText(), QStringLiteral("language"), language, false));
           });
         }
+
+        QStringList labels = m_sessionModel->data(sourceIndex, SessionModel::PrLabelsRole).toStringList();
+        if (!labels.isEmpty()) {
+          QMenu *labelsMenu = githubMenu->addMenu(i18n("Labels"));
+          for (const QString &label : labels) {
+            QMenu *labelSubMenu = labelsMenu->addMenu(label);
+            QAction *hideLabelAction = labelSubMenu->addAction(i18n("Filter out label '%1'", label));
+            QAction *onlyLabelAction = labelSubMenu->addAction(i18n("Filter only label '%1'", label));
+            connect(hideLabelAction, &QAction::triggered, [this, label]() {
+              m_followingFilterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                  m_followingFilterEditor->filterText(), QStringLiteral("label"), label, true));
+            });
+            connect(onlyLabelAction, &QAction::triggered, [this, label]() {
+              m_followingFilterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                  m_followingFilterEditor->filterText(), QStringLiteral("label"), label, false));
+            });
+          }
+        }
       }
 
       QAction *completeAction = menu.addAction(i18n("Mark as Complete"));
@@ -1151,6 +1169,24 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
             m_archiveFilterEditor->setFilterText(FilterEditor::applyQuickFilter(
                 m_archiveFilterEditor->filterText(), QStringLiteral("language"), language, false));
           });
+        }
+
+        QStringList labels = m_archiveModel->data(sourceIndex, SessionModel::PrLabelsRole).toStringList();
+        if (!labels.isEmpty()) {
+          QMenu *labelsMenu = githubMenu->addMenu(i18n("Labels"));
+          for (const QString &label : labels) {
+            QMenu *labelSubMenu = labelsMenu->addMenu(label);
+            QAction *hideLabelAction = labelSubMenu->addAction(i18n("Filter out label '%1'", label));
+            QAction *onlyLabelAction = labelSubMenu->addAction(i18n("Filter only label '%1'", label));
+            connect(hideLabelAction, &QAction::triggered, [this, label]() {
+              m_archiveFilterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                  m_archiveFilterEditor->filterText(), QStringLiteral("label"), label, true));
+            });
+            connect(onlyLabelAction, &QAction::triggered, [this, label]() {
+              m_archiveFilterEditor->setFilterText(FilterEditor::applyQuickFilter(
+                  m_archiveFilterEditor->filterText(), QStringLiteral("label"), label, false));
+            });
+          }
         }
       }
 
@@ -4718,6 +4754,16 @@ void MainWindow::updateCompletions() {
   repos.removeDuplicates();
   completions[QStringLiteral("repo")] = repos;
   completions[QStringLiteral("owner")] = repos; // just dummy for now
+
+  QStringList labels;
+  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+    labels.append(m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrLabelsRole).toStringList());
+  }
+  for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
+    labels.append(m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::PrLabelsRole).toStringList());
+  }
+  labels.removeDuplicates();
+  completions[QStringLiteral("label")] = labels;
 
   m_sourcesFilterEditor->setCompletions(completions);
   m_followingFilterEditor->setCompletions(completions);
