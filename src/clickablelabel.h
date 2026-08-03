@@ -8,11 +8,9 @@ class ClickableLabel : public QLabel {
   Q_OBJECT
 
 public:
-  explicit ClickableLabel(QWidget *parent = nullptr) : QLabel(parent) {
-      setCursor(Qt::PointingHandCursor);
-  }
+  explicit ClickableLabel(QWidget *parent = nullptr) : QLabel(parent) { setCursor(Qt::PointingHandCursor); }
   explicit ClickableLabel(const QString &text, QWidget *parent = nullptr) : QLabel(text, parent) {
-      setCursor(Qt::PointingHandCursor);
+    setCursor(Qt::PointingHandCursor);
   }
 
 Q_SIGNALS:

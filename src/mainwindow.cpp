@@ -4277,10 +4277,10 @@ void MainWindow::updateStatus(const QString &message) {
   QString formattedMessage = QStringLiteral("[%1] %2").arg(timeStr, message);
 
   if (m_queueModel && !m_queueModel->isEmpty()) {
-      QueueItem first = m_queueModel->peek();
-      if (first.isWaitItem) {
-          formattedMessage += i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
-      }
+    QueueItem first = m_queueModel->peek();
+    if (first.isWaitItem) {
+      formattedMessage += i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
+    }
   }
 
   m_statusLabel->setText(formattedMessage);
