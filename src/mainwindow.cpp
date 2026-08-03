@@ -1729,7 +1729,12 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
 
 void MainWindow::setupStatusBar() {
   // Status Bar
-  m_statusLabel = new QLabel(i18n("Ready"), this);
+  m_statusLabel = new ClickableLabel(i18n("Ready"), this);
+  connect(m_statusLabel, &ClickableLabel::clicked, this, []() {
+    ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow();
+  });
   statusBar()->addWidget(m_statusLabel);
 
   m_sessionStatsLabel = new QLabel(this);
@@ -3503,7 +3508,6 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
     }
 
     if (isPrecondition) {
-      updateStatus(i18n("Too many concurrent tasks, waiting before retrying..."));
       QueueItem waitItem;
       waitItem.isWaitItem = true;
       KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
@@ -3511,13 +3515,14 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
       waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60, QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime();
+      updateStatus(i18n("Too many concurrent tasks, waiting before retrying..."));
     } else if (isResourceExhausted) {
-      updateStatus(i18n("API Rate limit hit, adding a wait item..."));
       QueueItem waitItem;
       waitItem.isWaitItem = true;
       waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
       m_queueModel->prependWaitItem(waitItem);
       m_queueBackoffUntil = QDateTime();
+      updateStatus(i18n("API Rate limit hit, adding a wait item..."));
     } else {
       updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
       m_queueModel->dequeue();
@@ -4268,10 +4273,25 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 }
 
 void MainWindow::updateStatus(const QString &message) {
-  m_statusLabel->setText(message);
-  m_lastStatusMessage = message;
+  QString timeStr = QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
+  QString formattedMessage = QStringLiteral("[%1] %2").arg(timeStr, message);
+  QString logMessage = message;
+
+  if (m_queueModel && !m_queueModel->isEmpty()) {
+    QueueItem first = m_queueModel->peek();
+    if (first.isWaitItem) {
+      QString waitStr = i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
+      formattedMessage += waitStr;
+      logMessage += waitStr;
+    }
+  }
+
+  ActivityLogWindow::instance()->logMessage(logMessage);
+
+  m_statusLabel->setText(formattedMessage);
+  m_lastStatusMessage = formattedMessage;
   updateTrayToolTip();
-  Q_EMIT statusMessage(message);
+  Q_EMIT statusMessage(formattedMessage);
 }
 
 void MainWindow::refreshGithubDataForSources(const QStringList &sourceIds) {

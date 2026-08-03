@@ -9,6 +9,7 @@
 #include <QMultiMap>
 #include <QSystemTrayIcon>
 
+#include "clickablelabel.h"
 #include "sessionswindow.h"
 
 class APIManager;
@@ -235,7 +236,7 @@ private:
   QTabWidget *m_tabWidget;
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
-  QLabel *m_statusLabel;
+  ClickableLabel *m_statusLabel;
   QLabel *m_sessionStatsLabel;
   QLabel *m_queueCountdownLabel;
   ClickableProgressBar *m_sourceProgressBar;

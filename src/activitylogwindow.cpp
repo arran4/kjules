@@ -22,6 +22,7 @@ ActivityLogWindow::ActivityLogWindow(QWidget *parent) : KXmlGuiWindow(parent) {
   setWindowTitle(i18n("Activity Log"));
 
   m_logBrowser = new QTextBrowser(this);
+  m_logBrowser->document()->setMaximumBlockCount(100);
   setCentralWidget(m_logBrowser);
 
   QMenu *fileMenu = new QMenu(i18n("File"), this);
