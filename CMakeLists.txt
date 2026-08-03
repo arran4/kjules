@@ -89,6 +89,7 @@ set(kjules_SRCS
     src/activitybrowser.cpp
     src/activitylogwindow.cpp
     src/clickableprogressbar.cpp
+    src/clickablelabel.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/errorwindow.cpp
