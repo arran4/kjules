@@ -4275,13 +4275,18 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
 void MainWindow::updateStatus(const QString &message) {
   QString timeStr = QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
   QString formattedMessage = QStringLiteral("[%1] %2").arg(timeStr, message);
+  QString logMessage = message;
 
   if (m_queueModel && !m_queueModel->isEmpty()) {
     QueueItem first = m_queueModel->peek();
     if (first.isWaitItem) {
-      formattedMessage += i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
+      QString waitStr = i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
+      formattedMessage += waitStr;
+      logMessage += waitStr;
     }
   }
+
+  ActivityLogWindow::instance()->logMessage(logMessage);
 
   m_statusLabel->setText(formattedMessage);
   m_lastStatusMessage = formattedMessage;

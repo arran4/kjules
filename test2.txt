@@ -1,0 +1,36 @@
+Ah wait, `ActivityLogWindow::logMessage` ALREADY prepends the timestamp.
+```cpp
+void ActivityLogWindow::logMessage(const QString &message) {
+  QString timeStr = QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
+  m_logBrowser->append(QStringLiteral("[%1] %2").arg(timeStr, message));
+}
+```
+If I pass `formattedMessage`, it will double the timestamp! Wait, I'm passing `message` in the patch above, which doesn't have the timestamp or wait info. Let me check what the user wants.
+"it should be logging all status text changes, and including extra details and presenting the time htey happened."
+So I should pass the wait info to `logMessage` too if applicable, but `logMessage` itself will prepend the time. Or I could pass `message` + wait info.
+
+Let's do:
+```cpp
+  QString timeStr = QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss"));
+  QString formattedMessage = QStringLiteral("[%1] %2").arg(timeStr, message);
+  QString logMessage = message;
+
+  if (m_queueModel && !m_queueModel->isEmpty()) {
+      QueueItem first = m_queueModel->peek();
+      if (first.isWaitItem) {
+          QString waitStr = i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
+          formattedMessage += waitStr;
+          logMessage += waitStr;
+      }
+  }
+
+  ActivityLogWindow::instance()->logMessage(logMessage);
+
+  m_statusLabel->setText(formattedMessage);
+  m_lastStatusMessage = formattedMessage;
+  updateTrayToolTip();
+  Q_EMIT statusMessage(formattedMessage);
+```
+Wait, the user also wants to see a log of the last ~100 messages.
+`QTextBrowser` doesn't automatically truncate its contents by default. Does `ActivityLogWindow` limit it?
+No, it doesn't limit it to 100 messages. I should add that.
