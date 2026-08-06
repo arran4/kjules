@@ -50,6 +50,7 @@
             <Action name="open_jules_urls_completed_no_pr_or_feedback" />
             <Action name="open_github_url" />
             <Action name="open_url" />
+            <Action name="open_current_url" />
             <Action name="copy_url" />
             <Separator />
             <Action name="configure_concurrency_limit" />
@@ -89,6 +90,7 @@
         <Action name="toggle_queue" />
         <Separator />
         <Action name="refresh_current_tab" />
+        <Action name="open_current_url" />
         <Action name="view_sessions" />
         <Action name="toggle_window" />
     </ToolBar>

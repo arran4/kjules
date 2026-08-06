@@ -2560,6 +2560,158 @@ void MainWindow::setupViewRawDataAction() {
 }
 
 void MainWindow::setupUrlActions() {
+  m_openCurrentUrlAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("internet-web-browser")), i18n("Open URLs for selected"), this);
+  actionCollection()->addAction(QStringLiteral("open_current_url"), m_openCurrentUrlAction);
+  connect(m_openCurrentUrlAction, &QAction::triggered, this, [this]() {
+    if (m_tabWidget && m_tabWidget->currentWidget()) {
+      if (m_tabWidget->currentWidget()->objectName() == QStringLiteral("sourcesTab")) {
+        m_openUrlAction->trigger();
+      } else if (m_tabWidget->currentWidget()->objectName() == QStringLiteral("followingTab")) {
+        QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+        if (selectedRows.isEmpty())
+          return;
+        const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+
+        int count = 0;
+        for (const QModelIndex &idx : selectedRows) {
+          QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+          QString prUrl = m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
+
+          if (!prUrl.isEmpty()) {
+            Utils::openUrl(QUrl(prUrl));
+            count++;
+          } else {
+            QString id = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+            if (!id.isEmpty()) {
+              QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
+              Utils::openUrl(QUrl(urlStr));
+              count++;
+            }
+          }
+        }
+        if (count > 0) {
+          updateStatus(i18np("Opened 1 URL.", "Opened %1 URLs.", count));
+        } else {
+          updateStatus(i18n("No URLs found for selected sessions."));
+        }
+      }
+    }
+  });
+
+  QMenu *openMenu = new QMenu(this);
+  m_openCurrentUrlAction->setMenu(openMenu);
+
+  QMenu *githubMenu = new QMenu(i18n("Open all Github URLs"), this);
+  m_openAllGithubUrlsAction = new QAction(i18n("All"), this);
+  m_openAllGithubInProgressAction = new QAction(i18n("In Progress"), this);
+  m_openAllGithubCompleteAction = new QAction(i18n("Complete"), this);
+  m_openAllGithubWaitingFeedbackAction = new QAction(i18n("Waiting Feedback"), this);
+  githubMenu->addAction(m_openAllGithubUrlsAction);
+  githubMenu->addAction(m_openAllGithubInProgressAction);
+  githubMenu->addAction(m_openAllGithubCompleteAction);
+  githubMenu->addAction(m_openAllGithubWaitingFeedbackAction);
+
+  QMenu *julesMenu = new QMenu(i18n("Open all Jules URLs"), this);
+  m_openAllJulesUrlsAction = new QAction(i18n("All"), this);
+  m_openAllJulesInProgressAction = new QAction(i18n("In Progress"), this);
+  m_openAllJulesCompleteAction = new QAction(i18n("Complete"), this);
+  m_openAllJulesWaitingFeedbackAction = new QAction(i18n("Waiting Feedback"), this);
+  julesMenu->addAction(m_openAllJulesUrlsAction);
+  julesMenu->addAction(m_openAllJulesInProgressAction);
+  julesMenu->addAction(m_openAllJulesCompleteAction);
+  julesMenu->addAction(m_openAllJulesWaitingFeedbackAction);
+
+  QMenu *julesNoGithubMenu = new QMenu(i18n("Open all Jules URLs (no Github URL)"), this);
+  m_openAllJulesNoGithubUrlsAction = new QAction(i18n("All"), this);
+  m_openAllJulesNoGithubInProgressAction = new QAction(i18n("In Progress"), this);
+  m_openAllJulesNoGithubCompleteAction = new QAction(i18n("Complete"), this);
+  m_openAllJulesNoGithubWaitingFeedbackAction = new QAction(i18n("Waiting Feedback"), this);
+  julesNoGithubMenu->addAction(m_openAllJulesNoGithubUrlsAction);
+  julesNoGithubMenu->addAction(m_openAllJulesNoGithubInProgressAction);
+  julesNoGithubMenu->addAction(m_openAllJulesNoGithubCompleteAction);
+  julesNoGithubMenu->addAction(m_openAllJulesNoGithubWaitingFeedbackAction);
+
+  openMenu->addMenu(githubMenu);
+  openMenu->addMenu(julesMenu);
+  openMenu->addMenu(julesNoGithubMenu);
+
+  connect(openMenu, &QMenu::aboutToShow, this, [this, openMenu, githubMenu, julesMenu, julesNoGithubMenu]() {
+    bool isFollowingTab = (m_tabWidget && m_tabWidget->currentWidget() &&
+                           m_tabWidget->currentWidget()->objectName() == QStringLiteral("followingTab"));
+
+    githubMenu->menuAction()->setVisible(isFollowingTab);
+    julesMenu->menuAction()->setVisible(isFollowingTab);
+    julesNoGithubMenu->menuAction()->setVisible(isFollowingTab);
+
+    if (!isFollowingTab) {
+      openMenu->hide();
+    }
+  });
+
+  auto openUrlsByStateAndType = [this](const QString &state, const QString &type) {
+    int count = 0;
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QModelIndex index = m_sessionModel->index(i, 0);
+      QString currentState = m_sessionModel->data(index, SessionModel::StateRole).toString();
+
+      if (state.isEmpty() || currentState == state) {
+        QString prUrl = m_sessionModel->data(index, SessionModel::PrUrlRole).toString();
+        QString id = m_sessionModel->data(index, SessionModel::IdRole).toString();
+
+        if (type == QStringLiteral("github") && !prUrl.isEmpty()) {
+          Utils::openUrl(QUrl(prUrl));
+          count++;
+        } else if (type == QStringLiteral("jules") && !id.isEmpty()) {
+          Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
+          count++;
+        } else if (type == QStringLiteral("jules_no_github") && prUrl.isEmpty() && !id.isEmpty()) {
+          Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
+          count++;
+        }
+      }
+    }
+    if (count > 0) {
+      updateStatus(i18np("Opened 1 URL.", "Opened %1 URLs.", count));
+    } else {
+      updateStatus(i18n("No URLs found matching criteria."));
+    }
+  };
+
+  connect(m_openAllGithubUrlsAction, &QAction::triggered, this,
+          [openUrlsByStateAndType]() { openUrlsByStateAndType(QString(), QStringLiteral("github")); });
+  connect(m_openAllGithubInProgressAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("IN_PROGRESS"), QStringLiteral("github"));
+  });
+  connect(m_openAllGithubCompleteAction, &QAction::triggered, this,
+          [openUrlsByStateAndType]() { openUrlsByStateAndType(QStringLiteral("DONE"), QStringLiteral("github")); });
+  connect(m_openAllGithubWaitingFeedbackAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("WAITING_FEEDBACK"), QStringLiteral("github"));
+  });
+
+  connect(m_openAllJulesUrlsAction, &QAction::triggered, this,
+          [openUrlsByStateAndType]() { openUrlsByStateAndType(QString(), QStringLiteral("jules")); });
+  connect(m_openAllJulesInProgressAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("IN_PROGRESS"), QStringLiteral("jules"));
+  });
+  connect(m_openAllJulesCompleteAction, &QAction::triggered, this,
+          [openUrlsByStateAndType]() { openUrlsByStateAndType(QStringLiteral("DONE"), QStringLiteral("jules")); });
+  connect(m_openAllJulesWaitingFeedbackAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("WAITING_FEEDBACK"), QStringLiteral("jules"));
+  });
+
+  connect(m_openAllJulesNoGithubUrlsAction, &QAction::triggered, this,
+          [openUrlsByStateAndType]() { openUrlsByStateAndType(QString(), QStringLiteral("jules_no_github")); });
+  connect(m_openAllJulesNoGithubInProgressAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("IN_PROGRESS"), QStringLiteral("jules_no_github"));
+  });
+  connect(m_openAllJulesNoGithubCompleteAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("DONE"), QStringLiteral("jules_no_github"));
+  });
+  connect(m_openAllJulesNoGithubWaitingFeedbackAction, &QAction::triggered, this, [openUrlsByStateAndType]() {
+    openUrlsByStateAndType(QStringLiteral("WAITING_FEEDBACK"), QStringLiteral("jules_no_github"));
+  });
+
   m_openUrlAction = new QAction(i18n("Open URL"), this);
   actionCollection()->addAction(QStringLiteral("open_url"), m_openUrlAction);
   connect(m_openUrlAction, &QAction::triggered, this, [this]() {
@@ -2940,6 +3092,11 @@ void MainWindow::createStandardActions() {
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
     if (QWidget *widget = tb->widgetForAction(m_refreshCurrentTabAction)) {
+      if (QToolButton *btn = qobject_cast<QToolButton *>(widget)) {
+        btn->setPopupMode(QToolButton::MenuButtonPopup);
+      }
+    }
+    if (QWidget *widget = tb->widgetForAction(m_openCurrentUrlAction)) {
       if (QToolButton *btn = qobject_cast<QToolButton *>(widget)) {
         btn->setPopupMode(QToolButton::MenuButtonPopup);
       }
