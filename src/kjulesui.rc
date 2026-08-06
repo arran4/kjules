@@ -23,8 +23,7 @@
             <text>Actions</text>
             <Action name="toggle_queue" />
             <Separator />
-            <Action name="refresh_sources" />
-            <Action name="refresh_following" />
+            <Action name="refresh_current_tab" />
             <Action name="show_full_session_list" />
             <Action name="follow_from_id" />
             <Separator />
@@ -89,8 +88,7 @@
         <Separator />
         <Action name="toggle_queue" />
         <Separator />
-        <Action name="refresh_sources" />
-        <Action name="refresh_following" />
+        <Action name="refresh_current_tab" />
         <Action name="view_sessions" />
         <Action name="toggle_window" />
     </ToolBar>
