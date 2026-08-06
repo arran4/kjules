@@ -47,6 +47,8 @@ public:
   void setFavouriteRank(const QString &id, int rank);
   void increaseFavouriteRank(const QString &id);
   void decreaseFavouriteRank(const QString &id);
+  void setDefaultBranches(const QString &id, const QStringList &branches);
+  static QString extractApiDefaultBranch(const QJsonObject &rawData);
   void clear();
   void recordSessionCreated(const QString &sourceId);
   void recalculateStatsFromSessions(const QJsonArray &allSessions);

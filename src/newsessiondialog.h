@@ -19,7 +19,8 @@ class QCheckBox;
 class QSpinBox;
 class QPushButton;
 
-class SourceSelectionProxyModel;
+class SourceFilterProxyModel;
+class BranchListProxyModel;
 class TemplatesModel;
 
 class PromptTextEdit : public QTextEdit {
@@ -79,9 +80,11 @@ private Q_SLOTS:
   void onAddSelected();
   void onRemoveSelected();
   void updateModels();
-  QString getDefaultBranch(const QModelIndex &sourceIdx);
   QStringList getAvailableBranches(const QModelIndex &sourceIdx);
   void applyFilter();
+
+public:
+  QStringList getDefaultBranches(const QModelIndex &sourceIdx);
 
 protected:
   void addFavouriteAction(QMenu &menu, const QModelIndex &sourceIdx);
@@ -94,8 +97,10 @@ private:
   TemplatesModel *m_templatesModel;
   QListView *m_unselectedView;
   QListView *m_selectedView;
-  SourceSelectionProxyModel *m_unselectedProxy;
-  SourceSelectionProxyModel *m_selectedProxy;
+  SourceFilterProxyModel *m_unselectedFilterModel;
+  SourceFilterProxyModel *m_selectedFilterModel;
+  BranchListProxyModel *m_unselectedProxy;
+  BranchListProxyModel *m_selectedProxy;
   FilterEditor *m_filterEditor;
   PromptTextEdit *m_promptEdit;
   QComboBox *m_markdownModeComboBox;

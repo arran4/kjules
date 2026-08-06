@@ -558,6 +558,33 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
         source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
       if (existing.contains(QStringLiteral("local_favourite")))
         source[QStringLiteral("local_favourite")] = existing[QStringLiteral("local_favourite")];
+
+      QStringList localDefaults;
+      if (existing.contains(QStringLiteral("local_defaultBranches"))) {
+        QJsonArray arr = existing.value(QStringLiteral("local_defaultBranches")).toArray();
+        for (const QJsonValue &v : arr) {
+          localDefaults.append(v.toString());
+        }
+      } else {
+        QString oldApiBranch = extractApiDefaultBranch(existing);
+        if (!oldApiBranch.isEmpty()) {
+          localDefaults.append(oldApiBranch);
+        }
+      }
+
+      QString newApiBranch = extractApiDefaultBranch(source);
+      if (!newApiBranch.isEmpty() && !localDefaults.contains(newApiBranch)) {
+        localDefaults.append(newApiBranch);
+      }
+
+      if (!localDefaults.isEmpty()) {
+        QJsonArray arr;
+        for (const QString &b : localDefaults) {
+          arr.append(b);
+        }
+        source[QStringLiteral("local_defaultBranches")] = arr;
+      }
+
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
       QModelIndex lastColIndex = createIndex(i, ColCount - 1);
@@ -849,6 +876,49 @@ void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *se
       m_sources[i] = source;
       QModelIndex idx = index(i, ColQueueStatus);
       Q_EMIT dataChanged(idx, idx);
+    }
+  }
+}
+
+QString SourceModel::extractApiDefaultBranch(const QJsonObject &rawData) {
+  QJsonObject githubRepo = rawData.value(QStringLiteral("githubRepo")).toObject();
+  if (githubRepo.contains(QStringLiteral("defaultBranch"))) {
+    QJsonObject db = githubRepo.value(QStringLiteral("defaultBranch")).toObject();
+    if (db.contains(QStringLiteral("displayName"))) {
+      return db.value(QStringLiteral("displayName")).toString();
+    }
+  }
+
+  if (rawData.contains(QStringLiteral("defaultBranch"))) {
+    return rawData.value(QStringLiteral("defaultBranch")).toString();
+  }
+  QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+  if (github.contains(QStringLiteral("default_branch"))) {
+    return github.value(QStringLiteral("default_branch")).toString();
+  }
+  return QString();
+}
+
+void SourceModel::setDefaultBranches(const QString &id, const QStringList &branches) {
+  QString normId = normalizeSourceId(id);
+  for (int i = 0; i < m_sources.size(); ++i) {
+    QJsonObject obj = m_sources[i].toObject();
+    QString currentId = obj.value(QStringLiteral("id")).toString();
+    if (currentId.isEmpty()) {
+      currentId = obj.value(QStringLiteral("name")).toString();
+    }
+    if (normalizeSourceId(currentId) == normId) {
+      QJsonArray arr;
+      for (const QString &b : branches) {
+        arr.append(b);
+      }
+      obj[QStringLiteral("local_defaultBranches")] = arr;
+      m_sources[i] = obj;
+      QModelIndex index = createIndex(i, 0);
+      QModelIndex lastColIndex = createIndex(i, ColCount - 1);
+      Q_EMIT dataChanged(index, lastColIndex);
+      saveSources();
+      return;
     }
   }
 }
