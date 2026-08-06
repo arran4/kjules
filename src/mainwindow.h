@@ -251,6 +251,9 @@ private:
   QAction *m_refreshInProgressAction;
   QAction *m_refreshCompleteAction;
   QAction *m_refreshWaitingFeedbackAction;
+  QAction *m_refreshFollowingGithubAction;
+  QAction *m_refreshSourcesAllAction;
+  QAction *m_refreshSourcesGithubAction;
   QAction *m_recalculateStatsAction;
   QAction *m_showFullSessionListAction;
   QAction *m_followFromIdAction;
