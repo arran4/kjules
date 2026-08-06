@@ -2275,9 +2275,48 @@ void MainWindow::setupRefreshSourceActions() {
   connect(m_refreshSourcesAction, &QAction::triggered, this, &MainWindow::refreshSources);
   actionCollection()->addAction(QStringLiteral("refresh_sources"), m_refreshSourcesAction);
 
-  QAction *refreshCurrentTabAction = new QAction(i18n("Refresh Current Tab"), this);
-  actionCollection()->setDefaultShortcut(refreshCurrentTabAction, QKeySequence(Qt::Key_F5));
-  connect(refreshCurrentTabAction, &QAction::triggered, this, [this]() {
+  m_refreshCurrentTabAction = new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
+  actionCollection()->setDefaultShortcut(m_refreshCurrentTabAction, QKeySequence(Qt::Key_F5));
+
+  QMenu *refreshMenu = new QMenu(this);
+  m_refreshInProgressAction = new QAction(i18n("Refresh all in progress"), this);
+  m_refreshCompleteAction = new QAction(i18n("Refresh all complete"), this);
+  m_refreshWaitingFeedbackAction = new QAction(i18n("Refresh all waiting user feedback"), this);
+  m_refreshFollowingGithubAction = new QAction(i18n("Refresh following github"), this);
+
+  m_refreshSourcesAllAction = new QAction(i18n("Refresh sources"), this);
+  m_refreshSourcesGithubAction = new QAction(i18n("Refresh source's github"), this);
+
+  refreshMenu->addAction(m_refreshInProgressAction);
+  refreshMenu->addAction(m_refreshCompleteAction);
+  refreshMenu->addAction(m_refreshWaitingFeedbackAction);
+  refreshMenu->addAction(m_refreshFollowingGithubAction);
+
+  refreshMenu->addAction(m_refreshSourcesAllAction);
+  refreshMenu->addAction(m_refreshSourcesGithubAction);
+
+  m_refreshCurrentTabAction->setMenu(refreshMenu);
+
+  connect(refreshMenu, &QMenu::aboutToShow, this, [this, refreshMenu]() {
+    bool isFollowingTab = (m_tabWidget && m_tabWidget->currentWidget() &&
+                           m_tabWidget->currentWidget()->objectName() == QStringLiteral("followingTab"));
+    bool isSourcesTab = (m_tabWidget && m_tabWidget->currentWidget() &&
+                         m_tabWidget->currentWidget()->objectName() == QStringLiteral("sourcesTab"));
+
+    m_refreshInProgressAction->setVisible(isFollowingTab);
+    m_refreshCompleteAction->setVisible(isFollowingTab);
+    m_refreshWaitingFeedbackAction->setVisible(isFollowingTab);
+    m_refreshFollowingGithubAction->setVisible(isFollowingTab);
+
+    m_refreshSourcesAllAction->setVisible(isSourcesTab);
+    m_refreshSourcesGithubAction->setVisible(isSourcesTab);
+
+    if (!isFollowingTab && !isSourcesTab) {
+      refreshMenu->hide();
+    }
+  });
+
+  connect(m_refreshCurrentTabAction, &QAction::triggered, this, [this]() {
     if (m_tabWidget && m_tabWidget->currentWidget()) {
       if (m_tabWidget->currentWidget()->objectName() == QStringLiteral("sourcesTab")) {
         m_refreshSourcesAction->trigger();
@@ -2286,7 +2325,94 @@ void MainWindow::setupRefreshSourceActions() {
       }
     }
   });
-  actionCollection()->addAction(QStringLiteral("refresh_current_tab"), refreshCurrentTabAction);
+
+  auto refreshByState = [this](const QString &state) {
+    m_sessionModel->clearAllUnreadChanges();
+    QStringList idsToRefresh;
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QModelIndex index = m_sessionModel->index(i, 0);
+      QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
+      QString currentState = m_sessionModel->data(index, SessionModel::StateRole).toString();
+      if (!currentId.isEmpty() && currentState == state) {
+        idsToRefresh.append(currentId);
+      }
+    }
+    if (!idsToRefresh.isEmpty()) {
+      if (m_refreshProgressWindow && !m_refreshProgressWindow->isFinishedProcess()) {
+        m_refreshProgressWindow->addSessionIds(idsToRefresh);
+        m_refreshProgressWindow->show();
+        m_refreshProgressWindow->raise();
+        m_refreshProgressWindow->activateWindow();
+      } else {
+        if (m_refreshProgressWindow) {
+          m_refreshProgressWindow->deleteLater();
+        }
+        m_refreshProgressWindow = new RefreshProgressWindow(idsToRefresh, m_apiManager, m_sessionModel, this);
+        connect(m_refreshProgressWindow, &RefreshProgressWindow::progressUpdated, this,
+                &MainWindow::onRefreshProgressUpdated);
+        connect(m_refreshProgressWindow, &RefreshProgressWindow::progressFinished, this,
+                &MainWindow::onRefreshProgressFinished);
+        connect(m_refreshProgressWindow, &RefreshProgressWindow::openSessionRequested, this, [this](const QString &id) {
+          m_apiManager->getSession(id);
+          updateStatus(i18n("Fetching details for session %1...", id));
+        });
+        m_refreshProgressWindow->show();
+      }
+    } else {
+      updateStatus(i18n("No sessions found in state %1 to refresh.", state));
+    }
+  };
+
+  connect(m_refreshInProgressAction, &QAction::triggered, this,
+          [refreshByState]() { refreshByState(QStringLiteral("IN_PROGRESS")); });
+
+  connect(m_refreshCompleteAction, &QAction::triggered, this,
+          [refreshByState]() { refreshByState(QStringLiteral("DONE")); });
+
+  connect(m_refreshWaitingFeedbackAction, &QAction::triggered, this,
+          [refreshByState]() { refreshByState(QStringLiteral("WAITING_FEEDBACK")); });
+
+  connect(m_refreshFollowingGithubAction, &QAction::triggered, this, [this]() {
+    m_sessionModel->clearAllUnreadChanges();
+    QStringList idsToRefresh;
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QModelIndex index = m_sessionModel->index(i, 0);
+      QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
+      if (!currentId.isEmpty() && currentId.startsWith(QStringLiteral("github/"))) {
+        idsToRefresh.append(currentId);
+      }
+    }
+    if (!idsToRefresh.isEmpty()) {
+      if (m_refreshProgressWindow && !m_refreshProgressWindow->isFinishedProcess()) {
+        m_refreshProgressWindow->addSessionIds(idsToRefresh);
+        m_refreshProgressWindow->show();
+        m_refreshProgressWindow->raise();
+        m_refreshProgressWindow->activateWindow();
+      } else {
+        if (m_refreshProgressWindow) {
+          m_refreshProgressWindow->deleteLater();
+        }
+        m_refreshProgressWindow = new RefreshProgressWindow(idsToRefresh, m_apiManager, m_sessionModel, this);
+        connect(m_refreshProgressWindow, &RefreshProgressWindow::progressUpdated, this,
+                &MainWindow::onRefreshProgressUpdated);
+        connect(m_refreshProgressWindow, &RefreshProgressWindow::progressFinished, this,
+                &MainWindow::onRefreshProgressFinished);
+        connect(m_refreshProgressWindow, &RefreshProgressWindow::openSessionRequested, this, [this](const QString &id) {
+          m_apiManager->getSession(id);
+          updateStatus(i18n("Fetching details for session %1...", id));
+        });
+        m_refreshProgressWindow->show();
+      }
+    } else {
+      updateStatus(i18n("No Github sessions found to refresh."));
+    }
+  });
+
+  connect(m_refreshSourcesAllAction, &QAction::triggered, this, &MainWindow::refreshSources);
+
+  connect(m_refreshSourcesGithubAction, &QAction::triggered, this, [this]() { m_refreshSourcesAction->trigger(); });
+
+  actionCollection()->addAction(QStringLiteral("refresh_current_tab"), m_refreshCurrentTabAction);
 
   m_refreshSourceAction = new QAction(i18n("Refresh Source"), this);
   actionCollection()->addAction(QStringLiteral("refresh_source"), m_refreshSourceAction);
@@ -2813,6 +2939,11 @@ void MainWindow::createStandardActions() {
 
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     tb->show();
+    if (QWidget *widget = tb->widgetForAction(m_refreshCurrentTabAction)) {
+      if (QToolButton *btn = qobject_cast<QToolButton *>(widget)) {
+        btn->setPopupMode(QToolButton::MenuButtonPopup);
+      }
+    }
   }
 
   m_favouritesMenu = qobject_cast<QMenu *>(factory()->container(QStringLiteral("favourites"), this));
