@@ -229,7 +229,7 @@ protected:
     const SourceModel *m_model;
   };
 
-  bool filterAcceptsColumn(int source_column, const QModelIndex &source_parent) const override {
+  bool filterAcceptsColumn(int /* source_column */, const QModelIndex & /* source_parent */) const override {
     return true;
   }
 
