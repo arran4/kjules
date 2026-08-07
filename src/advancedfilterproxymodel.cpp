@@ -132,11 +132,10 @@ void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
   } else {
     m_ast.reset();
   }
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-  invalidate();
-#else
-  invalidateFilter();
-#endif
+  // The query only changes which rows are accepted. Invalidating the entire
+  // proxy also rebuilds its column mapping and can leave a stacked list proxy
+  // with no mapped columns while a view is handling the change.
+  invalidateRowsFilter();
 }
 
 bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
@@ -218,11 +217,7 @@ FollowingFilterProxyModel::FollowingFilterProxyModel(QObject *parent)
 
 void FollowingFilterProxyModel::setTabType(TabType type) {
   m_tabType = type;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-  invalidate();
-#else
-  invalidateFilter();
-#endif
+  invalidateRowsFilter();
 }
 
 bool FollowingFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {

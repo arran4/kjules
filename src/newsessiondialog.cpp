@@ -379,10 +379,6 @@ protected:
     const QAbstractItemModel *m_model;
   };
 
-  bool filterAcceptsColumn(int /* source_column */, const QModelIndex & /* source_parent */) const override {
-    return true;
-  }
-
   bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
 

@@ -104,10 +104,12 @@ private Q_SLOTS:
 
     AdvancedFilterProxyModel proxyModel;
     proxyModel.setSourceModel(&sourceModel);
+    QCOMPARE(proxyModel.columnCount(), 2);
 
     // Default global substring search
     proxyModel.setFilterQuery(QStringLiteral("test"));
     QCOMPARE(proxyModel.rowCount(), 2);
+    QCOMPARE(proxyModel.columnCount(), 2);
 
     proxyModel.setFilterQuery(QStringLiteral("Another"));
     QCOMPARE(proxyModel.rowCount(), 2);
@@ -115,6 +117,17 @@ private Q_SLOTS:
     // Empty query
     proxyModel.setFilterQuery(QStringLiteral(""));
     QCOMPARE(proxyModel.rowCount(), 3);
+    QCOMPARE(proxyModel.columnCount(), 2);
+
+    // Repeated transitions between text and empty queries must preserve the
+    // proxy's source rows and columns. NewSessionDialog stacks its branch list
+    // behind this proxy and exercises this path on every keystroke.
+    proxyModel.setFilterQuery(QStringLiteral("missing"));
+    QCOMPARE(proxyModel.rowCount(), 0);
+    QCOMPARE(proxyModel.columnCount(), 2);
+    proxyModel.setFilterQuery(QStringLiteral(""));
+    QCOMPARE(proxyModel.rowCount(), 3);
+    QCOMPARE(proxyModel.columnCount(), 2);
 
     // AST query - relies on Name column for owner/repo parsing
     // KeyValueNode::evaluate does wildcard match for 'owner' and 'repo'
