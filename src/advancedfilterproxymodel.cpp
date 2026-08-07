@@ -224,8 +224,9 @@ void FollowingFilterProxyModel::setTabType(TabType type) {
   if (m_tabType == type)
     return;
 
+  beginFilterChange();
   m_tabType = type;
-  invalidateRowsFilter();
+  endFilterChange(QSortFilterProxyModel::Direction::Rows);
 }
 
 bool FollowingFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
