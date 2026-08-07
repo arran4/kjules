@@ -41,36 +41,24 @@ void SessionsProxyModel::setTextFilter(const QString &text) {
   if (m_textFilter == text)
     return;
   m_textFilter = text;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
   beginFilterChange();
   endFilterChange(Direction::Rows);
-#else
-  invalidateFilter();
-#endif
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
   if (m_statusFilter == status)
     return;
   m_statusFilter = status;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
   beginFilterChange();
   endFilterChange(Direction::Rows);
-#else
-  invalidateFilter();
-#endif
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
   if (m_repoFilter == repo)
     return;
   m_repoFilter = repo;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
   beginFilterChange();
   endFilterChange(Direction::Rows);
-#else
-  invalidateFilter();
-#endif
 }
 
 bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {

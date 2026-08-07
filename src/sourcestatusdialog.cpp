@@ -22,12 +22,8 @@ SourceFilterProxyModel::SourceFilterProxyModel(const QString &sourceName, QObjec
 void SourceFilterProxyModel::setFilterSource(const QString &sourceName) {
   if (m_sourceName != sourceName) {
     m_sourceName = sourceName;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
     beginFilterChange();
     endFilterChange(Direction::Rows);
-#else
-    invalidateFilter();
-#endif
   }
 }
 

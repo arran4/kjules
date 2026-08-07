@@ -136,14 +136,8 @@ void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
   } else {
     m_ast.reset();
   }
-  // The query only changes which rows are accepted. On Qt 6.10 and newer use
-  // the replacement for the deprecated invalidateRowsFilter() API.
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
   beginFilterChange();
   endFilterChange(Direction::Rows);
-#else
-  invalidateRowsFilter();
-#endif
 }
 
 bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
@@ -228,12 +222,8 @@ void FollowingFilterProxyModel::setTabType(TabType type) {
     return;
 
   m_tabType = type;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
   beginFilterChange();
   endFilterChange(Direction::Rows);
-#else
-  invalidateRowsFilter();
-#endif
 }
 
 bool FollowingFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
