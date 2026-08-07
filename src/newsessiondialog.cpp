@@ -262,6 +262,7 @@ public:
     connect(m_filterModel, &QAbstractItemModel::rowsRemoved, this, &BranchListProxyModel::rebuild);
     connect(m_filterModel, &QAbstractItemModel::dataChanged, this, &BranchListProxyModel::rebuild);
     connect(m_filterModel, &QAbstractItemModel::layoutChanged, this, &BranchListProxyModel::rebuild);
+    connect(m_filterModel, &QAbstractItemModel::layoutChanged, this, &BranchListProxyModel::rebuild);
     rebuild();
   }
 
