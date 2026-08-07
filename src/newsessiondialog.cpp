@@ -236,6 +236,11 @@ public:
     for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
       QModelIndex baseIdx = m_sourceModel->index(i, 0);
       QString name = baseIdx.data(SourceModel::NameRole).toString();
+      if (name.isEmpty()) {
+        name = baseIdx.data(SourceModel::IdRole).toString();
+        if (name.startsWith(QStringLiteral("sources/")))
+          name.remove(0, 8);
+      }
       processedSources.insert(name);
 
       if (m_showSelected) {
@@ -1008,6 +1013,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   sourceLayout->addLayout(splitViewLayout);
 
   connect(m_filterEditor, &FilterEditor::filterChanged, this, &NewSessionDialog::applyFilter);
+  // setFilterText() above runs before the signal is connected, so explicitly
+  // apply the configured default to both source lists on first display.
+  applyFilter();
 
   connect(m_filterEditor, &FilterEditor::returnPressed, this, [this]() {
     if (m_unselectedFilterModel->rowCount() == 1) {

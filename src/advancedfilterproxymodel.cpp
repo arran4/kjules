@@ -126,16 +126,24 @@ AdvancedFilterProxyModel::AdvancedFilterProxyModel(QObject *parent) : QSortFilte
 void AdvancedFilterProxyModel::setGlobalSourceModel(SourceModel *sourceModel) { m_globalSourceModel = sourceModel; }
 
 void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
-  m_query = query.trimmed();
+  const QString normalizedQuery = query.trimmed();
+  if (m_query == normalizedQuery)
+    return;
+
+  m_query = normalizedQuery;
   if (m_query.startsWith(QLatin1String("="))) {
     m_ast = FilterParser::parse(m_query.mid(1));
   } else {
     m_ast.reset();
   }
-  // The query only changes which rows are accepted. Invalidating the entire
-  // proxy also rebuilds its column mapping and can leave a stacked list proxy
-  // with no mapped columns while a view is handling the change.
+  // The query only changes which rows are accepted. On Qt 6.10 and newer use
+  // the replacement for the deprecated invalidateRowsFilter() API.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+#else
   invalidateRowsFilter();
+#endif
 }
 
 bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
@@ -216,8 +224,16 @@ FollowingFilterProxyModel::FollowingFilterProxyModel(QObject *parent)
     : AdvancedFilterProxyModel(parent), m_tabType(FollowingTab) {}
 
 void FollowingFilterProxyModel::setTabType(TabType type) {
+  if (m_tabType == type)
+    return;
+
   m_tabType = type;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+#else
   invalidateRowsFilter();
+#endif
 }
 
 bool FollowingFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
