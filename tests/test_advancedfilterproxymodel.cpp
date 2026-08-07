@@ -219,6 +219,38 @@ private Q_SLOTS:
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(2, 0)).row(), 0);
     QCOMPARE(proxyModel.mapToSource(proxyModel.index(3, 0)).row(), 2);
   }
+
+  void testSourceModelNameRoleFallback() {
+    SourceModel model;
+    QJsonArray sources;
+    QJsonObject s1;
+    s1[QStringLiteral("id")] = QStringLiteral("sources/github/kde/kjules");
+    sources.append(s1);
+    model.setSources(sources);
+
+    QCOMPARE(model.rowCount(), 1);
+    QModelIndex idx = model.index(0, 0);
+    QCOMPARE(model.data(idx, SourceModel::NameRole).toString(), QStringLiteral("kde/kjules"));
+    QCOMPARE(model.data(idx, Qt::DisplayRole).toString(), QStringLiteral("kde/kjules"));
+  }
+
+  void testEmptyEqualsFormulaFilter() {
+    SourceModel model;
+    QJsonArray sources;
+    QJsonObject s1;
+    s1[QStringLiteral("id")] = QStringLiteral("sources/github/kde/kjules");
+    sources.append(s1);
+    model.setSources(sources);
+
+    AdvancedFilterProxyModel proxyModel;
+    proxyModel.setSourceModel(&model);
+
+    proxyModel.setFilterQuery(QStringLiteral("="));
+    QCOMPARE(proxyModel.rowCount(), 1);
+
+    proxyModel.setFilterQuery(QStringLiteral("= "));
+    QCOMPARE(proxyModel.rowCount(), 1);
+  }
 };
 
 QTEST_MAIN(TestAdvancedFilterProxyModel)

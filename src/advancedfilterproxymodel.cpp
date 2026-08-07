@@ -130,23 +130,26 @@ void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
   if (m_query == normalizedQuery)
     return;
 
-  beginFilterChange();
   m_query = normalizedQuery;
   if (m_query.startsWith(QLatin1String("="))) {
-    m_ast = FilterParser::parse(m_query.mid(1));
+    m_ast = FilterParser::parse(m_query.mid(1).trimmed());
   } else {
     m_ast.reset();
   }
-  endFilterChange(Direction::Rows);
+  invalidate();
 }
 
 bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
-  if (m_query.isEmpty())
+  const QString trimmedQuery = m_query.trimmed();
+  if (trimmedQuery.isEmpty())
     return true;
 
-  if (m_query.startsWith(QLatin1String("=")) && m_ast) {
-    ModelDataAccessor accessor(sourceModel(), source_row, source_parent, m_globalSourceModel);
-    return m_ast->evaluate(accessor);
+  if (trimmedQuery.startsWith(QLatin1String("="))) {
+    if (m_ast) {
+      ModelDataAccessor accessor(sourceModel(), source_row, source_parent, m_globalSourceModel);
+      return m_ast->evaluate(accessor);
+    }
+    return true;
   }
 
   QAbstractItemModel *m = sourceModel();
@@ -221,9 +224,8 @@ void FollowingFilterProxyModel::setTabType(TabType type) {
   if (m_tabType == type)
     return;
 
-  beginFilterChange();
   m_tabType = type;
-  endFilterChange(Direction::Rows);
+  invalidateRowsFilter();
 }
 
 bool FollowingFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {

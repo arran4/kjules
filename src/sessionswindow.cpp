@@ -40,25 +40,22 @@ SessionsProxyModel::SessionsProxyModel(QObject *parent) : QSortFilterProxyModel(
 void SessionsProxyModel::setTextFilter(const QString &text) {
   if (m_textFilter == text)
     return;
-  beginFilterChange();
   m_textFilter = text;
-  endFilterChange(Direction::Rows);
+  invalidateFilter();
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
   if (m_statusFilter == status)
     return;
-  beginFilterChange();
   m_statusFilter = status;
-  endFilterChange(Direction::Rows);
+  invalidateFilter();
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
   if (m_repoFilter == repo)
     return;
-  beginFilterChange();
   m_repoFilter = repo;
-  endFilterChange(Direction::Rows);
+  invalidateFilter();
 }
 
 bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {

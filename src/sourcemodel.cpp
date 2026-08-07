@@ -183,8 +183,22 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     return QVariant();
   } else
     switch (role) {
-    case NameRole:
-      return source.value(QStringLiteral("name")).toString();
+    case NameRole: {
+      if (!provider.isEmpty() && !owner.isEmpty() && !repo.isEmpty()) {
+        return owner + QLatin1Char('/') + repo;
+      }
+      QString name = source.value(QStringLiteral("name")).toString();
+      if (!name.isEmpty() && name != id)
+        return name;
+      QString normId = id;
+      if (normId.startsWith(QStringLiteral("sources/"))) {
+        normId = normId.mid(8);
+      }
+      if (normId.startsWith(QStringLiteral("github/"))) {
+        normId = normId.mid(7);
+      }
+      return normId;
+    }
     case IdRole:
       return id;
     case RawDataRole:

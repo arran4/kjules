@@ -19,7 +19,7 @@ class QCheckBox;
 class QSpinBox;
 class QPushButton;
 
-class SourceFilterProxyModel;
+class NewSessionSourceFilterProxyModel;
 class SourceBranchModel;
 class TemplatesModel;
 
@@ -97,8 +97,8 @@ private:
   TemplatesModel *m_templatesModel;
   QListView *m_unselectedView;
   QListView *m_selectedView;
-  SourceFilterProxyModel *m_unselectedFilterModel;
-  SourceFilterProxyModel *m_selectedFilterModel;
+  NewSessionSourceFilterProxyModel *m_unselectedFilterModel;
+  NewSessionSourceFilterProxyModel *m_selectedFilterModel;
   SourceBranchModel *m_unselectedProjection;
   SourceBranchModel *m_selectedProjection;
   FilterEditor *m_filterEditor;
