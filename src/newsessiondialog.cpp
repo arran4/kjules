@@ -380,6 +380,8 @@ protected:
   };
 
   bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
+    if (!sourceModel())
+      return false;
     QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
 
     if (filterAST()) {
