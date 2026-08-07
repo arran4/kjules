@@ -130,13 +130,13 @@ void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
   if (m_query == normalizedQuery)
     return;
 
+  beginFilterChange();
   m_query = normalizedQuery;
   if (m_query.startsWith(QLatin1String("="))) {
     m_ast = FilterParser::parse(m_query.mid(1));
   } else {
     m_ast.reset();
   }
-  beginFilterChange();
   endFilterChange(Direction::Rows);
 }
 
@@ -221,8 +221,8 @@ void FollowingFilterProxyModel::setTabType(TabType type) {
   if (m_tabType == type)
     return;
 
-  m_tabType = type;
   beginFilterChange();
+  m_tabType = type;
   endFilterChange(Direction::Rows);
 }
 

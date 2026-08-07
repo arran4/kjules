@@ -40,24 +40,24 @@ SessionsProxyModel::SessionsProxyModel(QObject *parent) : QSortFilterProxyModel(
 void SessionsProxyModel::setTextFilter(const QString &text) {
   if (m_textFilter == text)
     return;
-  m_textFilter = text;
   beginFilterChange();
+  m_textFilter = text;
   endFilterChange(Direction::Rows);
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
   if (m_statusFilter == status)
     return;
-  m_statusFilter = status;
   beginFilterChange();
+  m_statusFilter = status;
   endFilterChange(Direction::Rows);
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
   if (m_repoFilter == repo)
     return;
-  m_repoFilter = repo;
   beginFilterChange();
+  m_repoFilter = repo;
   endFilterChange(Direction::Rows);
 }
 
