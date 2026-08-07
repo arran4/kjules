@@ -577,6 +577,10 @@ void FilterEditor::onTextChanged(const QString &text) {
     m_userDismissed = false;
   } else if (text.startsWith(QLatin1String("=")) && isKeywordColonTrigger(text)) {
     m_userDismissed = false;
+  } else if (!text.startsWith(QLatin1String("="))) {
+    // Plain text is a simple search, not a formula. Keep the builder dismissed
+    // even when it was opened for the empty field immediately before typing.
+    m_userDismissed = true;
   }
 
   if (shouldShowPopup(text) && m_lineEdit->hasFocus()) {

@@ -29,6 +29,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSet>
 #include <QShortcut>
 #include <QSortFilterProxyModel>
@@ -43,6 +44,7 @@
 #include <QTextListFormat>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <algorithm>
 
 PromptTextEdit::PromptTextEdit(QWidget *parent) : QTextEdit(parent), m_mode(WysiwygMarkdown) {
   setAcceptRichText(true);
@@ -389,7 +391,20 @@ protected:
       return filterAST()->evaluate(accessor);
     }
 
-    return AdvancedFilterProxyModel::filterAcceptsRow(source_row, source_parent);
+    const QStringList tokens = filterQuery().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+    if (tokens.isEmpty())
+      return true;
+
+    const ProxyFilterDataAccessor accessor(idx, sourceModel());
+    const QList<QString> values = accessor.getAllValues();
+    for (const QString &token : tokens) {
+      const bool matched = std::any_of(values.cbegin(), values.cend(), [this, &token](const QString &value) {
+        return value.contains(token, filterCaseSensitivity());
+      });
+      if (!matched)
+        return false;
+    }
+    return true;
   }
 };
 
@@ -1584,9 +1599,7 @@ void NewSessionDialog::updateModels() {
 void NewSessionDialog::applyFilter() {
   QString text = m_filterEditor->filterText();
   m_unselectedFilterModel->setFilterQuery(text);
-
-  bool applyToSelected = m_selectedSources.size() >= 10;
-  m_selectedFilterModel->setFilterQuery(applyToSelected ? text : QStringLiteral(""));
+  m_selectedFilterModel->setFilterQuery(text);
 }
 
 void NewSessionDialog::onAddSelected() {
