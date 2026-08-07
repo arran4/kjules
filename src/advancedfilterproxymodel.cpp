@@ -128,10 +128,9 @@ void AdvancedFilterProxyModel::setGlobalSourceModel(SourceModel *sourceModel) { 
 void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
   m_query = query.trimmed();
   if (m_query.startsWith(QLatin1String("="))) {
-    m_ast = FilterParser::parse(m_query);
+    m_ast = FilterParser::parse(m_query.mid(1));
   } else {
     m_ast.reset();
-    setFilterFixedString(m_query);
   }
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
   invalidate();
@@ -149,17 +148,37 @@ bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelInde
     return m_ast->evaluate(accessor);
   }
 
-  // Default global substring search across all columns.
   QAbstractItemModel *m = sourceModel();
   int cols = m->columnCount(source_parent);
+
+  QStringList tokens = m_query.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+  if (tokens.isEmpty())
+    return true;
+
+  QStringList colValues;
   for (int c = 0; c < cols; ++c) {
     QModelIndex idx = m->index(source_row, c, source_parent);
-    QString val = m->data(idx, Qt::DisplayRole).toString();
-    if (val.contains(m_query, filterCaseSensitivity())) {
-      return true;
+    colValues.append(m->data(idx, Qt::DisplayRole).toString());
+    QVariant nameVar = m->data(idx, SourceModel::NameRole);
+    if (nameVar.isValid()) {
+      colValues.append(nameVar.toString());
     }
   }
-  return false;
+
+  for (const QString &token : tokens) {
+    bool tokenMatched = false;
+    for (const QString &val : colValues) {
+      if (val.contains(token, filterCaseSensitivity())) {
+        tokenMatched = true;
+        break;
+      }
+    }
+    if (!tokenMatched) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool AdvancedFilterProxyModel::lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const {

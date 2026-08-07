@@ -227,16 +227,30 @@ bool KeyValueNode::evaluate(const FilterDataAccessor &accessor) const {
     return checkDateFilter(m_value, dateStr, isBefore);
   }
   QString val = accessor.getValue(m_key);
-  if (lowerKey == QStringLiteral("repo") || lowerKey == QStringLiteral("owner")) {
+  if (lowerKey == QStringLiteral("archived") || lowerKey == QStringLiteral("isarchived") ||
+      lowerKey == QStringLiteral("fork") || lowerKey == QStringLiteral("isfork") ||
+      lowerKey == QStringLiteral("private") || lowerKey == QStringLiteral("isprivate") ||
+      lowerKey == QStringLiteral("public") || lowerKey == QStringLiteral("ispublic")) {
+    QString lowerVal = m_value.toLower();
+    bool expectedBool = (lowerVal == QStringLiteral("yes") || lowerVal == QStringLiteral("true") ||
+                         lowerVal == QStringLiteral("1") || lowerVal == QStringLiteral("y"));
+    bool actualBool = (val.toLower() == QStringLiteral("true") || val == QStringLiteral("1"));
+    return actualBool == expectedBool;
+  }
+  if (lowerKey == QStringLiteral("repo") || lowerKey == QStringLiteral("owner") ||
+      lowerKey == QStringLiteral("branch")) {
+    if (m_value.contains(QLatin1Char('*')) || m_value.contains(QLatin1Char('?'))) {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QRegularExpression re = QRegularExpression::fromWildcard(m_value, Qt::CaseInsensitive);
-    return re.match(val).hasMatch();
+      QRegularExpression re = QRegularExpression::fromWildcard(m_value, Qt::CaseInsensitive);
+      return re.match(val).hasMatch();
 #else
-    QRegExp rx(m_value);
-    rx.setPatternSyntax(QRegExp::Wildcard);
-    rx.setCaseSensitivity(Qt::CaseInsensitive);
-    return rx.exactMatch(val);
+      QRegExp rx(m_value);
+      rx.setPatternSyntax(QRegExp::Wildcard);
+      rx.setCaseSensitivity(Qt::CaseInsensitive);
+      return rx.exactMatch(val);
 #endif
+    }
+    return val.contains(m_value, Qt::CaseInsensitive);
   }
   return val.contains(m_value, Qt::CaseInsensitive);
 }

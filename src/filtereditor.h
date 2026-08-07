@@ -49,6 +49,7 @@ private:
   void populateTree(QStandardItem *parentItem, QSharedPointer<ASTNode> node);
   QSharedPointer<ASTNode> buildASTFromTree(QStandardItem *item);
   void updatePopupPosition();
+  bool shouldShowPopup(const QString &text) const;
 
   QLineEdit *m_lineEdit;
   QToolButton *m_toggleButton;
