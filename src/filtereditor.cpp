@@ -411,6 +411,61 @@ void FilterEditor::updatePopupPosition() {
   m_popupFrame->resize(m_lineEdit->width(), 300);
 }
 
+static bool isKeywordColonTrigger(const QString &text) {
+  if (!text.startsWith(QLatin1String("=")))
+    return false;
+
+  QString trimmed = text.trimmed();
+  if (!trimmed.endsWith(QLatin1Char(':')))
+    return false;
+
+  int lastSpace = trimmed.lastIndexOf(QLatin1Char(' '));
+  QString lastToken = lastSpace == -1 ? trimmed.mid(1) : trimmed.mid(lastSpace + 1);
+  if (!lastToken.endsWith(QLatin1Char(':')))
+    return false;
+
+  QString key = lastToken.chopped(1).toLower();
+  static const QSet<QString> validKeys = {QStringLiteral("repo"),
+                                          QStringLiteral("owner"),
+                                          QStringLiteral("branch"),
+                                          QStringLiteral("language"),
+                                          QStringLiteral("archived"),
+                                          QStringLiteral("isarchived"),
+                                          QStringLiteral("fork"),
+                                          QStringLiteral("isfork"),
+                                          QStringLiteral("private"),
+                                          QStringLiteral("isprivate"),
+                                          QStringLiteral("public"),
+                                          QStringLiteral("ispublic"),
+                                          QStringLiteral("state"),
+                                          QStringLiteral("label"),
+                                          QStringLiteral("labels"),
+                                          QStringLiteral("title"),
+                                          QStringLiteral("is"),
+                                          QStringLiteral("created-before"),
+                                          QStringLiteral("created-after"),
+                                          QStringLiteral("updated-before"),
+                                          QStringLiteral("updated-after"),
+                                          QStringLiteral("in")};
+  return validKeys.contains(key);
+}
+
+bool FilterEditor::shouldShowPopup(const QString &text) const {
+  if (m_userDismissed)
+    return false;
+
+  if (text.isEmpty())
+    return true;
+
+  if (text == QStringLiteral("="))
+    return true;
+
+  if (isKeywordColonTrigger(text))
+    return true;
+
+  return false;
+}
+
 bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
@@ -422,10 +477,15 @@ bool FilterEditor::eventFilter(QObject *obj, QEvent *event) {
 
   if (obj == m_lineEdit) {
     if (event->type() == QEvent::FocusIn) {
-      m_userDismissed = false;
-      updatePopupPosition();
-      m_popupFrame->show();
-      m_toggleButton->setChecked(true);
+      QString text = m_lineEdit->text();
+      if (shouldShowPopup(text)) {
+        updatePopupPosition();
+        m_popupFrame->show();
+        m_toggleButton->setChecked(true);
+      } else {
+        m_popupFrame->hide();
+        m_toggleButton->setChecked(false);
+      }
     } else if (event->type() == QEvent::FocusOut) {
       QWidget *reasonWidget = QApplication::focusWidget();
       bool focusInPopup = reasonWidget && (m_popupFrame->isAncestorOf(reasonWidget) || reasonWidget == m_popupFrame);
@@ -482,12 +542,16 @@ void FilterEditor::setFilterText(const QString &text) {
   m_lineEdit->setText(newText);
   m_toggleButton->setVisible(true);
 
-  if (newText.isEmpty() || newText.startsWith(QLatin1String("="))) {
-    if (!m_userDismissed && m_lineEdit->hasFocus()) {
-      updatePopupPosition();
-      m_popupFrame->show();
-      m_toggleButton->setChecked(true);
-    }
+  if (newText.isEmpty() || newText == QStringLiteral("=")) {
+    m_userDismissed = false;
+  } else if (newText.startsWith(QLatin1String("=")) && isKeywordColonTrigger(newText)) {
+    m_userDismissed = false;
+  }
+
+  if (shouldShowPopup(newText) && m_lineEdit->hasFocus()) {
+    updatePopupPosition();
+    m_popupFrame->show();
+    m_toggleButton->setChecked(true);
   } else {
     m_popupFrame->hide();
     m_toggleButton->setChecked(false);
@@ -509,12 +573,20 @@ void FilterEditor::onTextChanged(const QString &text) {
   m_updating = true;
   m_toggleButton->setVisible(true);
 
-  if (text.isEmpty() || text.startsWith(QLatin1String("="))) {
-    if (!m_userDismissed && m_lineEdit->hasFocus()) {
-      updatePopupPosition();
-      m_popupFrame->show();
-      m_toggleButton->setChecked(true);
-    }
+  if (text.isEmpty() || text == QStringLiteral("=")) {
+    m_userDismissed = false;
+  } else if (text.startsWith(QLatin1String("=")) && isKeywordColonTrigger(text)) {
+    m_userDismissed = false;
+  } else if (!text.startsWith(QLatin1String("="))) {
+    // Plain text is a simple search, not a formula. Keep the builder dismissed
+    // even when it was opened for the empty field immediately before typing.
+    m_userDismissed = true;
+  }
+
+  if (shouldShowPopup(text) && m_lineEdit->hasFocus()) {
+    updatePopupPosition();
+    m_popupFrame->show();
+    m_toggleButton->setChecked(true);
   } else {
     m_popupFrame->hide();
     m_toggleButton->setChecked(false);

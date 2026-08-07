@@ -14,6 +14,8 @@ public:
 
   void setFilterQuery(const QString &query);
   void setGlobalSourceModel(SourceModel *sourceModel);
+  QSharedPointer<ASTNode> filterAST() const { return m_ast; }
+  QString filterQuery() const { return m_query; }
 
 protected:
   bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
