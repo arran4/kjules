@@ -37,7 +37,7 @@ endif()
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
-find_package(Qt6 6.10 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Concurrent)
+find_package(Qt6 6.6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Concurrent)
 find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive)
 
 include(KDEInstallDirs)
