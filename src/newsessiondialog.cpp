@@ -8,6 +8,7 @@
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
+#include <QAbstractTableModel>
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
@@ -147,14 +148,18 @@ void PromptTextEdit::contextMenuEvent(QContextMenuEvent *e) {
   delete menu;
 }
 
-class BranchListProxyModel : public QAbstractListModel {
+// A row-per-(source, branch) projection.  Unlike the old list adapter this
+// preserves the complete SourceModel interface, so consumers can filter and
+// sort projected rows exactly as they filtered source rows before multiple
+// default branches were introduced.
+class BranchListProxyModel : public QAbstractTableModel {
   Q_OBJECT
 public:
   enum Roles { BranchRole = Qt::UserRole + 100 };
 
   BranchListProxyModel(SourceModel *sourceModel, NewSessionDialog *dialog,
                        const QMultiMap<QString, QString> *selectedSources, bool showSelected, QObject *parent = nullptr)
-      : QAbstractListModel(parent), m_sourceModel(sourceModel), m_dialog(dialog), m_selectedSources(selectedSources),
+      : QAbstractTableModel(parent), m_sourceModel(sourceModel), m_dialog(dialog), m_selectedSources(selectedSources),
         m_showSelected(showSelected) {
     if (m_sourceModel) {
       connect(m_sourceModel, &QAbstractItemModel::modelReset, this, &BranchListProxyModel::rebuild);
@@ -174,24 +179,28 @@ public:
     return m_rows.size();
   }
 
+  int columnCount(const QModelIndex &parent = QModelIndex()) const override {
+    return parent.isValid() || !m_sourceModel ? 0 : m_sourceModel->columnCount();
+  }
+
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override {
     if (!index.isValid() || index.row() >= m_rows.size())
       return QVariant();
     const auto &row = m_rows[index.row()];
-    QModelIndex sourceIdx = row.sourceIdx;
+    QModelIndex sourceIdx = row.sourceIdx.siblingAtColumn(index.column());
 
     if (role == Qt::DisplayRole) {
       QString displayName;
       if (sourceIdx.isValid()) {
-        displayName = sourceIdx.siblingAtColumn(0).data(Qt::DisplayRole).toString();
+        displayName = row.sourceIdx.data(Qt::DisplayRole).toString();
       } else {
         displayName = row.name;
       }
 
-      bool hasMultipleDefaults = sourceIdx.isValid() && (m_dialog->getDefaultBranches(sourceIdx).size() > 1);
-      if (hasMultipleDefaults || m_showSelected) {
+      bool hasMultipleDefaults = row.sourceIdx.isValid() && (m_dialog->getDefaultBranches(row.sourceIdx).size() > 1);
+      if (index.column() == SourceModel::ColName && (hasMultipleDefaults || m_showSelected)) {
         return displayName + QStringLiteral(" (") + row.branch + QStringLiteral(")");
-      } else {
+      } else if (index.column() == SourceModel::ColName) {
         return displayName;
       }
     }
@@ -209,6 +218,16 @@ public:
     }
 
     return QVariant();
+  }
+
+  QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override {
+    return m_sourceModel ? m_sourceModel->headerData(section, orientation, role) : QVariant();
+  }
+
+  QHash<int, QByteArray> roleNames() const override {
+    QHash<int, QByteArray> roles = m_sourceModel ? m_sourceModel->roleNames() : QHash<int, QByteArray>();
+    roles.insert(BranchRole, QByteArrayLiteral("branch"));
+    return roles;
   }
 
   QModelIndex mapToSource(const QModelIndex &proxyIndex) const {
@@ -235,12 +254,7 @@ public:
 
     for (int i = 0; i < m_sourceModel->rowCount(); ++i) {
       QModelIndex baseIdx = m_sourceModel->index(i, 0);
-      QString name = baseIdx.data(SourceModel::NameRole).toString();
-      if (name.isEmpty()) {
-        name = baseIdx.data(SourceModel::IdRole).toString();
-        if (name.startsWith(QStringLiteral("sources/")))
-          name.remove(0, 8);
-      }
+      QString name = sourceName(baseIdx);
       processedSources.insert(name);
 
       if (m_showSelected) {
@@ -274,6 +288,17 @@ public:
   }
 
 private:
+  static QString sourceName(const QModelIndex &sourceIdx) {
+    QString name = sourceIdx.data(SourceModel::NameRole).toString();
+    if (!name.isEmpty())
+      return name;
+
+    name = sourceIdx.data(SourceModel::IdRole).toString();
+    if (name.startsWith(QStringLiteral("sources/")))
+      name.remove(0, 8);
+    return name;
+  }
+
   struct RowData {
     QModelIndex sourceIdx;
     QString name;
@@ -400,14 +425,16 @@ protected:
 
     const ProxyFilterDataAccessor accessor(idx, sourceModel());
     const QList<QString> values = accessor.getAllValues();
-    for (const QString &token : tokens) {
-      const bool matched = std::any_of(values.cbegin(), values.cend(), [this, &token](const QString &value) {
-        return value.contains(token, filterCaseSensitivity());
-      });
-      if (!matched)
-        return false;
-    }
-    return true;
+    QStringList escapedTokens;
+    escapedTokens.reserve(tokens.size());
+    for (const QString &token : tokens)
+      escapedTokens.append(QRegularExpression::escape(token));
+    const QRegularExpression::PatternOptions options = filterCaseSensitivity() == Qt::CaseInsensitive
+                                                           ? QRegularExpression::CaseInsensitiveOption
+                                                           : QRegularExpression::NoPatternOption;
+    const QRegularExpression orderedWords(escapedTokens.join(QStringLiteral(".*")), options);
+    return std::any_of(values.cbegin(), values.cend(),
+                       [&orderedWords](const QString &value) { return orderedWords.match(value).hasMatch(); });
   }
 };
 
@@ -482,9 +509,6 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   m_unselectedFilterModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_unselectedFilterModel->setFilterRole(Qt::DisplayRole);
   m_unselectedFilterModel->sort(0, Qt::DescendingOrder);
-  QString defaultFilter =
-      config.readEntry(QStringLiteral("DefaultFilter"), QStringLiteral("=NOT archived:") + i18n("Yes"));
-  m_filterEditor->setFilterText(defaultFilter);
   m_unselectedView->setModel(m_unselectedFilterModel);
   m_unselectedView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_unselectedView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1013,9 +1037,9 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   sourceLayout->addLayout(splitViewLayout);
 
   connect(m_filterEditor, &FilterEditor::filterChanged, this, &NewSessionDialog::applyFilter);
-  // setFilterText() above runs before the signal is connected, so explicitly
-  // apply the configured default to both source lists on first display.
-  applyFilter();
+  const QString defaultFilter =
+      config.readEntry(QStringLiteral("DefaultFilter"), QStringLiteral("=NOT archived:") + i18n("Yes"));
+  m_filterEditor->setFilterText(defaultFilter);
 
   connect(m_filterEditor, &FilterEditor::returnPressed, this, [this]() {
     if (m_unselectedFilterModel->rowCount() == 1) {
