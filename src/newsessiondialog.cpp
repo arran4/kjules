@@ -504,6 +504,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   m_filterEditor = new FilterEditor(this);
   m_filterEditor->setSimplifiedMode(true);
+  m_sourceSelectionWidget->setFocusProxy(m_filterEditor->lineEdit());
 
   QPushButton *refreshSourcesBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Sources"), this);
@@ -1118,7 +1119,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
     m_selectedView->clearSelection();
   });
 
-  formLayout->addRow(tr("Sources:"), m_sourceSelectionWidget);
+  formLayout->addRow(tr("S&ources:"), m_sourceSelectionWidget);
 
   // Prompt
   m_promptEdit = new PromptTextEdit(this);
