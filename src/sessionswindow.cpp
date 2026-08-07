@@ -38,24 +38,29 @@
 SessionsProxyModel::SessionsProxyModel(QObject *parent) : QSortFilterProxyModel(parent) {}
 
 void SessionsProxyModel::setTextFilter(const QString &text) {
+  if (m_textFilter == text)
+    return;
   m_textFilter = text;
-  beginResetModel();
-  endResetModel();
+  invalidateFilter();
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
+  if (m_statusFilter == status)
+    return;
   m_statusFilter = status;
-  beginResetModel();
-  endResetModel();
+  invalidateFilter();
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
+  if (m_repoFilter == repo)
+    return;
   m_repoFilter = repo;
-  beginResetModel();
-  endResetModel();
+  invalidateFilter();
 }
 
 bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
+  if (!sourceModel())
+    return false;
   QModelIndex indexTitle = sourceModel()->index(source_row, SessionModel::ColTitle, source_parent);
   QModelIndex indexOwner = sourceModel()->index(source_row, SessionModel::ColOwner, source_parent);
   QModelIndex indexRepo = sourceModel()->index(source_row, SessionModel::ColRepo, source_parent);

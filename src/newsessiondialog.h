@@ -19,8 +19,8 @@ class QCheckBox;
 class QSpinBox;
 class QPushButton;
 
-class SourceFilterProxyModel;
-class BranchListProxyModel;
+class NewSessionSourceFilterProxyModel;
+class SourceBranchModel;
 class TemplatesModel;
 
 class PromptTextEdit : public QTextEdit {
@@ -97,10 +97,10 @@ private:
   TemplatesModel *m_templatesModel;
   QListView *m_unselectedView;
   QListView *m_selectedView;
-  SourceFilterProxyModel *m_unselectedFilterModel;
-  SourceFilterProxyModel *m_selectedFilterModel;
-  BranchListProxyModel *m_unselectedProxy;
-  BranchListProxyModel *m_selectedProxy;
+  NewSessionSourceFilterProxyModel *m_unselectedFilterModel;
+  NewSessionSourceFilterProxyModel *m_selectedFilterModel;
+  SourceBranchModel *m_unselectedProjection;
+  SourceBranchModel *m_selectedProjection;
   FilterEditor *m_filterEditor;
   PromptTextEdit *m_promptEdit;
   QComboBox *m_markdownModeComboBox;

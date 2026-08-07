@@ -126,25 +126,30 @@ AdvancedFilterProxyModel::AdvancedFilterProxyModel(QObject *parent) : QSortFilte
 void AdvancedFilterProxyModel::setGlobalSourceModel(SourceModel *sourceModel) { m_globalSourceModel = sourceModel; }
 
 void AdvancedFilterProxyModel::setFilterQuery(const QString &query) {
-  m_query = query.trimmed();
+  const QString normalizedQuery = query.trimmed();
+  if (m_query == normalizedQuery)
+    return;
+
+  m_query = normalizedQuery;
   if (m_query.startsWith(QLatin1String("="))) {
-    m_ast = FilterParser::parse(m_query.mid(1));
+    m_ast = FilterParser::parse(m_query.mid(1).trimmed());
   } else {
     m_ast.reset();
   }
-  // The query only changes which rows are accepted. Invalidating the entire
-  // proxy also rebuilds its column mapping and can leave a stacked list proxy
-  // with no mapped columns while a view is handling the change.
-  invalidateRowsFilter();
+  invalidate();
 }
 
 bool AdvancedFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
-  if (m_query.isEmpty())
+  const QString trimmedQuery = m_query.trimmed();
+  if (trimmedQuery.isEmpty())
     return true;
 
-  if (m_query.startsWith(QLatin1String("=")) && m_ast) {
-    ModelDataAccessor accessor(sourceModel(), source_row, source_parent, m_globalSourceModel);
-    return m_ast->evaluate(accessor);
+  if (trimmedQuery.startsWith(QLatin1String("="))) {
+    if (m_ast) {
+      ModelDataAccessor accessor(sourceModel(), source_row, source_parent, m_globalSourceModel);
+      return m_ast->evaluate(accessor);
+    }
+    return true;
   }
 
   QAbstractItemModel *m = sourceModel();
@@ -216,6 +221,9 @@ FollowingFilterProxyModel::FollowingFilterProxyModel(QObject *parent)
     : AdvancedFilterProxyModel(parent), m_tabType(FollowingTab) {}
 
 void FollowingFilterProxyModel::setTabType(TabType type) {
+  if (m_tabType == type)
+    return;
+
   m_tabType = type;
   invalidateRowsFilter();
 }
