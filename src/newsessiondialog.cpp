@@ -586,7 +586,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
     QAction *filterAction = menu.addAction(tr("Filter just this"));
     connect(filterAction, &QAction::triggered, this, [this, name]() {
-      m_filterEditor->setFilterText(name);
+      m_filterEditor->setFilterText(
+          FilterEditor::applyQuickFilter(m_filterEditor->filterText(), QStringLiteral("name"), name, false));
       applyFilter();
     });
 
