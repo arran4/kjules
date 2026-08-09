@@ -2662,7 +2662,7 @@ void MainWindow::setupUrlActions() {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QString prUrl = m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
 
-          if (!prUrl.isEmpty()) {
+          if (!prUrl.isEmpty() && prUrl != "undefined") {
             Utils::openUrl(QUrl(prUrl));
             count++;
           } else {
@@ -2690,8 +2690,8 @@ void MainWindow::setupUrlActions() {
   QAction *openInProgressAction = openMenu->addAction(i18n("=IN_PROGRESS"));
   QAction *openCompleteAction = openMenu->addAction(i18n("=DONE"));
   QAction *openWaitingFeedbackAction = openMenu->addAction(i18n("=WAITING_FEEDBACK"));
-  QAction *openAllButInProgressAction = openMenu->addAction(i18n("!=IN_PROGRESS"));
-  QAction *openAllButCompleteAction = openMenu->addAction(i18n("!=DONE"));
+  QAction *openAllButInProgressAction = openMenu->addAction(i18n("NOT =IN_PROGRESS"));
+  QAction *openAllButCompleteAction = openMenu->addAction(i18n("NOT =DONE"));
 
   connect(openMenu, &QMenu::aboutToShow, this, [this, openMenu]() {
     bool isFollowingTab = (m_tabWidget && m_tabWidget->currentWidget() &&
@@ -2710,7 +2710,7 @@ void MainWindow::setupUrlActions() {
       if (stateFilter(currentState)) {
         QString prUrl = m_sessionModel->data(index, SessionModel::PrUrlRole).toString();
 
-        if (!prUrl.isEmpty()) {
+        if (!prUrl.isEmpty() && prUrl != "undefined") {
           Utils::openUrl(QUrl(prUrl));
           count++;
         } else {
