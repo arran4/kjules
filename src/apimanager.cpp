@@ -260,7 +260,7 @@ void APIManager::sendMessage(const QString &sessionId, const QString &message) {
       QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
       const auto reqHeaders = request.rawHeaderList();
       for (const QByteArray &h : reqHeaders) {
-        if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
+        if (h.toLower() != QByteArrayLiteral("x-goog-api-key") && h.toLower() != QByteArrayLiteral("authorization")) {
           httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) +
                      QStringLiteral("\n");
         } else {
@@ -773,7 +773,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
       const auto reqHeaders = request.rawHeaderList();
       for (const QByteArray &h : reqHeaders) {
-        if (h.toLower() != "x-goog-api-key" && h.toLower() != "authorization") {
+        if (h.toLower() != QByteArrayLiteral("x-goog-api-key") && h.toLower() != QByteArrayLiteral("authorization")) {
           httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) +
                      QStringLiteral("\n");
         } else {

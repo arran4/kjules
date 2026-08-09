@@ -65,11 +65,13 @@ SessionData parseSessionData(const QJsonObject &obj) {
     if (outputObj.contains(QStringLiteral("pullRequest"))) {
       QJsonObject prObj = outputObj.value(QStringLiteral("pullRequest")).toObject();
       data.prUrl = prObj.value(QStringLiteral("url")).toString();
-      if (!data.prUrl.isEmpty()) {
+      if (!data.prUrl.isEmpty() && data.prUrl != QLatin1StringView("undefined")) {
         int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
         if (lastSlash != -1) {
           data.prNumber = QStringLiteral("#") + data.prUrl.mid(lastSlash + 1);
         }
+      } else {
+        data.prUrl.clear();
       }
     }
   }

@@ -154,6 +154,9 @@ void SessionWindow::setupActions() {
     QJsonObject outObj = outputs[i].toObject();
     if (outObj.contains(QStringLiteral("pullRequest"))) {
       prUrlStr = outObj.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString();
+      if (prUrlStr == QLatin1StringView("undefined")) {
+        prUrlStr.clear();
+      }
     }
   }
 
@@ -410,14 +413,19 @@ void SessionWindow::renderDetailsAndDiff() {
     if (outObj.contains(QStringLiteral("pullRequest"))) {
       QJsonObject prObj = outObj.value(QStringLiteral("pullRequest")).toObject();
       QString prUrl = prObj.value(QStringLiteral("url")).toString();
-      QString prTitle = prObj.value(QStringLiteral("title")).toString();
-      detailsHtml += QStringLiteral("<hr/><h3>") + i18n("Pull Request") + QStringLiteral("</h3><table>");
-      detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") +
-                     prTitle.toHtmlEscaped() + QStringLiteral("</td></tr>");
-      detailsHtml += QStringLiteral("<tr><th>") + i18n("URL:") + QStringLiteral("</th><td><a href=\"") +
-                     prUrl.toHtmlEscaped() + QStringLiteral("\">") + prUrl.toHtmlEscaped() +
-                     QStringLiteral("</a></td></tr>");
-      detailsHtml += QStringLiteral("</table>");
+      if (prUrl == QLatin1StringView("undefined")) {
+        prUrl.clear();
+      }
+      if (!prUrl.isEmpty()) {
+        QString prTitle = prObj.value(QStringLiteral("title")).toString();
+        detailsHtml += QStringLiteral("<hr/><h3>") + i18n("Pull Request") + QStringLiteral("</h3><table>");
+        detailsHtml += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") +
+                       prTitle.toHtmlEscaped() + QStringLiteral("</td></tr>");
+        detailsHtml += QStringLiteral("<tr><th>") + i18n("URL:") + QStringLiteral("</th><td><a href=\"") +
+                       prUrl.toHtmlEscaped() + QStringLiteral("\">") + prUrl.toHtmlEscaped() +
+                       QStringLiteral("</a></td></tr>");
+        detailsHtml += QStringLiteral("</table>");
+      }
     }
     if (outObj.contains(QStringLiteral("changeSet"))) {
       QJsonObject changeSet = outObj.value(QStringLiteral("changeSet")).toObject();

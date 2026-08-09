@@ -251,6 +251,29 @@ private Q_SLOTS:
     proxyModel.setFilterQuery(QStringLiteral("= "));
     QCOMPARE(proxyModel.rowCount(), 1);
   }
+
+  void testSessionModelUndefinedPrUrl() {
+    SessionModel model(QStringLiteral("test"));
+    QJsonArray sessions;
+    QJsonObject session;
+    session[QStringLiteral("name")] = QStringLiteral("sessions/123");
+    session[QStringLiteral("id")] = QStringLiteral("123");
+
+    QJsonArray outputs;
+    QJsonObject out;
+    QJsonObject pr;
+    pr[QStringLiteral("url")] = QStringLiteral("undefined");
+    out[QStringLiteral("pullRequest")] = pr;
+    outputs.append(out);
+    session[QStringLiteral("outputs")] = outputs;
+
+    sessions.append(session);
+    model.setSessions(sessions);
+
+    QCOMPARE(model.rowCount(), 1);
+    QModelIndex idx = model.index(0, 0);
+    QCOMPARE(model.data(idx, SessionModel::PrUrlRole).toString(), QString());
+  }
 };
 
 QTEST_MAIN(TestAdvancedFilterProxyModel)

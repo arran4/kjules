@@ -487,7 +487,8 @@ void SessionsWindow::showContextMenu(const QPoint &pos) {
 
     bool hasPr = false;
     for (const QModelIndex &idx : selectedRows) {
-      if (!m_proxyModel->data(idx, SessionModel::PrUrlRole).toString().isEmpty()) {
+      QString prUrl = m_proxyModel->data(idx, SessionModel::PrUrlRole).toString();
+      if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
         hasPr = true;
         break;
       }
@@ -636,7 +637,7 @@ void SessionsWindow::openPrUrls() {
   int count = 0;
   for (const QModelIndex &idx : selectedRows) {
     QString prUrl = m_proxyModel->data(idx, SessionModel::PrUrlRole).toString();
-    if (!prUrl.isEmpty()) {
+    if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
       QDesktopServices::openUrl(QUrl(prUrl));
       count++;
     }
@@ -649,7 +650,7 @@ void SessionsWindow::copyPrUrls() {
   QStringList urls;
   for (const QModelIndex &idx : selectedRows) {
     QString prUrl = m_proxyModel->data(idx, SessionModel::PrUrlRole).toString();
-    if (!prUrl.isEmpty()) {
+    if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
       urls.append(prUrl);
     }
   }

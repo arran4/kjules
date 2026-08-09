@@ -187,7 +187,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
     QString prUrl = m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::PrUrlRole).toString();
-    if (!prUrl.isEmpty()) {
+    if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
       m_apiManager->fetchGithubPullRequest(prUrl);
     }
   }
@@ -636,7 +636,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
       QString prUrl = m_sessionModel->data(sourceIndex, SessionModel::PrUrlRole).toString();
       QAction *openGithubUrlAction = nullptr;
       QAction *copyGithubUrlAction = nullptr;
-      if (!prUrl.isEmpty()) {
+      if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
         openGithubUrlAction = menu.addAction(i18n("Open Github URL"));
         copyGithubUrlAction = menu.addAction(i18n("Copy Github URL"));
       }
@@ -2221,7 +2221,7 @@ void MainWindow::createSessionActions() {
       QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
       QString prUrl = m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
 
-      if (!prUrl.isEmpty()) {
+      if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
         Utils::openUrl(QUrl(prUrl));
         count++;
       }
@@ -5690,7 +5690,7 @@ void MainWindow::onSessionReloaded(const QJsonObject &session) {
     if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() ==
         session.value(QStringLiteral("id")).toString()) {
       QString prUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
-      if (!prUrl.isEmpty()) {
+      if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
         m_apiManager->fetchGithubPullRequest(prUrl);
       }
       break;

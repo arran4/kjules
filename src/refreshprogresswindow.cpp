@@ -183,6 +183,9 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
     if (session.contains(QStringLiteral("pullRequest"))) {
       QJsonObject prObj = session.value(QStringLiteral("pullRequest")).toObject();
       prUrl = prObj.value(QStringLiteral("url")).toString();
+      if (prUrl == QLatin1StringView("undefined")) {
+        prUrl.clear();
+      }
     }
 
     if (!prUrl.isEmpty()) {

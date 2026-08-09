@@ -362,6 +362,9 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
     if (sc.contains(QStringLiteral("pullRequest"))) {
       QJsonObject pr = sc.value(QStringLiteral("pullRequest")).toObject();
       prUrl = pr.value(QStringLiteral("url")).toString();
+      if (prUrl == QLatin1StringView("undefined")) {
+        prUrl.clear();
+      }
       prTitle = pr.value(QStringLiteral("title")).toString();
       prBody = pr.value(QStringLiteral("body")).toString();
       prHeadBranch = pr.value(QStringLiteral("headBranch")).toString();
@@ -372,6 +375,9 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
         if (outs[i].toObject().contains(QStringLiteral("pullRequest"))) {
           QJsonObject pr = outs[i].toObject().value(QStringLiteral("pullRequest")).toObject();
           prUrl = pr.value(QStringLiteral("url")).toString();
+          if (prUrl == QLatin1StringView("undefined")) {
+            prUrl.clear();
+          }
           prTitle = pr.value(QStringLiteral("title")).toString();
           prBody = pr.value(QStringLiteral("body")).toString();
           prHeadBranch = pr.value(QStringLiteral("headBranch")).toString();
