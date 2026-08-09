@@ -29,7 +29,6 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
-#include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
 #include <QShortcut>
@@ -44,6 +43,7 @@
 #include <QTextList>
 #include <QTextListFormat>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -1395,8 +1395,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   m_saveTemplateButton = new QPushButton(tr("Save as Template"), this);
 
-  m_createButton = new QPushButton(tr("Create Session"), this);
-  m_createButton->setDefault(true);
+  m_createButton = new QToolButton(this);
+  m_createButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -1441,18 +1441,29 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   connect(saveDraftAction, &QAction::triggered, this, &NewSessionDialog::onSaveDraft);
   connect(draftButton, &QPushButton::clicked, saveDraftAction, &QAction::trigger);
 
-  QAction *createSessionAction = actionCollection()->addAction(QStringLiteral("create_session"));
-  createSessionAction->setText(tr("Create &Session"));
-  createSessionAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
+  m_createSessionAction = actionCollection()->addAction(QStringLiteral("create_session"));
+  m_createSessionAction->setText(tr("Create &Session"));
+  m_createSessionAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
   actionCollection()->setDefaultShortcuts(
-      createSessionAction, {QKeySequence(Qt::CTRL | Qt::Key_Enter), QKeySequence(Qt::CTRL | Qt::Key_Return)});
-  connect(createSessionAction, &QAction::triggered, this, &NewSessionDialog::onSubmitSession);
-  connect(m_createButton, &QPushButton::clicked, createSessionAction, &QAction::trigger);
+      m_createSessionAction, {QKeySequence(Qt::CTRL | Qt::Key_Enter), QKeySequence(Qt::CTRL | Qt::Key_Return)});
+  connect(m_createSessionAction, &QAction::triggered, this, &NewSessionDialog::onSubmitSession);
+
+  m_createButton->setPopupMode(QToolButton::MenuButtonPopup);
+  m_createButton->setDefaultAction(m_createSessionAction);
+
+  QMenu *createMenu = new QMenu(m_createButton);
+  QAction *createStartAction =
+      createMenu->addAction(QIcon::fromTheme(QStringLiteral("media-skip-backward")), tr("Add to start of queue"));
+  QAction *createSendNowAction =
+      createMenu->addAction(QIcon::fromTheme(QStringLiteral("mail-send")), tr("Send immediately"));
+  connect(createStartAction, &QAction::triggered, this, &NewSessionDialog::onSubmitSessionStart);
+  connect(createSendNowAction, &QAction::triggered, this, &NewSessionDialog::onSubmitSessionSendNow);
+  m_createButton->setMenu(createMenu);
 
   if (!hasApiKey) {
     m_createButton->setEnabled(false);
     m_createButton->setToolTip(tr("An API key is required to create a session."));
-    createSessionAction->setEnabled(false);
+    m_createSessionAction->setEnabled(false);
   }
 
   QAction *hideSelectedSourcesAction = actionCollection()->addAction(QStringLiteral("hide_selected_sources"));
@@ -1519,7 +1530,13 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
 }
 
-void NewSessionDialog::onSubmitSession() { onSubmit(m_automationModeComboBox->currentData().toString()); }
+void NewSessionDialog::onSubmitSession() { onSubmit(m_automationModeComboBox->currentData().toString(), QString()); }
+void NewSessionDialog::onSubmitSessionStart() {
+  onSubmit(m_automationModeComboBox->currentData().toString(), QStringLiteral("send_next"));
+}
+void NewSessionDialog::onSubmitSessionSendNow() {
+  onSubmit(m_automationModeComboBox->currentData().toString(), QStringLiteral("send_now"));
+}
 
 void NewSessionDialog::onLoadTemplate() {
   TemplateSelectionDialog dlg(m_templatesModel, this);
@@ -1531,10 +1548,10 @@ void NewSessionDialog::onLoadTemplate() {
 void NewSessionDialog::setEditMode(bool isEdit) {
   if (isEdit) {
     setWindowTitle(tr("Edit Queued Session"));
-    m_createButton->setText(tr("Requeue Session"));
+    m_createSessionAction->setText(tr("Requeue Session"));
   } else {
     setWindowTitle(tr("Create New Session"));
-    m_createButton->setText(tr("Create Session"));
+    m_createSessionAction->setText(tr("Create Session"));
   }
 }
 
@@ -1744,7 +1761,7 @@ void NewSessionDialog::onUnselectAll() {
   updateModels();
 }
 
-void NewSessionDialog::onSubmit(const QString &automationMode) {
+void NewSessionDialog::onSubmit(const QString &automationMode, const QString &queueAction) {
   if (m_selectedSources.isEmpty()) {
     QMessageBox::warning(this, tr("Missing Source"), tr("Please select at least one source."));
     return;
@@ -1763,7 +1780,8 @@ void NewSessionDialog::onSubmit(const QString &automationMode) {
   bool ignoreConcurrency = m_ignoreConcurrencyCheckBox->isChecked();
   int priority = m_prioritySpinBox->value();
 
-  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority);
+  Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority,
+                                queueAction);
 
   if (m_keepOpenCheckBox->isChecked()) {
     if (!m_keepPromptCheckBox->isChecked()) {
