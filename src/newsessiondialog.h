@@ -17,7 +17,8 @@ class QComboBox;
 class QSortFilterProxyModel;
 class QCheckBox;
 class QSpinBox;
-class QPushButton;
+class QToolButton;
+class QAction;
 
 class NewSessionSourceFilterProxyModel;
 class SourceBranchModel;
@@ -57,7 +58,7 @@ public:
 Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources, const QString &prompt,
                               const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
-                              int priority);
+                              int priority, const QString &queueAction = QString());
   void previewQueuePositionRequested(int priority);
   void saveDraftRequested(const QJsonObject &draft);
   void saveTemplateRequested(const QJsonObject &tmpl);
@@ -70,8 +71,10 @@ Q_SIGNALS:
 public Q_SLOTS:
   void updateStatus(const QString &message);
 private Q_SLOTS:
-  void onSubmit(const QString &automationMode);
+  void onSubmit(const QString &automationMode, const QString &queueAction = QString());
   void onSubmitSession();
+  void onSubmitSessionStart();
+  void onSubmitSessionSendNow();
   void onLoadTemplate();
   void onSaveDraft();
   void onSaveTemplate();
@@ -111,7 +114,8 @@ private:
   QCheckBox *m_keepPromptCheckBox;
   QCheckBox *m_ignoreConcurrencyCheckBox;
   QSpinBox *m_prioritySpinBox;
-  QPushButton *m_createButton;
+  QToolButton *m_createButton;
+  QAction *m_createSessionAction;
   QPushButton *m_loadTemplateButton;
   QPushButton *m_saveTemplateButton;
   QMultiMap<QString, QString> m_selectedSources;

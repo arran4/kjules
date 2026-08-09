@@ -1633,7 +1633,17 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         for (int row : rowsToRequeue) {
           QJsonObject errData = m_errorsModel->getError(row);
           QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-          m_queueModel->enqueue(req);
+          if (queueAction == QStringLiteral("send_now")) {
+            req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+            req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
+            m_apiManager->createSessionAsync(req);
+          } else if (queueAction == QStringLiteral("send_next")) {
+            QueueItem item;
+            item.requestData = req;
+            m_queueModel->insertItem(0, item);
+          } else {
+            m_queueModel->enqueue(req);
+          }
           m_errorsModel->removeError(row);
         }
         if (!rowsToRequeue.isEmpty()) {
@@ -1686,6 +1696,10 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
             m_errorsModel->removeError(row);
+            req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+            req[QStringLiteral("_kjules_requeue_origin_row")] = row;
+            req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
+            req[QStringLiteral("_kjules_requeue_err_data")] = errData;
             m_apiManager->createSessionAsync(req);
             updateStatus(i18n("Sending error item immediately..."));
           });
@@ -1693,7 +1707,17 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
             m_errorsModel->removeError(row);
-            m_queueModel->enqueue(req);
+            if (queueAction == QStringLiteral("send_now")) {
+              req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+              req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
+              m_apiManager->createSessionAsync(req);
+            } else if (queueAction == QStringLiteral("send_next")) {
+              QueueItem item;
+              item.requestData = req;
+              m_queueModel->insertItem(0, item);
+            } else {
+              m_queueModel->enqueue(req);
+            }
             updateStatus(i18n("Error item requeued."));
             if (!m_queuePaused && !m_queueTimer->isActive()) {
               m_queueTimer->start();
@@ -3405,7 +3429,17 @@ void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState, cons
         req[QStringLiteral("ignoreConcurrency")] = session.value(QStringLiteral("ignoreConcurrency")).toBool();
       }
 
-      m_queueModel->enqueue(req);
+      if (queueAction == QStringLiteral("send_now")) {
+        req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+        req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
+        m_apiManager->createSessionAsync(req);
+      } else if (queueAction == QStringLiteral("send_next")) {
+        QueueItem item;
+        item.requestData = req;
+        m_queueModel->insertItem(0, item);
+      } else {
+        m_queueModel->enqueue(req);
+      }
 
       m_archiveModel->addSession(session);
       m_sessionModel->removeSession(i);
@@ -3443,7 +3477,8 @@ void MainWindow::toggleQueueState() {
 
 void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
                                   const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
-                                  int priority) {
+                                  int priority, const QString &queueAction) {
+
   for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req;
     req[QStringLiteral("source")] = it.key();
@@ -3461,7 +3496,18 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
     if (!automationMode.isEmpty()) {
       req[QStringLiteral("automationMode")] = automationMode;
     }
-    m_queueModel->enqueue(req);
+    if (queueAction == QStringLiteral("send_now")) {
+      req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+      req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
+      req[QStringLiteral("_kjules_requeue_origin_row")] = -1;
+      m_apiManager->createSessionAsync(req);
+    } else if (queueAction == QStringLiteral("send_next")) {
+      QueueItem item;
+      item.requestData = req;
+      m_queueModel->insertItem(0, item);
+    } else {
+      m_queueModel->enqueue(req);
+    }
   }
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.", sources.size()));
 
@@ -4150,7 +4196,12 @@ void MainWindow::sendQueueItemNow(int row) {
     return;
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
-  m_apiManager->createSessionAsync(item.requestData);
+  QJsonObject req = item.requestData;
+  req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+  req[QStringLiteral("_kjules_requeue_origin_row")] = row;
+  req[QStringLiteral("_kjules_requeue_source_is_queue")] = true;
+  req[QStringLiteral("_kjules_requeue_item")] = item.toJson();
+  m_apiManager->createSessionAsync(req);
 }
 
 void MainWindow::requeueError(int sourceRow) {
@@ -4214,11 +4265,12 @@ void MainWindow::editQueueItem(int row) {
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency, int priority) {
+                                  bool requirePlanApproval, bool ignoreConcurrency, int priority,
+                                  const QString &queueAction) {
             if (persistentIndex.isValid()) {
               m_queueModel->removeItem(persistentIndex.row());
             }
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority);
+            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction);
           });
 
   connect(window, &NewSessionDialog::saveDraftRequested, [this, persistentIndex](const QJsonObject &d) {
@@ -4244,6 +4296,62 @@ void MainWindow::convertQueueItemToDraft(int row) {
 
 void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response,
                                          const QString &errorString, const QString &httpDetails) {
+  QJsonObject requestCopy = request;
+  if (requestCopy.value(QStringLiteral("_kjules_failed_action")).toString() == QStringLiteral("send_now")) {
+    int originalRow = requestCopy.value(QStringLiteral("_kjules_requeue_origin_row")).toInt();
+    bool sourceIsQueue = requestCopy.value(QStringLiteral("_kjules_requeue_source_is_queue")).toBool();
+    QJsonObject itemJson = requestCopy.value(QStringLiteral("_kjules_requeue_item")).toObject();
+    QJsonObject errDataJson = requestCopy.value(QStringLiteral("_kjules_requeue_err_data")).toObject();
+    requestCopy.remove(QStringLiteral("_kjules_failed_action"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_origin_row"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_source_is_queue"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_item"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_err_data"));
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(i18n("Send Now Failed"));
+    msgBox.setText(i18n("The task sent immediately has failed to process:\n%1", errorString));
+    msgBox.setIcon(QMessageBox::Warning);
+
+    QPushButton *readdBtn = msgBox.addButton(i18n("Readd back where it came from"), QMessageBox::ActionRole);
+    QPushButton *startBtn = msgBox.addButton(i18n("Add to the start of the queue"), QMessageBox::ActionRole);
+    QPushButton *endBtn = msgBox.addButton(i18n("Add to the end of the queue"), QMessageBox::ActionRole);
+    QPushButton *errBtn = msgBox.addButton(i18n("Send to errors"), QMessageBox::ActionRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == startBtn) {
+      if (sourceIsQueue) {
+        m_queueModel->insertItem(0, QueueItem::fromJson(itemJson));
+      } else {
+        QueueItem newItem;
+        newItem.requestData = requestCopy;
+        m_queueModel->insertItem(0, newItem);
+      }
+      return;
+    } else if (msgBox.clickedButton() == endBtn) {
+      if (sourceIsQueue) {
+        m_queueModel->insertItem(m_queueModel->size(), QueueItem::fromJson(itemJson));
+      } else {
+        QueueItem newItem;
+        newItem.requestData = requestCopy;
+        m_queueModel->insertItem(m_queueModel->size(), newItem);
+      }
+      return;
+    } else if (msgBox.clickedButton() == readdBtn) {
+      if (originalRow != -1) {
+        if (sourceIsQueue) {
+          m_queueModel->insertItem(originalRow, QueueItem::fromJson(itemJson));
+        } else {
+          m_errorsModel->addErrorObj(errDataJson);
+        }
+        return;
+      }
+      // If originalRow is -1 (new session), fall through to normal error handling
+    }
+    // Default or errBtn is to continue to normal error handling logic below
+  }
+
   bool isRateLimit = false;
   if (m_isProcessingQueue) {
     QJsonObject errObj = response.value(QStringLiteral("error")).toObject();
@@ -4257,7 +4365,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
 
   if (!isRateLimit) {
     QJsonObject errorObj;
-    errorObj[QStringLiteral("request")] = request;
+    errorObj[QStringLiteral("request")] = requestCopy;
     errorObj[QStringLiteral("response")] = response;
     errorObj[QStringLiteral("message")] = errorString;
     if (!httpDetails.isEmpty()) {
@@ -4271,7 +4379,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
     // extract its pastErrors.
     if (m_isProcessingQueue && m_queueModel->size() > 0) {
       QueueItem item = m_queueModel->peek();
-      if (item.requestData == request && !item.pastErrors.isEmpty()) {
+      if (item.requestData == requestCopy && !item.pastErrors.isEmpty()) {
         errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
       }
     }
@@ -4281,7 +4389,6 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
 
     // We capture request object to uniquely identify the error instead of
     // relying on shifting index
-    QJsonObject requestCopy = request;
 
     KNotification *notification = new KNotification(QStringLiteral("queueError"), KNotification::CloseOnTimeout, this);
     notification->setTitle(i18n("Queue Error"));
@@ -4346,8 +4453,9 @@ void MainWindow::onErrorActivated(const QModelIndex &index) {
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency, int priority) {
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority);
+                                  bool requirePlanApproval, bool ignoreConcurrency, int priority,
+                                  const QString &queueAction) {
+            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction);
             if (persistentIndex.isValid()) {
               m_errorsModel->removeError(persistentIndex.row());
             }
@@ -4375,8 +4483,9 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
           [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency, int priority) {
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority);
+                                  bool requirePlanApproval, bool ignoreConcurrency, int priority,
+                                  const QString &queueAction) {
+            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction);
             if (persistentIndex.isValid()) {
               m_draftsModel->removeDraft(persistentIndex.row());
             }
