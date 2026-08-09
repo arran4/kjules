@@ -1686,6 +1686,10 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
             m_errorsModel->removeError(row);
+            req[QStringLiteral("_kjules_send_now")] = true;
+            req[QStringLiteral("_kjules_send_now_row")] = row;
+            req[QStringLiteral("_kjules_send_now_source_is_queue")] = false;
+            req[QStringLiteral("_kjules_send_now_err_data")] = errData;
             m_apiManager->createSessionAsync(req);
             updateStatus(i18n("Sending error item immediately..."));
           });
@@ -4150,7 +4154,12 @@ void MainWindow::sendQueueItemNow(int row) {
     return;
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
-  m_apiManager->createSessionAsync(item.requestData);
+  QJsonObject req = item.requestData;
+  req[QStringLiteral("_kjules_send_now")] = true;
+  req[QStringLiteral("_kjules_send_now_row")] = row;
+  req[QStringLiteral("_kjules_send_now_source_is_queue")] = true;
+  req[QStringLiteral("_kjules_send_now_item")] = item.toJson();
+  m_apiManager->createSessionAsync(req);
 }
 
 void MainWindow::requeueError(int sourceRow) {
@@ -4244,6 +4253,59 @@ void MainWindow::convertQueueItemToDraft(int row) {
 
 void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response,
                                          const QString &errorString, const QString &httpDetails) {
+  QJsonObject requestCopy = request;
+  if (requestCopy.contains(QStringLiteral("_kjules_send_now"))) {
+    int originalRow = requestCopy.value(QStringLiteral("_kjules_send_now_row")).toInt();
+    bool sourceIsQueue = requestCopy.value(QStringLiteral("_kjules_send_now_source_is_queue")).toBool();
+    QJsonObject itemJson = requestCopy.value(QStringLiteral("_kjules_send_now_item")).toObject();
+    QJsonObject errDataJson = requestCopy.value(QStringLiteral("_kjules_send_now_err_data")).toObject();
+    requestCopy.remove(QStringLiteral("_kjules_send_now"));
+    requestCopy.remove(QStringLiteral("_kjules_send_now_row"));
+    requestCopy.remove(QStringLiteral("_kjules_send_now_source_is_queue"));
+    requestCopy.remove(QStringLiteral("_kjules_send_now_item"));
+    requestCopy.remove(QStringLiteral("_kjules_send_now_err_data"));
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(i18n("Send Now Failed"));
+    msgBox.setText(i18n("The task sent immediately has failed to process:\n%1", errorString));
+    msgBox.setIcon(QMessageBox::Warning);
+
+    QPushButton *readdBtn = msgBox.addButton(i18n("Readd back where it came from"), QMessageBox::ActionRole);
+    QPushButton *startBtn = msgBox.addButton(i18n("Add to the start of the queue"), QMessageBox::ActionRole);
+    QPushButton *endBtn = msgBox.addButton(i18n("Add to the end of the queue"), QMessageBox::ActionRole);
+    QPushButton *errBtn = msgBox.addButton(i18n("Send to errors"), QMessageBox::ActionRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == startBtn) {
+      if (sourceIsQueue) {
+        m_queueModel->insertItem(0, QueueItem::fromJson(itemJson));
+      } else {
+        QueueItem newItem;
+        newItem.requestData = requestCopy;
+        m_queueModel->insertItem(0, newItem);
+      }
+      return;
+    } else if (msgBox.clickedButton() == endBtn) {
+      if (sourceIsQueue) {
+        m_queueModel->insertItem(m_queueModel->size(), QueueItem::fromJson(itemJson));
+      } else {
+        QueueItem newItem;
+        newItem.requestData = requestCopy;
+        m_queueModel->insertItem(m_queueModel->size(), newItem);
+      }
+      return;
+    } else if (msgBox.clickedButton() == readdBtn) {
+      if (sourceIsQueue) {
+        m_queueModel->insertItem(originalRow, QueueItem::fromJson(itemJson));
+      } else {
+        m_errorsModel->addErrorObj(errDataJson);
+      }
+      return;
+    }
+    // Default or errBtn is to continue to normal error handling logic below
+  }
+
   bool isRateLimit = false;
   if (m_isProcessingQueue) {
     QJsonObject errObj = response.value(QStringLiteral("error")).toObject();
@@ -4257,7 +4319,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
 
   if (!isRateLimit) {
     QJsonObject errorObj;
-    errorObj[QStringLiteral("request")] = request;
+    errorObj[QStringLiteral("request")] = requestCopy;
     errorObj[QStringLiteral("response")] = response;
     errorObj[QStringLiteral("message")] = errorString;
     if (!httpDetails.isEmpty()) {
@@ -4271,7 +4333,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
     // extract its pastErrors.
     if (m_isProcessingQueue && m_queueModel->size() > 0) {
       QueueItem item = m_queueModel->peek();
-      if (item.requestData == request && !item.pastErrors.isEmpty()) {
+      if (item.requestData == requestCopy && !item.pastErrors.isEmpty()) {
         errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
       }
     }
@@ -4281,7 +4343,6 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
 
     // We capture request object to uniquely identify the error instead of
     // relying on shifting index
-    QJsonObject requestCopy = request;
 
     KNotification *notification = new KNotification(QStringLiteral("queueError"), KNotification::CloseOnTimeout, this);
     notification->setTitle(i18n("Queue Error"));
