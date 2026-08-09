@@ -2687,11 +2687,11 @@ void MainWindow::setupUrlActions() {
   m_openCurrentUrlAction->setMenu(openMenu);
 
   QAction *openAllAction = openMenu->addAction(i18n("All"));
-  QAction *openInProgressAction = openMenu->addAction(i18n("=IN_PROGRESS"));
-  QAction *openCompleteAction = openMenu->addAction(i18n("=DONE"));
-  QAction *openWaitingFeedbackAction = openMenu->addAction(i18n("=WAITING_FEEDBACK"));
-  QAction *openAllButInProgressAction = openMenu->addAction(i18n("!=IN_PROGRESS"));
-  QAction *openAllButCompleteAction = openMenu->addAction(i18n("!=DONE"));
+  QAction *openInProgressAction = openMenu->addAction(i18n("In Progress"));
+  QAction *openCompleteAction = openMenu->addAction(i18n("Complete"));
+  QAction *openWaitingFeedbackAction = openMenu->addAction(i18n("Waiting Feedback"));
+  QAction *openAllButInProgressAction = openMenu->addAction(i18n("All but In Progress"));
+  QAction *openAllButCompleteAction = openMenu->addAction(i18n("All but Complete"));
 
   connect(openMenu, &QMenu::aboutToShow, this, [this, openMenu]() {
     bool isFollowingTab = (m_tabWidget && m_tabWidget->currentWidget() &&
