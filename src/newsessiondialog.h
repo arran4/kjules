@@ -19,6 +19,7 @@ class QCheckBox;
 class QSpinBox;
 class QToolButton;
 class QAction;
+class QPushButton;
 
 class NewSessionSourceFilterProxyModel;
 class SourceBranchModel;

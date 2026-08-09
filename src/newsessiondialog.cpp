@@ -29,6 +29,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
 #include <QShortcut>

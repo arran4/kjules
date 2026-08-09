@@ -1633,17 +1633,7 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         for (int row : rowsToRequeue) {
           QJsonObject errData = m_errorsModel->getError(row);
           QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-          if (queueAction == QStringLiteral("send_now")) {
-            req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
-            req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
-            m_apiManager->createSessionAsync(req);
-          } else if (queueAction == QStringLiteral("send_next")) {
-            QueueItem item;
-            item.requestData = req;
-            m_queueModel->insertItem(0, item);
-          } else {
-            m_queueModel->enqueue(req);
-          }
+          m_queueModel->enqueue(req);
           m_errorsModel->removeError(row);
         }
         if (!rowsToRequeue.isEmpty()) {
@@ -1707,17 +1697,7 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
             m_errorsModel->removeError(row);
-            if (queueAction == QStringLiteral("send_now")) {
-              req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
-              req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
-              m_apiManager->createSessionAsync(req);
-            } else if (queueAction == QStringLiteral("send_next")) {
-              QueueItem item;
-              item.requestData = req;
-              m_queueModel->insertItem(0, item);
-            } else {
-              m_queueModel->enqueue(req);
-            }
+            m_queueModel->enqueue(req);
             updateStatus(i18n("Error item requeued."));
             if (!m_queuePaused && !m_queueTimer->isActive()) {
               m_queueTimer->start();
@@ -3429,17 +3409,7 @@ void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState, cons
         req[QStringLiteral("ignoreConcurrency")] = session.value(QStringLiteral("ignoreConcurrency")).toBool();
       }
 
-      if (queueAction == QStringLiteral("send_now")) {
-        req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
-        req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
-        m_apiManager->createSessionAsync(req);
-      } else if (queueAction == QStringLiteral("send_next")) {
-        QueueItem item;
-        item.requestData = req;
-        m_queueModel->insertItem(0, item);
-      } else {
-        m_queueModel->enqueue(req);
-      }
+      m_queueModel->enqueue(req);
 
       m_archiveModel->addSession(session);
       m_sessionModel->removeSession(i);
@@ -4316,7 +4286,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
     QPushButton *readdBtn = msgBox.addButton(i18n("Readd back where it came from"), QMessageBox::ActionRole);
     QPushButton *startBtn = msgBox.addButton(i18n("Add to the start of the queue"), QMessageBox::ActionRole);
     QPushButton *endBtn = msgBox.addButton(i18n("Add to the end of the queue"), QMessageBox::ActionRole);
-    QPushButton *errBtn = msgBox.addButton(i18n("Send to errors"), QMessageBox::ActionRole);
+    msgBox.addButton(i18n("Send to errors"), QMessageBox::ActionRole);
 
     msgBox.exec();
 
