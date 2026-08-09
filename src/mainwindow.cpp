@@ -1686,10 +1686,10 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
             m_errorsModel->removeError(row);
-            req[QStringLiteral("_kjules_send_now")] = true;
-            req[QStringLiteral("_kjules_send_now_row")] = row;
-            req[QStringLiteral("_kjules_send_now_source_is_queue")] = false;
-            req[QStringLiteral("_kjules_send_now_err_data")] = errData;
+            req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+            req[QStringLiteral("_kjules_requeue_origin_row")] = row;
+            req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
+            req[QStringLiteral("_kjules_requeue_err_data")] = errData;
             m_apiManager->createSessionAsync(req);
             updateStatus(i18n("Sending error item immediately..."));
           });
@@ -4155,10 +4155,10 @@ void MainWindow::sendQueueItemNow(int row) {
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
   QJsonObject req = item.requestData;
-  req[QStringLiteral("_kjules_send_now")] = true;
-  req[QStringLiteral("_kjules_send_now_row")] = row;
-  req[QStringLiteral("_kjules_send_now_source_is_queue")] = true;
-  req[QStringLiteral("_kjules_send_now_item")] = item.toJson();
+  req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
+  req[QStringLiteral("_kjules_requeue_origin_row")] = row;
+  req[QStringLiteral("_kjules_requeue_source_is_queue")] = true;
+  req[QStringLiteral("_kjules_requeue_item")] = item.toJson();
   m_apiManager->createSessionAsync(req);
 }
 
@@ -4254,16 +4254,16 @@ void MainWindow::convertQueueItemToDraft(int row) {
 void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response,
                                          const QString &errorString, const QString &httpDetails) {
   QJsonObject requestCopy = request;
-  if (requestCopy.contains(QStringLiteral("_kjules_send_now"))) {
-    int originalRow = requestCopy.value(QStringLiteral("_kjules_send_now_row")).toInt();
-    bool sourceIsQueue = requestCopy.value(QStringLiteral("_kjules_send_now_source_is_queue")).toBool();
-    QJsonObject itemJson = requestCopy.value(QStringLiteral("_kjules_send_now_item")).toObject();
-    QJsonObject errDataJson = requestCopy.value(QStringLiteral("_kjules_send_now_err_data")).toObject();
-    requestCopy.remove(QStringLiteral("_kjules_send_now"));
-    requestCopy.remove(QStringLiteral("_kjules_send_now_row"));
-    requestCopy.remove(QStringLiteral("_kjules_send_now_source_is_queue"));
-    requestCopy.remove(QStringLiteral("_kjules_send_now_item"));
-    requestCopy.remove(QStringLiteral("_kjules_send_now_err_data"));
+  if (requestCopy.value(QStringLiteral("_kjules_failed_action")).toString() == QStringLiteral("send_now")) {
+    int originalRow = requestCopy.value(QStringLiteral("_kjules_requeue_origin_row")).toInt();
+    bool sourceIsQueue = requestCopy.value(QStringLiteral("_kjules_requeue_source_is_queue")).toBool();
+    QJsonObject itemJson = requestCopy.value(QStringLiteral("_kjules_requeue_item")).toObject();
+    QJsonObject errDataJson = requestCopy.value(QStringLiteral("_kjules_requeue_err_data")).toObject();
+    requestCopy.remove(QStringLiteral("_kjules_failed_action"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_origin_row"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_source_is_queue"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_item"));
+    requestCopy.remove(QStringLiteral("_kjules_requeue_err_data"));
 
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(i18n("Send Now Failed"));
