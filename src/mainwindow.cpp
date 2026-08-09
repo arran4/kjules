@@ -2662,7 +2662,7 @@ void MainWindow::setupUrlActions() {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QString prUrl = m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
 
-          if (!prUrl.isEmpty() && prUrl != "undefined") {
+          if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
             Utils::openUrl(QUrl(prUrl));
             count++;
           } else {
@@ -2710,7 +2710,7 @@ void MainWindow::setupUrlActions() {
       if (stateFilter(currentState)) {
         QString prUrl = m_sessionModel->data(index, SessionModel::PrUrlRole).toString();
 
-        if (!prUrl.isEmpty() && prUrl != "undefined") {
+        if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
           Utils::openUrl(QUrl(prUrl));
           count++;
         } else {
