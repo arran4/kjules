@@ -719,6 +719,14 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
     json[QStringLiteral("automationMode")] = requestData.value(QStringLiteral("automationMode")).toString();
   }
 
+  // Pass any additional keys from the internal payload structure like _kjules metadata to json directly
+  // so it correctly retains tracking
+  for(auto it = requestData.constBegin(); it != requestData.constEnd(); ++it) {
+      if (it.key().startsWith(QStringLiteral("_kjules"))) {
+          json.insert(it.key(), it.value());
+      }
+  }
+
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
