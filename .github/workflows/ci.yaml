@@ -182,7 +182,7 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt-get install -y clang-format
       - name: Format check
-        run: find src tests bench -name "*.h" -o -name "*.cpp" | xargs -r clang-format --dry-run --Werror
+        run: find src tests bench \( -name "*.h" -o -name "*.cpp" \) -print0 | xargs -0 -r clang-format --dry-run --Werror
 
   cpp-qt-lint:
     name: C++ Lint
@@ -205,9 +205,15 @@ jobs:
       - name: Cppcheck
         run: cppcheck --enable=warning,style,performance,portability --inline-suppr --error-exitcode=1 -I src src tests bench || true
       - name: Configure CMake
-        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=6 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        run: CC=clang CXX=clang++ cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=6 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Build Clang lint targets
+        run: cmake --build build --parallel
       - name: Clang-Tidy
-        run: run-clang-tidy -p build -extra-arg=-Wno-unknown-argument src tests bench || true
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="$(pwd)"
+          run-clang-tidy -p build -quiet -source-filter="^${source_root}/(src|tests|bench)/"
 
   cpp-qt-build-test:
     name: Qt/C++ build
@@ -260,7 +266,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ needs.discover.outputs.has_qt_cpp }}" == "true" ]]; then
-            find src tests bench -name "*.h" -o -name "*.cpp" | xargs -r clang-format -i || true
+            find src tests bench \( -name "*.h" -o -name "*.cpp" \) -print0 | xargs -0 -r clang-format -i
           fi
 
       - name: Create PR if changes exist

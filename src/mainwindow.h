@@ -23,7 +23,6 @@ class DraftsModel;
 class TemplatesModel;
 class QueueModel;
 struct QueueItem;
-struct QueueItem;
 class ErrorsModel;
 class BlockedTreeModel;
 class QAbstractItemView;

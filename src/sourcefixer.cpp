@@ -7,13 +7,17 @@
 #include <tuple>
 
 namespace {
+constexpr qsizetype SourcePrefixLength = 8;
+
 QStringList segments(QString value) {
   if (value.startsWith(QStringLiteral("sources/"))) {
-    value.remove(0, 8);
+    value.remove(0, SourcePrefixLength);
   }
   return value.split(QLatin1Char('/'), Qt::SkipEmptyParts);
 }
 
+// The parameter names make their asymmetric roles explicit at each call site.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool isSubsequence(const QStringList &needle, const QStringList &haystack) {
   int position = 0;
   for (const QString &segment : haystack) {
@@ -44,7 +48,8 @@ int editDistance(const QString &left, const QString &right) {
 QJsonValue remapSourceValues(const QJsonValue &value, const QString &newSource) {
   if (value.isArray()) {
     QJsonArray result;
-    for (const QJsonValue &element : value.toArray()) {
+    const QJsonArray values = value.toArray();
+    for (const auto &element : values) {
       result.append(remapSourceValues(element, newSource));
     }
     return result;
@@ -75,7 +80,7 @@ QString source(const QJsonObject &object) {
       return nestedSource;
     }
   }
-  const QString flatSource = object.value(QStringLiteral("source")).toString();
+  QString flatSource = object.value(QStringLiteral("source")).toString();
   if (!flatSource.isEmpty()) {
     return flatSource;
   }
@@ -96,9 +101,7 @@ QString bestMatch(const QString &oldSource, const QStringList &availableSources)
   for (const QString &candidate : availableSources) {
     const QStringList candidateSegments = segments(candidate);
     int relationship = 2;
-    if (oldSource.compare(candidate, Qt::CaseInsensitive) == 0) {
-      relationship = 0;
-    } else if (isSubsequence(oldSegments, candidateSegments)) {
+    if (oldSource.compare(candidate, Qt::CaseInsensitive) == 0 || isSubsequence(oldSegments, candidateSegments)) {
       relationship = 0; // Prefer a provider segment newly inserted by the API.
     } else if (isSubsequence(candidateSegments, oldSegments)) {
       relationship = 1;

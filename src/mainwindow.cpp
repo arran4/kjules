@@ -47,8 +47,11 @@
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QCursor>
+#include <QDateTimeEdit>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QDockWidget>
 #include <QFile>
@@ -2170,14 +2173,14 @@ void MainWindow::createSessionActions() {
                                 m_openJulesUrlsAwaitingFeedbackAction);
   actionCollection()->setDefaultShortcut(m_openJulesUrlsAwaitingFeedbackAction,
                                          QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_O));
-  connect(m_openJulesUrlsAwaitingFeedbackAction, &QAction::triggered, this, [this, openJulesUrls]() {
+  connect(m_openJulesUrlsAwaitingFeedbackAction, &QAction::triggered, this, [openJulesUrls]() {
     openJulesUrls(i18n("No Jules URLs awaiting feedback found."),
                   [](const QString &state, const QString &) { return state == QStringLiteral("WAITING_FEEDBACK"); });
   });
 
   m_openJulesUrlsCompletedNoPrAction = new QAction(i18n("Open Jules URLs Completed No PR"), this);
   actionCollection()->addAction(QStringLiteral("open_jules_urls_completed_no_pr"), m_openJulesUrlsCompletedNoPrAction);
-  connect(m_openJulesUrlsCompletedNoPrAction, &QAction::triggered, this, [this, openJulesUrls]() {
+  connect(m_openJulesUrlsCompletedNoPrAction, &QAction::triggered, this, [openJulesUrls]() {
     openJulesUrls(i18n("No Jules URLs completed with no PR found."), [](const QString &state, const QString &prUrl) {
       return state == QStringLiteral("DONE") && prUrl.isEmpty();
     });
@@ -2186,7 +2189,7 @@ void MainWindow::createSessionActions() {
   m_openJulesUrlsCompletedNoPrOrFeedbackAction = new QAction(i18n("Open Jules URLs Completed No PR Or Feedback"), this);
   actionCollection()->addAction(QStringLiteral("open_jules_urls_completed_no_pr_or_feedback"),
                                 m_openJulesUrlsCompletedNoPrOrFeedbackAction);
-  connect(m_openJulesUrlsCompletedNoPrOrFeedbackAction, &QAction::triggered, this, [this, openJulesUrls]() {
+  connect(m_openJulesUrlsCompletedNoPrOrFeedbackAction, &QAction::triggered, this, [openJulesUrls]() {
     openJulesUrls(i18n("No Jules URLs matching criteria found."), [](const QString &state, const QString &prUrl) {
       return (state == QStringLiteral("DONE") && prUrl.isEmpty()) || state == QStringLiteral("WAITING_FEEDBACK");
     });
@@ -5704,11 +5707,6 @@ void MainWindow::setFavouriteRank() {
     }
   });
 }
-
-#include <QDateTimeEdit>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QVBoxLayout>
 
 void MainWindow::snoozeSelectedFollowingSessionsCustom() {
   QDialog dialog(this);
