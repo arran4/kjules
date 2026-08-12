@@ -4368,8 +4368,12 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
 
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(i18n("Send Now Failed"));
-    msgBox.setText(
-        i18n("The task sent immediately has failed to process:\n%1", !apiMessage.isEmpty() ? apiMessage : errorString));
+    if (!apiMessage.isEmpty()) {
+      msgBox.setText(i18n("The task sent immediately has failed to process:\n%1", apiMessage));
+      msgBox.setInformativeText(errorString);
+    } else {
+      msgBox.setText(i18n("The task sent immediately has failed to process:\n%1", errorString));
+    }
     msgBox.setIcon(QMessageBox::Warning);
 
     QPushButton *readdBtn = msgBox.addButton(i18n("Readd back where it came from"), QMessageBox::ActionRole);
