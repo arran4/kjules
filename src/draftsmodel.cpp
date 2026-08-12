@@ -63,6 +63,15 @@ void DraftsModel::addDraft(const QJsonObject &draft) {
   saveDrafts();
 }
 
+void DraftsModel::updateDraft(int row, const QJsonObject &draft) {
+  if (row < 0 || row >= m_drafts.size()) {
+    return;
+  }
+  m_drafts[row] = draft;
+  Q_EMIT dataChanged(index(row, 0), index(row, 0));
+  saveDrafts();
+}
+
 void DraftsModel::clear() {
   beginResetModel();
   m_drafts = QJsonArray();

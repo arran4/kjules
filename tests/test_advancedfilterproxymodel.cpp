@@ -234,6 +234,84 @@ private Q_SLOTS:
     QCOMPARE(model.data(idx, Qt::DisplayRole).toString(), QStringLiteral("kde/kjules"));
   }
 
+  void testSourceModelPreservesUnmatchedCustomSources() {
+    SourceModel model;
+    model.setSources({});
+    model.addSources({QJsonObject{{QStringLiteral("id"), QStringLiteral("manual/repository")},
+                                  {QStringLiteral("name"), QStringLiteral("manual/repository")},
+                                  {QStringLiteral("isCustom"), true}}});
+
+    model.setSources({QJsonObject{{QStringLiteral("id"), QStringLiteral("sources/github/kde/kjules")},
+                                  {QStringLiteral("name"), QStringLiteral("sources/github/kde/kjules")}}});
+
+    QCOMPARE(model.rowCount(), 2);
+    bool foundCustom = false;
+    for (int row = 0; row < model.rowCount(); ++row) {
+      const QJsonObject raw = model.data(model.index(row, 0), SourceModel::RawDataRole).toJsonObject();
+      if (raw.value(QStringLiteral("id")).toString() == QStringLiteral("manual/repository")) {
+        foundCustom = raw.value(QStringLiteral("isCustom")).toBool();
+      }
+    }
+    QVERIFY(foundCustom);
+  }
+
+  void testSourceModelMigratesCustomSourceToApiSource() {
+    SourceModel model;
+    model.setSources({});
+    model.addSources({QJsonObject{{QStringLiteral("id"), QStringLiteral("arran4/blog")},
+                                  {QStringLiteral("name"), QStringLiteral("arran4/blog")},
+                                  {QStringLiteral("isCustom"), true}}});
+
+    model.setSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/github/kde/kjules")}}});
+    QCOMPARE(model.rowCount(), 2);
+    QCOMPARE(model.addSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/github/arran4/blog")}}}),
+             0);
+
+    QCOMPARE(model.rowCount(), 2);
+    bool foundMigrated = false;
+    for (int row = 0; row < model.rowCount(); ++row) {
+      const QModelIndex index = model.index(row, 0);
+      if (model.data(index, SourceModel::IdRole).toString() == QStringLiteral("sources/github/arran4/blog")) {
+        foundMigrated =
+            !model.data(index, SourceModel::RawDataRole).toJsonObject().value(QStringLiteral("isCustom")).toBool();
+      }
+    }
+    QVERIFY(foundMigrated);
+  }
+
+  void testSourceModelKeepsDistinctOpaqueResourceNames() {
+    SourceModel model;
+    model.setSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/acme/repository")}},
+                      QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/github/acme/repository")},
+                                  {QStringLiteral("githubRepo"),
+                                   QJsonObject{{QStringLiteral("owner"), QStringLiteral("acme")},
+                                               {QStringLiteral("repo"), QStringLiteral("repository")}}}}});
+
+    QCOMPARE(model.rowCount(), 2);
+    QCOMPARE(model.data(model.index(0, 0), SourceModel::IdRole).toString(), QStringLiteral("sources/acme/repository"));
+    QCOMPARE(model.data(model.index(1, 0), SourceModel::IdRole).toString(),
+             QStringLiteral("sources/github/acme/repository"));
+
+    model.recordSessionCreated(QStringLiteral("sources/acme/repository"));
+    QCOMPARE(model.data(model.index(0, SourceModel::ColManagedSessions), Qt::DisplayRole).toInt(), 1);
+    QCOMPARE(model.data(model.index(1, SourceModel::ColManagedSessions), Qt::DisplayRole).toInt(), 0);
+  }
+
+  void testSourceModelUsesDocumentedNameAndGithubMetadata() {
+    const QJsonObject source{
+        {QStringLiteral("name"), QStringLiteral("sources/opaque-value")},
+        {QStringLiteral("id"), QStringLiteral("output-only-id")},
+        {QStringLiteral("githubRepo"), QJsonObject{{QStringLiteral("owner"), QStringLiteral("example")},
+                                                   {QStringLiteral("repo"), QStringLiteral("project")}}}};
+    SourceModel model;
+    model.setSources({source});
+
+    QCOMPARE(model.data(model.index(0, 0), SourceModel::IdRole).toString(), QStringLiteral("sources/opaque-value"));
+    QCOMPARE(SourceModel::githubOwner(source), QStringLiteral("example"));
+    QCOMPARE(SourceModel::githubRepository(source), QStringLiteral("project"));
+    QCOMPARE(SourceModel::repositoryUrl(source), QStringLiteral("https://github.com/example/project"));
+  }
+
   void testEmptyEqualsFormulaFilter() {
     SourceModel model;
     QJsonArray sources;

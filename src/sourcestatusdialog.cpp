@@ -44,7 +44,7 @@ bool SourceFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex 
     source = req.value(QStringLiteral("source")).toString();
   }
 
-  return source.endsWith(m_sourceName);
+  return source == m_sourceName;
 }
 
 SessionFilterProxyModel::SessionFilterProxyModel(const QString &sourceName, QObject *parent)
@@ -76,7 +76,7 @@ bool ErrorFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &
     source = req.value(QStringLiteral("source")).toString();
   }
 
-  return source.endsWith(m_sourceName);
+  return source == m_sourceName;
 }
 
 BlockedErrorProxyModel::BlockedErrorProxyModel(const QString &sourceName, QObject *parent)
@@ -88,7 +88,7 @@ bool BlockedErrorProxyModel::filterAcceptsRow(int source_row, const QModelIndex 
   }
   QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
   QString source = sourceModel()->data(index, BlockedTreeModel::SourceIdRole).toString();
-  return source.endsWith(m_sourceName);
+  return source == m_sourceName;
 }
 
 SourceStatusDialog::SourceStatusDialog(const QString &sourceName, SessionModel *sessionModel, QueueModel *queueModel,

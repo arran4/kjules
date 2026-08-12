@@ -456,6 +456,23 @@ void SessionModel::updateSession(const QJsonObject &session) {
   addSession(sessionWithRefresh);
 }
 
+void SessionModel::updateSessionAt(int row, const QJsonObject &session) {
+  if (row < 0 || row >= m_sessions.size()) {
+    return;
+  }
+  SessionData replacement = parseSessionData(session);
+  replacement.favouriteRank = m_sessions[row].favouriteRank;
+  replacement.hasUnreadChanges = m_sessions[row].hasUnreadChanges;
+  replacement.snoozeUntil = m_sessions[row].snoozeUntil;
+  m_sessions[row] = replacement;
+  m_idToIndex.clear();
+  for (int index = 0; index < m_sessions.size(); ++index) {
+    m_idToIndex[m_sessions[index].id] = index;
+  }
+  Q_EMIT dataChanged(index(row, 0), index(row, ColCount - 1));
+  saveSessions();
+}
+
 QJsonObject SessionModel::getSession(int row) const {
   if (row >= 0 && row < m_sessions.size()) {
     return m_sessions[row].rawObject;

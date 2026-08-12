@@ -10,7 +10,7 @@ private Q_SLOTS:
   void createsDocumentedFullRequest();
   void createsMinimalRepolessRequest();
   void createsDefaultBranchRequestWithoutRepoContext();
-  void normalizesSourceResourceName();
+  void preservesSourceResourceNameVerbatim();
   void includesExplicitBranchForOpaqueSourceName();
   void preservesCanonicalRequestWhenRetryingError();
   void unwrapsRequestFromApplicationMetadata();
@@ -24,7 +24,7 @@ private Q_SLOTS:
 void SessionRequestBuilderTest::createsDocumentedFullRequest() {
   const QJsonObject input{{QStringLiteral("prompt"), QStringLiteral("Add tests")},
                           {QStringLiteral("title"), QStringLiteral("Test task")},
-                          {QStringLiteral("source"), QStringLiteral("github/example/repo")},
+                          {QStringLiteral("source"), QStringLiteral("sources/github/example/repo")},
                           {QStringLiteral("startingBranch"), QStringLiteral("develop")},
                           {QStringLiteral("requirePlanApproval"), true},
                           {QStringLiteral("automationMode"), QStringLiteral("AUTO_CREATE_PR")}};
@@ -62,12 +62,12 @@ void SessionRequestBuilderTest::createsDefaultBranchRequestWithoutRepoContext() 
   QVERIFY(!actual.value(QStringLiteral("sourceContext")).toObject().contains(QStringLiteral("githubRepoContext")));
 }
 
-void SessionRequestBuilderTest::normalizesSourceResourceName() {
-  const QJsonObject actual =
-      SessionRequestBuilder::createSession({{QStringLiteral("prompt"), QStringLiteral("Task")},
-                                            {QStringLiteral("source"), QStringLiteral("sources/github/example/repo")}});
+void SessionRequestBuilderTest::preservesSourceResourceNameVerbatim() {
+  const QJsonObject actual = SessionRequestBuilder::createSession(
+      {{QStringLiteral("prompt"), QStringLiteral("Task")},
+       {QStringLiteral("source"), QStringLiteral("opaque/provider/example/repo")}});
   QCOMPARE(actual.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString(),
-           QStringLiteral("sources/github/example/repo"));
+           QStringLiteral("opaque/provider/example/repo"));
 }
 
 void SessionRequestBuilderTest::includesExplicitBranchForOpaqueSourceName() {

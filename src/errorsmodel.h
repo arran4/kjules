@@ -31,6 +31,7 @@ public:
    * }
    */
   void addErrorObj(const QJsonObject &errorObj);
+  void updateError(int row, const QJsonObject &errorObj);
   void removeError(int row);
   QJsonObject getError(int row) const;
   void loadErrors();

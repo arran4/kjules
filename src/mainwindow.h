@@ -38,6 +38,7 @@ class QVBoxLayout;
 class RefreshProgressWindow;
 class SourcesRefreshProgressWindow;
 class ClickableProgressBar;
+struct SourceRemapEntry;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -152,11 +153,13 @@ private Q_SLOTS:
   void updateTabTitles();
   void updateSelectionDependentActions();
   void connectModelForTabUpdates(QAbstractItemModel *model);
+  bool resolvePendingGithubSource();
   void checkAutoArchiveSessions();
   void updateCountdownStatus();
   void onRefreshProgressUpdated(int current, int total);
   void onRefreshProgressFinished();
   void onSessionRefreshProgressBarClicked();
+  void showFixSourcesDialog();
 
 private Q_SLOTS:
   void autoRefreshFollowing();
@@ -169,7 +172,7 @@ private:
       std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QModelIndexList &, int)> action);
 
   QStringList getSelectedSessionIds() const;
-  QString urlFromSourceId(const QString &id) const;
+  QString urlFromSource(const QJsonObject &source) const;
 
   void updateFollowingRefreshTimer();
   void setupUi();
@@ -203,6 +206,9 @@ private:
   void createRefreshActions();
   void createStandardActions();
   void connectSignals();
+  void showFixSourcesDialog(const QString &onlySource);
+  QList<SourceRemapEntry> pendingSourceEntries(const QString &onlySource = QString()) const;
+  void applySourceRemaps(const QList<SourceRemapEntry> &entries, const QStringList &newSources);
 
   APIManager *m_apiManager;
   QHash<QString, QString> m_previousSessionStates;
@@ -308,6 +314,7 @@ private:
   QAction *m_viewFilterForksAction;
   QAction *m_viewFilterPrivateAction;
   QAction *m_createRepoAndSessionAction;
+  QAction *m_fixSourcesAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;
@@ -325,6 +332,8 @@ private:
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
   bool m_isWaitingForRefreshBeforeQueue;
+  bool m_isWaitingForCreatedRepoSource = false;
+  bool m_suppressNextErrorDialog = false;
 
   RefreshProgressWindow *m_refreshProgressWindow;
 };

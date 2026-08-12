@@ -18,6 +18,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void addDraft(const QJsonObject &draft);
+  void updateDraft(int row, const QJsonObject &draft);
   void removeDraft(int row);
   QJsonObject getDraft(int row) const;
   void loadDrafts();

@@ -87,6 +87,7 @@ public:
   int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);
   void updateSession(const QJsonObject &session);
+  void updateSessionAt(int row, const QJsonObject &session);
   void toggleFavourite(const QString &id);
   void setFavouriteRank(const QString &id, int rank);
   void increaseFavouriteRank(const QString &id);

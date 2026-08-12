@@ -149,7 +149,7 @@ void PromptTextEdit::contextMenuEvent(QContextMenuEvent *e) {
   delete menu;
 }
 
-static QString normalizeSourceName(const QString &raw) {
+static QString displaySourceName(const QString &raw) {
   QString s = raw.trimmed();
   if (s.startsWith(QStringLiteral("/sources/"))) {
     s.remove(0, 9);
@@ -209,7 +209,7 @@ public:
       if (sourceIdx.isValid()) {
         displayName = row.sourceIdx.data(Qt::DisplayRole).toString();
       } else {
-        displayName = row.name;
+        displayName = displaySourceName(row.name);
       }
 
       bool hasMultipleDefaults = row.sourceIdx.isValid() && (m_dialog->getDefaultBranches(row.sourceIdx).size() > 1);
@@ -221,6 +221,10 @@ public:
     }
 
     if (role == SourceModel::NameRole) {
+      return sourceIdx.isValid() ? sourceIdx.data(SourceModel::NameRole) : displaySourceName(row.name);
+    }
+
+    if (role == SourceModel::IdRole) {
       return row.name;
     }
 
@@ -275,11 +279,11 @@ public:
 
     QSet<QString> knownSources;
     for (int i = 0; i < m_sourceModel->rowCount(); ++i)
-      knownSources.insert(sourceName(m_sourceModel->index(i, 0)));
+      knownSources.insert(sourceId(m_sourceModel->index(i, 0)));
 
     for (int i = 0; i < m_filteredSources->rowCount(); ++i) {
       QModelIndex baseIdx = m_filteredSources->mapToSource(m_filteredSources->index(i, 0));
-      QString name = sourceName(baseIdx);
+      QString name = sourceId(baseIdx);
 
       if (m_showSelected) {
         if (m_selectedSources->contains(name)) {
@@ -318,14 +322,7 @@ private:
     QString branch;
   };
 
-  static QString sourceName(const QModelIndex &sourceIdx) {
-    QString name = sourceIdx.data(SourceModel::NameRole).toString();
-    if (!name.isEmpty())
-      return normalizeSourceName(name);
-
-    name = sourceIdx.data(SourceModel::IdRole).toString();
-    return normalizeSourceName(name);
-  }
+  static QString sourceId(const QModelIndex &sourceIdx) { return sourceIdx.data(SourceModel::IdRole).toString(); }
 
   static QString sourceId(const RowData &row) {
     const QString id = row.sourceIdx.data(SourceModel::IdRole).toString();
@@ -392,7 +389,7 @@ protected:
           return fullName.section(QLatin1Char('/'), 0, 0);
         }
         QString id = m_model->data(m_index, SourceModel::IdRole).toString();
-        id = normalizeSourceName(id);
+        id = displaySourceName(id);
         if (id.contains(QLatin1Char('/'))) {
           return id.section(QLatin1Char('/'), 0, 0);
         }
@@ -519,13 +516,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   connect(refreshGithubBtn, &QPushButton::clicked, this, [this]() {
     statusBar()->showMessage(tr("Requested refresh of GitHub data..."));
     QStringList ids;
-    for (const QString &name : m_selectedSources.keys()) {
-      QModelIndexList matches =
-          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1, Qt::MatchExactly);
-      if (!matches.isEmpty()) {
-        ids.append(matches.first().data(SourceModel::IdRole).toString());
-      }
-    }
+    ids.append(m_selectedSources.keys());
     if (ids.isEmpty()) {
       for (int i = 0; i < m_unselectedProjection->rowCount() && i < 10; ++i) {
         QModelIndex srcIdx = m_unselectedProjection->mapToSource(m_unselectedProjection->index(i, 0));
@@ -576,7 +567,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
       if (!selected.contains(filterIdx))
         selected = {filterIdx};
       for (const QModelIndex &fIdx : selected) {
-        QString selName = fIdx.data(SourceModel::NameRole).toString();
+        QString selName = fIdx.data(SourceModel::IdRole).toString();
         QString b = m_unselectedProjection->branch(fIdx);
         if (!m_selectedSources.values(selName).contains(b)) {
           m_selectedSources.insert(selName, b);
@@ -618,16 +609,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
       }
     }
     QAction *showStatusAction = menu.addAction(tr("Show Status"));
-    connect(showStatusAction, &QAction::triggered, this,
-            [this, id]() { Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last()); });
+    connect(showStatusAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceStatusRequested(id); });
 
-    QStringList parts = id.split(QLatin1Char('/'));
-    QString owner;
-    QString repo;
-    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-      owner = parts[2];
-      repo = parts[3];
-    }
+    const QJsonObject rawSource = sourceIdx.data(SourceModel::RawDataRole).toJsonObject();
+    const QString owner = SourceModel::githubOwner(rawSource);
+    const QString repo = SourceModel::githubRepository(rawSource);
 
     if (!owner.isEmpty() && !repo.isEmpty()) {
       QAction *hideRepoAction = menu.addAction(tr("Filter out repo '%1'").arg(repo));
@@ -766,6 +752,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
         QModelIndexList matches =
             m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, customSource, 1, Qt::MatchExactly);
+        QString selectedSource = customSource;
 
         QString targetBranch = branchCombo->currentText().trimmed();
         if (targetBranch.isEmpty()) {
@@ -780,10 +767,12 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
           obj[QStringLiteral("isCustom")] = true;
           arr.append(obj);
           m_sourceModel->addSources(arr);
+        } else {
+          selectedSource = matches.first().data(SourceModel::IdRole).toString();
         }
 
-        if (!m_selectedSources.values(customSource).contains(targetBranch)) {
-          m_selectedSources.insert(customSource, targetBranch);
+        if (!m_selectedSources.values(selectedSource).contains(targetBranch)) {
+          m_selectedSources.insert(selectedSource, targetBranch);
           updateModels();
         }
       }
@@ -796,7 +785,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
     menu.addSeparator();
 
     QModelIndex sourceIdx = m_selectedProjection->mapToSource(filterIdx);
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString displayName =
         sourceIdx.isValid() ? m_sourceModel->data(sourceIdx.siblingAtColumn(0), Qt::DisplayRole).toString() : name;
 
@@ -978,7 +967,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
                 if (!newBranches.isEmpty()) {
                   for (const QModelIndex &fIdx : selected) {
-                    QString selName = fIdx.data(SourceModel::NameRole).toString();
+                    QString selName = fIdx.data(SourceModel::IdRole).toString();
                     m_selectedSources.remove(selName);
                     for (const QString &b : newBranches) {
                       m_selectedSources.insert(selName, b);
@@ -995,7 +984,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
       if (!selected.contains(filterIdx))
         selected = {filterIdx};
       for (const QModelIndex &fIdx : selected) {
-        QString selName = fIdx.data(SourceModel::NameRole).toString();
+        QString selName = fIdx.data(SourceModel::IdRole).toString();
         QString b = m_selectedProjection->branch(fIdx);
         m_selectedSources.remove(selName, b);
       }
@@ -1004,16 +993,11 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
     QString id = sourceIdx.isValid() ? m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString() : QString();
     QAction *showStatusAction = menu.addAction(tr("Show Status"));
-    connect(showStatusAction, &QAction::triggered, this,
-            [this, id]() { Q_EMIT showSourceStatusRequested(id.split(QLatin1Char('/')).last()); });
+    connect(showStatusAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceStatusRequested(id); });
 
-    QStringList parts = id.split(QLatin1Char('/'));
-    QString owner;
-    QString repo;
-    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-      owner = parts[2];
-      repo = parts[3];
-    }
+    const QJsonObject rawSource = sourceIdx.data(SourceModel::RawDataRole).toJsonObject();
+    const QString owner = SourceModel::githubOwner(rawSource);
+    const QString repo = SourceModel::githubRepository(rawSource);
 
     if (!owner.isEmpty() && !repo.isEmpty()) {
       QAction *hideRepoAction = menu.addAction(tr("Filter out repo '%1'").arg(repo));
@@ -1089,7 +1073,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   connect(m_filterEditor, &FilterEditor::returnPressed, this, [this]() {
     if (m_unselectedProjection->rowCount() == 1) {
       QModelIndex filterIdx = m_unselectedProjection->index(0, 0);
-      QString name = filterIdx.data(SourceModel::NameRole).toString();
+      QString name = filterIdx.data(SourceModel::IdRole).toString();
       QString b = m_unselectedProjection->branch(filterIdx);
       if (!m_selectedSources.values(name).contains(b)) {
         m_selectedSources.insert(name, b);
@@ -1103,7 +1087,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   });
 
   connect(m_unselectedView, &QListView::activated, this, [this](const QModelIndex &filterIdx) {
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString b = m_unselectedProjection->branch(filterIdx);
     if (!m_selectedSources.values(name).contains(b)) {
       m_selectedSources.insert(name, b);
@@ -1114,7 +1098,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   });
 
   connect(m_selectedView, &QListView::activated, this, [this](const QModelIndex &filterIdx) {
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString b = m_selectedProjection->branch(filterIdx);
     m_selectedSources.remove(name, b);
     updateModels();
@@ -1589,7 +1573,23 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   // Check for "sources" array, fallback to "source" string
   m_selectedSources.clear();
 
-  auto extractSourceAndBranch = [this](const QJsonValue &val, QString &outName, QString &outBranch) {
+  auto resolveSourceName = [this](const QString &storedName) {
+    if (storedName.isEmpty() || m_sourceModel->rowCount() == 0) {
+      return storedName;
+    }
+    QModelIndexList matches =
+        m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, storedName, 1, Qt::MatchExactly);
+    if (matches.isEmpty()) {
+      // Legacy drafts stored the display name. Resolve it through the cached
+      // API source object once, rather than reconstructing a resource name.
+      matches =
+          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, storedName, 2, Qt::MatchExactly);
+    }
+    return matches.size() == 1 ? matches.first().data(SourceModel::IdRole).toString() : storedName;
+  };
+
+  auto extractSourceAndBranch = [this, &resolveSourceName](const QJsonValue &val, QString &outName,
+                                                           QString &outBranch) {
     outName.clear();
     outBranch.clear();
     if (val.isObject()) {
@@ -1606,11 +1606,11 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
       outName = val.toString();
     }
 
-    outName = normalizeSourceName(outName);
+    outName = resolveSourceName(outName);
 
     if (outBranch.isEmpty() && !outName.isEmpty()) {
       QModelIndexList matches =
-          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, outName, 1, Qt::MatchExactly);
+          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, outName, 1, Qt::MatchExactly);
       if (!matches.isEmpty()) {
         QStringList defaults = getDefaultBranches(matches.first());
         outBranch = defaults.isEmpty() ? QStringLiteral("main") : defaults.first();
@@ -1640,11 +1640,11 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
       }
     }
   } else if (data.contains(QStringLiteral("source"))) {
-    QString name = normalizeSourceName(data.value(QStringLiteral("source")).toString());
+    QString name = resolveSourceName(data.value(QStringLiteral("source")).toString());
     QString branch = data.value(QStringLiteral("startingBranch")).toString();
     if (branch.isEmpty() && !name.isEmpty()) {
       QModelIndexList matches =
-          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::NameRole, name, 1, Qt::MatchExactly);
+          m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, name, 1, Qt::MatchExactly);
       if (!matches.isEmpty()) {
         QStringList defaults = getDefaultBranches(matches.first());
         branch = defaults.isEmpty() ? QStringLiteral("main") : defaults.first();
@@ -1658,7 +1658,7 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
   } else if (data.contains(QStringLiteral("sourceContext"))) {
     QJsonObject sc = data.value(QStringLiteral("sourceContext")).toObject();
     if (sc.contains(QStringLiteral("source"))) {
-      QString s = normalizeSourceName(sc.value(QStringLiteral("source")).toString());
+      QString s = resolveSourceName(sc.value(QStringLiteral("source")).toString());
       QString branch = QStringLiteral("main");
       if (sc.contains(QStringLiteral("githubRepoContext"))) {
         QJsonObject ghCtx = sc.value(QStringLiteral("githubRepoContext")).toObject();
@@ -1720,7 +1720,7 @@ void NewSessionDialog::applyFilter() {
 void NewSessionDialog::onAddSelected() {
   QModelIndexList selection = m_unselectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &filterIdx : selection) {
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString b = m_unselectedProjection->branch(filterIdx);
     if (!m_selectedSources.values(name).contains(b)) {
       m_selectedSources.insert(name, b);
@@ -1733,7 +1733,7 @@ void NewSessionDialog::onAddSelected() {
 void NewSessionDialog::onRemoveSelected() {
   QModelIndexList selection = m_selectedView->selectionModel()->selectedIndexes();
   for (const QModelIndex &filterIdx : selection) {
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString b = m_selectedProjection->branch(filterIdx);
     m_selectedSources.remove(name, b);
   }
@@ -1744,7 +1744,7 @@ void NewSessionDialog::onRemoveSelected() {
 void NewSessionDialog::onSelectAll() {
   for (int i = 0; i < m_unselectedProjection->rowCount(); ++i) {
     QModelIndex filterIdx = m_unselectedProjection->index(i, 0);
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString b = m_unselectedProjection->branch(filterIdx);
     if (!m_selectedSources.values(name).contains(b)) {
       m_selectedSources.insert(name, b);
@@ -1756,7 +1756,7 @@ void NewSessionDialog::onSelectAll() {
 void NewSessionDialog::onUnselectAll() {
   for (int i = 0; i < m_selectedProjection->rowCount(); ++i) {
     QModelIndex filterIdx = m_selectedProjection->index(i, 0);
-    QString name = filterIdx.data(SourceModel::NameRole).toString();
+    QString name = filterIdx.data(SourceModel::IdRole).toString();
     QString b = m_selectedProjection->branch(filterIdx);
     m_selectedSources.remove(name, b);
   }

@@ -423,16 +423,12 @@ QString ActivityBrowser::generateHtmlForActivity(const QJsonObject &activity, bo
       QJsonObject art = artifacts[i].toObject();
       if (art.contains(QStringLiteral("changeSet"))) {
         QJsonObject cs = art.value(QStringLiteral("changeSet")).toObject();
-        QString source = cs.value(QStringLiteral("source")).toString();
-        source.replace(QStringLiteral("sources/github/"), QStringLiteral(""));
-
         QJsonObject gp = cs.value(QStringLiteral("gitPatch")).toObject();
         QString commitId = gp.value(QStringLiteral("baseCommitId")).toString();
 
         html += QStringLiteral("<div class='box'>");
-        html += QStringLiteral("<b>") + i18n("Commit:") + QStringLiteral("</b> <a href='https://github.com/") +
-                source.toHtmlEscaped() + QStringLiteral("/commit/") + commitId.toHtmlEscaped() + QStringLiteral("'>") +
-                commitId.toHtmlEscaped() + QStringLiteral("</a><br/>");
+        html += QStringLiteral("<b>") + i18n("Commit:") + QStringLiteral("</b> ") + commitId.toHtmlEscaped() +
+                QStringLiteral("<br/>");
 
         QString sugg = gp.value(QStringLiteral("suggestedCommitMessage")).toString();
         if (!sugg.isEmpty()) {

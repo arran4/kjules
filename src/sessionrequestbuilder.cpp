@@ -19,10 +19,6 @@ QJsonObject createSession(const QJsonObject &requestData) {
     source = suppliedSourceContext.value(QStringLiteral("source")).toString();
   }
   if (!source.isEmpty()) {
-    if (!source.startsWith(QStringLiteral("sources/"))) {
-      source.prepend(QStringLiteral("sources/"));
-    }
-
     QJsonObject sourceContext{{QStringLiteral("source"), source}};
     QString startingBranch = input.value(QStringLiteral("startingBranch")).toString();
     if (startingBranch.isEmpty()) {

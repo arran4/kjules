@@ -61,6 +61,15 @@ void ErrorsModel::addErrorObj(const QJsonObject &errorObj) {
   saveErrors();
 }
 
+void ErrorsModel::updateError(int row, const QJsonObject &errorObj) {
+  if (row < 0 || row >= m_errors.size()) {
+    return;
+  }
+  m_errors[row] = errorObj;
+  Q_EMIT dataChanged(index(row, 0), index(row, 0));
+  saveErrors();
+}
+
 void ErrorsModel::clear() {
   beginResetModel();
   m_errors = QJsonArray();

@@ -48,6 +48,10 @@ public:
   void increaseFavouriteRank(const QString &id);
   void decreaseFavouriteRank(const QString &id);
   void setDefaultBranches(const QString &id, const QStringList &branches);
+  static QString resourceName(const QJsonObject &rawData);
+  static QString githubOwner(const QJsonObject &rawData);
+  static QString githubRepository(const QJsonObject &rawData);
+  static QString repositoryUrl(const QJsonObject &rawData);
   static QString extractApiDefaultBranch(const QJsonObject &rawData);
   void clear();
   void recordSessionCreated(const QString &sourceId);

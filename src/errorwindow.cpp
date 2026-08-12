@@ -104,6 +104,16 @@ void ErrorWindow::setupUi() {
   actionsLayout->addWidget(templateBtn);
   actionsLayout->addWidget(sendNowBtn);
   actionsLayout->addWidget(requeueBtn);
+  if (m_lastResponse.contains(QStringLiteral("NOT_FOUND")) || m_httpDetails.contains(QStringLiteral("NOT_FOUND")) ||
+      m_httpDetails.contains(QStringLiteral("HTTP 404"))) {
+    QPushButton *remapBtn =
+        new QPushButton(QIcon::fromTheme(QStringLiteral("tools-wizard")), i18n("Remap Source"), this);
+    connect(remapBtn, &QPushButton::clicked, [this]() {
+      Q_EMIT remapSourceRequested(m_row);
+      accept();
+    });
+    actionsLayout->addWidget(remapBtn);
+  }
   actionsLayout->addWidget(copyErrorBtn);
   actionsLayout->addStretch();
 

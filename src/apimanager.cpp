@@ -395,21 +395,12 @@ void APIManager::getSource(const QString &sourceId) {
     return;
   }
 
-  QString cleanId = sourceId;
-  if (cleanId.startsWith(QStringLiteral("sources/"))) {
-    cleanId = cleanId.mid(8);
-  } else if (cleanId.startsWith(QStringLiteral("/sources/"))) {
-    cleanId = cleanId.mid(9);
-  } else if (cleanId.startsWith(QStringLiteral("/"))) {
-    cleanId = cleanId.mid(1);
-  }
-
-  if (cleanId.contains(QStringLiteral(".."))) {
+  if (!sourceId.startsWith(QStringLiteral("sources/")) || sourceId.contains(QStringLiteral(".."))) {
     Q_EMIT errorOccurred(QStringLiteral("Invalid source ID."));
     return;
   }
 
-  QString endpoint = QStringLiteral("/sources/") + cleanId;
+  const QString endpoint = QLatin1Char('/') + sourceId;
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
@@ -627,29 +618,27 @@ void APIManager::updateGithubRateLimit(QNetworkReply *reply) {
   }
 }
 
-void APIManager::fetchGithubInfo(const QString &sourceId) {
+void APIManager::fetchGithubInfo(const QString &sourceName, const QString &owner, const QString &repository) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     if (m_githubTokenFailed) {
-      Q_EMIT githubInfoFailed(sourceId, QStringLiteral("GitHub token authentication failed previously."));
+      Q_EMIT githubInfoFailed(sourceName, QStringLiteral("GitHub token authentication failed previously."));
     }
     return;
   }
 
   if (!checkGithubRateLimit()) {
-    Q_EMIT githubInfoFailed(sourceId, QStringLiteral("Rate limit exhausted"));
+    Q_EMIT githubInfoFailed(sourceName, QStringLiteral("Rate limit exhausted"));
     return;
   }
 
-  QString cleanId = sourceId;
-  if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
-    cleanId = cleanId.mid(15);
-  } else if (cleanId.startsWith(QStringLiteral("github/"))) {
-    cleanId = cleanId.mid(7);
-  } else {
-    return; // Not a github source
+  if (sourceName.isEmpty() || owner.isEmpty() || repository.isEmpty()) {
+    Q_EMIT githubInfoFailed(sourceName, QStringLiteral("Missing GitHub repository metadata."));
+    return;
   }
 
-  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId));
+  const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
+                                 QString::fromLatin1(QUrl::toPercentEncoding(repository));
+  QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com/repos/") + repositoryPath));
   request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
   request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
@@ -657,16 +646,16 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
   request.setRawHeader("Authorization", auth.toUtf8());
 
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceName]() {
     reply->deleteLater();
     updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isObject()) {
-        Q_EMIT githubInfoReceived(sourceId, doc.object());
+        Q_EMIT githubInfoReceived(sourceName, doc.object());
       } else {
-        Q_EMIT githubInfoFailed(sourceId, QStringLiteral("Invalid JSON response"));
+        Q_EMIT githubInfoFailed(sourceName, QStringLiteral("Invalid JSON response"));
       }
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -676,7 +665,7 @@ void APIManager::fetchGithubInfo(const QString &sourceId) {
                                          "requests blocked until token is updated.")
                               .arg(statusCode));
       }
-      Q_EMIT githubInfoFailed(sourceId, reply->errorString());
+      Q_EMIT githubInfoFailed(sourceName, reply->errorString());
     }
   });
 }
@@ -871,22 +860,18 @@ void APIManager::getSession(const QString &sessionId) {
   });
 }
 
-void APIManager::fetchGithubBranches(const QString &sourceId) {
+void APIManager::fetchGithubBranches(const QString &sourceName, const QString &owner, const QString &repository) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
     return;
   }
 
-  QString cleanId = sourceId;
-  if (cleanId.startsWith(QStringLiteral("sources/github/"))) {
-    cleanId = cleanId.mid(15);
-  } else if (cleanId.startsWith(QStringLiteral("github/"))) {
-    cleanId = cleanId.mid(7);
-  } else {
-    return; // Not a github source
-  }
+  if (sourceName.isEmpty() || owner.isEmpty() || repository.isEmpty())
+    return;
 
+  const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
+                                 QString::fromLatin1(QUrl::toPercentEncoding(repository));
   QNetworkRequest request(
-      QUrl(QStringLiteral("https://api.github.com/repos/") + cleanId + QStringLiteral("/branches")));
+      QUrl(QStringLiteral("https://api.github.com/repos/") + repositoryPath + QStringLiteral("/branches")));
   request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
   request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
   request.setRawHeader("Accept", "application/vnd.github.v3+json");
@@ -894,14 +879,14 @@ void APIManager::fetchGithubBranches(const QString &sourceId) {
   request.setRawHeader("Authorization", auth.toUtf8());
 
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceName]() {
     reply->deleteLater();
     updateGithubRateLimit(reply);
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
       if (doc.isArray()) {
-        Q_EMIT githubBranchesReceived(sourceId, doc.array());
+        Q_EMIT githubBranchesReceived(sourceName, doc.array());
       }
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

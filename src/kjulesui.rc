@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gui name="org.kde.kjules"
-     version="2"
+     version="3"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0
@@ -80,6 +80,9 @@
             <Action name="set_default_archive_filter"/>
             <Separator/>
             <Action name="toggle_formula_builder"/>
+        </Menu>
+        <Menu name="help">
+            <Action name="fix_sources" />
         </Menu>
     </MenuBar>
     <ToolBar name="mainToolBar">

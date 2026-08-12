@@ -13,15 +13,74 @@
 #include <QStandardPaths>
 #include <cmath>
 
-static QString normalizeSourceId(const QString &id) {
-  QString res = id;
-  if (res.startsWith(QStringLiteral("sources/"))) {
-    res = res.mid(8);
+static QString customMigrationKey(const QJsonObject &source) {
+  const QString owner = SourceModel::githubOwner(source);
+  const QString repository = SourceModel::githubRepository(source);
+  if (!owner.isEmpty() && !repository.isEmpty()) {
+    return owner + QLatin1Char('/') + repository;
   }
-  if (res.startsWith(QStringLiteral("github/"))) {
-    res = res.mid(7);
+
+  QString value = SourceModel::resourceName(source);
+  if (value.startsWith(QStringLiteral("sources/"))) {
+    value.remove(0, 8);
   }
-  return res;
+  if (value.startsWith(QStringLiteral("github/"))) {
+    value.remove(0, 7);
+  }
+  return value;
+}
+
+static bool isCustomReplacement(const QJsonObject &existing, const QJsonObject &replacement) {
+  return existing.value(QStringLiteral("isCustom")).toBool() &&
+         !replacement.value(QStringLiteral("isCustom")).toBool() && !customMigrationKey(existing).isEmpty() &&
+         customMigrationKey(existing) == customMigrationKey(replacement);
+}
+
+QString SourceModel::resourceName(const QJsonObject &rawData) {
+  const QString name = rawData.value(QStringLiteral("name")).toString();
+  if (name.startsWith(QStringLiteral("sources/"))) {
+    return name;
+  }
+  const QString legacyId = rawData.value(QStringLiteral("id")).toString();
+  if (legacyId.startsWith(QStringLiteral("sources/"))) {
+    return legacyId;
+  }
+  return name.isEmpty() ? legacyId : name;
+}
+
+QString SourceModel::githubOwner(const QJsonObject &rawData) {
+  const QJsonObject githubRepo = rawData.value(QStringLiteral("githubRepo")).toObject();
+  const QString apiOwner = githubRepo.value(QStringLiteral("owner")).toString();
+  if (!apiOwner.isEmpty()) {
+    return apiOwner;
+  }
+
+  const QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
+  const QJsonValue owner = github.value(QStringLiteral("owner"));
+  return owner.isObject() ? owner.toObject().value(QStringLiteral("login")).toString() : owner.toString();
+}
+
+QString SourceModel::githubRepository(const QJsonObject &rawData) {
+  const QString apiRepository =
+      rawData.value(QStringLiteral("githubRepo")).toObject().value(QStringLiteral("repo")).toString();
+  if (!apiRepository.isEmpty()) {
+    return apiRepository;
+  }
+  return rawData.value(QStringLiteral("github")).toObject().value(QStringLiteral("name")).toString();
+}
+
+QString SourceModel::repositoryUrl(const QJsonObject &rawData) {
+  const QString apiUrl =
+      rawData.value(QStringLiteral("github")).toObject().value(QStringLiteral("html_url")).toString();
+  if (!apiUrl.isEmpty()) {
+    return apiUrl;
+  }
+  const QString owner = githubOwner(rawData);
+  const QString repository = githubRepository(rawData);
+  if (!owner.isEmpty() && !repository.isEmpty()) {
+    return QStringLiteral("https://github.com/%1/%2").arg(owner, repository);
+  }
+  return {};
 }
 
 SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) { loadSources(); }
@@ -43,18 +102,25 @@ QVariant SourceModel::data(const QModelIndex &index, int role) const {
     return QVariant();
 
   const QJsonObject source = m_sources[index.row()].toObject();
-  QString id = source.value(QStringLiteral("id")).toString();
+  const QString id = resourceName(source);
   QString provider, owner, repo;
 
-  QStringList parts = id.split(QLatin1Char('/'));
-  if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-    provider = parts[1];
-    owner = parts[2];
-    repo = parts[3];
-  } else if (parts.size() >= 3) {
-    provider = parts[0];
-    owner = parts[1];
-    repo = parts[2];
+  owner = githubOwner(source);
+  repo = githubRepository(source);
+  if (!owner.isEmpty() && !repo.isEmpty()) {
+    provider = QStringLiteral("github");
+  } else {
+    // Parsing is intentionally limited to presentation of legacy/custom rows.
+    const QStringList parts = id.split(QLatin1Char('/'));
+    if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
+      provider = parts[1];
+      owner = parts[2];
+      repo = parts[3];
+    } else if (parts.size() >= 3) {
+      provider = parts[0];
+      owner = parts[1];
+      repo = parts[2];
+    }
   }
 
   if (role == Qt::DisplayRole) {
@@ -261,10 +327,7 @@ QHash<int, QByteArray> SourceModel::roleNames() const {
 void SourceModel::toggleFavourite(const QString &id) {
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString currentId = source.value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = source.value(QStringLiteral("name")).toString();
-    }
+    const QString currentId = resourceName(source);
 
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
@@ -292,10 +355,7 @@ void SourceModel::toggleFavourite(const QString &id) {
 void SourceModel::setFavouriteRank(const QString &id, int rank) {
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString currentId = source.value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = source.value(QStringLiteral("name")).toString();
-    }
+    const QString currentId = resourceName(source);
     if (currentId == id) {
       source[QStringLiteral("local_favourite")] = rank;
       m_sources[i] = source;
@@ -311,10 +371,7 @@ void SourceModel::setFavouriteRank(const QString &id, int rank) {
 void SourceModel::increaseFavouriteRank(const QString &id) {
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString currentId = source.value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = source.value(QStringLiteral("name")).toString();
-    }
+    const QString currentId = resourceName(source);
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
@@ -337,10 +394,7 @@ void SourceModel::increaseFavouriteRank(const QString &id) {
 void SourceModel::decreaseFavouriteRank(const QString &id) {
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString currentId = source.value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = source.value(QStringLiteral("name")).toString();
-    }
+    const QString currentId = resourceName(source);
     if (currentId == id) {
       QJsonValue favVal = source.value(QStringLiteral("local_favourite"));
       int currentRank = 0;
@@ -369,29 +423,26 @@ void SourceModel::setSources(const QJsonArray &sources) {
   beginResetModel();
   QJsonArray newSources;
   QHash<QString, bool> seenInNewSources;
+  QJsonArray customSources;
+  for (const QJsonValue &value : m_sources) {
+    const QJsonObject existing = value.toObject();
+    if (existing.value(QStringLiteral("isCustom")).toBool()) {
+      customSources.append(existing);
+    }
+  }
 
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
 
-    QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty())
-      id = source.value(QStringLiteral("name")).toString();
-
-    QString normId = normalizeSourceId(id);
-    if (seenInNewSources.contains(normId)) {
+    const QString id = resourceName(source);
+    if (seenInNewSources.contains(id)) {
       continue;
     }
-    seenInNewSources[normId] = true;
+    seenInNewSources[id] = true;
 
     for (int j = 0; j < m_sources.size(); ++j) {
-      QString currentId = m_sources[j].toObject().value(QStringLiteral("id")).toString();
-      if (currentId.isEmpty())
-        currentId = m_sources[j].toObject().value(QStringLiteral("name")).toString();
-      if (normalizeSourceId(currentId) == normId) {
-        QJsonObject existing = m_sources[j].toObject();
-        if (existing.contains(QStringLiteral("isCustom")) && !source.contains(QStringLiteral("github"))) {
-          source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
-        }
+      const QJsonObject existing = m_sources[j].toObject();
+      if (resourceName(existing) == id || isCustomReplacement(existing, source)) {
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] = existing[QStringLiteral("local_firstSeen")];
         if (existing.contains(QStringLiteral("local_lastChanged")))
@@ -417,37 +468,44 @@ void SourceModel::setSources(const QJsonArray &sources) {
     }
     newSources.append(source);
   }
+  for (const QJsonValue &value : customSources) {
+    const QJsonObject custom = value.toObject();
+    const QString customId = resourceName(custom);
+    bool replaced = false;
+    for (const QJsonValue &newValue : newSources) {
+      if (isCustomReplacement(custom, newValue.toObject())) {
+        replaced = true;
+        break;
+      }
+    }
+    if (!seenInNewSources.contains(customId) && !replaced) {
+      newSources.append(custom);
+    }
+  }
   m_sources = newSources;
   endResetModel();
   saveSources();
 }
 int SourceModel::addSources(const QJsonArray &sources) {
   int addedCount = 0;
+  bool updatedExisting = false;
   QJsonArray newSources;
   QHash<QString, bool> seenInNewSources;
 
   for (int i = 0; i < sources.size(); ++i) {
     QJsonObject source = sources[i].toObject();
-    QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty())
-      id = source.value(QStringLiteral("name")).toString();
-
-    QString normId = normalizeSourceId(id);
-    if (seenInNewSources.contains(normId)) {
+    const QString id = resourceName(source);
+    if (seenInNewSources.contains(id)) {
       continue;
     }
+    seenInNewSources[id] = true;
 
     bool exists = false;
     for (int j = 0; j < m_sources.size(); ++j) {
-      QString currentId = m_sources[j].toObject().value(QStringLiteral("id")).toString();
-      if (currentId.isEmpty())
-        currentId = m_sources[j].toObject().value(QStringLiteral("name")).toString();
-      if (normalizeSourceId(currentId) == normId) {
+      const QJsonObject existingObject = m_sources[j].toObject();
+      if (resourceName(existingObject) == id || isCustomReplacement(existingObject, source)) {
         exists = true;
-        QJsonObject existing = m_sources[j].toObject();
-        if (existing.contains(QStringLiteral("isCustom")) && !source.contains(QStringLiteral("github"))) {
-          source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
-        }
+        QJsonObject existing = existingObject;
         if (existing.contains(QStringLiteral("local_firstSeen")))
           source[QStringLiteral("local_firstSeen")] = existing[QStringLiteral("local_firstSeen")];
         if (existing.contains(QStringLiteral("local_lastChanged")))
@@ -463,6 +521,8 @@ int SourceModel::addSources(const QJsonArray &sources) {
         if (existing.contains(QStringLiteral("local_favourite")))
           source[QStringLiteral("local_favourite")] = existing[QStringLiteral("local_favourite")];
         m_sources[j] = source;
+        updatedExisting = true;
+        Q_EMIT dataChanged(index(j, 0), index(j, ColCount - 1));
         break;
       }
     }
@@ -473,7 +533,6 @@ int SourceModel::addSources(const QJsonArray &sources) {
       if (!source.contains(QStringLiteral("local_lastChanged"))) {
         source[QStringLiteral("local_lastChanged")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       }
-      seenInNewSources[normId] = true;
       newSources.append(source);
       addedCount++;
     }
@@ -486,6 +545,8 @@ int SourceModel::addSources(const QJsonArray &sources) {
     }
     endInsertRows();
     saveSources();
+  } else if (updatedExisting) {
+    saveSources();
   }
   return addedCount;
 }
@@ -496,19 +557,15 @@ void SourceModel::loadSources() {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     QJsonArray rawSources = doc.array();
     QJsonArray deduplicatedSources;
-    QHash<QString, int> normalizedIdToIndex;
+    QHash<QString, int> resourceNameToIndex;
     bool modified = false;
 
     for (int i = 0; i < rawSources.size(); ++i) {
       QJsonObject source = rawSources[i].toObject();
-      QString id = source.value(QStringLiteral("id")).toString();
-      if (id.isEmpty()) {
-        id = source.value(QStringLiteral("name")).toString();
-      }
-      QString normId = normalizeSourceId(id);
+      const QString id = resourceName(source);
 
-      if (normalizedIdToIndex.contains(normId)) {
-        int existingIndex = normalizedIdToIndex[normId];
+      if (resourceNameToIndex.contains(id)) {
+        int existingIndex = resourceNameToIndex[id];
         QJsonObject existing = deduplicatedSources[existingIndex].toObject();
 
         int existingCount = existing.value(QStringLiteral("local_sessionCount")).toInt();
@@ -524,7 +581,7 @@ void SourceModel::loadSources() {
         deduplicatedSources[existingIndex] = existing;
         modified = true;
       } else {
-        normalizedIdToIndex[normId] = deduplicatedSources.size();
+        resourceNameToIndex[id] = deduplicatedSources.size();
         deduplicatedSources.append(source);
       }
     }
@@ -540,26 +597,17 @@ void SourceModel::loadSources() {
 
 void SourceModel::updateSource(const QJsonObject &sourceConst) {
   QJsonObject source = sourceConst;
-  QString id = source.value(QStringLiteral("id")).toString();
-  if (id.isEmpty()) {
-    id = source.value(QStringLiteral("name")).toString();
-  }
+  const QString id = resourceName(source);
 
   if (id.isEmpty()) {
     return;
   }
 
-  QString normId = normalizeSourceId(id);
-
   for (int i = 0; i < m_sources.size(); ++i) {
-    QString currentId = m_sources[i].toObject().value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = m_sources[i].toObject().value(QStringLiteral("name")).toString();
-    }
-
-    if (normalizeSourceId(currentId) == normId) {
-      QJsonObject existing = m_sources[i].toObject();
-      if (existing.contains(QStringLiteral("isCustom")) && !source.contains(QStringLiteral("github"))) {
+    const QJsonObject existing = m_sources[i].toObject();
+    if (resourceName(existing) == id || isCustomReplacement(existing, source)) {
+      if (resourceName(existing) == id && existing.contains(QStringLiteral("isCustom")) &&
+          !source.contains(QStringLiteral("githubRepo")) && !source.contains(QStringLiteral("github"))) {
         source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
       }
       if (existing.contains(QStringLiteral("local_lastUsed")))
@@ -622,13 +670,8 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
 }
 
 void SourceModel::removeSource(const QString &id) {
-  QString normId = normalizeSourceId(id);
   for (int i = 0; i < m_sources.size(); ++i) {
-    QString currentId = m_sources[i].toObject().value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = m_sources[i].toObject().value(QStringLiteral("name")).toString();
-    }
-    if (normalizeSourceId(currentId) == normId) {
+    if (resourceName(m_sources[i].toObject()) == id) {
       beginRemoveRows(QModelIndex(), i, i);
       m_sources.removeAt(i);
       endRemoveRows();
@@ -638,15 +681,9 @@ void SourceModel::removeSource(const QString &id) {
   }
 }
 void SourceModel::recordSessionCreated(const QString &sourceId) {
-  QString normSourceId = normalizeSourceId(sourceId);
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString currentId = source.value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = source.value(QStringLiteral("name")).toString();
-    }
-
-    if (normalizeSourceId(currentId) == normSourceId) {
+    if (resourceName(source) == sourceId) {
       source[QStringLiteral("local_lastUsed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       source[QStringLiteral("local_lastChanged")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       int count = source.value(QStringLiteral("local_sessionCount")).toInt(0);
@@ -736,9 +773,6 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
     if (sourceId.isEmpty())
       continue;
 
-    // Normalize source ID
-    QString normSourceId = normalizeSourceId(sourceId);
-
     QString updateTimeStr = session.value(QStringLiteral("updateTime")).toString();
     QString createTimeStr = session.value(QStringLiteral("createTime")).toString();
     QString timeStr = updateTimeStr.isEmpty() ? createTimeStr : updateTimeStr;
@@ -751,19 +785,19 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
       }
     }
 
-    sessionCounts[normSourceId]++;
+    sessionCounts[sourceId]++;
     if (ts > 0) {
-      QJsonArray timestamps = sessionTimestamps[normSourceId];
+      QJsonArray timestamps = sessionTimestamps[sourceId];
       timestamps.append(ts);
-      sessionTimestamps[normSourceId] = timestamps;
+      sessionTimestamps[sourceId] = timestamps;
 
-      if (!lastUsedDates.contains(normSourceId)) {
-        lastUsedDates[normSourceId] = timeStr;
+      if (!lastUsedDates.contains(sourceId)) {
+        lastUsedDates[sourceId] = timeStr;
       } else {
-        QDateTime currentLast = QDateTime::fromString(lastUsedDates[normSourceId], Qt::ISODate);
+        QDateTime currentLast = QDateTime::fromString(lastUsedDates[sourceId], Qt::ISODate);
         QDateTime thisTime = QDateTime::fromString(timeStr, Qt::ISODate);
         if (thisTime > currentLast) {
-          lastUsedDates[normSourceId] = timeStr;
+          lastUsedDates[sourceId] = timeStr;
         }
       }
     }
@@ -777,11 +811,7 @@ void SourceModel::recalculateStatsFromSessions(const QJsonArray &allSessions) {
   bool changed = false;
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty())
-      id = source.value(QStringLiteral("name")).toString();
-
-    QString keyToUse = normalizeSourceId(id);
+    const QString keyToUse = resourceName(source);
 
     int count = sessionCounts.value(keyToUse, 0);
     QJsonArray timestamps = sessionTimestamps.value(keyToUse, QJsonArray());
@@ -843,11 +873,10 @@ void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *se
     if (source.isEmpty())
       continue;
 
-    QString normSourceId = normalizeSourceId(source);
     if (item.isBlocked) {
-      blockedCounts[normSourceId]++;
+      blockedCounts[source]++;
     } else {
-      pendingCounts[normSourceId]++;
+      pendingCounts[source]++;
     }
   }
 
@@ -863,22 +892,18 @@ void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *se
         sourceId = session.value(QStringLiteral("source")).toString();
       }
       if (!sourceId.isEmpty()) {
-        inProgressCounts[normalizeSourceId(sourceId)]++;
+        inProgressCounts[sourceId]++;
       }
     }
   }
 
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject source = m_sources[i].toObject();
-    QString id = source.value(QStringLiteral("id")).toString();
-    if (id.isEmpty()) {
-      id = source.value(QStringLiteral("name")).toString();
-    }
-    QString normSourceId = normalizeSourceId(id);
+    const QString sourceId = resourceName(source);
 
-    int newBlocked = blockedCounts.value(normSourceId, 0);
-    int newPending = pendingCounts.value(normSourceId, 0);
-    int newInProgress = inProgressCounts.value(normSourceId, 0);
+    int newBlocked = blockedCounts.value(sourceId, 0);
+    int newPending = pendingCounts.value(sourceId, 0);
+    int newInProgress = inProgressCounts.value(sourceId, 0);
 
     if (source.value(QStringLiteral("local_blockedCount")).toInt() != newBlocked ||
         source.value(QStringLiteral("local_pendingCount")).toInt() != newPending ||
@@ -914,14 +939,9 @@ QString SourceModel::extractApiDefaultBranch(const QJsonObject &rawData) {
 }
 
 void SourceModel::setDefaultBranches(const QString &id, const QStringList &branches) {
-  QString normId = normalizeSourceId(id);
   for (int i = 0; i < m_sources.size(); ++i) {
     QJsonObject obj = m_sources[i].toObject();
-    QString currentId = obj.value(QStringLiteral("id")).toString();
-    if (currentId.isEmpty()) {
-      currentId = obj.value(QStringLiteral("name")).toString();
-    }
-    if (normalizeSourceId(currentId) == normId) {
+    if (resourceName(obj) == id) {
       QJsonArray arr;
       for (const QString &b : branches) {
         arr.append(b);

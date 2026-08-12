@@ -23,7 +23,9 @@
 #include "sessionmodel.h"
 #include "sessionwindow.h"
 #include "settingsdialog.h"
+#include "sourcefixer.h"
 #include "sourcemodel.h"
+#include "sourceremapdialog.h"
 #include "sourcesrefreshprogresswindow.h"
 #include "sourcestatusdialog.h"
 #include "templateeditdialog.h"
@@ -139,6 +141,11 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this, &MainWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this, &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg) {
+    if (m_suppressNextErrorDialog) {
+      m_suppressNextErrorDialog = false;
+      updateStatus(i18n("Error: %1", msg));
+      return;
+    }
     if (!m_isProcessingQueue) {
       onError(msg);
     }
@@ -372,14 +379,10 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
       const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
       QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
       QString id = m_sourceModel->data(sourceIndex, SourceModel::IdRole).toString();
-      QString owner;
-      QString repo;
-      QStringList parts = id.split(QLatin1Char('/'));
-      if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-        owner = parts[2];
-        repo = parts[3];
-      }
-      QString urlStr = urlFromSourceId(id);
+      const QJsonObject rawSource = m_sourceModel->data(sourceIndex, SourceModel::RawDataRole).toJsonObject();
+      const QString owner = SourceModel::githubOwner(rawSource);
+      const QString repo = SourceModel::githubRepository(rawSource);
+      QString urlStr = urlFromSource(rawSource);
 
       QMenu menu;
       QMenu *favMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("emblem-favorite")), i18n("Favourite"));
@@ -435,8 +438,7 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
         }
       });
       QAction *showStatusAction = menu.addAction(i18n("Show Status"));
-      connect(showStatusAction, &QAction::triggered,
-              [this, id]() { showSourceStatusDialog(id.split(QLatin1Char('/')).last()); });
+      connect(showStatusAction, &QAction::triggered, [this, id]() { showSourceStatusDialog(id); });
 
       menu.addAction(m_refreshSourceAction);
       menu.addAction(m_viewSessionsAction);
@@ -1693,6 +1695,10 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
 
             updateStatus(i18n("Sending error item immediately..."));
           });
+          connect(window, &ErrorWindow::remapSourceRequested, [this](int row) {
+            const QString source = SourceFixer::source(m_errorsModel->getError(row));
+            showFixSourcesDialog(source);
+          });
           connect(window, &ErrorWindow::requeueRequested, [this](int row) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
@@ -2041,6 +2047,10 @@ void MainWindow::createGeneralActions() {
   actionCollection()->addAction(QStringLiteral("new_session"), newSessionAction);
   KGlobalAccel::setGlobalShortcut(newSessionAction, QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_J));
   actionCollection()->setDefaultShortcut(newSessionAction, QKeySequence(Qt::CTRL | Qt::Key_N));
+
+  m_fixSourcesAction = new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")), i18n("Fix Sources..."), this);
+  actionCollection()->addAction(QStringLiteral("fix_sources"), m_fixSourcesAction);
+  connect(m_fixSourcesAction, &QAction::triggered, this, qOverload<>(&MainWindow::showFixSourcesDialog));
 
   m_createRepoAndSessionAction =
       new QAction(QIcon::fromTheme(QStringLiteral("folder-new")), i18n("Create Repo and Session"), this);
@@ -2768,9 +2778,8 @@ void MainWindow::setupUrlActions() {
     int count = 0;
     for (const QModelIndex &idx : itemsToOpen) {
       QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-      QString id = m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
-
-      QString urlStr = urlFromSourceId(id);
+      const QJsonObject rawSource = m_sourceModel->data(mappedIdx, SourceModel::RawDataRole).toJsonObject();
+      QString urlStr = urlFromSource(rawSource);
 
       if (!urlStr.isEmpty()) {
         Utils::openUrl(QUrl(urlStr));
@@ -2795,9 +2804,8 @@ void MainWindow::setupUrlActions() {
     QStringList urlsToCopy;
     for (const QModelIndex &idx : selectedRows) {
       QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-      QString id = m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
-
-      QString urlStr = urlFromSourceId(id);
+      const QJsonObject rawSource = m_sourceModel->data(mappedIdx, SourceModel::RawDataRole).toJsonObject();
+      QString urlStr = urlFromSource(rawSource);
 
       if (!urlStr.isEmpty()) {
         urlsToCopy.append(urlStr);
@@ -3301,11 +3309,9 @@ void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoN
   repoReq[QStringLiteral("repoName")] = repoName;
   repoReq[QStringLiteral("private")] = isPrivate;
 
-  QString username = m_apiManager->githubUsername();
-  QString sourceId = QStringLiteral("github/") + (org.isEmpty() ? username : org) + QStringLiteral("/") + repoName;
-
   QJsonObject sessionReq;
-  sessionReq[QStringLiteral("source")] = sourceId;
+  sessionReq[QStringLiteral("_kjules_github_owner")] = org.isEmpty() ? m_apiManager->githubUsername() : org;
+  sessionReq[QStringLiteral("_kjules_github_repository")] = repoName;
   sessionReq[QStringLiteral("prompt")] = prompt;
   if (requirePlanApproval) {
     sessionReq[QStringLiteral("requirePlanApproval")] = true;
@@ -3345,7 +3351,7 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData, bool ignor
       const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
       for (const QModelIndex &selIndex : selection) {
         QModelIndex mappedIndex = proxy ? proxy->mapToSource(selIndex) : selIndex;
-        QString srcName = m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
+        QString srcName = m_sourceModel->data(mappedIndex, SourceModel::IdRole).toString();
         sourcesArr.append(srcName);
       }
       finalData[QStringLiteral("sources")] = sourcesArr;
@@ -3537,7 +3543,7 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
 void MainWindow::processErrorRetries() {}
 
 void MainWindow::onQueueTimerTimeout() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
+  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
     return;
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
@@ -3599,7 +3605,7 @@ void MainWindow::checkPendingRefreshBeforeQueue(const QString &id) {
 }
 
 void MainWindow::processQueue() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue)
+  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
     return;
   if (m_queueModel->isEmpty()) {
     if (m_queueTimer->isActive()) {
@@ -3755,8 +3761,19 @@ void MainWindow::processQueue() {
     return;
   }
 
-  m_isProcessingQueue = true;
   QueueItem item = m_queueModel->peek();
+  if (item.requestData.contains(QStringLiteral("_kjules_github_owner"))) {
+    if (!resolvePendingGithubSource()) {
+      m_isWaitingForCreatedRepoSource = true;
+      if (!m_isRefreshingSources) {
+        refreshSources();
+      }
+      updateStatus(i18n("Waiting for the new repository to appear in Jules sources."));
+      return;
+    }
+    item = m_queueModel->peek();
+  }
+  m_isProcessingQueue = true;
   if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
       item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
     m_apiManager->createGithubRepoAsync(item.requestData);
@@ -4275,6 +4292,9 @@ void MainWindow::showErrorDetails(int row, QueueModel *model) {
     }
   });
   connect(window, &ErrorWindow::sendNowRequested, this, &MainWindow::sendQueueItemNow);
+  connect(window, &ErrorWindow::remapSourceRequested, [this, model](int queueRow) {
+    showFixSourcesDialog(SourceFixer::source(model->getItem(queueRow).requestData));
+  });
 
   window->setAttribute(Qt::WA_DeleteOnClose);
   window->show();
@@ -4326,6 +4346,7 @@ void MainWindow::convertQueueItemToDraft(int row) {
 
 void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response,
                                          const QString &errorString, const QString &httpDetails) {
+  m_suppressNextErrorDialog = true;
   QJsonObject requestCopy = request;
   if (requestCopy.value(QStringLiteral("_kjules_failed_action")).toString() == QStringLiteral("send_now")) {
     int originalRow = requestCopy.value(QStringLiteral("_kjules_requeue_origin_row")).toInt();
@@ -4341,16 +4362,65 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(i18n("Send Now Failed"));
     msgBox.setText(i18n("The task sent immediately has failed to process:\n%1", errorString));
+    const QJsonObject apiError = response.value(QStringLiteral("error")).toObject();
+    const QString apiMessage = apiError.value(QStringLiteral("message")).toString();
+    if (!apiMessage.isEmpty()) {
+      msgBox.setInformativeText(apiMessage);
+    }
     msgBox.setIcon(QMessageBox::Warning);
 
     QPushButton *readdBtn = msgBox.addButton(i18n("Readd back where it came from"), QMessageBox::ActionRole);
     QPushButton *startBtn = msgBox.addButton(i18n("Add to the start of the queue"), QMessageBox::ActionRole);
     QPushButton *endBtn = msgBox.addButton(i18n("Add to the end of the queue"), QMessageBox::ActionRole);
+    QPushButton *editBtn = msgBox.addButton(i18n("Edit in New Session"), QMessageBox::ActionRole);
+    QPushButton *remapBtn = nullptr;
+    const bool sourceNotFound = apiError.value(QStringLiteral("code")).toInt() == 404 ||
+                                apiError.value(QStringLiteral("status")).toString() == QStringLiteral("NOT_FOUND");
+    if (sourceNotFound) {
+      remapBtn = msgBox.addButton(i18n("Remap Source"), QMessageBox::ActionRole);
+    }
     msgBox.addButton(i18n("Send to errors"), QMessageBox::ActionRole);
 
     msgBox.exec();
 
-    if (msgBox.clickedButton() == startBtn) {
+    if (msgBox.clickedButton() == editBtn) {
+      if (sourceIsQueue && !itemJson.isEmpty()) {
+        const int insertAt = originalRow >= 0 ? originalRow : m_queueModel->size();
+        m_queueModel->insertItem(insertAt, QueueItem::fromJson(itemJson));
+        editQueueItem(insertAt);
+      } else {
+        QJsonObject editableError = errDataJson;
+        editableError[QStringLiteral("request")] = requestCopy;
+        editableError[QStringLiteral("response")] = response;
+        editableError[QStringLiteral("message")] = errorString;
+        editableError[QStringLiteral("httpDetails")] = httpDetails;
+        editableError[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+        m_errorsModel->addErrorObj(editableError);
+        onErrorActivated(m_errorsModel->index(0, 0));
+      }
+      return;
+    } else if (remapBtn && msgBox.clickedButton() == remapBtn) {
+      const QString oldSource = SourceFixer::source(requestCopy);
+      if (sourceIsQueue && !itemJson.isEmpty()) {
+        const int insertAt = originalRow >= 0 ? originalRow : m_queueModel->size();
+        m_queueModel->insertItem(insertAt, QueueItem::fromJson(itemJson));
+      } else if (!errDataJson.isEmpty()) {
+        errDataJson[QStringLiteral("response")] = response;
+        errDataJson[QStringLiteral("message")] = errorString;
+        errDataJson[QStringLiteral("httpDetails")] = httpDetails;
+        errDataJson[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+        m_errorsModel->addErrorObj(errDataJson);
+      } else {
+        QJsonObject errorObj{{QStringLiteral("request"), requestCopy},
+                             {QStringLiteral("response"), response},
+                             {QStringLiteral("message"), errorString},
+                             {QStringLiteral("httpDetails"), httpDetails},
+                             {QStringLiteral("timestamp"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}};
+        m_errorsModel->addErrorObj(errorObj);
+      }
+      showFixSourcesDialog(oldSource);
+      return;
+    } else if (msgBox.clickedButton() == startBtn) {
       if (sourceIsQueue) {
         m_queueModel->insertItem(0, QueueItem::fromJson(itemJson));
       } else {
@@ -4547,7 +4617,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 
   for (const QModelIndex &selIndex : selection) {
     QModelIndex mappedIndex = proxy ? proxy->mapToSource(selIndex) : selIndex;
-    QString srcName = m_sourceModel->data(mappedIndex, SourceModel::NameRole).toString();
+    QString srcName = m_sourceModel->data(mappedIndex, SourceModel::IdRole).toString();
     sourcesArr.append(srcName);
   }
 
@@ -4729,18 +4799,162 @@ void MainWindow::refreshGithubDataForSources(const QStringList &sourceIds) {
     updateStatus(i18n("Cannot refresh GitHub data: No GitHub token."));
     return;
   }
+  int requested = 0;
   for (const QString &id : sourceIds) {
-    if (id.startsWith(QStringLiteral("sources/github/"))) {
-      m_apiManager->fetchGithubInfo(id);
-      m_apiManager->fetchGithubBranches(id);
+    const QModelIndexList matches =
+        m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, id, 1, Qt::MatchExactly);
+    if (!matches.isEmpty()) {
+      const QJsonObject raw = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+      const QString owner = SourceModel::githubOwner(raw);
+      const QString repository = SourceModel::githubRepository(raw);
+      if (!owner.isEmpty() && !repository.isEmpty()) {
+        m_apiManager->fetchGithubInfo(id, owner, repository);
+        m_apiManager->fetchGithubBranches(id, owner, repository);
+        ++requested;
+      }
     }
   }
-  updateStatus(i18n("GitHub data refresh requested for %1 sources.", sourceIds.size()));
+  updateStatus(i18n("GitHub data refresh requested for %1 sources.", requested));
 }
 
 void MainWindow::onError(const QString &message) {
   updateStatus(i18n("Error: %1", message));
   QMessageBox::critical(this, i18n("Error"), message);
+}
+
+QList<SourceRemapEntry> MainWindow::pendingSourceEntries(const QString &onlySource) const {
+  QList<SourceRemapEntry> entries;
+  QStringList apiSources;
+  QStringList customSources;
+  for (int row = 0; row < m_sourceModel->rowCount(); ++row) {
+    const QModelIndex modelIndex = m_sourceModel->index(row, 0);
+    const QString id = m_sourceModel->data(modelIndex, SourceModel::IdRole).toString();
+    const QJsonObject raw = m_sourceModel->data(modelIndex, SourceModel::RawDataRole).toJsonObject();
+    if (raw.value(QStringLiteral("isCustom")).toBool()) {
+      customSources.append(id);
+    } else {
+      apiSources.append(id);
+    }
+  }
+  auto containsSource = [](const QStringList &sources, const QString &source) {
+    return std::any_of(sources.cbegin(), sources.cend(),
+                       [&source](const QString &candidate) { return SourceFixer::sameSource(candidate, source); });
+  };
+  auto append = [&entries, &onlySource, &apiSources, &customSources,
+                 &containsSource](const QString &kind, const QString &location, int index, const QJsonObject &object) {
+    const QString source = SourceFixer::source(object);
+    if (source.isEmpty() || (!onlySource.isEmpty() && !SourceFixer::sameSource(source, onlySource))) {
+      return;
+    }
+    if (containsSource(apiSources, source)) {
+      return;
+    }
+    const bool isCustom = containsSource(customSources, source);
+    QJsonObject request = object.value(QStringLiteral("request")).toObject();
+    if (request.isEmpty()) {
+      request = object;
+    }
+    QString description = request.value(QStringLiteral("title")).toString();
+    if (description.isEmpty()) {
+      description = request.value(QStringLiteral("prompt")).toString();
+    }
+    description.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    entries.append({location, description.left(100), source, index, kind, object,
+                    isCustom ? i18n("Custom — optional migration") : i18n("Orphaned"), !isCustom});
+  };
+
+  for (int row = 0; row < m_errorsModel->rowCount(); ++row) {
+    append(QStringLiteral("error"), i18n("Errors"), row, m_errorsModel->getError(row));
+  }
+  for (int row = 0; row < m_draftsModel->rowCount(); ++row) {
+    append(QStringLiteral("draft"), i18n("Drafts"), row, m_draftsModel->getDraft(row));
+  }
+  for (int row = 0; row < m_queueModel->rowCount(); ++row) {
+    const QueueItem item = m_queueModel->getItem(row);
+    if (!item.isWaitItem) {
+      append(QStringLiteral("queue"), item.isBlocked ? i18n("Blocked") : i18n("Queue"), row, item.requestData);
+    }
+  }
+  for (int row = 0; row < m_holdingModel->rowCount(); ++row) {
+    const QueueItem item = m_holdingModel->getItem(row);
+    if (!item.isWaitItem) {
+      append(QStringLiteral("holding"), i18n("Holding"), row, item.requestData);
+    }
+  }
+  for (int row = 0; row < m_sessionModel->rowCount(); ++row) {
+    const QJsonObject session = m_sessionModel->getSession(row);
+    if (session.value(QStringLiteral("state")).toString() != QStringLiteral("IN_PROGRESS")) {
+      append(QStringLiteral("session"),
+             session.contains(QStringLiteral("local_snooze_until")) ? i18n("Snoozed") : i18n("Sessions"), row, session);
+    }
+  }
+  return entries;
+}
+
+void MainWindow::applySourceRemaps(const QList<SourceRemapEntry> &entries, const QStringList &newSources) {
+  for (int position = 0; position < entries.size() && position < newSources.size(); ++position) {
+    const SourceRemapEntry &entry = entries[position];
+    const QString &newSource = newSources[position];
+    if (entry.kind == QStringLiteral("error")) {
+      m_errorsModel->updateError(entry.index, SourceFixer::remap(m_errorsModel->getError(entry.index), newSource));
+    } else if (entry.kind == QStringLiteral("draft")) {
+      m_draftsModel->updateDraft(entry.index, SourceFixer::remap(m_draftsModel->getDraft(entry.index), newSource));
+    } else if (entry.kind == QStringLiteral("queue") || entry.kind == QStringLiteral("holding")) {
+      QueueModel *model = entry.kind == QStringLiteral("queue") ? m_queueModel : m_holdingModel;
+      QueueItem item = model->getItem(entry.index);
+      item.requestData = SourceFixer::remap(item.requestData, newSource);
+      model->updateItem(entry.index, item);
+    } else if (entry.kind == QStringLiteral("session")) {
+      QJsonObject session = SourceFixer::remap(m_sessionModel->getSession(entry.index), newSource);
+      m_sessionModel->updateSessionAt(entry.index, session);
+    }
+  }
+}
+
+void MainWindow::showFixSourcesDialog() { showFixSourcesDialog(QString()); }
+
+void MainWindow::showFixSourcesDialog(const QString &onlySource) {
+  QStringList availableSources;
+  for (int row = 0; row < m_sourceModel->rowCount(); ++row) {
+    const QModelIndex index = m_sourceModel->index(row, 0);
+    const QString source = m_sourceModel->data(index, SourceModel::IdRole).toString();
+    const bool isCustom =
+        m_sourceModel->data(index, SourceModel::RawDataRole).toJsonObject().value(QStringLiteral("isCustom")).toBool();
+    if (!isCustom && !source.isEmpty() && !availableSources.contains(source)) {
+      availableSources.append(source);
+    }
+  }
+  availableSources.sort(Qt::CaseInsensitive);
+  const QList<SourceRemapEntry> entries = pendingSourceEntries(onlySource);
+  if (entries.isEmpty()) {
+    QMessageBox::information(this, i18n("Fix Sources"), i18n("No matching pending or active items were found."));
+    return;
+  }
+  if (availableSources.isEmpty()) {
+    QMessageBox::warning(this, i18n("Fix Sources"), i18n("No current sources are available. Refresh Sources first."));
+    return;
+  }
+
+  SourceRemapDialog dialog(entries, availableSources, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+  QList<SourceRemapEntry> selectedEntries;
+  QStringList replacements;
+  for (const SourceRemapSelection &selection : dialog.selections()) {
+    selectedEntries.append(selection.entry);
+    replacements.append(selection.newSource);
+  }
+  applySourceRemaps(selectedEntries, replacements);
+  const QString summary =
+      i18np("Remapped 1 source reference.", "Remapped %1 source references.", selectedEntries.size());
+  updateStatus(summary);
+  ActivityLogWindow::instance()->logMessage(summary);
+  for (int index = 0; index < selectedEntries.size(); ++index) {
+    const SourceRemapEntry &entry = selectedEntries[index];
+    ActivityLogWindow::instance()->logMessage(i18n("Remapped %1 %2 item “%3”: %4 → %5", entry.status, entry.location,
+                                                   entry.description, entry.source, replacements[index]));
+  }
 }
 
 void MainWindow::toggleWindow() { toggleWindowVisibility(); }
@@ -4872,6 +5086,44 @@ void MainWindow::onSourcesRefreshFinished() {
     updateStatus(
         i18n("Source refresh cancelled. Loaded %1 sources, %2 new.", m_sourcesLoadedCount, m_sourcesAddedCount));
   }
+
+  if (m_isWaitingForCreatedRepoSource) {
+    if (resolvePendingGithubSource()) {
+      updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    } else {
+      updateStatus(i18n("The new repository is not available in Jules sources yet. Refresh sources to retry."));
+    }
+  }
+}
+
+bool MainWindow::resolvePendingGithubSource() {
+  if (m_queueModel->isEmpty()) {
+    m_isWaitingForCreatedRepoSource = false;
+    return false;
+  }
+
+  QueueItem item = m_queueModel->peek();
+  const QString owner = item.requestData.value(QStringLiteral("_kjules_github_owner")).toString();
+  const QString repository = item.requestData.value(QStringLiteral("_kjules_github_repository")).toString();
+  if (owner.isEmpty() || repository.isEmpty()) {
+    m_isWaitingForCreatedRepoSource = false;
+    return true;
+  }
+
+  for (int row = 0; row < m_sourceModel->rowCount(); ++row) {
+    const QModelIndex sourceIndex = m_sourceModel->index(row, 0);
+    const QJsonObject raw = sourceIndex.data(SourceModel::RawDataRole).toJsonObject();
+    if (SourceModel::githubOwner(raw) == owner && SourceModel::githubRepository(raw) == repository) {
+      item.requestData[QStringLiteral("source")] = sourceIndex.data(SourceModel::IdRole).toString();
+      item.requestData.remove(QStringLiteral("_kjules_github_owner"));
+      item.requestData.remove(QStringLiteral("_kjules_github_repository"));
+      m_queueModel->updateItem(0, item);
+      m_isWaitingForCreatedRepoSource = false;
+      return true;
+    }
+  }
+  return false;
 }
 
 void MainWindow::onSourceDetailsReceived(const QJsonObject &source) {
@@ -5330,7 +5582,7 @@ void MainWindow::updateFavouritesMenu() {
         if (persistentIdx.isValid()) {
           QJsonObject initData;
           QJsonArray sourcesArr;
-          QString srcName = m_sourceModel->data(persistentIdx, SourceModel::NameRole).toString();
+          QString srcName = m_sourceModel->data(persistentIdx, SourceModel::IdRole).toString();
           sourcesArr.append(srcName);
           initData[QStringLiteral("sources")] = sourcesArr;
           showNewSessionDialog(initData);
@@ -5723,27 +5975,7 @@ void MainWindow::addGithubLink(QMenu *githubMenu, const QString &urlStr, const Q
   });
 }
 
-QString MainWindow::urlFromSourceId(const QString &id) const {
-  QString urlStr;
-  QStringList parts = id.split(QLatin1Char('/'));
-  if (parts.size() >= 4 && parts[0] == QStringLiteral("sources")) {
-    QString provider = parts[1];
-    QString owner = parts[2];
-    QString repo = parts[3];
-    if (provider == QStringLiteral("github")) {
-      urlStr = QStringLiteral("https://github.com/") + owner + QLatin1Char('/') + repo;
-    } else if (provider == QStringLiteral("gitlab")) {
-      urlStr = QStringLiteral("https://gitlab.com/") + owner + QLatin1Char('/') + repo;
-    } else if (provider == QStringLiteral("bitbucket")) {
-      urlStr = QStringLiteral("https://bitbucket.org/") + owner + QLatin1Char('/') + repo;
-    } else {
-      urlStr = QStringLiteral("https://") + provider + QStringLiteral(".com/") + owner + QLatin1Char('/') + repo;
-    }
-  } else {
-    urlStr = id;
-  }
-  return urlStr;
-}
+QString MainWindow::urlFromSource(const QJsonObject &source) const { return SourceModel::repositoryUrl(source); }
 
 QList<int> MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows, const QAbstractItemView *view) const {
   QSet<int> uniqueRows;

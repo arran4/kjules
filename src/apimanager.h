@@ -50,8 +50,8 @@ public:
   void getSource(const QString &sourceId);
   void listActivities(const QString &sessionId);
   void sendMessage(const QString &sessionId, const QString &message);
-  void fetchGithubInfo(const QString &sourceId);
-  void fetchGithubBranches(const QString &sourceId);
+  void fetchGithubInfo(const QString &sourceName, const QString &owner, const QString &repository);
+  void fetchGithubBranches(const QString &sourceName, const QString &owner, const QString &repository);
   void fetchGithubPullRequest(const QString &prUrl);
   void createGithubRepoAsync(const QJsonObject &requestData);
 

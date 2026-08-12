@@ -42,7 +42,7 @@ private:
   int m_totalGithubRequests;
   int m_finishedGithubRequests;
   int m_activeWorkers;
-  QStringList m_githubQueue;
+  QList<QJsonObject> m_githubQueue;
   bool m_isFinished;
 };
 

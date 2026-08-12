@@ -23,6 +23,7 @@ Q_SIGNALS:
   void templateRequested(int row);
   void sendNowRequested(int row);
   void requeueRequested(int row);
+  void remapSourceRequested(int row);
 
 private Q_SLOTS:
   void onCopyError();

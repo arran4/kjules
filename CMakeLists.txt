@@ -68,6 +68,8 @@ set(kjules_SRCS
     src/mainwindow.cpp
     src/apimanager.cpp
     src/sessionrequestbuilder.cpp
+    src/sourcefixer.cpp
+    src/sourceremapdialog.cpp
     src/followsessiondialog.cpp
     src/backupdialog.cpp
     src/restoredialog.cpp

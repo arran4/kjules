@@ -108,13 +108,11 @@ void SourcesRefreshProgressWindow::onSourcesReceived(const QJsonArray &sources) 
   if (!m_apiManager->githubToken().isEmpty()) {
     for (int i = 0; i < sources.size(); ++i) {
       QJsonObject source = sources[i].toObject();
-      QString id = source.value(QStringLiteral("id")).toString();
-      if (id.isEmpty()) {
-        id = source.value(QStringLiteral("name")).toString();
-      }
-      if (id.startsWith(QStringLiteral("sources/github/")) || id.startsWith(QStringLiteral("github/"))) {
+      const QJsonObject githubRepo = source.value(QStringLiteral("githubRepo")).toObject();
+      if (!githubRepo.value(QStringLiteral("owner")).toString().isEmpty() &&
+          !githubRepo.value(QStringLiteral("repo")).toString().isEmpty()) {
         m_totalGithubRequests++;
-        m_githubQueue.append(id);
+        m_githubQueue.append(source);
       }
     }
   }
@@ -148,8 +146,11 @@ void SourcesRefreshProgressWindow::processNextGithub() {
   }
 
   m_activeWorkers++;
-  QString id = m_githubQueue.takeFirst();
-  m_apiManager->fetchGithubInfo(id);
+  const QJsonObject source = m_githubQueue.takeFirst();
+  const QJsonObject githubRepo = source.value(QStringLiteral("githubRepo")).toObject();
+  const QString sourceName = source.value(QStringLiteral("name")).toString();
+  m_apiManager->fetchGithubInfo(sourceName, githubRepo.value(QStringLiteral("owner")).toString(),
+                                githubRepo.value(QStringLiteral("repo")).toString());
 
   // Stagger next requests by 1000ms
   QTimer::singleShot(1000, this, &SourcesRefreshProgressWindow::processNextGithub);
