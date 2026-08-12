@@ -18,3 +18,6 @@ add_test(NAME AdvancedFilterProxyModelTest COMMAND test_advancedfilterproxymodel
 add_test(NAME SessionRequestBuilderTest COMMAND test_sessionrequestbuilder)
 add_test(NAME SourceFixerTest COMMAND test_sourcefixer)
 add_test(NAME SourceRemapDialogTest COMMAND test_sourceremapdialog)
+
+set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest
+                     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
