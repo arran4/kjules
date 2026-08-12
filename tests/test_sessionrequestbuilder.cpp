@@ -52,11 +52,11 @@ void SessionRequestBuilderTest::createsMinimalRepolessRequest() {
 void SessionRequestBuilderTest::createsDefaultBranchRequestWithoutRepoContext() {
   const QJsonObject actual =
       SessionRequestBuilder::createSession({{QStringLiteral("prompt"), QStringLiteral("Add verification notes")},
-                                            {QStringLiteral("source"), QStringLiteral("sources/github/arran4/goa4web")},
+                                            {QStringLiteral("source"), QStringLiteral("sources/arran4/goa4web")},
                                             {QStringLiteral("automationMode"), QStringLiteral("AUTO_CREATE_PR")}});
   const QJsonObject expected{{QStringLiteral("prompt"), QStringLiteral("Add verification notes")},
                              {QStringLiteral("sourceContext"),
-                              QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/github/arran4/goa4web")}}},
+                              QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/arran4/goa4web")}}},
                              {QStringLiteral("automationMode"), QStringLiteral("AUTO_CREATE_PR")}};
   QCOMPARE(actual, expected);
   QVERIFY(!actual.value(QStringLiteral("sourceContext")).toObject().contains(QStringLiteral("githubRepoContext")));
@@ -65,18 +65,18 @@ void SessionRequestBuilderTest::createsDefaultBranchRequestWithoutRepoContext() 
 void SessionRequestBuilderTest::preservesSourceResourceNameVerbatim() {
   const QJsonObject actual = SessionRequestBuilder::createSession(
       {{QStringLiteral("prompt"), QStringLiteral("Task")},
-       {QStringLiteral("source"), QStringLiteral("sources/github/opaque/provider/example/repo")}});
+       {QStringLiteral("source"), QStringLiteral("opaque/provider/example/repo")}});
   QCOMPARE(actual.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString(),
-           QStringLiteral("sources/github/opaque/provider/example/repo"));
+           QStringLiteral("opaque/provider/example/repo"));
 }
 
 void SessionRequestBuilderTest::includesExplicitBranchForOpaqueSourceName() {
   const QJsonObject actual =
       SessionRequestBuilder::createSession({{QStringLiteral("prompt"), QStringLiteral("Task")},
-                                            {QStringLiteral("source"), QStringLiteral("sources/github/arran4/goa4web")},
+                                            {QStringLiteral("source"), QStringLiteral("sources/arran4/goa4web")},
                                             {QStringLiteral("startingBranch"), QStringLiteral("feature/tests")}});
   const QJsonObject sourceContext = actual.value(QStringLiteral("sourceContext")).toObject();
-  QCOMPARE(sourceContext.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/arran4/goa4web"));
+  QCOMPARE(sourceContext.value(QStringLiteral("source")).toString(), QStringLiteral("sources/arran4/goa4web"));
   QCOMPARE(sourceContext.value(QStringLiteral("githubRepoContext"))
                .toObject()
                .value(QStringLiteral("startingBranch"))
@@ -88,7 +88,7 @@ void SessionRequestBuilderTest::preservesCanonicalRequestWhenRetryingError() {
   const QJsonObject canonicalRequest{
       {QStringLiteral("prompt"), QStringLiteral("Add verification notes")},
       {QStringLiteral("sourceContext"),
-       QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/github/arran4/goa4web")},
+       QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/arran4/goa4web")},
                    {QStringLiteral("githubRepoContext"),
                     QJsonObject{{QStringLiteral("startingBranch"), QStringLiteral("feature/verification")}}}}},
       {QStringLiteral("automationMode"), QStringLiteral("AUTO_CREATE_PR")}};
@@ -100,7 +100,7 @@ void SessionRequestBuilderTest::unwrapsRequestFromApplicationMetadata() {
   const QJsonObject canonicalRequest{
       {QStringLiteral("prompt"), QStringLiteral("Task")},
       {QStringLiteral("sourceContext"),
-       QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/github/arran4/goa4web")},
+       QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/arran4/goa4web")},
                    {QStringLiteral("githubRepoContext"),
                     QJsonObject{{QStringLiteral("startingBranch"), QStringLiteral("release")}}}}}};
   const QJsonObject wrapper{{QStringLiteral("request"), canonicalRequest},

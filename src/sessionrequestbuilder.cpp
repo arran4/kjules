@@ -19,16 +19,7 @@ QJsonObject createSession(const QJsonObject &requestData) {
     source = suppliedSourceContext.value(QStringLiteral("source")).toString();
   }
   if (!source.isEmpty()) {
-    QString apiSource = source;
-    if (apiSource.startsWith(QStringLiteral("sources/"))) {
-      apiSource = apiSource.mid(8);
-    }
-    if (apiSource.startsWith(QStringLiteral("github/"))) {
-      apiSource = apiSource.mid(7);
-    }
-    apiSource = QStringLiteral("sources/github/") + apiSource;
-
-    QJsonObject sourceContext{{QStringLiteral("source"), apiSource}};
+    QJsonObject sourceContext{{QStringLiteral("source"), source}};
     QString startingBranch = input.value(QStringLiteral("startingBranch")).toString();
     if (startingBranch.isEmpty()) {
       startingBranch = suppliedSourceContext.value(QStringLiteral("githubRepoContext"))
