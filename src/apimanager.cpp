@@ -711,12 +711,19 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
 
   json[QStringLiteral("sourceContext")] = sourceContext;
 
-  if (requestData.contains(QStringLiteral("requirePlanApproval"))) {
-    json[QStringLiteral("requirePlanApproval")] = requestData.value(QStringLiteral("requirePlanApproval")).toBool();
-  }
+  // Always include requirePlanApproval as it's required by the API even if false
+  json[QStringLiteral("requirePlanApproval")] = requestData.value(QStringLiteral("requirePlanApproval")).toBool();
 
   if (requestData.contains(QStringLiteral("automationMode"))) {
     json[QStringLiteral("automationMode")] = requestData.value(QStringLiteral("automationMode")).toString();
+  }
+
+  // Pass any additional keys from the internal payload structure like _kjules metadata to json directly
+  // so it correctly retains tracking
+  for (auto it = requestData.constBegin(); it != requestData.constEnd(); ++it) {
+    if (it.key().startsWith(QStringLiteral("_kjules"))) {
+      json.insert(it.key(), it.value());
+    }
   }
 
   QByteArray data = QJsonDocument(json).toJson();

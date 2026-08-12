@@ -1686,11 +1686,11 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             QJsonObject errData = m_errorsModel->getError(row);
             QJsonObject req = errData.value(QStringLiteral("request")).toObject();
             m_errorsModel->removeError(row);
-            req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
-            req[QStringLiteral("_kjules_requeue_origin_row")] = row;
-            req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
-            req[QStringLiteral("_kjules_requeue_err_data")] = errData;
-            m_apiManager->createSessionAsync(req);
+
+            QueueItem item;
+            item.requestData = req;
+            sendItemNow(item, row, false, errData);
+
             updateStatus(i18n("Sending error item immediately..."));
           });
           connect(window, &ErrorWindow::requeueRequested, [this](int row) {
@@ -3512,10 +3512,9 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
       req[QStringLiteral("automationMode")] = automationMode;
     }
     if (queueAction == QStringLiteral("send_now")) {
-      req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
-      req[QStringLiteral("_kjules_requeue_source_is_queue")] = false;
-      req[QStringLiteral("_kjules_requeue_origin_row")] = -1;
-      m_apiManager->createSessionAsync(req);
+      QueueItem item;
+      item.requestData = req;
+      sendItemNow(item, -1, false);
     } else if (queueAction == QStringLiteral("send_next")) {
       QueueItem item;
       item.requestData = req;
@@ -4211,12 +4210,28 @@ void MainWindow::sendQueueItemNow(int row) {
     return;
   m_queueModel->removeItem(row);
   updateStatus(i18n("Sending queue item immediately..."));
+
+  sendItemNow(item, row, true);
+}
+
+void MainWindow::sendItemNow(const QueueItem &item, int originRow, bool sourceIsQueue, const QJsonObject &errData) {
   QJsonObject req = item.requestData;
   req[QStringLiteral("_kjules_failed_action")] = QStringLiteral("send_now");
-  req[QStringLiteral("_kjules_requeue_origin_row")] = row;
-  req[QStringLiteral("_kjules_requeue_source_is_queue")] = true;
-  req[QStringLiteral("_kjules_requeue_item")] = item.toJson();
-  m_apiManager->createSessionAsync(req);
+  req[QStringLiteral("_kjules_requeue_origin_row")] = originRow;
+  req[QStringLiteral("_kjules_requeue_source_is_queue")] = sourceIsQueue;
+
+  if (sourceIsQueue) {
+    req[QStringLiteral("_kjules_requeue_item")] = item.toJson();
+  } else if (!errData.isEmpty()) {
+    req[QStringLiteral("_kjules_requeue_err_data")] = errData;
+  }
+
+  if (req.contains(QStringLiteral("_kjules_action")) &&
+      req.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
+    m_apiManager->createGithubRepoAsync(req);
+  } else {
+    m_apiManager->createSessionAsync(req);
+  }
 }
 
 void MainWindow::requeueError(int sourceRow) {

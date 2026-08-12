@@ -1398,6 +1398,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   m_createButton = new QToolButton(this);
   m_createButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+  m_createButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
@@ -1443,7 +1444,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   connect(draftButton, &QPushButton::clicked, saveDraftAction, &QAction::trigger);
 
   m_createSessionAction = actionCollection()->addAction(QStringLiteral("create_session"));
-  m_createSessionAction->setText(tr("Create &Session"));
+  m_createSessionAction->setText(tr("Queue &Session"));
   m_createSessionAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
   actionCollection()->setDefaultShortcuts(
       m_createSessionAction, {QKeySequence(Qt::CTRL | Qt::Key_Enter), QKeySequence(Qt::CTRL | Qt::Key_Return)});
@@ -1552,7 +1553,7 @@ void NewSessionDialog::setEditMode(bool isEdit) {
     m_createSessionAction->setText(tr("Requeue Session"));
   } else {
     setWindowTitle(tr("Create New Session"));
-    m_createSessionAction->setText(tr("Create Session"));
+    m_createSessionAction->setText(tr("Queue Session"));
   }
 }
 
