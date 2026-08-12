@@ -1,4 +1,5 @@
 #include "errorwindow.h"
+#include "sessionrequestbuilder.h"
 
 #include <KLocalizedString>
 #include <QApplication>
@@ -127,7 +128,8 @@ void ErrorWindow::setupUi() {
   QLabel *reqLabel = new QLabel(i18n("Raw Request:"), this);
   m_rawRequestEdit = new QTextEdit(this);
   m_rawRequestEdit->setReadOnly(true);
-  m_rawRequestEdit->setPlainText(QString::fromUtf8(QJsonDocument(m_requestData).toJson(QJsonDocument::Indented)));
+  m_rawRequestEdit->setPlainText(QString::fromUtf8(
+      QJsonDocument(SessionRequestBuilder::createSession(m_requestData)).toJson(QJsonDocument::Indented)));
 
   QLabel *resLabel = new QLabel(i18n("Raw Response:"), this);
   m_rawResponseEdit = new QTextEdit(this);
