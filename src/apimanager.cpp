@@ -1,4 +1,5 @@
 #include "apimanager.h"
+#include "sessionrequestbuilder.h"
 #include <KConfigGroup>
 #include <KSharedConfig>
 #include <KWallet>
@@ -236,12 +237,11 @@ void APIManager::sendMessage(const QString &sessionId, const QString &message) {
     return;
   }
 
-  QString endpoint = QStringLiteral("/sessions/") + cleanId + QStringLiteral("/messages");
+  QString endpoint = QStringLiteral("/sessions/") + cleanId + QStringLiteral(":sendMessage");
 
   QNetworkRequest request = createRequest(endpoint);
 
-  QJsonObject json;
-  json[QStringLiteral("message")] = message;
+  const QJsonObject json = SessionRequestBuilder::sendMessage(message);
   QByteArray data = QJsonDocument(json).toJson();
 
   QNetworkReply *reply = m_nam->post(request, data);
@@ -688,43 +688,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   }
 
   QNetworkRequest request = createRequest(QStringLiteral("/sessions"));
-  QJsonObject json;
-  json[QStringLiteral("prompt")] = requestData.value(QStringLiteral("prompt")).toString();
-
-  QJsonObject sourceContext;
-  QString sourceStr = requestData.value(QStringLiteral("source")).toString();
-  if (!sourceStr.startsWith(QStringLiteral("sources/")) && !sourceStr.isEmpty()) {
-    sourceStr = QStringLiteral("sources/") + sourceStr;
-  }
-  sourceContext[QStringLiteral("source")] = sourceStr;
-
-  if (sourceStr.startsWith(QStringLiteral("sources/github/"))) {
-    QJsonObject githubRepoContext;
-    if (requestData.contains(QStringLiteral("startingBranch"))) {
-      githubRepoContext[QStringLiteral("startingBranch")] =
-          requestData.value(QStringLiteral("startingBranch")).toString();
-    } else {
-      githubRepoContext[QStringLiteral("startingBranch")] = QStringLiteral("main");
-    }
-    sourceContext[QStringLiteral("githubRepoContext")] = githubRepoContext;
-  }
-
-  json[QStringLiteral("sourceContext")] = sourceContext;
-
-  // Always include requirePlanApproval as it's required by the API even if false
-  json[QStringLiteral("requirePlanApproval")] = requestData.value(QStringLiteral("requirePlanApproval")).toBool();
-
-  if (requestData.contains(QStringLiteral("automationMode"))) {
-    json[QStringLiteral("automationMode")] = requestData.value(QStringLiteral("automationMode")).toString();
-  }
-
-  // Pass any additional keys from the internal payload structure like _kjules metadata to json directly
-  // so it correctly retains tracking
-  for (auto it = requestData.constBegin(); it != requestData.constEnd(); ++it) {
-    if (it.key().startsWith(QStringLiteral("_kjules"))) {
-      json.insert(it.key(), it.value());
-    }
-  }
+  const QJsonObject json = SessionRequestBuilder::createSession(requestData);
 
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
@@ -733,11 +697,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
     QByteArray responseData = reply->readAll();
     if (reply->error() == QNetworkReply::NoError) {
       QJsonDocument doc = QJsonDocument::fromJson(responseData);
-      QJsonObject sessionObj = doc.object();
-
-      if (!sessionObj.contains(QStringLiteral("sourceContext"))) {
-        sessionObj[QStringLiteral("sourceContext")] = json.value(QStringLiteral("sourceContext")).toObject();
-      }
+      QJsonObject sessionObj = SessionRequestBuilder::sessionResponseWithRequest(doc.object(), json);
       if (requestData.contains(QStringLiteral("ignoreConcurrency"))) {
         sessionObj[QStringLiteral("ignoreConcurrency")] =
             requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
