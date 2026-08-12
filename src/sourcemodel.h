@@ -61,6 +61,8 @@ public:
   void recalculateQueueStats(QueueModel *queueModel, SessionModel *sessionModel);
 
 private:
+  void mergeLocalFields(const QString &id, const QJsonObject &existing, QJsonObject &source);
+
   StorageMode m_storageMode;
   QJsonArray m_sources;
 };

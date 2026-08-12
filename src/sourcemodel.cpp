@@ -48,6 +48,47 @@ QString SourceModel::resourceName(const QJsonObject &rawData) {
   return name.isEmpty() ? legacyId : name;
 }
 
+void SourceModel::mergeLocalFields(const QString &id, const QJsonObject &existing, QJsonObject &source) {
+  if (resourceName(existing) == id && existing.contains(QStringLiteral("isCustom")) &&
+      !source.contains(QStringLiteral("githubRepo")) && !source.contains(QStringLiteral("github"))) {
+    source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
+  }
+
+  for (auto it = existing.constBegin(); it != existing.constEnd(); ++it) {
+    if (it.key().startsWith(QStringLiteral("local_"))) {
+      if (it.key() != QStringLiteral("local_defaultBranches")) {
+        source[it.key()] = it.value();
+      }
+    }
+  }
+
+  QStringList localDefaults;
+  if (existing.contains(QStringLiteral("local_defaultBranches"))) {
+    QJsonArray arr = existing.value(QStringLiteral("local_defaultBranches")).toArray();
+    for (const QJsonValue &v : arr) {
+      localDefaults.append(v.toString());
+    }
+  } else {
+    QString oldApiBranch = extractApiDefaultBranch(existing);
+    if (!oldApiBranch.isEmpty()) {
+      localDefaults.append(oldApiBranch);
+    }
+  }
+
+  QString newApiBranch = extractApiDefaultBranch(source);
+  if (!newApiBranch.isEmpty() && !localDefaults.contains(newApiBranch)) {
+    localDefaults.append(newApiBranch);
+  }
+
+  if (!localDefaults.isEmpty()) {
+    QJsonArray arr;
+    for (const QString &b : localDefaults) {
+      arr.append(b);
+    }
+    source[QStringLiteral("local_defaultBranches")] = arr;
+  }
+}
+
 QString SourceModel::githubOwner(const QJsonObject &rawData) {
   const QJsonObject githubRepo = rawData.value(QStringLiteral("githubRepo")).toObject();
   const QString apiOwner = githubRepo.value(QStringLiteral("owner")).toString();
@@ -448,20 +489,7 @@ void SourceModel::setSources(const QJsonArray &sources) {
     for (int j = 0; j < m_sources.size(); ++j) {
       const QJsonObject existing = m_sources[j].toObject();
       if (resourceName(existing) == id || isCustomReplacement(existing, source)) {
-        if (existing.contains(QStringLiteral("local_firstSeen")))
-          source[QStringLiteral("local_firstSeen")] = existing[QStringLiteral("local_firstSeen")];
-        if (existing.contains(QStringLiteral("local_lastChanged")))
-          source[QStringLiteral("local_lastChanged")] = existing[QStringLiteral("local_lastChanged")];
-        if (existing.contains(QStringLiteral("local_lastUsed")))
-          source[QStringLiteral("local_lastUsed")] = existing[QStringLiteral("local_lastUsed")];
-        if (existing.contains(QStringLiteral("local_sessionCount")))
-          source[QStringLiteral("local_sessionCount")] = existing[QStringLiteral("local_sessionCount")];
-        if (existing.contains(QStringLiteral("local_heat")))
-          source[QStringLiteral("local_heat")] = existing[QStringLiteral("local_heat")];
-        if (existing.contains(QStringLiteral("local_sessionTimestamps")))
-          source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
-        if (existing.contains(QStringLiteral("local_favourite")))
-          source[QStringLiteral("local_favourite")] = existing[QStringLiteral("local_favourite")];
+        mergeLocalFields(id, existing, source);
         break;
       }
     }
@@ -510,21 +538,7 @@ int SourceModel::addSources(const QJsonArray &sources) {
       const QJsonObject existingObject = m_sources[j].toObject();
       if (resourceName(existingObject) == id || isCustomReplacement(existingObject, source)) {
         exists = true;
-        QJsonObject existing = existingObject;
-        if (existing.contains(QStringLiteral("local_firstSeen")))
-          source[QStringLiteral("local_firstSeen")] = existing[QStringLiteral("local_firstSeen")];
-        if (existing.contains(QStringLiteral("local_lastChanged")))
-          source[QStringLiteral("local_lastChanged")] = existing[QStringLiteral("local_lastChanged")];
-        if (existing.contains(QStringLiteral("local_lastUsed")))
-          source[QStringLiteral("local_lastUsed")] = existing[QStringLiteral("local_lastUsed")];
-        if (existing.contains(QStringLiteral("local_sessionCount")))
-          source[QStringLiteral("local_sessionCount")] = existing[QStringLiteral("local_sessionCount")];
-        if (existing.contains(QStringLiteral("local_heat")))
-          source[QStringLiteral("local_heat")] = existing[QStringLiteral("local_heat")];
-        if (existing.contains(QStringLiteral("local_sessionTimestamps")))
-          source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
-        if (existing.contains(QStringLiteral("local_favourite")))
-          source[QStringLiteral("local_favourite")] = existing[QStringLiteral("local_favourite")];
+        mergeLocalFields(id, existingObject, source);
         m_sources[j] = source;
         updatedExisting = true;
         Q_EMIT dataChanged(index(j, 0), index(j, ColCount - 1));
@@ -611,46 +625,7 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
   for (int i = 0; i < m_sources.size(); ++i) {
     const QJsonObject existing = m_sources[i].toObject();
     if (resourceName(existing) == id || isCustomReplacement(existing, source)) {
-      if (resourceName(existing) == id && existing.contains(QStringLiteral("isCustom")) &&
-          !source.contains(QStringLiteral("githubRepo")) && !source.contains(QStringLiteral("github"))) {
-        source[QStringLiteral("isCustom")] = existing.value(QStringLiteral("isCustom"));
-      }
-      if (existing.contains(QStringLiteral("local_lastUsed")))
-        source[QStringLiteral("local_lastUsed")] = existing[QStringLiteral("local_lastUsed")];
-      if (existing.contains(QStringLiteral("local_sessionCount")))
-        source[QStringLiteral("local_sessionCount")] = existing[QStringLiteral("local_sessionCount")];
-      if (existing.contains(QStringLiteral("local_heat")))
-        source[QStringLiteral("local_heat")] = existing[QStringLiteral("local_heat")];
-      if (existing.contains(QStringLiteral("local_sessionTimestamps")))
-        source[QStringLiteral("local_sessionTimestamps")] = existing[QStringLiteral("local_sessionTimestamps")];
-      if (existing.contains(QStringLiteral("local_favourite")))
-        source[QStringLiteral("local_favourite")] = existing[QStringLiteral("local_favourite")];
-
-      QStringList localDefaults;
-      if (existing.contains(QStringLiteral("local_defaultBranches"))) {
-        QJsonArray arr = existing.value(QStringLiteral("local_defaultBranches")).toArray();
-        for (const QJsonValue &v : arr) {
-          localDefaults.append(v.toString());
-        }
-      } else {
-        QString oldApiBranch = extractApiDefaultBranch(existing);
-        if (!oldApiBranch.isEmpty()) {
-          localDefaults.append(oldApiBranch);
-        }
-      }
-
-      QString newApiBranch = extractApiDefaultBranch(source);
-      if (!newApiBranch.isEmpty() && !localDefaults.contains(newApiBranch)) {
-        localDefaults.append(newApiBranch);
-      }
-
-      if (!localDefaults.isEmpty()) {
-        QJsonArray arr;
-        for (const QString &b : localDefaults) {
-          arr.append(b);
-        }
-        source[QStringLiteral("local_defaultBranches")] = arr;
-      }
+      mergeLocalFields(id, existing, source);
 
       m_sources[i] = source;
       QModelIndex index = createIndex(i, 0);
