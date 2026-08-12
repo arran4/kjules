@@ -21,6 +21,8 @@ class NewSessionDialog;
 class DraftsModel;
 class TemplatesModel;
 class QueueModel;
+struct QueueItem;
+struct QueueItem;
 class ErrorsModel;
 class BlockedTreeModel;
 class QAbstractItemView;
@@ -131,6 +133,8 @@ private Q_SLOTS:
   void onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
                                  const QString &errorMsg);
   void sendQueueItemNow(int row);
+  void sendItemNow(const QueueItem &item, int originRow, bool sourceIsQueue,
+                   const QJsonObject &errData = QJsonObject());
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row, QueueModel *model);

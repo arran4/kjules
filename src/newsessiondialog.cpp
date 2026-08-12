@@ -1398,6 +1398,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
 
   m_createButton = new QToolButton(this);
   m_createButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+  m_createButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
   buttonLayout->addWidget(cancelButton);
   buttonLayout->addStretch();
