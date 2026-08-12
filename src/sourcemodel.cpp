@@ -83,7 +83,12 @@ QString SourceModel::repositoryUrl(const QJsonObject &rawData) {
   return {};
 }
 
-SourceModel::SourceModel(QObject *parent) : QAbstractTableModel(parent) { loadSources(); }
+SourceModel::SourceModel(QObject *parent, StorageMode storageMode)
+    : QAbstractTableModel(parent), m_storageMode(storageMode) {
+  if (m_storageMode == StorageMode::Persistent) {
+    loadSources();
+  }
+}
 
 int SourceModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -737,6 +742,10 @@ void SourceModel::clear() {
 }
 
 void SourceModel::saveSources() {
+  if (m_storageMode == StorageMode::InMemory) {
+    return;
+  }
+
   QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {

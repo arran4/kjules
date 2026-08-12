@@ -12,6 +12,8 @@ class SourceModel : public QAbstractTableModel {
   Q_OBJECT
 
 public:
+  enum class StorageMode : quint8 { Persistent, InMemory };
+
   enum SourceRoles { NameRole = Qt::UserRole + 1, IdRole, RawDataRole, FavouriteRole };
   enum Columns {
     ColName = 0,
@@ -29,7 +31,7 @@ public:
     ColCount
   };
 
-  explicit SourceModel(QObject *parent = nullptr);
+  explicit SourceModel(QObject *parent = nullptr, StorageMode storageMode = StorageMode::Persistent);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
   int columnCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -59,6 +61,7 @@ public:
   void recalculateQueueStats(QueueModel *queueModel, SessionModel *sessionModel);
 
 private:
+  StorageMode m_storageMode;
   QJsonArray m_sources;
 };
 

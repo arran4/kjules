@@ -8,7 +8,7 @@
 
 class MockSourceModel : public SourceModel {
 public:
-  MockSourceModel(QObject *parent = nullptr) : SourceModel(parent) {}
+  MockSourceModel(QObject *parent = nullptr) : SourceModel(parent, StorageMode::InMemory) {}
   int rowCount(const QModelIndex &parent = QModelIndex()) const override {
     if (parent.isValid())
       return 0;
@@ -221,7 +221,7 @@ private Q_SLOTS:
   }
 
   void testSourceModelNameRoleFallback() {
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     QJsonArray sources;
     QJsonObject s1;
     s1[QStringLiteral("id")] = QStringLiteral("sources/github/kde/kjules");
@@ -235,7 +235,7 @@ private Q_SLOTS:
   }
 
   void testSourceModelPreservesUnmatchedCustomSources() {
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     model.setSources({});
     model.addSources({QJsonObject{{QStringLiteral("id"), QStringLiteral("manual/repository")},
                                   {QStringLiteral("name"), QStringLiteral("manual/repository")},
@@ -256,7 +256,7 @@ private Q_SLOTS:
   }
 
   void testSourceModelMigratesCustomSourceToApiSource() {
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     model.setSources({});
     model.addSources({QJsonObject{{QStringLiteral("id"), QStringLiteral("arran4/blog")},
                                   {QStringLiteral("name"), QStringLiteral("arran4/blog")},
@@ -280,7 +280,7 @@ private Q_SLOTS:
   }
 
   void testSourceModelKeepsDistinctOpaqueResourceNames() {
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     model.setSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/acme/repository")}},
                       QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/github/acme/repository")},
                                   {QStringLiteral("githubRepo"),
@@ -303,7 +303,7 @@ private Q_SLOTS:
         {QStringLiteral("id"), QStringLiteral("output-only-id")},
         {QStringLiteral("githubRepo"), QJsonObject{{QStringLiteral("owner"), QStringLiteral("example")},
                                                    {QStringLiteral("repo"), QStringLiteral("project")}}}};
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     model.setSources({source});
 
     QCOMPARE(model.data(model.index(0, 0), SourceModel::IdRole).toString(), QStringLiteral("sources/opaque-value"));
@@ -313,7 +313,7 @@ private Q_SLOTS:
   }
 
   void testSourceSnapshotRemovesStaleApiNamesButKeepsCustomSources() {
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     model.setSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/arran4/arrans_overlay")}}});
     model.addSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("custom/repository")},
                                   {QStringLiteral("isCustom"), true}}});
@@ -334,7 +334,7 @@ private Q_SLOTS:
   }
 
   void testEmptyEqualsFormulaFilter() {
-    SourceModel model;
+    SourceModel model(nullptr, SourceModel::StorageMode::InMemory);
     QJsonArray sources;
     QJsonObject s1;
     s1[QStringLiteral("id")] = QStringLiteral("sources/github/kde/kjules");
