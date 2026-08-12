@@ -4,6 +4,7 @@
 
 #include <KXmlGuiWindow>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
 #include <QMultiMap>
@@ -108,7 +109,7 @@ private Q_SLOTS:
   void toggleWindow();
   void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
-  void onSourcesRefreshFinished();
+  void onSourcesRefreshFinished(bool complete);
   void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void onGithubBranchesReceived(const QString &sourceId, const QJsonArray &branches);
   void onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
@@ -320,6 +321,7 @@ private:
   int m_sourcesLoadedCount;
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;
+  QJsonArray m_refreshedSources;
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
   QString m_lastStatusMessage;

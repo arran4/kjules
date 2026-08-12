@@ -1,5 +1,6 @@
 #include "sourcefixer.h"
 
+#include <QJsonArray>
 #include <QVector>
 #include <algorithm>
 #include <climits>
@@ -39,6 +40,29 @@ int editDistance(const QString &left, const QString &right) {
   }
   return previous[right.size()];
 }
+
+QJsonValue remapSourceValues(const QJsonValue &value, const QString &newSource) {
+  if (value.isArray()) {
+    QJsonArray result;
+    for (const QJsonValue &element : value.toArray()) {
+      result.append(remapSourceValues(element, newSource));
+    }
+    return result;
+  }
+  if (!value.isObject()) {
+    return value;
+  }
+
+  QJsonObject result = value.toObject();
+  for (auto iterator = result.begin(); iterator != result.end(); ++iterator) {
+    if (iterator.key() == QStringLiteral("source") && iterator.value().isString()) {
+      iterator.value() = newSource;
+    } else if (iterator.value().isObject() || iterator.value().isArray()) {
+      iterator.value() = remapSourceValues(iterator.value(), newSource);
+    }
+  }
+  return result;
+}
 } // namespace
 
 namespace SourceFixer {
@@ -59,19 +83,7 @@ QString source(const QJsonObject &object) {
 }
 
 QJsonObject remap(const QJsonObject &object, const QString &newSource) {
-  QJsonObject result = object;
-  if (result.value(QStringLiteral("request")).isObject()) {
-    result[QStringLiteral("request")] = remap(result.value(QStringLiteral("request")).toObject(), newSource);
-  }
-  if (result.contains(QStringLiteral("source"))) {
-    result[QStringLiteral("source")] = newSource;
-  }
-  if (result.value(QStringLiteral("sourceContext")).isObject()) {
-    QJsonObject context = result.value(QStringLiteral("sourceContext")).toObject();
-    context[QStringLiteral("source")] = newSource;
-    result[QStringLiteral("sourceContext")] = context;
-  }
-  return result;
+  return remapSourceValues(object, newSource).toObject();
 }
 
 QString bestMatch(const QString &oldSource, const QStringList &availableSources) {

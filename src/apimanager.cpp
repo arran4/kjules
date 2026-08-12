@@ -423,7 +423,7 @@ void APIManager::getSource(const QString &sourceId) {
 void APIManager::listSources(const QString &pageToken) {
   if (!canConnect()) {
     Q_EMIT logMessage(QStringLiteral("Skipping listSources: No token or previous failure."));
-    Q_EMIT sourcesRefreshFinished();
+    Q_EMIT sourcesRefreshFinished(false);
     return;
   }
 
@@ -460,18 +460,18 @@ void APIManager::listSources(const QString &pageToken) {
         // Fetch next page automatically
         listSources(nextPageToken);
       } else {
-        Q_EMIT sourcesRefreshFinished();
+        Q_EMIT sourcesRefreshFinished(true);
         Q_EMIT logMessage(QStringLiteral("Sources refreshed successfully."));
       }
     } else if (reply->error() == QNetworkReply::OperationCanceledError) {
-      Q_EMIT sourcesRefreshFinished();
+      Q_EMIT sourcesRefreshFinished(false);
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
       Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString());
-      Q_EMIT sourcesRefreshFinished();
+      Q_EMIT sourcesRefreshFinished(false);
     }
     reply->deleteLater();
   });

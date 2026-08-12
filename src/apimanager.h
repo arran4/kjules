@@ -67,7 +67,7 @@ Q_SIGNALS:
   void githubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
   void githubPullRequestFailed(const QString &prUrl, const QString &message);
   void sourcesReceived(const QJsonArray &sources);
-  void sourcesRefreshFinished();
+  void sourcesRefreshFinished(bool complete);
   void sessionsRefreshFinished();
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);

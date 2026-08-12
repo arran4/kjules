@@ -1,3 +1,4 @@
+#include "../src/sessionrequestbuilder.h"
 #include "../src/sourcefixer.h"
 
 #include <QtTest>
@@ -8,6 +9,8 @@ class SourceFixerTest : public QObject {
 private Q_SLOTS:
   void extractsAllRequestShapes();
   void remapsNestedRequestWithoutLosingBranch();
+  void remapsStoredFlatErrorThroughApiRequest();
+  void remapsEmbeddedRecoveryCopies();
   void prefersInsertedProviderSegment();
   void requiresExactResourceNameForIdentity();
 };
@@ -39,6 +42,52 @@ void SourceFixerTest::remapsNestedRequestWithoutLosingBranch() {
   QCOMPARE(
       context.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch")).toString(),
       QStringLiteral("main"));
+}
+
+void SourceFixerTest::remapsStoredFlatErrorThroughApiRequest() {
+  const QJsonObject storedError{
+      {QStringLiteral("request"),
+       QJsonObject{{QStringLiteral("automationMode"), QStringLiteral("AUTO_CREATE_PR")},
+                   {QStringLiteral("prompt"), QStringLiteral("https://github.com/block/buzz")},
+                   {QStringLiteral("source"), QStringLiteral("arran4/arrans_overlay")},
+                   {QStringLiteral("startingBranch"), QStringLiteral("main")}}}};
+
+  const QJsonObject remapped = SourceFixer::remap(storedError, QStringLiteral("sources/github/arran4/arrans_overlay"));
+  const QJsonObject storedRequest = remapped.value(QStringLiteral("request")).toObject();
+  QCOMPARE(storedRequest.value(QStringLiteral("source")).toString(),
+           QStringLiteral("sources/github/arran4/arrans_overlay"));
+
+  const QJsonObject apiRequest = SessionRequestBuilder::createSession(storedRequest);
+  QCOMPARE(apiRequest.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString(),
+           QStringLiteral("sources/github/arran4/arrans_overlay"));
+}
+
+void SourceFixerTest::remapsEmbeddedRecoveryCopies() {
+  const QJsonObject input{
+      {QStringLiteral("source"), QStringLiteral("arran4/arrans_overlay")},
+      {QStringLiteral("_kjules_requeue_item"),
+       QJsonObject{{QStringLiteral("requestData"),
+                    QJsonObject{{QStringLiteral("source"), QStringLiteral("arran4/arrans_overlay")}}}}},
+      {QStringLiteral("_kjules_requeue_err_data"),
+       QJsonObject{{QStringLiteral("request"),
+                    QJsonObject{{QStringLiteral("source"), QStringLiteral("arran4/arrans_overlay")}}}}}};
+  const QJsonObject remapped = SourceFixer::remap(input, QStringLiteral("sources/github/arran4/arrans_overlay"));
+
+  QCOMPARE(remapped.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/arran4/arrans_overlay"));
+  QCOMPARE(remapped.value(QStringLiteral("_kjules_requeue_item"))
+               .toObject()
+               .value(QStringLiteral("requestData"))
+               .toObject()
+               .value(QStringLiteral("source"))
+               .toString(),
+           QStringLiteral("sources/github/arran4/arrans_overlay"));
+  QCOMPARE(remapped.value(QStringLiteral("_kjules_requeue_err_data"))
+               .toObject()
+               .value(QStringLiteral("request"))
+               .toObject()
+               .value(QStringLiteral("source"))
+               .toString(),
+           QStringLiteral("sources/github/arran4/arrans_overlay"));
 }
 
 void SourceFixerTest::prefersInsertedProviderSegment() {

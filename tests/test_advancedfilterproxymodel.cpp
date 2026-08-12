@@ -312,6 +312,27 @@ private Q_SLOTS:
     QCOMPARE(SourceModel::repositoryUrl(source), QStringLiteral("https://github.com/example/project"));
   }
 
+  void testSourceSnapshotRemovesStaleApiNamesButKeepsCustomSources() {
+    SourceModel model;
+    model.setSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("sources/arran4/arrans_overlay")}}});
+    model.addSources({QJsonObject{{QStringLiteral("name"), QStringLiteral("custom/repository")},
+                                  {QStringLiteral("isCustom"), true}}});
+
+    model.setSources({QJsonObject{
+        {QStringLiteral("name"), QStringLiteral("sources/github/arran4/arrans_overlay")},
+        {QStringLiteral("githubRepo"), QJsonObject{{QStringLiteral("owner"), QStringLiteral("arran4")},
+                                                   {QStringLiteral("repo"), QStringLiteral("arrans_overlay")}}}}});
+
+    QCOMPARE(model.rowCount(), 2);
+    QStringList names;
+    for (int row = 0; row < model.rowCount(); ++row) {
+      names.append(model.data(model.index(row, 0), SourceModel::IdRole).toString());
+    }
+    QVERIFY(!names.contains(QStringLiteral("sources/arran4/arrans_overlay")));
+    QVERIFY(names.contains(QStringLiteral("sources/github/arran4/arrans_overlay")));
+    QVERIFY(names.contains(QStringLiteral("custom/repository")));
+  }
+
   void testEmptyEqualsFormulaFilter() {
     SourceModel model;
     QJsonArray sources;

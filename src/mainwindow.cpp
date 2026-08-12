@@ -3225,6 +3225,7 @@ void MainWindow::refreshSources() {
   m_sourcesLoadedCount = 0;
   m_sourcesAddedCount = 0;
   m_pagesLoadedCount = 0;
+  m_refreshedSources = {};
 
   m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
   m_sourceProgressBar->show();
@@ -5004,6 +5005,9 @@ void MainWindow::toggleWindowVisibility() {
 }
 
 void MainWindow::onSourcesReceived(const QJsonArray &sources) {
+  for (const QJsonValue &source : sources) {
+    m_refreshedSources.append(source);
+  }
   int added = m_sourceModel->addSources(sources);
   m_sourcesLoadedCount += sources.size();
   m_sourcesAddedCount += added;
@@ -5057,7 +5061,7 @@ void MainWindow::onGithubInfoReceived(const QString &sourceId, const QJsonObject
   }
 }
 
-void MainWindow::onSourcesRefreshFinished() {
+void MainWindow::onSourcesRefreshFinished(bool complete) {
   bool wasRefreshing = m_isRefreshingSources;
   m_isRefreshingSources = false;
   m_sourceProgressBar->hide();
@@ -5065,7 +5069,11 @@ void MainWindow::onSourcesRefreshFinished() {
 
   m_refreshSourcesAction->setText(i18n("Refresh Sources"));
 
-  if (wasRefreshing) {
+  if (wasRefreshing && complete) {
+    // A completed paginated refresh is the authoritative API snapshot.
+    // setSources preserves unmatched custom rows while removing stale API
+    // rows that must not be offered as valid remap destinations.
+    m_sourceModel->setSources(m_refreshedSources);
     updateStatus(
         i18n("Finished refreshing. Loaded %1 sources in total, %2 new.", m_sourcesLoadedCount, m_sourcesAddedCount));
     if (m_sourcesAddedCount > 0) {
@@ -5083,11 +5091,11 @@ void MainWindow::onSourcesRefreshFinished() {
       notification->sendEvent();
     }
   } else {
-    updateStatus(
-        i18n("Source refresh cancelled. Loaded %1 sources, %2 new.", m_sourcesLoadedCount, m_sourcesAddedCount));
+    updateStatus(i18n("Source refresh incomplete. Kept the previous source list after loading %1 sources.",
+                      m_sourcesLoadedCount));
   }
 
-  if (m_isWaitingForCreatedRepoSource) {
+  if (m_isWaitingForCreatedRepoSource && complete) {
     if (resolvePendingGithubSource()) {
       updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
       QTimer::singleShot(0, this, &MainWindow::processQueue);
