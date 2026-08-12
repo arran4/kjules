@@ -31,3 +31,8 @@ Action=Popup
 Name=Sources Refresh Finished
 Comment=Source refresh completed.
 Action=Popup
+
+[Event/queueError]
+Name=Queue Error
+Comment=A task encountered an error.
+Action=Popup
