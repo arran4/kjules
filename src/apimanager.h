@@ -1,6 +1,7 @@
 #ifndef APIMANAGER_H
 #define APIMANAGER_H
 
+#include "api/apierror.h"
 #include <KWallet>
 #include <QDir>
 #include <QFile>
@@ -58,8 +59,7 @@ public:
 Q_SIGNALS:
   void githubUsernameFetched(const QString &username);
   void githubRepoCreated(const QJsonObject &requestData, const QJsonObject &response);
-  void githubRepoCreationFailed(const QJsonObject &requestData, const QJsonObject &response,
-                                const QString &errorString);
+  void githubRepoCreationFailed(const QJsonObject &requestData, const ApiError &apiError);
 
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void githubInfoFailed(const QString &sourceId, const QString &message);
@@ -80,8 +80,7 @@ Q_SIGNALS:
   void githubConnectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message);
   void errorOccurredWithResponse(const QString &message, const QString &response);
-  void sessionCreationFailed(const QJsonObject &request, const QJsonObject &response, const QString &errorString,
-                             const QString &httpDetails);
+  void sessionCreationFailed(const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
   void messageSent(const QString &sessionId);
   void messageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails);
   void logMessage(const QString &message);

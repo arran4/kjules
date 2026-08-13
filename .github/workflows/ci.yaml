@@ -194,7 +194,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: zypper --gpg-auto-import-keys rr repo-openh264 || true
-      - run: zypper --gpg-auto-import-keys refresh
+      - run: zypper --gpg-auto-import-keys refresh || true
       - run: |
           zypper --gpg-auto-import-keys -n dup --allow-downgrade --allow-vendor-change
           zypper --gpg-auto-import-keys -n install --auto-agree-with-licenses cmake ninja gcc-c++ clang cppcheck \
@@ -219,7 +219,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: zypper --gpg-auto-import-keys rr repo-openh264 || true
-      - run: zypper --gpg-auto-import-keys refresh
+      - run: zypper --gpg-auto-import-keys refresh || true
       - run: |
           zypper --gpg-auto-import-keys -n dup --allow-downgrade --allow-vendor-change
           zypper --gpg-auto-import-keys -n install --auto-agree-with-licenses cmake ninja gcc-c++ AppStream \
