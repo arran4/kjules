@@ -4429,9 +4429,28 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
     }
     msgBox.setIcon(QMessageBox::Warning);
 
-    QPushButton *readdBtn = msgBox.addButton(i18n("Readd back where it came from"), QMessageBox::ActionRole);
-    QPushButton *startBtn = msgBox.addButton(i18n("Add to the start of the queue"), QMessageBox::ActionRole);
-    QPushButton *endBtn = msgBox.addButton(i18n("Add to the end of the queue"), QMessageBox::ActionRole);
+    QToolButton *readdBtn = new QToolButton(&msgBox);
+    readdBtn->setText(i18n("Readd back where it came from"));
+    readdBtn->setPopupMode(QToolButton::MenuButtonPopup);
+    msgBox.addButton(readdBtn, QMessageBox::ActionRole);
+
+    QMenu *queueMenu = new QMenu(&msgBox);
+    QAction *startAction = queueMenu->addAction(i18n("Add to the start of the queue"));
+    QAction *endAction = queueMenu->addAction(i18n("Add to the end of the queue"));
+    readdBtn->setMenu(queueMenu);
+
+    enum class QueueAction { None, Readd, Start, End };
+    QueueAction selectedQueueAction = QueueAction::None;
+
+    connect(startAction, &QAction::triggered, [&]() {
+      selectedQueueAction = QueueAction::Start;
+      msgBox.accept();
+    });
+    connect(endAction, &QAction::triggered, [&]() {
+      selectedQueueAction = QueueAction::End;
+      msgBox.accept();
+    });
+
     QPushButton *editBtn = msgBox.addButton(i18n("Edit in New Session"), QMessageBox::ActionRole);
     QPushButton *remapBtn = nullptr;
     const bool sourceNotFound = apiError.value(QStringLiteral("code")).toInt() == 404 ||
@@ -4442,6 +4461,10 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
     msgBox.addButton(i18n("Send to errors"), QMessageBox::ActionRole);
 
     msgBox.exec();
+
+    if (msgBox.clickedButton() == readdBtn) {
+      selectedQueueAction = QueueAction::Readd;
+    }
 
     if (msgBox.clickedButton() == editBtn) {
       if (sourceIsQueue && !itemJson.isEmpty()) {
@@ -4480,7 +4503,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
       }
       showFixSourcesDialog(oldSource);
       return;
-    } else if (msgBox.clickedButton() == startBtn) {
+    } else if (selectedQueueAction == QueueAction::Start) {
       if (sourceIsQueue) {
         m_queueModel->insertItem(0, QueueItem::fromJson(itemJson));
       } else {
@@ -4489,7 +4512,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
         m_queueModel->insertItem(0, newItem);
       }
       return;
-    } else if (msgBox.clickedButton() == endBtn) {
+    } else if (selectedQueueAction == QueueAction::End) {
       if (sourceIsQueue) {
         m_queueModel->insertItem(m_queueModel->size(), QueueItem::fromJson(itemJson));
       } else {
@@ -4498,7 +4521,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
         m_queueModel->insertItem(m_queueModel->size(), newItem);
       }
       return;
-    } else if (msgBox.clickedButton() == readdBtn) {
+    } else if (selectedQueueAction == QueueAction::Readd) {
       if (originalRow != -1) {
         if (sourceIsQueue) {
           m_queueModel->insertItem(originalRow, QueueItem::fromJson(itemJson));
