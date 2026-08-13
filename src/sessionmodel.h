@@ -9,6 +9,14 @@
 #include <QVector>
 #include <optional>
 
+namespace JulesStatus {
+inline const QString AWAITING_USER_FEEDBACK = QStringLiteral("AWAITING_USER_FEEDBACK");
+inline const QString COMPLETED = QStringLiteral("COMPLETED");
+inline const QString IN_PROGRESS = QStringLiteral("IN_PROGRESS");
+inline const QString ERROR_STATE = QStringLiteral("ERROR");
+inline const QString CANCELED = QStringLiteral("CANCELED");
+} // namespace JulesStatus
+
 struct SessionData {
   QString id;
   QString name;
