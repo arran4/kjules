@@ -66,6 +66,7 @@ endif()
 set(kjules_SRCS
     src/main.cpp
     src/mainwindow.cpp
+    src/api/apierror.cpp
     src/apimanager.cpp
     src/sessionrequestbuilder.cpp
     src/sourcefixer.cpp

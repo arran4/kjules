@@ -15,7 +15,7 @@ target_link_libraries(test_performance Qt6::Core Qt6::Test)
 add_executable(bench_sessionmodel bench_sessionmodel.cpp)
 target_link_libraries(bench_sessionmodel Qt6::Core Qt6::Test)
 
-add_executable(bench_apimanager bench_apimanager.cpp ../src/apimanager.cpp ../src/sessionrequestbuilder.cpp)
+add_executable(bench_apimanager bench_apimanager.cpp ../src/apimanager.cpp ../src/sessionrequestbuilder.cpp ../src/api/apierror.cpp)
 target_link_libraries(bench_apimanager Qt6::Core Qt6::Test Qt6::Network Qt6::Concurrent KF6::Wallet KF6::ConfigCore)
 target_include_directories(bench_apimanager PRIVATE ../src)
 

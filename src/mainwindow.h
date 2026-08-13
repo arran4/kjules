@@ -2,6 +2,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "api/apierror.h"
 #include <KXmlGuiWindow>
 #include <QDateTime>
 #include <QJsonArray>
@@ -96,8 +97,7 @@ private Q_SLOTS:
   void onHoldingContextMenu(const QPoint &pos);
   void onBlockedContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
-  void onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response, const QString &errorString,
-                               const QString &httpDetails);
+  void onSessionCreationFailed(const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
@@ -129,10 +129,10 @@ private Q_SLOTS:
   void updateBlockedTabVisibility();
   void processErrorRetries();
 
-  void onSessionCreatedResult(bool success, const QJsonObject &session, const QString &errorMsg,
+  void onSessionCreatedResult(bool success, const QJsonObject &session, const ApiError &apiError = ApiError(),
                               const QString &rawResponse = QString());
   void onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
-                                 const QString &errorMsg);
+                                 const ApiError &apiError = ApiError());
   void sendQueueItemNow(int row);
   void sendItemNow(const QueueItem &item, int originRow, bool sourceIsQueue,
                    const QJsonObject &errData = QJsonObject());

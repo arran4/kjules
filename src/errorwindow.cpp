@@ -21,9 +21,10 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
 }
 
 ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse,
-                         const QString &lastError, const QString &httpDetails, QWidget *parent)
+                         const QString &lastError, const QString &httpDetails, const QString &errorDetails,
+                         QWidget *parent)
     : QDialog(parent), m_row(errorRow), m_requestData(requestData), m_lastResponse(lastResponse),
-      m_lastError(lastError), m_httpDetails(httpDetails) {
+      m_lastError(lastError), m_httpDetails(httpDetails), m_errorDetails(errorDetails) {
   setWindowTitle(i18n("Error Details"));
   setupUi();
 }
@@ -40,7 +41,17 @@ void ErrorWindow::setupUi() {
 
   // Centered Error Message
   detailsLayout->addStretch();
-  m_errorLabel = new QLabel(m_lastError, this);
+  QString fullMessage = m_lastError;
+  if (m_requestData.contains(QStringLiteral("_kjules_requeue_err_data"))) {
+    // This is a hacky way to extract details from an ApiError JSON if it exists
+    QJsonObject errData = m_requestData.value(QStringLiteral("_kjules_requeue_err_data")).toObject();
+    QString details = errData.value(QStringLiteral("details")).toString();
+    if (!details.isEmpty())
+      fullMessage += QStringLiteral("\n\n") + details;
+  } // We will provide details from outside as well.
+  if (!m_errorDetails.isEmpty())
+    fullMessage += QStringLiteral("\n\n") + m_errorDetails;
+  m_errorLabel = new QLabel(fullMessage, this);
   m_errorLabel->setAlignment(Qt::AlignCenter);
   m_errorLabel->setWordWrap(true);
   QFont font = m_errorLabel->font();

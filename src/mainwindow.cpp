@@ -124,16 +124,19 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::githubInfoReceived, this, &MainWindow::onGithubInfoReceived);
   connect(m_apiManager, &APIManager::githubBranchesReceived, this, &MainWindow::onGithubBranchesReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this, &MainWindow::onGithubPullRequestInfoReceived);
-  connect(m_apiManager, &APIManager::sessionCreationFailed, this, &MainWindow::onSessionCreationFailed);
+  connect(m_apiManager, &APIManager::sessionCreationFailed, this,
+          [this](const QJsonObject &request, const ApiError &apiError, const QString &httpDetails) {
+            onSessionCreationFailed(request, apiError, httpDetails);
+          });
   connect(m_apiManager, &APIManager::sessionCreated,
-          [this](const QJsonObject &session) { onSessionCreatedResult(true, session, QString()); });
+          [this](const QJsonObject &session) { onSessionCreatedResult(true, session, ApiError()); });
   connect(m_apiManager, &APIManager::githubRepoCreated, this,
           [this](const QJsonObject &requestData, const QJsonObject &response) {
-            onGithubRepoCreatedResult(true, requestData, response, QString());
+            onGithubRepoCreatedResult(true, requestData, response, ApiError());
           });
   connect(m_apiManager, &APIManager::githubRepoCreationFailed, this,
-          [this](const QJsonObject &requestData, const QJsonObject &response, const QString &errorString) {
-            onGithubRepoCreatedResult(false, requestData, response, errorString);
+          [this](const QJsonObject &requestData, const ApiError &apiError) {
+            onGithubRepoCreatedResult(false, requestData, QJsonObject(), apiError);
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session) {
@@ -157,7 +160,10 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
           [this](const QString &msg, const QString &response) {
             if (m_isProcessingQueue) {
-              onSessionCreatedResult(false, QJsonObject(), msg, response);
+              ApiError apiError(ApiError::Type::Unknown, msg);
+              // We'll leave raw response empty or we can parse it
+              apiError.setRawResponse(QJsonDocument::fromJson(response.toUtf8()).object());
+              onSessionCreatedResult(false, QJsonObject(), apiError, response);
             }
           });
   connect(m_apiManager, &APIManager::logMessage, this, &MainWindow::updateStatus);
@@ -1657,10 +1663,11 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
           QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
           QString errorStr = errorData.value(QStringLiteral("message")).toString();
           QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
+          QString errorDetails = errorData.value(QStringLiteral("details")).toString();
 
           ErrorWindow *window = new ErrorWindow(
               idx.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr,
-              httpDetails, this);
+              httpDetails, errorDetails, this);
           connect(window, &ErrorWindow::editRequested, [this](int row) {
             QModelIndex idx = m_errorsModel->index(row, 0);
             onErrorActivated(idx);
@@ -3787,8 +3794,9 @@ void MainWindow::processQueue() {
 }
 
 void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
-                                           const QString &errorMsg) {
+                                           const ApiError &apiError) {
   Q_UNUSED(requestData);
+  QString errorMsg = apiError.message();
 
   if (!m_isProcessingQueue) {
     if (success) {
@@ -3836,8 +3844,9 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requ
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
-void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session, const QString &errorMsg,
+void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session, const ApiError &apiError,
                                         const QString &rawResponse) {
+  QString errorMsg = apiError.message();
   if (!m_isProcessingQueue) {
     if (success) {
       m_sessionModel->addSession(session);
@@ -4348,8 +4357,10 @@ void MainWindow::convertQueueItemToDraft(int row) {
   updateStatus(i18n("Task converted to draft."));
 }
 
-void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJsonObject &response,
-                                         const QString &errorString, const QString &httpDetails) {
+void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiError &apiError,
+                                         const QString &httpDetails) {
+  QString errorString = apiError.message();
+  QJsonObject response = apiError.rawResponse();
   m_suppressNextErrorDialog = true;
   QJsonObject requestCopy = request;
   if (requestCopy.value(QStringLiteral("_kjules_failed_action")).toString() == QStringLiteral("send_now")) {
@@ -4475,6 +4486,7 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const QJson
     errorObj[QStringLiteral("request")] = requestCopy;
     errorObj[QStringLiteral("response")] = response;
     errorObj[QStringLiteral("message")] = errorString;
+    errorObj[QStringLiteral("details")] = apiError.details();
     if (!httpDetails.isEmpty()) {
       errorObj[QStringLiteral("httpDetails")] = httpDetails;
     }

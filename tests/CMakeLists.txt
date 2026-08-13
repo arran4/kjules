@@ -21,3 +21,6 @@ add_test(NAME SourceRemapDialogTest COMMAND test_sourceremapdialog)
 
 set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest
                      PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+add_executable(test_apierror test_apierror.cpp ../src/api/apierror.cpp)
+target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core)
+add_test(NAME ApiErrorTest COMMAND test_apierror)

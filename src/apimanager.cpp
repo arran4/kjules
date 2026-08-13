@@ -558,12 +558,14 @@ bool APIManager::checkGithubRateLimit() {
 
 void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
-    Q_EMIT githubRepoCreationFailed(requestData, QJsonObject(),
-                                    QStringLiteral("GitHub token authentication failed previously or not provided."));
+    Q_EMIT githubRepoCreationFailed(
+        requestData, ApiError(ApiError::Type::Authentication,
+                              QStringLiteral("GitHub token authentication failed previously or not provided.")));
     return;
   }
   if (!checkGithubRateLimit()) {
-    Q_EMIT githubRepoCreationFailed(requestData, QJsonObject(), QStringLiteral("Rate limit exhausted"));
+    Q_EMIT githubRepoCreationFailed(requestData,
+                                    ApiError(ApiError::Type::RateLimit, QStringLiteral("Rate limit exhausted")));
     return;
   }
 
@@ -603,7 +605,9 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
                                             "requests will be blocked until the token is verified.")
                                  .arg(statusCode));
       }
-      Q_EMIT githubRepoCreationFailed(requestData, response, reply->errorString());
+      QByteArray responseData = reply->readAll();
+      ApiError apiError = ApiErrorDetector::detect(reply, responseData);
+      Q_EMIT githubRepoCreationFailed(requestData, apiError);
     }
     reply->deleteLater();
   });
@@ -752,8 +756,8 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       QString httpDetails =
           QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
 
-      QJsonDocument errDoc = QJsonDocument::fromJson(responseData);
-      Q_EMIT sessionCreationFailed(requestData, errDoc.object(), errorStr, httpDetails);
+      ApiError apiError = ApiErrorDetector::detect(reply, responseData);
+      Q_EMIT sessionCreationFailed(requestData, apiError, httpDetails);
       QString errorMsg = QStringLiteral("Failed to create session: ") + reply->errorString();
       Q_EMIT errorOccurred(errorMsg);
       Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData));
