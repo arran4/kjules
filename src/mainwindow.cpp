@@ -738,7 +738,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
       QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
       for (const QModelIndex &idx : selectedRows) {
         QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-        if (m_sessionModel->data(mappedIdx, SessionModel::StateRole).toString() == QStringLiteral("ERROR")) {
+        if (m_sessionModel->data(mappedIdx, SessionModel::StateRole).toString() == JulesStatus::ERROR_STATE) {
           hasErrorSession = true;
           break;
         }
@@ -817,7 +817,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
 
           for (int row : rowsToProcess) {
             if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() ==
-                QStringLiteral("ERROR")) {
+                JulesStatus::ERROR_STATE) {
               QJsonObject session = m_sessionModel->getSession(row);
 
               QJsonObject req;
@@ -850,7 +850,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
 
           for (int row : rowsToProcess) {
             if (m_sessionModel->data(m_sessionModel->index(row, 0), SessionModel::StateRole).toString() ==
-                QStringLiteral("ERROR")) {
+                JulesStatus::ERROR_STATE) {
               QJsonObject session = m_sessionModel->getSession(row);
 
               QJsonObject req;
@@ -2175,14 +2175,14 @@ void MainWindow::createSessionActions() {
                                          QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_O));
   connect(m_openJulesUrlsAwaitingFeedbackAction, &QAction::triggered, this, [openJulesUrls]() {
     openJulesUrls(i18n("No Jules URLs awaiting feedback found."),
-                  [](const QString &state, const QString &) { return state == QStringLiteral("WAITING_FEEDBACK"); });
+                  [](const QString &state, const QString &) { return state == JulesStatus::AWAITING_USER_FEEDBACK; });
   });
 
   m_openJulesUrlsCompletedNoPrAction = new QAction(i18n("Open Jules URLs Completed No PR"), this);
   actionCollection()->addAction(QStringLiteral("open_jules_urls_completed_no_pr"), m_openJulesUrlsCompletedNoPrAction);
   connect(m_openJulesUrlsCompletedNoPrAction, &QAction::triggered, this, [openJulesUrls]() {
     openJulesUrls(i18n("No Jules URLs completed with no PR found."), [](const QString &state, const QString &prUrl) {
-      return state == QStringLiteral("DONE") && prUrl.isEmpty();
+      return state == JulesStatus::COMPLETED && prUrl.isEmpty();
     });
   });
 
@@ -2191,7 +2191,7 @@ void MainWindow::createSessionActions() {
                                 m_openJulesUrlsCompletedNoPrOrFeedbackAction);
   connect(m_openJulesUrlsCompletedNoPrOrFeedbackAction, &QAction::triggered, this, [openJulesUrls]() {
     openJulesUrls(i18n("No Jules URLs matching criteria found."), [](const QString &state, const QString &prUrl) {
-      return (state == QStringLiteral("DONE") && prUrl.isEmpty()) || state == QStringLiteral("WAITING_FEEDBACK");
+      return (state == JulesStatus::COMPLETED && prUrl.isEmpty()) || state == JulesStatus::AWAITING_USER_FEEDBACK;
     });
   });
 
@@ -2326,9 +2326,9 @@ void MainWindow::setupRefreshSourceActions() {
   actionCollection()->setDefaultShortcut(m_refreshCurrentTabAction, QKeySequence(Qt::Key_F5));
 
   QMenu *refreshMenu = new QMenu(this);
-  m_refreshInProgressAction = new QAction(i18n("Refresh all in progress"), this);
-  m_refreshCompleteAction = new QAction(i18n("Refresh all complete"), this);
-  m_refreshWaitingFeedbackAction = new QAction(i18n("Refresh all waiting user feedback"), this);
+  m_refreshInProgressAction = new QAction(i18n("=state:IN_PROGRESS"), this);
+  m_refreshCompleteAction = new QAction(i18n("=state:COMPLETED"), this);
+  m_refreshWaitingFeedbackAction = new QAction(i18n("=state:AWAITING_USER_FEEDBACK"), this);
   m_refreshFollowingGithubAction = new QAction(i18n("Refresh following github"), this);
 
   m_refreshSourcesAllAction = new QAction(i18n("Refresh sources"), this);
@@ -2450,13 +2450,13 @@ void MainWindow::setupRefreshSourceActions() {
   };
 
   connect(m_refreshInProgressAction, &QAction::triggered, this,
-          [refreshByState]() { refreshByState(QStringLiteral("IN_PROGRESS")); });
+          [refreshByState]() { refreshByState(JulesStatus::IN_PROGRESS); });
 
   connect(m_refreshCompleteAction, &QAction::triggered, this,
-          [refreshByState]() { refreshByState(QStringLiteral("DONE")); });
+          [refreshByState]() { refreshByState(JulesStatus::COMPLETED); });
 
   connect(m_refreshWaitingFeedbackAction, &QAction::triggered, this,
-          [refreshByState]() { refreshByState(QStringLiteral("WAITING_FEEDBACK")); });
+          [refreshByState]() { refreshByState(JulesStatus::AWAITING_USER_FEEDBACK); });
 
   connect(m_refreshFollowingGithubAction, &QAction::triggered, this, [this]() {
     m_sessionModel->clearAllUnreadChanges();
@@ -2699,42 +2699,59 @@ void MainWindow::setupUrlActions() {
   QMenu *openMenu = new QMenu(this);
   m_openCurrentUrlAction->setMenu(openMenu);
 
-  QAction *openAllAction = openMenu->addAction(i18n("All"));
-  QAction *openInProgressAction = openMenu->addAction(i18n("=IN_PROGRESS"));
-  QAction *openCompleteAction = openMenu->addAction(i18n("=DONE"));
-  QAction *openWaitingFeedbackAction = openMenu->addAction(i18n("=WAITING_FEEDBACK"));
-  QAction *openAllButInProgressAction = openMenu->addAction(i18n("NOT =IN_PROGRESS"));
-  QAction *openAllButCompleteAction = openMenu->addAction(i18n("NOT =DONE"));
+  enum class OpenTarget { Smart, Jules, Github };
 
-  connect(openMenu, &QMenu::aboutToShow, this, [this, openMenu]() {
-    bool isFollowingTab = (m_tabWidget && m_tabWidget->currentWidget() &&
-                           m_tabWidget->currentWidget()->objectName() == QStringLiteral("followingTab"));
-    if (!isFollowingTab) {
-      openMenu->hide();
+  auto openUrlsTargeted = [this](std::function<bool(const QString &)> stateFilter, OpenTarget target,
+                                 bool onlySelected) {
+    QModelIndexList selectedRows;
+    if (onlySelected && m_sessionView->selectionModel()->hasSelection()) {
+      selectedRows = m_sessionView->selectionModel()->selectedRows();
     }
-  });
 
-  auto openUrlsByStateFilter = [this](std::function<bool(const QString &)> stateFilter) {
+    QList<QModelIndex> itemsToOpen;
+    if (onlySelected && !selectedRows.isEmpty()) {
+      itemsToOpen = selectedRows;
+    } else if (!onlySelected) {
+      for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+        itemsToOpen.append(m_sessionModel->index(i, 0));
+      }
+    }
+
+    const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
     int count = 0;
-    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      QModelIndex index = m_sessionModel->index(i, 0);
-      QString currentState = m_sessionModel->data(index, SessionModel::StateRole).toString();
+
+    for (const QModelIndex &idx : itemsToOpen) {
+      QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+      QString currentState = m_sessionModel->data(mappedIdx, SessionModel::StateRole).toString();
 
       if (stateFilter(currentState)) {
-        QString prUrl = m_sessionModel->data(index, SessionModel::PrUrlRole).toString();
+        QString prUrl = m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
+        QString id = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+        QString julesUrl = id.isEmpty() ? QString() : QStringLiteral("https://jules.google.com/session/") + id;
+        bool hasPrUrl = (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined"));
 
-        if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
-          Utils::openUrl(QUrl(prUrl));
-          count++;
-        } else {
-          QString id = m_sessionModel->data(index, SessionModel::IdRole).toString();
-          if (!id.isEmpty()) {
-            Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
-            count++;
+        QString urlToOpen;
+        if (target == OpenTarget::Jules) {
+          urlToOpen = julesUrl;
+        } else if (target == OpenTarget::Github) {
+          urlToOpen = hasPrUrl ? prUrl : QString();
+        } else { // Smart
+          if (currentState == JulesStatus::AWAITING_USER_FEEDBACK) {
+            urlToOpen = julesUrl;
+          } else if (hasPrUrl) {
+            urlToOpen = prUrl;
+          } else {
+            urlToOpen = julesUrl;
           }
+        }
+
+        if (!urlToOpen.isEmpty()) {
+          Utils::openUrl(QUrl(urlToOpen));
+          count++;
         }
       }
     }
+
     if (count > 0) {
       updateStatus(i18np("Opened 1 URL.", "Opened %1 URLs.", count));
     } else {
@@ -2742,22 +2759,47 @@ void MainWindow::setupUrlActions() {
     }
   };
 
-  connect(openAllAction, &QAction::triggered, this,
-          [openUrlsByStateFilter]() { openUrlsByStateFilter([](const QString &) { return true; }); });
-  connect(openInProgressAction, &QAction::triggered, this, [openUrlsByStateFilter]() {
-    openUrlsByStateFilter([](const QString &s) { return s == QStringLiteral("IN_PROGRESS"); });
-  });
-  connect(openCompleteAction, &QAction::triggered, this, [openUrlsByStateFilter]() {
-    openUrlsByStateFilter([](const QString &s) { return s == QStringLiteral("DONE"); });
-  });
-  connect(openWaitingFeedbackAction, &QAction::triggered, this, [openUrlsByStateFilter]() {
-    openUrlsByStateFilter([](const QString &s) { return s == QStringLiteral("WAITING_FEEDBACK"); });
-  });
-  connect(openAllButInProgressAction, &QAction::triggered, this, [openUrlsByStateFilter]() {
-    openUrlsByStateFilter([](const QString &s) { return s != QStringLiteral("IN_PROGRESS"); });
-  });
-  connect(openAllButCompleteAction, &QAction::triggered, this, [openUrlsByStateFilter]() {
-    openUrlsByStateFilter([](const QString &s) { return s != QStringLiteral("DONE"); });
+  auto createSubMenu = [this, openMenu, openUrlsTargeted](
+                           const QString &title, std::function<bool(const QString &)> stateFilter, bool onlySelected) {
+    QMenu *subMenu = openMenu->addMenu(title);
+
+    QAction *smartOpen = subMenu->addAction(i18n("Smart Open"));
+    connect(smartOpen, &QAction::triggered, this, [openUrlsTargeted, stateFilter, onlySelected]() {
+      openUrlsTargeted(stateFilter, OpenTarget::Smart, onlySelected);
+    });
+
+    QAction *julesOpen = subMenu->addAction(i18n("Open Jules"));
+    connect(julesOpen, &QAction::triggered, this, [openUrlsTargeted, stateFilter, onlySelected]() {
+      openUrlsTargeted(stateFilter, OpenTarget::Jules, onlySelected);
+    });
+
+    QAction *githubOpen = subMenu->addAction(i18n("Open Github"));
+    connect(githubOpen, &QAction::triggered, this, [openUrlsTargeted, stateFilter, onlySelected]() {
+      openUrlsTargeted(stateFilter, OpenTarget::Github, onlySelected);
+    });
+
+    return subMenu;
+  };
+
+  QMenu *selectedMenu = createSubMenu(i18n("Selected"), [](const QString &) { return true; }, true);
+  createSubMenu(i18n("All"), [](const QString &) { return true; }, false);
+  createSubMenu(i18n("=state:IN_PROGRESS"), [](const QString &s) { return s == JulesStatus::IN_PROGRESS; }, false);
+  createSubMenu(i18n("=state:COMPLETED"), [](const QString &s) { return s == JulesStatus::COMPLETED; }, false);
+  createSubMenu(
+      i18n("=state:AWAITING_USER_FEEDBACK"), [](const QString &s) { return s == JulesStatus::AWAITING_USER_FEEDBACK; },
+      false);
+  createSubMenu(i18n("NOT =state:IN_PROGRESS"), [](const QString &s) { return s != JulesStatus::IN_PROGRESS; }, false);
+  createSubMenu(i18n("NOT =state:COMPLETED"), [](const QString &s) { return s != JulesStatus::COMPLETED; }, false);
+
+  connect(openMenu, &QMenu::aboutToShow, this, [this, openMenu, selectedMenu]() {
+    bool isFollowingTab = (m_tabWidget && m_tabWidget->currentWidget() &&
+                           m_tabWidget->currentWidget()->objectName() == QStringLiteral("followingTab"));
+    if (!isFollowingTab) {
+      openMenu->hide();
+    } else {
+      bool hasSelection = m_sessionView->selectionModel()->hasSelection();
+      selectedMenu->setTitle(hasSelection ? i18n("Selected") : i18n("All"));
+    }
   });
 
   m_openUrlAction = new QAction(i18n("Open URL"), this);
@@ -2903,7 +2945,7 @@ void MainWindow::createArchiveActions() {
     int count = 0;
     for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
       if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::StateRole).toString() ==
-          QStringLiteral("ERROR")) {
+          JulesStatus::ERROR_STATE) {
         QJsonObject session = m_sessionModel->getSession(i);
         m_archiveModel->addSession(session);
         m_sessionModel->removeSession(i);
@@ -2926,7 +2968,7 @@ void MainWindow::createArchiveActions() {
     int count = 0;
     for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
       if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::StateRole).toString() ==
-          QStringLiteral("DONE")) {
+          JulesStatus::COMPLETED) {
         QJsonObject session = m_sessionModel->getSession(i);
         m_archiveModel->addSession(session);
         m_sessionModel->removeSession(i);
@@ -2949,7 +2991,7 @@ void MainWindow::createArchiveActions() {
     int count = 0;
     for (int i = m_sessionModel->rowCount() - 1; i >= 0; --i) {
       if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::StateRole).toString() ==
-          QStringLiteral("CANCELED")) {
+          JulesStatus::CANCELED) {
         QJsonObject session = m_sessionModel->getSession(i);
         m_archiveModel->addSession(session);
         m_sessionModel->removeSession(i);
@@ -2971,7 +3013,7 @@ void MainWindow::createArchiveActions() {
   actionCollection()->addAction(QStringLiteral("duplicate_failed_to_queue_and_archive"),
                                 m_duplicateFailedToQueueAndArchiveAction);
   connect(m_duplicateFailedToQueueAndArchiveAction, &QAction::triggered, this,
-          [this]() { duplicateFollowingItemsToQueue(QStringLiteral("ERROR"), i18n("Failed")); });
+          [this]() { duplicateFollowingItemsToQueue(JulesStatus::ERROR_STATE, i18n("Failed")); });
 
   m_duplicatePausedToQueueAndArchiveAction = new QAction(i18n("Duplicate all Following items that are in \"Paused\" "
                                                               "state to queue and archive"),
@@ -2988,7 +3030,7 @@ void MainWindow::createArchiveActions() {
   actionCollection()->addAction(QStringLiteral("duplicate_canceled_to_queue_and_archive"),
                                 m_duplicateCanceledToQueueAndArchiveAction);
   connect(m_duplicateCanceledToQueueAndArchiveAction, &QAction::triggered, this,
-          [this]() { duplicateFollowingItemsToQueue(QStringLiteral("CANCELED"), i18n("Canceled")); });
+          [this]() { duplicateFollowingItemsToQueue(JulesStatus::CANCELED, i18n("Canceled")); });
 
   m_purgeArchiveAction = new QAction(i18n("Purge archive"), this);
   actionCollection()->addAction(QStringLiteral("purge_archive"), m_purgeArchiveAction);
@@ -3570,7 +3612,7 @@ QStringList MainWindow::getActiveFollowingSessionIds() const {
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex index = m_sessionModel->index(i, 0);
     QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
-    if (state == QStringLiteral("DONE") || state == QStringLiteral("CANCELED") || state == QStringLiteral("ERROR"))
+    if (state == JulesStatus::COMPLETED || state == JulesStatus::CANCELED || state == JulesStatus::ERROR_STATE)
       continue;
     QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
     if (!currentId.isEmpty()) {
@@ -4890,7 +4932,7 @@ QList<SourceRemapEntry> MainWindow::pendingSourceEntries(const QString &onlySour
   }
   for (int row = 0; row < m_sessionModel->rowCount(); ++row) {
     const QJsonObject session = m_sessionModel->getSession(row);
-    if (session.value(QStringLiteral("state")).toString() != QStringLiteral("IN_PROGRESS")) {
+    if (session.value(QStringLiteral("state")).toString() != JulesStatus::IN_PROGRESS) {
       append(QStringLiteral("session"),
              session.contains(QStringLiteral("local_snooze_until")) ? i18n("Snoozed") : i18n("Sessions"), row, session);
     }
@@ -5171,7 +5213,7 @@ void MainWindow::updateTrayToolTip() {
     QString state = m_sessionModel->data(idx, SessionModel::StateRole).toString();
     QString currentId = m_sessionModel->data(idx, SessionModel::IdRole).toString();
 
-    if (state != QStringLiteral("DONE") && state != QStringLiteral("CANCELED") && state != QStringLiteral("ERROR") &&
+    if (state != JulesStatus::COMPLETED && state != JulesStatus::CANCELED && state != JulesStatus::ERROR_STATE &&
         !currentId.isEmpty()) {
       stateCounts[state]++;
       if (followingItems.size() < 5) {
@@ -5217,7 +5259,7 @@ void MainWindow::updateTrayToolTip() {
       hasWaitingApproval = true;
       break;
     }
-    if (state == QStringLiteral("DONE")) {
+    if (state == JulesStatus::COMPLETED) {
       QString prStatus = m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
       if (prStatus == QStringLiteral("open")) {
         hasDoneOpenPR = true;
@@ -5457,8 +5499,8 @@ void MainWindow::restoreData() {
 void MainWindow::updateCompletions() {
   QMap<QString, QStringList> completions;
   completions[QStringLiteral("state")] =
-      QStringList{QStringLiteral("RUNNING"), QStringLiteral("QUEUED"),   QStringLiteral("PAUSED"),
-                  QStringLiteral("ERROR"),   QStringLiteral("CANCELED"), QStringLiteral("DONE")};
+      QStringList{QStringLiteral("RUNNING"), QStringLiteral("QUEUED"), QStringLiteral("PAUSED"),
+                  JulesStatus::ERROR_STATE,  JulesStatus::CANCELED,    JulesStatus::COMPLETED};
 
   QStringList repos;
   QStringList owners;
@@ -5928,7 +5970,7 @@ void MainWindow::onSessionReloaded(const QJsonObject &session) {
     QString title;
     QString text;
 
-    if (newState == QStringLiteral("DONE") &&
+    if (newState == JulesStatus::COMPLETED &&
         (prevState == QStringLiteral("RUNNING") || prevState == QStringLiteral("QUEUED"))) {
       eventId = QStringLiteral("followingSessionCompleted");
       title = i18n("Following Session Completed");
@@ -5937,7 +5979,7 @@ void MainWindow::onSessionReloaded(const QJsonObject &session) {
       eventId = QStringLiteral("followingSessionRequiresAttention");
       title = i18n("Following Session Requires Attention");
       text = i18n("Session %1 is now running.", id);
-    } else if (newState == QStringLiteral("ERROR")) {
+    } else if (newState == JulesStatus::ERROR_STATE) {
       eventId = QStringLiteral("followingSessionFailed");
       title = i18n("Following Session Failed");
       text = i18n("Session %1 has encountered an error.", id);

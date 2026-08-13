@@ -867,7 +867,7 @@ void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *se
   for (int i = 0; i < sessionModel->rowCount(); ++i) {
     QJsonObject session = sessionModel->getSession(i);
     QString state = session.value(QStringLiteral("state")).toString();
-    if (state == QStringLiteral("IN_PROGRESS")) {
+    if (state == JulesStatus::IN_PROGRESS) {
       QString sourceId;
       if (session.contains(QStringLiteral("sourceContext"))) {
         sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();

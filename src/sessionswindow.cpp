@@ -197,8 +197,8 @@ void SessionsWindow::setupFilters(QVBoxLayout *layout) {
   filterLayout->addWidget(m_searchEdit);
 
   QComboBox *statusCombo = new QComboBox(this);
-  statusCombo->addItems({i18n("All"), QStringLiteral("PENDING"), QStringLiteral("IN_PROGRESS"),
-                         QStringLiteral("COMPLETED"), QStringLiteral("FAILED"), QStringLiteral("CANCELED")});
+  statusCombo->addItems({i18n("All"), QStringLiteral("PENDING"), JulesStatus::IN_PROGRESS, QStringLiteral("COMPLETED"),
+                         QStringLiteral("FAILED"), JulesStatus::CANCELED});
   connect(statusCombo, &QComboBox::currentTextChanged, m_proxyModel, &SessionsProxyModel::setStatusFilter);
   filterLayout->addWidget(statusCombo);
 
@@ -792,7 +792,7 @@ void SessionsWindow::onSessionsReceived(const QJsonArray &sessions, const QStrin
     for (const QJsonValue &sessionValue : sessions) {
       const QJsonObject obj = sessionValue.toObject();
       const QString state = obj.value(QStringLiteral("state")).toString();
-      if (state == QStringLiteral("IN_PROGRESS") || state == QStringLiteral("WAITING_FEEDBACK") ||
+      if (state == JulesStatus::IN_PROGRESS || state == JulesStatus::AWAITING_USER_FEEDBACK ||
           state == QStringLiteral("WAITING_APPROVAL")) {
         const QString id = obj.value(QStringLiteral("id")).toString();
         if (!m_managedModel->contains(id)) {
