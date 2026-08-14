@@ -3456,6 +3456,10 @@ void MainWindow::loadQueueSettings() {
   updateBlockedTabVisibility();
 }
 
+void MainWindow::updateFollowingRefreshTimer() {
+  // Legacy method now empty
+}
+
 void MainWindow::updateCountdownStatus() {
   if (m_queuePaused || m_queueModel->isEmpty()) {
     m_queueCountdownLabel->hide();

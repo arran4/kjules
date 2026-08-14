@@ -176,6 +176,7 @@ private:
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
 
+  void updateFollowingRefreshTimer();
   void setupUi();
 
   void setupSourcesTab(QWidget *tab);
@@ -328,6 +329,8 @@ private:
   QTimer *m_followingCheckTimer;
 
   QTimer *m_queueTimer;
+  QTimer *m_masterMinuteTimer;
+  QTimer *m_masterSecondTimer;
   QTimer *m_countdownTimer;
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
