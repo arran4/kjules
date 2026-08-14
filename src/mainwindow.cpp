@@ -95,8 +95,8 @@ MainWindow::MainWindow(QWidget *parent)
       m_errorRetryTimer(new QTimer(this)), m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
       m_isRefreshingSources(false), m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
       m_sessionRefreshTimer(new QTimer(this)), m_followingCheckTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false), m_queuePaused(false),
-      m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
+      m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
+      m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
   connect(m_masterSecondTimer, &QTimer::timeout, this, &MainWindow::onMasterSecondTimer);
