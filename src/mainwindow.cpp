@@ -92,10 +92,9 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourceModel(new SourceModel(this)), m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)), m_queueModel(new QueueModel(this)),
       m_holdingModel(new QueueModel(this, QStringLiteral("holding.json"), true)), m_errorsModel(new ErrorsModel(this)),
-      m_errorRetryTimer(new QTimer(this)), m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
+      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
       m_isRefreshingSources(false), m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_followingCheckTimer(new QTimer(this)), m_queueTimer(new QTimer(this)),
-      m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
+      m_masterMinuteTimer(new QTimer(this)), m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
@@ -3446,13 +3445,6 @@ void MainWindow::showSettingsDialog() {
 }
 
 void MainWindow::loadQueueSettings() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  int intervalMins = queueConfig.readEntry("TimerInterval", 1);
-  m_queueTimer->setInterval(intervalMins * 60000);
-
-  if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
-    m_queueTimer->start();
-  }
   updateBlockedTabVisibility();
 }
 
@@ -3472,9 +3464,11 @@ void MainWindow::updateCountdownStatus() {
   if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
     secondsLeft = now.secsTo(m_queueBackoffUntil);
   } else if (!m_isProcessingQueue) {
-    if (m_queueTimer->isActive()) {
-      secondsLeft = m_queueTimer->remainingTime() / 1000;
-    }
+    // If not backing off, use the master minute timer next tick + queue interval
+    // Actually the new queue execution is in the minute timer, but we need to track interval if it's >1
+    // For now we don't have remainingTime of an independent queue timer.
+    // The previous implementation used the interval. If it's ready to go on next minute tick:
+    secondsLeft = m_masterMinuteTimer->remainingTime() / 1000;
   }
 
   if (secondsLeft > 0) {
@@ -3589,11 +3583,6 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
 
 void MainWindow::processErrorRetries() {}
 
-void MainWindow::onQueueTimerTimeout() {
-  if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
-    processQueue();
-  }
-}
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
   QStringList activeIds;
@@ -6059,6 +6048,19 @@ void MainWindow::onMasterMinuteTimer() {
   updateSessionStats();
   autoRefreshFollowing();
   processErrorRetries();
-  onQueueTimerTimeout();
+
+  // Process queue at intervals
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int intervalMins = queueConfig.readEntry("TimerInterval", 1);
+
+  static QDateTime lastQueueProcessTime;
+  QDateTime now = QDateTime::currentDateTimeUtc();
+
+  if (!lastQueueProcessTime.isValid() || lastQueueProcessTime.addSecs(intervalMins * 60) <= now) {
+      if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
+        processQueue();
+        lastQueueProcessTime = now;
+      }
+  }
   m_isProcessingMinuteTimer = false;
 }

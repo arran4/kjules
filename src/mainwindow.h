@@ -121,7 +121,6 @@ private Q_SLOTS:
   void decreaseFavouriteRank();
   void setFavouriteRank();
   void processQueue();
-  void onQueueTimerTimeout();
   void onMasterMinuteTimer();
   void onMasterSecondTimer();
   void refreshBeforeQueue();
@@ -223,7 +222,6 @@ private:
   QueueModel *m_queueModel;
   QueueModel *m_holdingModel;
   ErrorsModel *m_errorsModel;
-  QTimer *m_errorRetryTimer;
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;
@@ -323,20 +321,14 @@ private:
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;
   QJsonArray m_refreshedSources;
-  QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
   QString m_lastStatusMessage;
-  QTimer *m_followingCheckTimer;
-
-  QTimer *m_queueTimer;
   QTimer *m_masterMinuteTimer;
   QTimer *m_masterSecondTimer;
-  QTimer *m_countdownTimer;
   bool m_isProcessingQueue;
   bool m_isProcessingMinuteTimer;
   QDateTime m_queueBackoffUntil;
   QString m_queueBackoffReason;
-  QTimer *m_queueBackoffTimer;
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
   bool m_isWaitingForRefreshBeforeQueue;
