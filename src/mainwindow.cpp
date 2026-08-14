@@ -1668,9 +1668,6 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         }
         if (!rowsToRequeue.isEmpty()) {
           updateStatus(i18np("Requeued 1 error item.", "Requeued %1 error items.", rowsToRequeue.size()));
-          if (!m_queuePaused && !m_queueTimer->isActive()) {
-            m_queueTimer->start();
-          }
         }
       });
 
@@ -1734,9 +1731,6 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             m_errorsModel->removeError(row);
             m_queueModel->enqueue(req);
             updateStatus(i18n("Error item requeued."));
-            if (!m_queuePaused && !m_queueTimer->isActive()) {
-              m_queueTimer->start();
-            }
           });
 
           connect(window, &ErrorWindow::requeueRequested, [this](int row) {
@@ -3399,10 +3393,6 @@ void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoN
   m_queueModel->enqueue(sessionReq);
 
   updateStatus(i18n("Added 2 tasks to queue for creating repo and session."));
-
-  if (!m_queuePaused && !m_queueTimer->isActive()) {
-    m_queueTimer->start();
-  }
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
@@ -3528,13 +3518,11 @@ void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState, cons
 void MainWindow::toggleQueueState() {
   m_queuePaused = !m_queuePaused;
   if (m_queuePaused) {
-    m_queueTimer->stop();
     m_toggleQueueAction->setText(i18n("Process Queue"));
     m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
     updateStatus(i18n("Queue processing paused."));
   } else {
     if (!m_queueModel->isEmpty()) {
-      m_queueTimer->start();
       // Try processing immediately when unpaused
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
@@ -3580,9 +3568,6 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.", sources.size()));
 
   // Start timer if not running
-  if (!m_queuePaused && !m_queueTimer->isActive()) {
-    m_queueTimer->start();
-  }
 
   // Trigger processing immediately if we can
   QTimer::singleShot(0, this, &MainWindow::processQueue);
@@ -3641,15 +3626,6 @@ void MainWindow::processQueue() {
     return;
   }
   if (m_queueModel->isEmpty()) {
-    if (m_queueTimer->isActive()) {
-      KNotification *notification =
-          new KNotification(QStringLiteral("queueEmpty"), KNotification::CloseOnTimeout, this);
-      notification->setTitle(i18n("Queue Empty"));
-      notification->setText(i18n("The processing queue is now empty."));
-      connect(notification, &KNotification::closed, notification, &QObject::deleteLater);
-      notification->sendEvent();
-      m_queueTimer->stop();
-    }
     return;
   }
 
