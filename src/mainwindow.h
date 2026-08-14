@@ -324,12 +324,13 @@ private:
   QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
   QString m_lastStatusMessage;
-  QTimer *m_followingRefreshTimer;
+  QTimer *m_followingCheckTimer;
 
   QTimer *m_queueTimer;
   QTimer *m_countdownTimer;
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
+  QString m_queueBackoffReason;
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
   bool m_isWaitingForRefreshBeforeQueue;

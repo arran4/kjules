@@ -98,6 +98,7 @@ public:
   void updateSessionAt(int row, const QJsonObject &session);
   void toggleFavourite(const QString &id);
   void setFavouriteRank(const QString &id, int rank);
+  void setRefreshInterval(const QString &id, int minutes);
   void increaseFavouriteRank(const QString &id);
   void decreaseFavouriteRank(const QString &id);
   void setSnoozeUntil(const QString &id, const QDateTime &snoozeUntil);

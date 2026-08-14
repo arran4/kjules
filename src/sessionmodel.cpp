@@ -42,6 +42,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
   data.state = obj.value(QStringLiteral("state")).toString();
   data.updateTime = QDateTime::fromString(obj.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
   data.createTime = QDateTime::fromString(obj.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+  data.lastRefreshed = QDateTime::fromString(obj.value(QStringLiteral("lastRefreshed")).toString(), Qt::ISODate);
 
   QJsonValue favVal = obj.value(QStringLiteral("local_favourite"));
   if (favVal.isDouble()) {
@@ -137,6 +138,22 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
       return session.repo;
     case ColId:
       return session.id;
+    case ColLastRefreshed: {
+      QDateTime lr = session.lastRefreshed.isValid() ? session.lastRefreshed : session.updateTime;
+      if (!lr.isValid())
+        return QVariant();
+      qint64 secs = lr.secsTo(QDateTime::currentDateTimeUtc());
+      QString timeStr;
+      if (secs < 60) {
+        timeStr = i18np("1 sec ago", "%1 secs ago", secs);
+      } else if (secs < 3600) {
+        timeStr = i18np("1 min ago", "%1 mins ago", secs / 60);
+      } else {
+        timeStr = i18np("1 hour ago", "%1 hours ago", secs / 3600);
+      }
+      return i18n("%1 at %2", timeStr,
+                  lr.toLocalTime().toString(QLocale::system().dateTimeFormat(QLocale::ShortFormat)));
+    }
     default:
       return QVariant();
     }
@@ -394,8 +411,11 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
 }
 
 void SessionModel::addSession(const QJsonObject &session) {
+  QJsonObject sessionWithRefresh = session;
+  sessionWithRefresh[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
   beginInsertRows(QModelIndex(), 0, 0);
-  SessionData data = parseSessionData(session);
+  SessionData data = parseSessionData(sessionWithRefresh);
   m_sessions.insert(0, data);
   // Rebuild the index completely because inserting at 0 shifts all indices
   m_idToIndex.clear();
@@ -460,7 +480,9 @@ void SessionModel::updateSessionAt(int row, const QJsonObject &session) {
   if (row < 0 || row >= m_sessions.size()) {
     return;
   }
-  SessionData replacement = parseSessionData(session);
+  QJsonObject sessionWithRefresh = session;
+  sessionWithRefresh[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+  SessionData replacement = parseSessionData(sessionWithRefresh);
   replacement.favouriteRank = m_sessions[row].favouriteRank;
   replacement.hasUnreadChanges = m_sessions[row].hasUnreadChanges;
   replacement.snoozeUntil = m_sessions[row].snoozeUntil;
@@ -637,5 +659,19 @@ void SessionModel::clearUnreadChanges(const QString &id) {
       m_sessions[i].hasUnreadChanges = false;
       Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
     }
+  }
+}
+
+void SessionModel::setRefreshInterval(const QString &id, int minutes) {
+  if (m_idToIndex.contains(id)) {
+    int i = m_idToIndex.value(id);
+    SessionData &data = m_sessions[i];
+    if (minutes == -1) {
+      data.rawObject.remove(QStringLiteral("local_refreshInterval"));
+    } else {
+      data.rawObject[QStringLiteral("local_refreshInterval")] = minutes;
+    }
+    Q_EMIT dataChanged(index(i, 0), index(i, ColCount - 1));
+    saveSessions();
   }
 }
