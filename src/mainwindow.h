@@ -122,6 +122,8 @@ private Q_SLOTS:
   void setFavouriteRank();
   void processQueue();
   void onQueueTimerTimeout();
+  void onMasterMinuteTimer();
+  void onMasterSecondTimer();
   void refreshBeforeQueue();
   void checkPendingRefreshBeforeQueue(const QString &id);
   QStringList getActiveFollowingSessionIds() const;
@@ -174,7 +176,6 @@ private:
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
 
-  void updateFollowingRefreshTimer();
   void setupUi();
 
   void setupSourcesTab(QWidget *tab);
