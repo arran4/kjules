@@ -111,6 +111,9 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_countdownTimer, &QTimer::timeout, this, &MainWindow::updateCountdownStatus);
   m_countdownTimer->start(1000); // 1 second
 
+  m_queueBackoffTimer->setSingleShot(true);
+  connect(m_queueBackoffTimer, &QTimer::timeout, this, &MainWindow::processQueue);
+
   connect(m_errorRetryTimer, &QTimer::timeout, this, &MainWindow::processErrorRetries);
   m_errorRetryTimer->start(60000); // 1 minute
 
@@ -3601,20 +3604,7 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
 void MainWindow::processErrorRetries() {}
 
 void MainWindow::onQueueTimerTimeout() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
-    return;
-
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
-  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
-
-  bool legacyMergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (legacyMergeRefresh && seconds != -1) {
-    seconds = -1;
-  }
-
-  if (seconds == -1) {
-    refreshBeforeQueue();
-  } else {
+  if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
     processQueue();
   }
 }
@@ -3843,6 +3833,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requ
     updateStatus(i18n("GitHub repository created from queue."));
     ActivityLogWindow::instance()->logMessage(i18n("Processed schedule run: GitHub repository created."));
     m_queueBackoffUntil = QDateTime();
+    m_queueBackoffTimer->stop();
   } else {
     QueueItem item = m_queueModel->peek();
     item.errorCount++;
@@ -3865,6 +3856,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requ
     } else {
       m_queueModel->updateItem(0, item);
       m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffSeconds);
+      m_queueBackoffTimer->start(backoffSeconds * 1000);
       m_queueBackoffReason = i18n("Repository creation failed");
       updateStatus(i18n("Repository creation failed. Retrying in %1 seconds.", backoffSeconds));
     }
@@ -3902,6 +3894,7 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
     updateStatus(i18n("Session created from queue."));
     ActivityLogWindow::instance()->logMessage(i18n("Processed schedule run: Session created for %1.", sourceId));
     m_queueBackoffUntil = QDateTime();
+    m_queueBackoffTimer->stop();
   } else {
     QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
     bool isPrecondition = false;
@@ -3921,10 +3914,12 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
         KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
         int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
         m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+        m_queueBackoffTimer->start(backoffMins * 60 * 1000);
         m_queueBackoffReason = i18n("Concurrent Limit Reached");
         updateStatus(i18n("Concurrent limit reached, waiting %1 mins before retrying...", backoffMins));
       } else if (isResourceExhausted) {
         m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(3600); // 1 hour DLRI
+        m_queueBackoffTimer->start(3600 * 1000);
         m_queueBackoffReason = i18n("API Rate/Daily Limit Reached");
         updateStatus(i18n("API rate limit hit, waiting 1 hour..."));
       }
@@ -3935,6 +3930,7 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
       KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
       m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+      m_queueBackoffTimer->start(backoffMins * 60 * 1000);
       m_queueBackoffReason = i18n("Error Processing Task");
     }
   }
@@ -5307,8 +5303,7 @@ void MainWindow::autoRefreshFollowing() {
     // Attempt to get session specific interval
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
-        QJsonObject rawData =
-            m_sessionModel->data(m_sessionModel->index(i, 0), SourceModel::RawDataRole).toJsonObject();
+        QJsonObject rawData = m_sessionModel->getSession(i);
         if (rawData.contains(QStringLiteral("local_refreshInterval"))) {
           intervalSeconds = rawData.value(QStringLiteral("local_refreshInterval")).toInt() * 60;
         }

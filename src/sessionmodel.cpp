@@ -381,6 +381,13 @@ int SessionModel::addSessions(const QJsonArray &sessions) {
       } else {
         data.rawObject.remove(QStringLiteral("local_snooze_until"));
       }
+
+      // Preserve local_refreshInterval
+      if (m_sessions[row].rawObject.contains(QStringLiteral("local_refreshInterval"))) {
+        data.rawObject[QStringLiteral("local_refreshInterval")] =
+            m_sessions[row].rawObject.value(QStringLiteral("local_refreshInterval")).toInt();
+      }
+
       data.id = id; // Ensure ID matches
 
       bool isUnread = wasUnread || (oldState != data.state) || (oldPrStatus != data.prStatus) ||
@@ -457,6 +464,13 @@ void SessionModel::updateSession(const QJsonObject &session) {
     } else {
       data.rawObject.remove(QStringLiteral("local_snooze_until"));
     }
+
+    // Preserve local_refreshInterval
+    if (m_sessions[i].rawObject.contains(QStringLiteral("local_refreshInterval"))) {
+      data.rawObject[QStringLiteral("local_refreshInterval")] =
+          m_sessions[i].rawObject.value(QStringLiteral("local_refreshInterval")).toInt();
+    }
+
     data.id = id; // Ensure ID matches
 
     bool isSubstantiallyChanged = false;

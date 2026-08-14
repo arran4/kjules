@@ -331,6 +331,7 @@ private:
   bool m_isProcessingQueue;
   QDateTime m_queueBackoffUntil;
   QString m_queueBackoffReason;
+  QTimer *m_queueBackoffTimer;
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
   bool m_isWaitingForRefreshBeforeQueue;
