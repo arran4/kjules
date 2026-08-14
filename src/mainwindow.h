@@ -327,6 +327,8 @@ private:
   QTimer *m_masterSecondTimer;
   bool m_isProcessingQueue;
   bool m_isProcessingMinuteTimer;
+  QDateTime m_lastQueueProcessTime;
+  QDateTime m_lastErrorRetryTime;
   QDateTime m_queueBackoffUntil;
   QString m_queueBackoffReason;
   bool m_queuePaused;

@@ -92,9 +92,9 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourceModel(new SourceModel(this)), m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)), m_queueModel(new QueueModel(this)),
       m_holdingModel(new QueueModel(this, QStringLiteral("holding.json"), true)), m_errorsModel(new ErrorsModel(this)),
-      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_masterMinuteTimer(new QTimer(this)), m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
+      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)),
+      m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
@@ -3444,9 +3444,7 @@ void MainWindow::showSettingsDialog() {
   }
 }
 
-void MainWindow::loadQueueSettings() {
-  updateBlockedTabVisibility();
-}
+void MainWindow::loadQueueSettings() { updateBlockedTabVisibility(); }
 
 void MainWindow::updateFollowingRefreshTimer() {
   // Legacy method now empty
@@ -3464,11 +3462,20 @@ void MainWindow::updateCountdownStatus() {
   if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
     secondsLeft = now.secsTo(m_queueBackoffUntil);
   } else if (!m_isProcessingQueue) {
-    // If not backing off, use the master minute timer next tick + queue interval
-    // Actually the new queue execution is in the minute timer, but we need to track interval if it's >1
-    // For now we don't have remainingTime of an independent queue timer.
-    // The previous implementation used the interval. If it's ready to go on next minute tick:
-    secondsLeft = m_masterMinuteTimer->remainingTime() / 1000;
+    KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+    int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+
+    if (m_lastQueueProcessTime.isValid()) {
+      QDateTime nextQueueTime = m_lastQueueProcessTime.addSecs(queueIntervalMins * 60);
+      if (now < nextQueueTime) {
+        secondsLeft = now.secsTo(nextQueueTime);
+      } else {
+        // Overdue or exactly due, but waiting for master minute timer
+        secondsLeft = m_masterMinuteTimer->remainingTime() / 1000;
+      }
+    } else {
+      secondsLeft = m_masterMinuteTimer->remainingTime() / 1000;
+    }
   }
 
   if (secondsLeft > 0) {
@@ -3582,7 +3589,6 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
 }
 
 void MainWindow::processErrorRetries() {}
-
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
   QStringList activeIds;
@@ -6045,22 +6051,34 @@ void MainWindow::onMasterMinuteTimer() {
     return;
   }
   m_isProcessingMinuteTimer = true;
-  updateSessionStats();
-  autoRefreshFollowing();
-  processErrorRetries();
 
-  // Process queue at intervals
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  int intervalMins = queueConfig.readEntry("TimerInterval", 1);
-
-  static QDateTime lastQueueProcessTime;
   QDateTime now = QDateTime::currentDateTimeUtc();
 
-  if (!lastQueueProcessTime.isValid() || lastQueueProcessTime.addSecs(intervalMins * 60) <= now) {
-      if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
+  // 1. Update inexpensive once-per-minute UI/session stats
+  updateSessionStats();
+
+  // 2. Refresh only following sessions whose individual/global FRI has expired
+  autoRefreshFollowing();
+
+  // 3. Process queue if due (and not in backoff)
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+  if (!m_lastQueueProcessTime.isValid() || m_lastQueueProcessTime.addSecs(queueIntervalMins * 60) <= now) {
+    if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
+      // Check backoff before triggering
+      if (!m_queueBackoffUntil.isValid() || now >= m_queueBackoffUntil) {
         processQueue();
-        lastQueueProcessTime = now;
+        m_lastQueueProcessTime = now;
       }
+    }
   }
+
+  // 4. Process error retries if due
+  int errorRetryIntervalMins = 1; // It was previously set to 60000 ms = 1 min
+  if (!m_lastErrorRetryTime.isValid() || m_lastErrorRetryTime.addSecs(errorRetryIntervalMins * 60) <= now) {
+    processErrorRetries();
+    m_lastErrorRetryTime = now;
+  }
+
   m_isProcessingMinuteTimer = false;
 }
