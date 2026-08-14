@@ -274,6 +274,15 @@ QStringList MainWindow::getSelectedSessionIds() const {
 }
 
 void MainWindow::setupUi() {
+  // Migration for legacy MergeRefreshAndQueue config
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  bool legacyMergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
+  if (legacyMergeRefresh) {
+    sessionConfig.writeEntry("FollowingAutoRefreshInterval", -1);
+    sessionConfig.deleteEntry("MergeRefreshAndQueue");
+    sessionConfig.sync();
+  }
+
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
 

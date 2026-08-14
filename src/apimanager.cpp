@@ -777,9 +777,11 @@ void APIManager::listSessions(const QString &pageToken) {
     return;
   }
 
-  QString endpoint = QStringLiteral("/sessions");
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("API"));
+  int pageSize = config.readEntry("PageSize", 100);
+  QString endpoint = QStringLiteral("/sessions?pageSize=") + QString::number(pageSize);
   if (!pageToken.isEmpty()) {
-    endpoint += QStringLiteral("?pageToken=") + pageToken;
+    endpoint += QStringLiteral("&pageToken=") + pageToken;
   }
   QNetworkRequest request = createRequest(endpoint);
   m_listSessionsReply = m_nam->get(request);
