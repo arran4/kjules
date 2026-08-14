@@ -333,6 +333,7 @@ private:
   QTimer *m_masterSecondTimer;
   QTimer *m_countdownTimer;
   bool m_isProcessingQueue;
+  bool m_isProcessingMinuteTimer;
   QDateTime m_queueBackoffUntil;
   QString m_queueBackoffReason;
   QTimer *m_queueBackoffTimer;
