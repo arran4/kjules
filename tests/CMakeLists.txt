@@ -4,6 +4,11 @@ add_executable(test_advancedfilterproxymodel test_advancedfilterproxymodel.cpp .
 add_executable(test_sessionrequestbuilder test_sessionrequestbuilder.cpp ../src/sessionrequestbuilder.cpp)
 add_executable(test_sourcefixer test_sourcefixer.cpp ../src/sourcefixer.cpp ../src/sessionrequestbuilder.cpp)
 add_executable(test_sourceremapdialog test_sourceremapdialog.cpp ../src/sourceremapdialog.cpp ../src/sourcefixer.cpp)
+add_executable(test_apierror test_apierror.cpp ../src/api/apierror.cpp)
+add_executable(test_queuescheduling test_queuescheduling.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp)
+add_executable(test_followingrefresh test_followingrefresh.cpp ../src/sessionmodel.cpp)
+add_executable(test_sessionmodel test_sessionmodel.cpp ../src/sessionmodel.cpp)
+add_executable(test_configmigration test_configmigration.cpp)
 
 target_link_libraries(test_dummy Qt6::Test)
 target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core)
@@ -11,6 +16,11 @@ target_link_libraries(test_advancedfilterproxymodel Qt6::Test Qt6::Widgets Qt6::
 target_link_libraries(test_sessionrequestbuilder Qt6::Test Qt6::Core)
 target_link_libraries(test_sourcefixer Qt6::Test Qt6::Core)
 target_link_libraries(test_sourceremapdialog Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n)
+target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core)
+target_link_libraries(test_queuescheduling Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigCore)
+target_link_libraries(test_followingrefresh Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
+target_link_libraries(test_sessionmodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
+target_link_libraries(test_configmigration Qt6::Test Qt6::Core KF6::ConfigCore)
 
 add_test(NAME DummyTest COMMAND test_dummy)
 add_test(NAME FilterTest COMMAND test_filter)
@@ -18,9 +28,11 @@ add_test(NAME AdvancedFilterProxyModelTest COMMAND test_advancedfilterproxymodel
 add_test(NAME SessionRequestBuilderTest COMMAND test_sessionrequestbuilder)
 add_test(NAME SourceFixerTest COMMAND test_sourcefixer)
 add_test(NAME SourceRemapDialogTest COMMAND test_sourceremapdialog)
-
-set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest
-                     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-add_executable(test_apierror test_apierror.cpp ../src/api/apierror.cpp)
-target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core)
 add_test(NAME ApiErrorTest COMMAND test_apierror)
+add_test(NAME QueueSchedulingTest COMMAND test_queuescheduling)
+add_test(NAME FollowingRefreshTest COMMAND test_followingrefresh)
+add_test(NAME SessionModelTest COMMAND test_sessionmodel)
+add_test(NAME ConfigMigrationTest COMMAND test_configmigration)
+
+set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest QueueSchedulingTest FollowingRefreshTest SessionModelTest ConfigMigrationTest
+                     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -175,7 +175,6 @@ private:
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
 
-  void updateFollowingRefreshTimer();
   void setupUi();
 
   void setupSourcesTab(QWidget *tab);
@@ -332,6 +331,8 @@ private:
   QString m_queueBackoffReason;
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
+  QSet<QString> m_inFlightSessionReloads;
+  QHash<QString, QDateTime> m_sessionReloadFailedAt;
   bool m_isWaitingForRefreshBeforeQueue;
   bool m_isWaitingForCreatedRepoSource = false;
   bool m_suppressNextErrorDialog = false;

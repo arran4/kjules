@@ -39,6 +39,7 @@ struct SessionData {
   QJsonObject rawObject;
   bool hasUnreadChanges = false;
   QDateTime snoozeUntil;
+  std::optional<int> refreshInterval;
 };
 
 class SessionModel : public QAbstractTableModel {
@@ -94,8 +95,8 @@ public:
   void setSessions(const QJsonArray &sessions);
   int addSessions(const QJsonArray &sessions);
   void addSession(const QJsonObject &session);
-  void updateSession(const QJsonObject &session);
-  void updateSessionAt(int row, const QJsonObject &session);
+  void updateSession(const QJsonObject &session, bool isSuccessfulRefresh = false);
+  void updateSessionAt(int row, const QJsonObject &session, bool isSuccessfulRefresh = false);
   void toggleFavourite(const QString &id);
   void setFavouriteRank(const QString &id, int rank);
   void setRefreshInterval(const QString &id, int minutes);
