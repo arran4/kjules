@@ -121,6 +121,7 @@ private Q_SLOTS:
   void decreaseFavouriteRank();
   void setFavouriteRank();
   void processQueue();
+  void scheduleNextQueueAttempt();
   void onMasterMinuteTimer();
   void onMasterSecondTimer();
   void refreshBeforeQueue();
@@ -327,8 +328,7 @@ private:
   QTimer *m_masterSecondTimer;
   bool m_isProcessingQueue;
   bool m_isProcessingMinuteTimer;
-  QDateTime m_lastQueueProcessTime;
-  QDateTime m_lastErrorRetryTime;
+  QDateTime m_nextQueueProcessAt;
   QDateTime m_queueBackoffUntil;
   QString m_queueBackoffReason;
   bool m_queuePaused;

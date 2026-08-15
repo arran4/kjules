@@ -3458,28 +3458,23 @@ void MainWindow::updateCountdownStatus() {
   QDateTime now = QDateTime::currentDateTimeUtc();
   qint64 secondsLeft = 0;
 
-  if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
-    secondsLeft = now.secsTo(m_queueBackoffUntil);
-  } else if (!m_isProcessingQueue) {
-    KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-    int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+  if (!m_isProcessingQueue) {
+    if (!m_nextQueueProcessAt.isValid()) {
+      // Startup state logic applied here too
+      KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+      int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+      m_nextQueueProcessAt = now.addSecs(queueIntervalMins * 60);
+    }
 
-    if (m_lastQueueProcessTime.isValid()) {
-      QDateTime nextQueueTime = m_lastQueueProcessTime.addSecs(queueIntervalMins * 60);
-      if (now < nextQueueTime) {
-        secondsLeft = now.secsTo(nextQueueTime);
-      } else {
-        // Overdue or exactly due, but waiting for master minute timer
-        secondsLeft = m_masterMinuteTimer->remainingTime() / 1000;
-      }
-    } else {
-      secondsLeft = m_masterMinuteTimer->remainingTime() / 1000;
+    if (m_nextQueueProcessAt > now) {
+      secondsLeft = now.secsTo(m_nextQueueProcessAt);
     }
   }
 
   if (secondsLeft > 0) {
     QString timeStr = Utils::formatDuration(secondsLeft);
-    if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil && !m_queueBackoffReason.isEmpty()) {
+    if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil == m_nextQueueProcessAt &&
+        !m_queueBackoffReason.isEmpty()) {
       m_queueCountdownLabel->setText(i18n("Waiting (%1): Next attempt in %2...", m_queueBackoffReason, timeStr));
     } else {
       m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
@@ -3627,18 +3622,22 @@ void MainWindow::checkPendingRefreshBeforeQueue(const QString &id) {
   }
 }
 
+void MainWindow::scheduleNextQueueAttempt() {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+
+  if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil > QDateTime::currentDateTimeUtc()) {
+    m_nextQueueProcessAt = m_queueBackoffUntil;
+  } else {
+    m_nextQueueProcessAt = QDateTime::currentDateTimeUtc().addSecs(queueIntervalMins * 60);
+  }
+}
+
 void MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
     return;
 
-  if (m_queueBackoffUntil.isValid() && QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
-    return;
-  }
   if (m_queueModel->isEmpty()) {
-    return;
-  }
-
-  if (m_queueBackoffUntil.isValid() && QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
     return;
   }
 
@@ -5257,6 +5256,8 @@ void MainWindow::autoRefreshFollowing() {
   QDateTime now = QDateTime::currentDateTimeUtc();
   QStringList activeIds = getActiveFollowingSessionIds();
 
+  bool anyRefreshed = false;
+
   for (const QString &id : activeIds) {
     int intervalSeconds = globalIntervalSeconds;
 
@@ -5281,15 +5282,19 @@ void MainWindow::autoRefreshFollowing() {
         }
 
         if (!lastRefreshed.isValid() || lastRefreshed.addSecs(intervalSeconds) <= now) {
+          // Also prevent sending again if recently attempted but the response hasn't updated the model yet
+          // Assuming the APIManager request queue inherently debounces identical concurrent queries
           m_apiManager->reloadSession(id);
+          anyRefreshed = true;
         }
         break; // Stop searching for this id
       }
     }
   }
 
-  m_lastSessionRefreshTime = QDateTime::currentDateTime();
-  updateSessionStats();
+  if (anyRefreshed) {
+    m_lastSessionRefreshTime = QDateTime::currentDateTime();
+  }
 }
 
 void MainWindow::backupData() {
@@ -6045,24 +6050,17 @@ void MainWindow::onMasterMinuteTimer() {
   // 2. Refresh only following sessions whose individual/global FRI has expired
   autoRefreshFollowing();
 
-  // 3. Process queue if due (and not in backoff)
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
-  if (!m_lastQueueProcessTime.isValid() || m_lastQueueProcessTime.addSecs(queueIntervalMins * 60) <= now) {
-    if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
-      // Check backoff before triggering
-      if (!m_queueBackoffUntil.isValid() || now >= m_queueBackoffUntil) {
-        processQueue();
-        m_lastQueueProcessTime = now;
-      }
-    }
+  // 3. Process queue if due
+  if (!m_nextQueueProcessAt.isValid()) {
+    KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+    int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+    m_nextQueueProcessAt = now.addSecs(queueIntervalMins * 60);
   }
 
-  // 4. Process error retries if due
-  int errorRetryIntervalMins = 1; // It was previously set to 60000 ms = 1 min
-  if (!m_lastErrorRetryTime.isValid() || m_lastErrorRetryTime.addSecs(errorRetryIntervalMins * 60) <= now) {
-    processErrorRetries();
-    m_lastErrorRetryTime = now;
+  if (m_nextQueueProcessAt <= now) {
+    if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
+      processQueue();
+    }
   }
 
   m_isProcessingMinuteTimer = false;
