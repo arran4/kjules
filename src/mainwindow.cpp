@@ -3448,7 +3448,7 @@ void MainWindow::loadQueueSettings() {
 
   // Recompute next normal queue due time appropriately
   if (!m_queueBackoffUntil.isValid() || m_queueBackoffUntil <= QDateTime::currentDateTimeUtc()) {
-      scheduleNextQueueAttempt(); // Enforce immediately
+    scheduleNextQueueAttempt(); // Enforce immediately
   }
 }
 
@@ -3471,10 +3471,11 @@ void MainWindow::updateCountdownStatus() {
 
   if (secondsLeft > 0) {
     QString timeStr = Utils::formatDuration(secondsLeft);
-    if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil == m_nextQueueProcessAt && !m_queueBackoffReason.isEmpty()) {
-        m_queueCountdownLabel->setText(i18n("Waiting (%1): Next attempt in %2...", m_queueBackoffReason, timeStr));
+    if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil == m_nextQueueProcessAt &&
+        !m_queueBackoffReason.isEmpty()) {
+      m_queueCountdownLabel->setText(i18n("Waiting (%1): Next attempt in %2...", m_queueBackoffReason, timeStr));
     } else {
-        m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
+      m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
     }
     m_queueCountdownLabel->show();
   } else {
@@ -3574,7 +3575,6 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
-
 QStringList MainWindow::getActiveFollowingSessionIds() const {
   QStringList activeIds;
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
@@ -3623,9 +3623,9 @@ void MainWindow::scheduleNextQueueAttempt() {
   int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
 
   if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil > QDateTime::currentDateTimeUtc()) {
-      m_nextQueueProcessAt = m_queueBackoffUntil;
+    m_nextQueueProcessAt = m_queueBackoffUntil;
   } else {
-      m_nextQueueProcessAt = QDateTime::currentDateTimeUtc().addSecs(queueIntervalMins * 60);
+    m_nextQueueProcessAt = QDateTime::currentDateTimeUtc().addSecs(queueIntervalMins * 60);
   }
 }
 
@@ -3747,7 +3747,7 @@ bool MainWindow::processQueue() {
   m_queueModel->endBatchUpdate();
 
   if (processIndex == -1) {
-    return;
+    return false;
   }
 
   if (processIndex != 0) {
@@ -3762,7 +3762,7 @@ bool MainWindow::processQueue() {
         refreshSources();
       }
       updateStatus(i18n("Waiting for the new repository to appear in Jules sources."));
-      return;
+      return false;
     }
     item = m_queueModel->peek();
   }
@@ -6057,7 +6057,7 @@ void MainWindow::onMasterMinuteTimer() {
 
   // 3. Process queue if due
   if (!m_nextQueueProcessAt.isValid()) {
-      scheduleNextQueueAttempt();
+    scheduleNextQueueAttempt();
   }
 
   if (now >= m_nextQueueProcessAt) {
