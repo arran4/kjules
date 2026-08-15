@@ -89,7 +89,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   if (modeIndex >= 0) {
     m_queueModeCombo->setCurrentIndex(modeIndex);
   }
-  queueLayout->addRow(i18n("Queue Processing Mode:"), m_queueModeCombo);
+  queueLayout->addRow(i18n("Default Queue Processing Mode:"), m_queueModeCombo);
 
   m_oneAtATimeLimitEdit = new QSpinBox(this);
   m_oneAtATimeLimitEdit->setRange(1, 100);
@@ -98,7 +98,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   QWidget *limitContainer = new QWidget(this);
   QHBoxLayout *limitLayout = new QHBoxLayout(limitContainer);
   limitLayout->setContentsMargins(0, 0, 0, 0);
-  QLabel *limitLabel = new QLabel(i18n("Max active sessions per source:"), limitContainer);
+  QLabel *limitLabel = new QLabel(i18n("Default max concurrent active sessions per source:"), limitContainer);
   limitLayout->addWidget(limitLabel);
   limitLayout->addWidget(m_oneAtATimeLimitEdit);
   limitLayout->addStretch();
@@ -111,77 +111,11 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   connect(m_queueModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, updateLimitVisibility);
   updateLimitVisibility();
 
-  m_backoffTypeCombo = new QComboBox(this);
-  m_backoffTypeCombo->addItem(i18n("Fixed"), QStringLiteral("fixed"));
-  m_backoffTypeCombo->addItem(i18n("Exponential"), QStringLiteral("exponential"));
-  m_backoffTypeCombo->addItem(i18n("Random"), QStringLiteral("random"));
-  m_backoffTypeCombo->addItem(i18n("Predict"), QStringLiteral("predict"));
-
-  QString currentBackoffType = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  int backoffTypeIndex = m_backoffTypeCombo->findData(currentBackoffType);
-  if (backoffTypeIndex >= 0) {
-    m_backoffTypeCombo->setCurrentIndex(backoffTypeIndex);
-  }
-  queueLayout->addRow(i18n("Backoff Strategy:"), m_backoffTypeCombo);
-
-  m_backoffTabWidget = new QTabWidget(this);
-
-  // Note: Predict and Fixed backoff strategies have no exclusive error backoff
-  // settings. The 'Tier' and 'WaitTime' settings previously placed here apply
-  // to the global concurrency limiter.
-
-  // Exponential Tab
-  QWidget *expTab = new QWidget();
-  QFormLayout *expLayout = new QFormLayout(expTab);
-  m_queueBackoffExpBaseEdit = new QSpinBox(this);
-  m_queueBackoffExpBaseEdit->setRange(1, 100);
-  m_queueBackoffExpBaseEdit->setValue(queueConfig.readEntry("BackoffExpBase", 2));
-  expLayout->addRow(i18n("Queue failure exponential base:"), m_queueBackoffExpBaseEdit);
-  m_backoffTabWidget->addTab(expTab, i18n("Exponential"));
-
-  // Random Tab
-  QWidget *randomTab = new QWidget();
-  QFormLayout *randomLayout = new QFormLayout(randomTab);
-  m_queueBackoffRandomMinEdit = new QSpinBox(this);
-  m_queueBackoffRandomMinEdit->setRange(1, 10080);
-  m_queueBackoffRandomMinEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffRandomMinEdit->setValue(queueConfig.readEntry("BackoffRandomMin", 10));
-  randomLayout->addRow(i18n("Queue failure random min:"), m_queueBackoffRandomMinEdit);
-
-  m_queueBackoffRandomMaxEdit = new QSpinBox(this);
-  m_queueBackoffRandomMaxEdit->setRange(1, 10080);
-  m_queueBackoffRandomMaxEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffRandomMaxEdit->setValue(queueConfig.readEntry("BackoffRandomMax", 60));
-  randomLayout->addRow(i18n("Queue failure random max:"), m_queueBackoffRandomMaxEdit);
-  m_backoffTabWidget->addTab(randomTab, i18n("Random"));
-
-  // Fixed + Exponential Tab
-  QWidget *fixedExpTab = new QWidget();
-  QFormLayout *fixedExpLayout = new QFormLayout(fixedExpTab);
   m_queueBackoffEdit = new QSpinBox(this);
   m_queueBackoffEdit->setRange(1, 10080); // 1 min to 1 week
   m_queueBackoffEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 30));
-  fixedExpLayout->addRow(i18n("Queue failure fixed/initial backoff:"), m_queueBackoffEdit);
-  m_backoffTabWidget->addTab(fixedExpTab, i18n("Fixed + Exponential"));
-
-  // Global Limits Tab
-  QWidget *allTab = new QWidget();
-  QFormLayout *allLayout = new QFormLayout(allTab);
-  m_queueBackoffMaxEdit = new QSpinBox(this);
-  m_queueBackoffMaxEdit->setRange(1, 10080); // Up to 1 week
-  m_queueBackoffMaxEdit->setSuffix(i18n(" minutes"));
-  m_queueBackoffMaxEdit->setValue(queueConfig.readEntry("BackoffMax", 480)); // Default 8 hours
-  allLayout->addRow(i18n("Global maximum backoff:"), m_queueBackoffMaxEdit);
-  m_backoffTabWidget->addTab(allTab, i18n("Global Limits"));
-
-  queueLayout->addRow(i18n("Backoff Settings:"), m_backoffTabWidget);
-
-  m_waitTimeEdit = new QSpinBox(this);
-  m_waitTimeEdit->setRange(1, 10080);
-  m_waitTimeEdit->setSuffix(i18n(" minutes"));
-  m_waitTimeEdit->setValue(config.readEntry("WaitTime", 3600) / 60);
-  queueLayout->addRow(i18n("Queue concurrency wait:"), m_waitTimeEdit);
+  m_queueBackoffEdit->setValue(queueConfig.readEntry("BackoffInterval", 15));
+  queueLayout->addRow(i18n("Queue Backoff Interval (QBI):"), m_queueBackoffEdit);
 
   m_refreshWorkersEdit = new QSpinBox(this);
   m_refreshWorkersEdit->setRange(1, 100);
@@ -192,20 +126,8 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   m_pageSizeEdit->setRange(10, 100);
   m_pageSizeEdit->setSingleStep(10);
   KConfigGroup apiConfig(KSharedConfig::openConfig(), QStringLiteral("API"));
-  m_pageSizeEdit->setValue(apiConfig.readEntry("PageSize", 30));
+  m_pageSizeEdit->setValue(apiConfig.readEntry("PageSize", 100));
   generalLayout->addRow(i18n("API page size:"), m_pageSizeEdit);
-
-  m_tierComboBox = new QComboBox(this);
-  m_tierComboBox->addItem(i18n("Free (3 jobs)"), QStringLiteral("free"));
-  m_tierComboBox->addItem(i18n("Pro (15 jobs)"), QStringLiteral("pro"));
-  m_tierComboBox->addItem(i18n("Max (30 jobs)"), QStringLiteral("max"));
-
-  QString currentTier = config.readEntry("Tier", QStringLiteral("free"));
-  int index = m_tierComboBox->findData(currentTier);
-  if (index >= 0) {
-    m_tierComboBox->setCurrentIndex(index);
-  }
-  generalLayout->addRow(i18n("Account Tier:"), m_tierComboBox);
 
   mainTabWidget->addTab(generalTab, i18n("General"));
   mainTabWidget->addTab(queueTab, i18n("Queue"));
@@ -225,27 +147,18 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   sessionLayout->addRow(i18n("Default session auto-refresh:"), m_globalAutoRefreshCombo);
 
   m_followingAutoRefreshCombo = new QComboBox(this);
-  m_followingAutoRefreshCombo->addItem(i18n("Off"), 0);
-  m_followingAutoRefreshCombo->addItem(i18n("Sync with queue processing"), -1);
-  m_followingAutoRefreshCombo->addItem(i18n("5 minutes"), 300);
   m_followingAutoRefreshCombo->addItem(i18n("15 minutes"), 900);
   m_followingAutoRefreshCombo->addItem(i18n("30 minutes"), 1800);
   m_followingAutoRefreshCombo->addItem(i18n("1 hour"), 3600);
+  m_followingAutoRefreshCombo->addItem(i18n("12 hours"), 43200);
+  m_followingAutoRefreshCombo->addItem(i18n("24 hours"), 86400);
 
-  int followingInterval = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
-  // Migrate the legacy MergeRefreshAndQueue checkbox state to the new combo box
-  // item if applicable
-  bool legacyMergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (legacyMergeRefresh && followingInterval != -1) {
-    followingInterval = -1;
-    // We clean up the old setting on save.
-  }
-
+  int followingInterval = sessionConfig.readEntry("FollowingAutoRefreshInterval", 900);
   int followingIndex = m_followingAutoRefreshCombo->findData(followingInterval);
   if (followingIndex >= 0) {
     m_followingAutoRefreshCombo->setCurrentIndex(followingIndex);
   }
-  sessionLayout->addRow(i18n("Following auto-refresh:"), m_followingAutoRefreshCombo);
+  sessionLayout->addRow(i18n("Following refresh interval (FRI):"), m_followingAutoRefreshCombo);
 
   m_autoArchiveCheckbox = new QCheckBox(i18n("Automatically archive following managed sessions"), this);
   m_autoArchiveCheckbox->setChecked(sessionConfig.readEntry("AutoArchiveEnabled", true));
@@ -308,8 +221,6 @@ void SettingsDialog::onSave() {
   config.writeEntry("CloseToTray", m_closeToTrayEdit->isChecked());
   config.writeEntry("Autostart", m_autostartEdit->isChecked());
   config.writeEntry("AutostartTray", m_autostartTrayEdit->isChecked());
-  config.writeEntry("Tier", m_tierComboBox->currentData().toString());
-  config.writeEntry("WaitTime", m_waitTimeEdit->value() * 60);
   config.writeEntry("RefreshWorkers", m_refreshWorkersEdit->value());
   config.sync();
 
@@ -343,13 +254,7 @@ void SettingsDialog::onSave() {
   queueConfig.writeEntry("TimerInterval", m_queueIntervalEdit->value());
   queueConfig.writeEntry("QueueMode", m_queueModeCombo->currentData().toString());
   queueConfig.writeEntry("OneAtATimeLimit", m_oneAtATimeLimitEdit->value());
-  QString backoffType = m_backoffTypeCombo->currentData().toString();
-  queueConfig.writeEntry("BackoffType", backoffType);
   queueConfig.writeEntry("BackoffInterval", m_queueBackoffEdit->value());
-  queueConfig.writeEntry("BackoffExpBase", m_queueBackoffExpBaseEdit->value());
-  queueConfig.writeEntry("BackoffRandomMin", m_queueBackoffRandomMinEdit->value());
-  queueConfig.writeEntry("BackoffRandomMax", m_queueBackoffRandomMaxEdit->value());
-  queueConfig.writeEntry("BackoffMax", m_queueBackoffMaxEdit->value());
   queueConfig.sync();
 
   KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));

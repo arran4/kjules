@@ -12,6 +12,7 @@
 #include <QSystemTrayIcon>
 
 #include "clickablelabel.h"
+#include "queuescheduler.h"
 #include "sessionswindow.h"
 
 class APIManager;
@@ -120,14 +121,15 @@ private Q_SLOTS:
   void increaseFavouriteRank();
   void decreaseFavouriteRank();
   void setFavouriteRank();
-  void processQueue();
-  void onQueueTimerTimeout();
+  bool processQueue();
+  void scheduleNextQueueAttempt();
+  void onMasterMinuteTimer();
+  void onMasterSecondTimer();
   void refreshBeforeQueue();
   void checkPendingRefreshBeforeQueue(const QString &id);
   QStringList getActiveFollowingSessionIds() const;
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
-  void processErrorRetries();
 
   void onSessionCreatedResult(bool success, const QJsonObject &session, const ApiError &apiError = ApiError(),
                               const QString &rawResponse = QString());
@@ -174,7 +176,6 @@ private:
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
 
-  void updateFollowingRefreshTimer();
   void setupUi();
 
   void setupSourcesTab(QWidget *tab);
@@ -221,7 +222,6 @@ private:
   QueueModel *m_queueModel;
   QueueModel *m_holdingModel;
   ErrorsModel *m_errorsModel;
-  QTimer *m_errorRetryTimer;
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;
@@ -321,17 +321,17 @@ private:
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;
   QJsonArray m_refreshedSources;
-  QTimer *m_sessionRefreshTimer;
   QDateTime m_lastSessionRefreshTime;
   QString m_lastStatusMessage;
-  QTimer *m_followingRefreshTimer;
-
-  QTimer *m_queueTimer;
-  QTimer *m_countdownTimer;
+  QTimer *m_masterMinuteTimer;
+  QTimer *m_masterSecondTimer;
   bool m_isProcessingQueue;
-  QDateTime m_queueBackoffUntil;
+  bool m_isProcessingMinuteTimer;
+  QueueScheduler m_queueScheduler;
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
+  QSet<QString> m_inFlightSessionReloads;
+  QHash<QString, QDateTime> m_sessionReloadFailedAt;
   bool m_isWaitingForRefreshBeforeQueue;
   bool m_isWaitingForCreatedRepoSource = false;
   bool m_suppressNextErrorDialog = false;

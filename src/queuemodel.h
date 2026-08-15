@@ -14,11 +14,6 @@ struct QueueItem {
   QString lastResponse;
   QDateTime lastTry;
   QJsonArray pastErrors; // stores history of errors
-
-  bool isWaitItem = false;
-  bool isDailyLimitWait = false;
-  int waitSeconds = 0;
-  QDateTime waitStartTime;
   bool isBlocked = false;
   QJsonObject blockMetadata;
 
@@ -29,9 +24,6 @@ struct QueueItem {
 class QueueModel : public QAbstractListModel {
   Q_OBJECT
 public:
-  static qint64 calculateBackoff(int errorCount);
-  static qint64 maxBackoffSeconds();
-
   enum Roles {
     RequestDataRole = Qt::UserRole + 1,
     ErrorCountRole,
@@ -63,14 +55,11 @@ public:
   QueueItem dequeue();
   QueueItem peek() const;
   void requeueFailed(const QueueItem &item, const QString &errorMsg, const QString &rawResponse = QString());
-  void prependWaitItem(const QueueItem &item);
   void recordRun();
-  void checkAndPrependDailyLimitWait();
   void removeItem(int index);
   bool isEmpty() const;
   void clear();
   int size() const;
-  void refreshWaitItems();
 
   int calculateInsertPosition(int priority) const;
 
@@ -85,13 +74,11 @@ private:
   bool m_batchUpdating = false;
   QVector<QDateTime> m_runTimestamps;
   void pruneRunTimestamps();
-  int m_jobsSinceLastWait = 0;
   QString m_filename;
   bool m_isHolding;
+  QString filePath() const;
   void load();
   void save();
-  void removeTrailingWaitItems();
-  void mergeWaitItems();
 };
 
 #endif // QUEUEMODEL_H

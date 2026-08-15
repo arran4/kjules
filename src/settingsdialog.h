@@ -30,17 +30,9 @@ private:
   QSpinBox *m_queueIntervalEdit;
   QComboBox *m_queueModeCombo;
   QSpinBox *m_oneAtATimeLimitEdit;
-  QComboBox *m_backoffTypeCombo;
-  QTabWidget *m_backoffTabWidget;
   QSpinBox *m_queueBackoffEdit;
-  QSpinBox *m_queueBackoffExpBaseEdit;
-  QSpinBox *m_queueBackoffRandomMinEdit;
-  QSpinBox *m_queueBackoffRandomMaxEdit;
-  QSpinBox *m_queueBackoffMaxEdit;
-  QSpinBox *m_waitTimeEdit;
   QSpinBox *m_refreshWorkersEdit;
   QSpinBox *m_pageSizeEdit;
-  QComboBox *m_tierComboBox;
   QComboBox *m_globalAutoRefreshCombo;
   QComboBox *m_followingAutoRefreshCombo;
   QCheckBox *m_autoArchiveCheckbox;

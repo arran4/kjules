@@ -5,6 +5,7 @@
 #include "backupdialog.h"
 #include "blockedtreemodel.h"
 #include "clickableprogressbar.h"
+#include "configmigration.h"
 #include "createrepodialog.h"
 #include "draftdelegate.h"
 #include "draftsmodel.h"
@@ -12,10 +13,12 @@
 #include "errorwindow.h"
 #include "filtereditor.h"
 #include "filterparser.h"
+#include "followingrefreshevaluator.h"
 #include "followsessiondialog.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
+#include "queuescheduler.h"
 #include "refreshprogresswindow.h"
 #include "restoredialog.h"
 #include "savedialog.h"
@@ -92,29 +95,20 @@ MainWindow::MainWindow(QWidget *parent)
       m_sourceModel(new SourceModel(this)), m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)), m_queueModel(new QueueModel(this)),
       m_holdingModel(new QueueModel(this, QStringLiteral("holding.json"), true)), m_errorsModel(new ErrorsModel(this)),
-      m_errorRetryTimer(new QTimer(this)), m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr),
-      m_isRefreshingSources(false), m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0),
-      m_sessionRefreshTimer(new QTimer(this)), m_followingRefreshTimer(new QTimer(this)),
-      m_queueTimer(new QTimer(this)), m_countdownTimer(new QTimer(this)), m_isProcessingQueue(false),
+      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr), m_isRefreshingSources(false),
+      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)),
+      m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
+  ConfigMigration::migrate();
   setObjectName(QStringLiteral("MainWindow"));
   setupUi();
+  connect(m_masterSecondTimer, &QTimer::timeout, this, &MainWindow::onMasterSecondTimer);
+  m_masterSecondTimer->start(1000);
 
-  connect(m_sessionRefreshTimer, &QTimer::timeout, this, &MainWindow::updateSessionStats);
-  m_sessionRefreshTimer->start(60000); // 1 minute
-
-  connect(m_followingRefreshTimer, &QTimer::timeout, this, &MainWindow::autoRefreshFollowing);
-
-  connect(m_queueTimer, &QTimer::timeout, this, &MainWindow::onQueueTimerTimeout);
-
-  connect(m_countdownTimer, &QTimer::timeout, this, &MainWindow::updateCountdownStatus);
-  m_countdownTimer->start(1000); // 1 second
-
-  connect(m_errorRetryTimer, &QTimer::timeout, this, &MainWindow::processErrorRetries);
-  m_errorRetryTimer->start(60000); // 1 minute
+  connect(m_masterMinuteTimer, &QTimer::timeout, this, &MainWindow::onMasterMinuteTimer);
+  m_masterMinuteTimer->start(60000);
 
   loadQueueSettings();
-  updateFollowingRefreshTimer();
   createActions();
   setupTrayIcon();
 
@@ -142,8 +136,11 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session) {
     checkPendingRefreshBeforeQueue(session.value(QStringLiteral("id")).toString());
   });
-  connect(m_apiManager, &APIManager::sessionReloadFailed, this,
-          [this](const QString &sessionId, const QString &) { checkPendingRefreshBeforeQueue(sessionId); });
+  connect(m_apiManager, &APIManager::sessionReloadFailed, this, [this](const QString &sessionId, const QString &) {
+    m_inFlightSessionReloads.remove(sessionId);
+    m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
+    checkPendingRefreshBeforeQueue(sessionId);
+  });
   connect(m_apiManager, &APIManager::sessionReloaded, this, &MainWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this, &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg) {
@@ -632,6 +629,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
       QAction *openSessionAction = menu.addAction(i18n("Open Session"));
       QAction *openSessionsForSourceAction = menu.addAction(i18n("Open Sessions for source"));
       QAction *refreshSessionAction = menu.addAction(i18n("Refresh session details"));
+      QAction *setRefreshIntervalAction = menu.addAction(i18n("Set Refresh Interval..."));
       menu.addSeparator();
 
       QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
@@ -682,7 +680,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
         menu.addSeparator();
       }
 
-      QJsonObject rawData = m_sessionModel->data(sourceIndex, SourceModel::RawDataRole).toJsonObject();
+      QJsonObject rawData = m_sessionModel->getSession(sourceIndex.row());
 
       if (rawData.contains(QStringLiteral("github"))) {
         QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
@@ -903,6 +901,34 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
             SessionsWindow *window = new SessionsWindow(source, m_apiManager, m_sessionModel, this);
             window->show();
           }
+        }
+      });
+
+      connect(setRefreshIntervalAction, &QAction::triggered, [this]() {
+        QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+        const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+        if (selectedRows.isEmpty())
+          return;
+
+        QModelIndex mappedIdx = proxy ? proxy->mapToSource(selectedRows.first()) : selectedRows.first();
+        QString id = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+
+        QJsonObject rawData = m_sessionModel->getSession(mappedIdx.row());
+        int currentVal = rawData.contains(QStringLiteral("local_refreshInterval"))
+                             ? rawData.value(QStringLiteral("local_refreshInterval")).toInt()
+                             : -1;
+
+        bool ok;
+        int newInterval = QInputDialog::getInt(this, i18n("Set Refresh Interval"),
+                                               i18n("Interval in minutes (-1 for global default, 0 to disable):"),
+                                               currentVal, -1, 10080, 1, &ok);
+        if (ok) {
+          for (const QModelIndex &idx : selectedRows) {
+            QModelIndex mIdx = proxy ? proxy->mapToSource(idx) : idx;
+            QString cId = m_sessionModel->data(mIdx, SessionModel::IdRole).toString();
+            m_sessionModel->setRefreshInterval(cId, newInterval);
+          }
+          updateStatus(i18n("Refresh interval updated for selected sessions."));
         }
       });
 
@@ -1148,7 +1174,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
         menu.addSeparator();
       }
 
-      QJsonObject rawData = m_archiveModel->data(sourceIndex, SourceModel::RawDataRole).toJsonObject();
+      QJsonObject rawData = m_archiveModel->getSession(sourceIndex.row());
 
       if (rawData.contains(QStringLiteral("github"))) {
         QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
@@ -1649,9 +1675,6 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         }
         if (!rowsToRequeue.isEmpty()) {
           updateStatus(i18np("Requeued 1 error item.", "Requeued %1 error items.", rowsToRequeue.size()));
-          if (!m_queuePaused && !m_queueTimer->isActive()) {
-            m_queueTimer->start();
-          }
         }
       });
 
@@ -1715,9 +1738,6 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
             m_errorsModel->removeError(row);
             m_queueModel->enqueue(req);
             updateStatus(i18n("Error item requeued."));
-            if (!m_queuePaused && !m_queueTimer->isActive()) {
-              m_queueTimer->start();
-            }
           });
 
           connect(window, &ErrorWindow::requeueRequested, [this](int row) {
@@ -3380,10 +3400,6 @@ void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoN
   m_queueModel->enqueue(sessionReq);
 
   updateStatus(i18n("Added 2 tasks to queue for creating repo and session."));
-
-  if (!m_queuePaused && !m_queueTimer->isActive()) {
-    m_queueTimer->start();
-  }
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
@@ -3421,48 +3437,18 @@ void MainWindow::showSettingsDialog() {
   SettingsDialog dialog(m_apiManager, this);
   if (dialog.exec() == QDialog::Accepted) {
     loadQueueSettings();
-    updateFollowingRefreshTimer();
   }
 }
 
 void MainWindow::loadQueueSettings() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  int intervalMins = queueConfig.readEntry("TimerInterval", 1);
-  m_queueTimer->setInterval(intervalMins * 60000);
-
-  if (!m_queuePaused && !m_queueModel->isEmpty() && !m_queueTimer->isActive()) {
-    m_queueTimer->start();
-  }
   updateBlockedTabVisibility();
-}
 
-void MainWindow::updateFollowingRefreshTimer() {
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
-
-  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
-
-  // Backwards compatibility migration
-  bool legacyMergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (legacyMergeRefresh && seconds != -1) {
-    seconds = -1;
-  }
-
-  if (seconds == -1) {
-    m_followingRefreshTimer->stop();
-    return;
-  }
-
-  if (seconds > 0) {
-    m_followingRefreshTimer->start(seconds * 1000);
-  } else {
-    m_followingRefreshTimer->stop();
-  }
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+  m_queueScheduler.updateInterval(QDateTime::currentDateTimeUtc(), queueIntervalMins);
 }
 
 void MainWindow::updateCountdownStatus() {
-  // Inform the queue model to update display of active wait items
-  m_queueModel->refreshWaitItems();
-
   if (m_queuePaused || m_queueModel->isEmpty()) {
     m_queueCountdownLabel->hide();
     return;
@@ -3471,20 +3457,23 @@ void MainWindow::updateCountdownStatus() {
   QDateTime now = QDateTime::currentDateTimeUtc();
   qint64 secondsLeft = 0;
 
-  if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
-    secondsLeft = now.secsTo(m_queueBackoffUntil);
-  } else {
-    QueueItem peekItem = m_queueModel->peek();
-    if (peekItem.isWaitItem && peekItem.waitStartTime.isValid()) {
-      qint64 elapsed = peekItem.waitStartTime.secsTo(now);
-      if (elapsed < peekItem.waitSeconds) {
-        secondsLeft = peekItem.waitSeconds - elapsed;
+  if (m_queueScheduler.isBackoffActive(now)) {
+    secondsLeft = now.secsTo(m_queueScheduler.queueBackoffUntil());
+    if (secondsLeft > 0) {
+      QString timeStr = Utils::formatDuration(secondsLeft);
+      if (!m_queueScheduler.queueBackoffReason().isEmpty()) {
+        m_queueCountdownLabel->setText(
+            i18n("Waiting (%1): Next attempt in %2...", m_queueScheduler.queueBackoffReason(), timeStr));
+      } else {
+        m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
       }
-    } else if (!m_isProcessingQueue) {
-      if (m_queueTimer->isActive()) {
-        secondsLeft = m_queueTimer->remainingTime() / 1000;
-      }
+      m_queueCountdownLabel->show();
+      return;
     }
+  }
+
+  if (m_queueScheduler.nextQueueProcessAt().isValid() && m_queueScheduler.nextQueueProcessAt() > now) {
+    secondsLeft = now.secsTo(m_queueScheduler.nextQueueProcessAt());
   }
 
   if (secondsLeft > 0) {
@@ -3533,13 +3522,11 @@ void MainWindow::duplicateFollowingItemsToQueue(const QString &targetState, cons
 void MainWindow::toggleQueueState() {
   m_queuePaused = !m_queuePaused;
   if (m_queuePaused) {
-    m_queueTimer->stop();
     m_toggleQueueAction->setText(i18n("Process Queue"));
     m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
     updateStatus(i18n("Queue processing paused."));
   } else {
     if (!m_queueModel->isEmpty()) {
-      m_queueTimer->start();
       // Try processing immediately when unpaused
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     }
@@ -3585,33 +3572,9 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.", sources.size()));
 
   // Start timer if not running
-  if (!m_queuePaused && !m_queueTimer->isActive()) {
-    m_queueTimer->start();
-  }
 
   // Trigger processing immediately if we can
   QTimer::singleShot(0, this, &MainWindow::processQueue);
-}
-
-void MainWindow::processErrorRetries() {}
-
-void MainWindow::onQueueTimerTimeout() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
-    return;
-
-  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
-  int seconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 0);
-
-  bool legacyMergeRefresh = sessionConfig.readEntry("MergeRefreshAndQueue", false);
-  if (legacyMergeRefresh && seconds != -1) {
-    seconds = -1;
-  }
-
-  if (seconds == -1) {
-    refreshBeforeQueue();
-  } else {
-    processQueue();
-  }
 }
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
@@ -3657,24 +3620,23 @@ void MainWindow::checkPendingRefreshBeforeQueue(const QString &id) {
   }
 }
 
-void MainWindow::processQueue() {
+void MainWindow::scheduleNextQueueAttempt() {
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
+  m_queueScheduler.recordNoWork(QDateTime::currentDateTimeUtc(), queueIntervalMins);
+}
+
+bool MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
-    return;
-  if (m_queueModel->isEmpty()) {
-    if (m_queueTimer->isActive()) {
-      KNotification *notification =
-          new KNotification(QStringLiteral("queueEmpty"), KNotification::CloseOnTimeout, this);
-      notification->setTitle(i18n("Queue Empty"));
-      notification->setText(i18n("The processing queue is now empty."));
-      connect(notification, &KNotification::closed, notification, &QObject::deleteLater);
-      notification->sendEvent();
-      m_queueTimer->stop();
-    }
-    return;
+    return false;
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
+  if (m_queueScheduler.isBackoffActive(now)) {
+    return false;
   }
 
-  if (m_queueBackoffUntil.isValid() && QDateTime::currentDateTimeUtc() < m_queueBackoffUntil) {
-    return;
+  if (m_queueModel->isEmpty()) {
+    return false;
   }
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
@@ -3715,13 +3677,6 @@ void MainWindow::processQueue() {
   for (int i = 0; i < m_queueModel->rowCount(); ++i) {
     QueueItem item = m_queueModel->getItem(i);
     bool needsUpdate = false;
-
-    if (item.isWaitItem) {
-      if (processIndex == -1) {
-        processIndex = i;
-      }
-      continue;
-    }
 
     QString source =
         item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
@@ -3789,29 +3744,11 @@ void MainWindow::processQueue() {
   m_queueModel->endBatchUpdate();
 
   if (processIndex == -1) {
-    return;
+    return false;
   }
 
   if (processIndex != 0) {
     m_queueModel->moveItem(processIndex, 0);
-  }
-
-  QueueItem peekItem = m_queueModel->peek();
-  if (peekItem.isWaitItem) {
-    if (!peekItem.waitStartTime.isValid()) {
-      peekItem.waitStartTime = QDateTime::currentDateTimeUtc();
-      m_queueModel->updateItem(0, peekItem);
-      QTimer::singleShot(peekItem.waitSeconds * 1000, this, &MainWindow::processQueue);
-    } else {
-      qint64 elapsed = peekItem.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-      if (elapsed >= peekItem.waitSeconds) {
-        m_queueModel->dequeue();
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      } else {
-        QTimer::singleShot((peekItem.waitSeconds - elapsed) * 1000, this, &MainWindow::processQueue);
-      }
-    }
-    return;
   }
 
   QueueItem item = m_queueModel->peek();
@@ -3822,10 +3759,15 @@ void MainWindow::processQueue() {
         refreshSources();
       }
       updateStatus(i18n("Waiting for the new repository to appear in Jules sources."));
-      return;
+      return false;
     }
     item = m_queueModel->peek();
   }
+
+  KConfigGroup queueConfigGroup(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int queueIntervalMins = queueConfigGroup.readEntry("TimerInterval", 1);
+  m_queueScheduler.recordDispatch(now, queueIntervalMins);
+
   m_isProcessingQueue = true;
   if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
       item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
@@ -3833,6 +3775,7 @@ void MainWindow::processQueue() {
   } else {
     m_apiManager->createSessionAsync(item.requestData);
   }
+  return true;
 }
 
 void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
@@ -3855,35 +3798,64 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requ
 
   if (success) {
     m_queueModel->dequeue();
-    m_queueModel->checkAndPrependDailyLimitWait();
+
     updateStatus(i18n("GitHub repository created from queue."));
     ActivityLogWindow::instance()->logMessage(i18n("Processed schedule run: GitHub repository created."));
-    m_queueBackoffUntil = QDateTime();
+    m_queueScheduler.clearBackoff();
+
+    QTimer::singleShot(0, this, &MainWindow::processQueue);
   } else {
-    QueueItem item = m_queueModel->peek();
-    item.errorCount++;
-    item.lastError = errorMsg;
-    item.lastResponse = QString();
+    QDateTime now = QDateTime::currentDateTimeUtc();
+    if (apiError.type() == ApiError::Type::RateLimit || apiError.httpStatusCode() == 429) {
+      QueueItem item = m_queueModel->peek();
+      item.lastError = errorMsg;
+      item.lastTry = now;
+      m_queueModel->updateItem(0, item);
 
-    qint64 backoffSeconds = QueueModel::calculateBackoff(item.errorCount);
-
-    if (item.errorCount >= 4) {
-      item.pastErrors.append(errorMsg);
+      m_queueScheduler.applyBackoff(now, 3600, i18n("API Rate/Daily Limit Reached"));
+      updateStatus(i18n("GitHub rate limit hit, waiting 1 hour..."));
+    } else if (apiError.type() == ApiError::Type::Validation || apiError.type() == ApiError::Type::NotFound ||
+               apiError.httpStatusCode() == 400 || apiError.httpStatusCode() == 404) {
+      QueueItem item = m_queueModel->peek();
       m_queueModel->removeItem(0);
+
       QJsonObject errorObj;
       errorObj[QStringLiteral("request")] = item.requestData;
       errorObj[QStringLiteral("message")] = errorMsg;
       errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
+      errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
       m_errorsModel->addErrorObj(errorObj);
-      updateStatus(i18n("Repository creation failed %1 times. Moved to Errors.", item.errorCount));
+
+      updateStatus(i18n("Repository creation failed (non-retryable): %1. Moved to Errors.", errorMsg));
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
     } else {
-      m_queueModel->updateItem(0, item);
-      m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffSeconds);
-      updateStatus(i18n("Repository creation failed. Retrying in %1 seconds.", backoffSeconds));
+      QueueItem item = m_queueModel->peek();
+      item.errorCount++;
+      item.lastError = errorMsg;
+      item.lastTry = now;
+
+      KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+      int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
+      qint64 backoffSeconds = static_cast<qint64>(backoffMins) * 60;
+
+      if (item.errorCount >= 4) {
+        item.pastErrors.append(errorMsg);
+        m_queueModel->removeItem(0);
+        QJsonObject errorObj;
+        errorObj[QStringLiteral("request")] = item.requestData;
+        errorObj[QStringLiteral("message")] = errorMsg;
+        errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
+        errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
+        m_errorsModel->addErrorObj(errorObj);
+        updateStatus(i18n("Repository creation failed %1 times. Moved to Errors.", item.errorCount));
+        QTimer::singleShot(0, this, &MainWindow::processQueue);
+      } else {
+        m_queueModel->updateItem(0, item);
+        m_queueScheduler.applyBackoff(now, backoffSeconds, i18n("Repository creation failed"));
+        updateStatus(i18n("Repository creation failed. Retrying in %1 seconds.", backoffSeconds));
+      }
     }
   }
-
-  QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
 void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session, const ApiError &apiError,
@@ -3906,7 +3878,7 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
 
   if (success) {
     m_queueModel->dequeue();
-    m_queueModel->checkAndPrependDailyLimitWait();
+
     m_sessionModel->addSession(session);
     QString sourceId =
         session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
@@ -3914,40 +3886,84 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
       m_sourceModel->recordSessionCreated(sourceId);
     updateStatus(i18n("Session created from queue."));
     ActivityLogWindow::instance()->logMessage(i18n("Processed schedule run: Session created for %1.", sourceId));
-    m_queueBackoffUntil = QDateTime();
+    m_queueScheduler.clearBackoff();
+
+    QTimer::singleShot(0, this, &MainWindow::processQueue);
   } else {
+    QDateTime now = QDateTime::currentDateTimeUtc();
     QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
-    bool isPrecondition = false;
-    bool isResourceExhausted = false;
+    bool isPrecondition = (apiError.type() == ApiError::Type::PreconditionFailed);
+    bool isResourceExhausted = (apiError.type() == ApiError::Type::RateLimit || apiError.httpStatusCode() == 429);
+
     if (errDoc.isObject()) {
       QJsonObject errObj = errDoc.object().value(QStringLiteral("error")).toObject();
-      if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("FAILED_PRECONDITION")) {
+      QString status = errObj.value(QStringLiteral("status")).toString();
+      if (status == QStringLiteral("FAILED_PRECONDITION")) {
         isPrecondition = true;
-      } else if (errObj.value(QStringLiteral("status")).toString() == QStringLiteral("RESOURCE_EXHAUSTED") ||
+      } else if (status == QStringLiteral("RESOURCE_EXHAUSTED") ||
                  errObj.value(QStringLiteral("code")).toInt() == 429) {
         isResourceExhausted = true;
       }
     }
 
-    if (isPrecondition) {
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-      int backoffMins = queueConfig.readEntry("PreconditionBackoffInterval", 5);
-      waitItem.waitSeconds = qMin(static_cast<qint64>(backoffMins) * 60, QueueModel::maxBackoffSeconds());
-      m_queueModel->prependWaitItem(waitItem);
-      m_queueBackoffUntil = QDateTime();
-      updateStatus(i18n("Too many concurrent tasks, waiting before retrying..."));
-    } else if (isResourceExhausted) {
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      waitItem.waitSeconds = qMin(3600LL, QueueModel::maxBackoffSeconds());
-      m_queueModel->prependWaitItem(waitItem);
-      m_queueBackoffUntil = QDateTime();
-      updateStatus(i18n("API Rate limit hit, adding a wait item..."));
+    if (isPrecondition || isResourceExhausted) {
+      QueueItem item = m_queueModel->peek();
+      item.lastError = errorMsg;
+      item.lastResponse = rawResponse;
+      item.lastTry = now;
+      m_queueModel->updateItem(0, item);
+
+      if (isPrecondition) {
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+        int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
+        m_queueScheduler.applyBackoff(now, static_cast<qint64>(backoffMins) * 60, i18n("Concurrent Limit Reached"));
+        updateStatus(i18n("Concurrent limit reached, waiting %1 mins before retrying...", backoffMins));
+      } else if (isResourceExhausted) {
+        m_queueScheduler.applyBackoff(now, 3600, i18n("API Rate/Daily Limit Reached"));
+        updateStatus(i18n("API rate limit hit, waiting 1 hour..."));
+      }
+    } else if (apiError.type() == ApiError::Type::Validation || apiError.type() == ApiError::Type::NotFound ||
+               apiError.httpStatusCode() == 400 || apiError.httpStatusCode() == 404) {
+      QueueItem item = m_queueModel->peek();
+      m_queueModel->removeItem(0);
+
+      QJsonObject errorObj;
+      errorObj[QStringLiteral("request")] = item.requestData;
+      errorObj[QStringLiteral("message")] = errorMsg;
+      errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
+      errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
+      m_errorsModel->addErrorObj(errorObj);
+
+      updateStatus(i18n("Failed to create session (non-retryable): %1. Moved to Errors.", errorMsg));
+      QTimer::singleShot(0, this, &MainWindow::processQueue);
     } else {
-      updateStatus(i18n("Failed to create session from queue: %1", errorMsg));
-      m_queueModel->dequeue();
+      QueueItem item = m_queueModel->peek();
+      item.errorCount++;
+      item.lastError = errorMsg;
+      item.lastResponse = rawResponse;
+      item.lastTry = now;
+
+      if (item.errorCount >= 4) {
+        item.pastErrors.append(errorMsg);
+        m_queueModel->removeItem(0);
+
+        QJsonObject errorObj;
+        errorObj[QStringLiteral("request")] = item.requestData;
+        errorObj[QStringLiteral("message")] = errorMsg;
+        errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
+        errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
+        m_errorsModel->addErrorObj(errorObj);
+
+        updateStatus(i18n("Session creation failed %1 times. Moved to Errors.", item.errorCount));
+        QTimer::singleShot(0, this, &MainWindow::processQueue);
+      } else {
+        m_queueModel->updateItem(0, item);
+
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+        int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
+        m_queueScheduler.applyBackoff(now, static_cast<qint64>(backoffMins) * 60, i18n("Error Processing Task"));
+        updateStatus(i18n("Failed to create session from queue: %1. Retrying in %2 mins...", errorMsg, backoffMins));
+      }
     }
   }
 }
@@ -4135,7 +4151,6 @@ void MainWindow::onHoldingContextMenu(const QPoint &pos) {
     for (int r : rowsToRequeue) {
       QueueItem item = m_holdingModel->getItem(r);
       m_holdingModel->removeItem(r);
-      item.isWaitItem = false;
       m_queueModel->enqueueItem(item);
     }
     updateStatus(i18np("Task moved back to queue.", "%1 tasks moved back to queue.", rowsToRequeue.size()));
@@ -4182,10 +4197,8 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
   }
 
   QAction *editAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Edit"));
-  QAction *priorityAction = nullptr;
-  if (!item.isWaitItem && !item.isDailyLimitWait) {
-    priorityAction = menu.addAction(QIcon::fromTheme(QStringLiteral("view-sort-descending")), i18n("Change Priority"));
-  }
+  QAction *priorityAction =
+      menu.addAction(QIcon::fromTheme(QStringLiteral("view-sort-descending")), i18n("Change Priority"));
   QAction *deleteAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"));
   QAction *draftAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Convert to Draft"));
   QAction *copyTemplateAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy as Template"));
@@ -4250,14 +4263,11 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
     const QList<int> selectedQueueRows = getUniqueSortedRows(selectedRows, m_queueView);
     for (int selectedRow : selectedQueueRows) {
       QueueItem checkItem = m_queueModel->getItem(selectedRow);
-      if (!checkItem.isWaitItem) {
-        rowsToHold.append(selectedRow);
-      }
+      rowsToHold.append(selectedRow);
     }
     for (int r : rowsToHold) {
       QueueItem holdItem = m_queueModel->getItem(r);
       m_queueModel->removeItem(r);
-      holdItem.isWaitItem = false;
       m_holdingModel->enqueueItem(holdItem);
     }
     if (rowsToHold.size() > 0) {
@@ -4270,14 +4280,6 @@ void MainWindow::onQueueContextMenu(const QPoint &pos) {
 
 void MainWindow::sendQueueItemNow(int row) {
   QueueItem item = m_queueModel->getItem(row);
-  if (item.isWaitItem) {
-    m_queueModel->removeItem(row);
-    updateStatus(i18n("Wait item removed from queue."));
-    if (row == 0) {
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
-    }
-    return;
-  }
   if (item.requestData.isEmpty())
     return;
   m_queueModel->removeItem(row);
@@ -4862,11 +4864,6 @@ void MainWindow::updateStatus(const QString &message) {
 
   if (m_queueModel && !m_queueModel->isEmpty()) {
     QueueItem first = m_queueModel->peek();
-    if (first.isWaitItem) {
-      QString waitStr = i18n(" (Waiting %1)", Utils::formatDuration(first.waitSeconds));
-      formattedMessage += waitStr;
-      logMessage += waitStr;
-    }
   }
 
   ActivityLogWindow::instance()->logMessage(logMessage);
@@ -4955,15 +4952,11 @@ QList<SourceRemapEntry> MainWindow::pendingSourceEntries(const QString &onlySour
   }
   for (int row = 0; row < m_queueModel->rowCount(); ++row) {
     const QueueItem item = m_queueModel->getItem(row);
-    if (!item.isWaitItem) {
-      append(QStringLiteral("queue"), item.isBlocked ? i18n("Blocked") : i18n("Queue"), row, item.requestData);
-    }
+    append(QStringLiteral("queue"), item.isBlocked ? i18n("Blocked") : i18n("Queue"), row, item.requestData);
   }
   for (int row = 0; row < m_holdingModel->rowCount(); ++row) {
     const QueueItem item = m_holdingModel->getItem(row);
-    if (!item.isWaitItem) {
-      append(QStringLiteral("holding"), i18n("Holding"), row, item.requestData);
-    }
+    append(QStringLiteral("holding"), i18n("Holding"), row, item.requestData);
   }
   for (int row = 0; row < m_sessionModel->rowCount(); ++row) {
     const QJsonObject session = m_sessionModel->getSession(row);
@@ -5330,12 +5323,50 @@ void MainWindow::updateSessionStats() {
 }
 
 void MainWindow::autoRefreshFollowing() {
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  int globalIntervalSeconds = sessionConfig.readEntry("FollowingAutoRefreshInterval", 900); // Default 15 mins
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
   QStringList activeIds = getActiveFollowingSessionIds();
+
   for (const QString &id : activeIds) {
-    m_apiManager->reloadSession(id);
+    if (m_inFlightSessionReloads.contains(id)) {
+      continue;
+    }
+
+    QDateTime lastFailedAt = m_sessionReloadFailedAt.value(id);
+
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
+        QJsonObject rawData = m_sessionModel->getSession(i);
+
+        std::optional<int> localRefresh;
+        if (rawData.contains(QStringLiteral("local_refreshInterval"))) {
+          localRefresh = rawData.value(QStringLiteral("local_refreshInterval")).toInt(-1);
+        }
+
+        int intervalSecs = FollowingRefreshEvaluator::effectiveIntervalSeconds(globalIntervalSeconds, localRefresh);
+        if (intervalSecs <= 0) {
+          break; // Refresh disabled
+        }
+
+        QDateTime lastRefreshed;
+        if (rawData.contains(QStringLiteral("lastRefreshed"))) {
+          lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("lastRefreshed")).toString(), Qt::ISODate);
+        } else if (rawData.contains(QStringLiteral("updateTime"))) {
+          lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
+        } else if (rawData.contains(QStringLiteral("createTime"))) {
+          lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+        }
+
+        if (FollowingRefreshEvaluator::shouldRefresh(now, lastRefreshed, intervalSecs, false, lastFailedAt)) {
+          m_inFlightSessionReloads.insert(id);
+          m_apiManager->reloadSession(id);
+        }
+        break;
+      }
+    }
   }
-  m_lastSessionRefreshTime = QDateTime::currentDateTime();
-  updateSessionStats();
 }
 
 void MainWindow::backupData() {
@@ -5996,7 +6027,11 @@ void MainWindow::switchToFollowingTab() {
 }
 
 void MainWindow::onSessionReloaded(const QJsonObject &session) {
+  m_lastSessionRefreshTime = QDateTime::currentDateTime();
   const QString id = session.value(QStringLiteral("id")).toString();
+  m_inFlightSessionReloads.remove(id);
+  m_sessionReloadFailedAt.remove(id);
+
   const QString newState = session.value(QStringLiteral("state")).toString();
   const QString prevState = m_previousSessionStates.value(id);
 
@@ -6038,7 +6073,8 @@ void MainWindow::onSessionReloaded(const QJsonObject &session) {
   }
   m_previousSessionStates[id] = newState;
 
-  m_sessionModel->updateSession(session);
+  m_sessionModel->updateSession(session, /*isSuccessfulRefresh=*/true);
+  m_sessionModel->saveSessions();
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() ==
         session.value(QStringLiteral("id")).toString()) {
@@ -6073,4 +6109,31 @@ QList<int> MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows, 
   QList<int> rows(uniqueRows.begin(), uniqueRows.end());
   std::sort(rows.begin(), rows.end(), std::greater<int>());
   return rows;
+}
+
+void MainWindow::onMasterSecondTimer() { updateCountdownStatus(); }
+
+void MainWindow::onMasterMinuteTimer() {
+  if (m_isProcessingMinuteTimer) {
+    return;
+  }
+  m_isProcessingMinuteTimer = true;
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
+
+  // 1. Update inexpensive once-per-minute UI/session stats
+  updateSessionStats();
+
+  // 2. Refresh only following sessions whose individual/global FRI has expired
+  autoRefreshFollowing();
+
+  // 3. Process queue if due
+  if (m_queueScheduler.isDue(now)) {
+    bool dispatched = processQueue();
+    if (!dispatched) {
+      scheduleNextQueueAttempt();
+    }
+  }
+
+  m_isProcessingMinuteTimer = false;
 }

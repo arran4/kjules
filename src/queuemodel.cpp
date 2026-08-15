@@ -14,67 +14,6 @@
 #include <QStandardPaths>
 #include <limits>
 
-qint64 QueueModel::maxBackoffSeconds() {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  qint64 maxWait = queueConfig.readEntry("BackoffMax", 480) * 60; // Default 8 hours
-  if (maxWait < 0)
-    maxWait = 8 * 60 * 60; // Failsafe
-  return maxWait;
-}
-
-static qint64 calculateExponentialBackoff(qint64 initialWait, int expBase, int errorCount) {
-  int power = qMax(0, errorCount - 1);
-  if (power > 20)
-    power = 20; // Prevent huge shifts
-  qint64 multiplier = 1;
-  bool overflow = false;
-  for (int i = 0; i < power; ++i) {
-    if (multiplier > std::numeric_limits<qint64>::max() / expBase) {
-      overflow = true;
-      break;
-    }
-    multiplier *= expBase;
-  }
-
-  if (overflow || initialWait > std::numeric_limits<qint64>::max() / multiplier) {
-    return std::numeric_limits<qint64>::max();
-  }
-  return initialWait * multiplier;
-}
-
-static qint64 calculateRandomBackoff(KConfigGroup &queueConfig) {
-  int randMin = queueConfig.readEntry("BackoffRandomMin", 10) * 60;
-  int randMax = queueConfig.readEntry("BackoffRandomMax", 60) * 60;
-  if (randMax > randMin) {
-    return QRandomGenerator::global()->bounded(randMin, randMax + 1);
-  }
-  return randMin;
-}
-
-static qint64 calculateFixedBackoff(qint64 initialWait) { return initialWait; }
-
-qint64 QueueModel::calculateBackoff(int errorCount) {
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-
-  QString type = queueConfig.readEntry("BackoffType", QStringLiteral("fixed"));
-  qint64 initialWait = queueConfig.readEntry("BackoffInterval", 30) * 60; // Default 30 mins
-  qint64 waitSeconds;
-
-  if (type == QStringLiteral("exponential")) {
-    int expBase = queueConfig.readEntry("BackoffExpBase", 2);
-    waitSeconds = calculateExponentialBackoff(initialWait, expBase, errorCount);
-  } else if (type == QStringLiteral("random")) {
-    waitSeconds = calculateRandomBackoff(queueConfig);
-  } else if (type == QStringLiteral("predict")) {
-    KConfigGroup generalConfig(KSharedConfig::openConfig(), QStringLiteral("General"));
-    waitSeconds = generalConfig.readEntry("WaitTime", 3600);
-  } else {
-    waitSeconds = calculateFixedBackoff(initialWait);
-  }
-
-  return qMin(waitSeconds, maxBackoffSeconds());
-}
-
 QJsonObject QueueItem::toJson() const {
   QJsonObject obj;
   obj[QStringLiteral("requestData")] = requestData;
@@ -86,12 +25,6 @@ QJsonObject QueueItem::toJson() const {
   }
   if (!pastErrors.isEmpty()) {
     obj[QStringLiteral("pastErrors")] = pastErrors;
-  }
-  obj[QStringLiteral("isWaitItem")] = isWaitItem;
-  obj[QStringLiteral("isDailyLimitWait")] = isDailyLimitWait;
-  obj[QStringLiteral("waitSeconds")] = waitSeconds;
-  if (waitStartTime.isValid()) {
-    obj[QStringLiteral("waitStartTime")] = waitStartTime.toString(Qt::ISODate);
   }
   obj[QStringLiteral("isBlocked")] = isBlocked;
   if (!blockMetadata.isEmpty()) {
@@ -111,12 +44,6 @@ QueueItem QueueItem::fromJson(const QJsonObject &obj) {
   }
   if (obj.contains(QStringLiteral("pastErrors"))) {
     item.pastErrors = obj.value(QStringLiteral("pastErrors")).toArray();
-  }
-  item.isWaitItem = obj.value(QStringLiteral("isWaitItem")).toBool();
-  item.isDailyLimitWait = obj.value(QStringLiteral("isDailyLimitWait")).toBool();
-  item.waitSeconds = obj.value(QStringLiteral("waitSeconds")).toInt();
-  if (obj.contains(QStringLiteral("waitStartTime"))) {
-    item.waitStartTime = QDateTime::fromString(obj.value(QStringLiteral("waitStartTime")).toString(), Qt::ISODate);
   }
   item.isBlocked = obj.value(QStringLiteral("isBlocked")).toBool();
   if (obj.contains(QStringLiteral("blockMetadata"))) {
@@ -271,7 +198,7 @@ bool QueueModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int 
   }
   for (int i = 0; i < itemsArray.size(); ++i) {
     QueueItem newItem = QueueItem::fromJson(itemsArray[i].toObject());
-    newItem.isWaitItem = false;
+
     insertItem(currentDestRow, newItem);
     currentDestRow++;
   }
@@ -307,9 +234,6 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
   case LastTryRole:
     return item.lastTry;
   case SummaryRole: {
-    if (item.isWaitItem) {
-      return i18n("Wait for %1", Utils::formatDuration(item.waitSeconds));
-    }
     QString source = item.requestData.value(QStringLiteral("source")).toString();
     QString prompt = item.requestData.value(QStringLiteral("prompt")).toString();
     // truncate prompt for summary
@@ -325,18 +249,6 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
   case StatusRole: {
     if (item.isBlocked) {
       return i18n("Blocked");
-    }
-    if (item.isWaitItem) {
-      if (item.waitStartTime.isValid()) {
-        qint64 elapsed = item.waitStartTime.secsTo(QDateTime::currentDateTimeUtc());
-        qint64 remaining = item.waitSeconds - elapsed;
-        if (remaining > 0) {
-          return i18n("Waiting... %1 remaining", Utils::formatDuration(remaining));
-        } else {
-          return i18n("Wait complete");
-        }
-      }
-      return i18n("Pending wait");
     }
     if (item.errorCount > 0) {
       QString timeStr = item.lastTry.isValid()
@@ -375,42 +287,8 @@ void QueueModel::enqueue(const QJsonObject &requestData) {
 }
 
 void QueueModel::enqueueItem(const QueueItem &item) {
-  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
-  QString tier = config.readEntry("Tier", QStringLiteral("free"));
-  int jobsBeforeWait = 3;
-  if (tier == QStringLiteral("pro")) {
-    jobsBeforeWait = 15;
-  } else if (tier == QStringLiteral("max")) {
-    jobsBeforeWait = 30;
-  }
-
-  pruneRunTimestamps();
-
-  qint64 waitTime = config.readEntry("WaitTime", 3600);
-
   int priority = item.requestData.value(QStringLiteral("priority")).toInt(0);
   int insertPos = calculateInsertPosition(priority);
-
-  if (!m_isHolding) {
-    if (m_jobsSinceLastWait >= jobsBeforeWait) {
-      beginInsertRows(QModelIndex(), m_items.size(), m_items.size());
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      waitItem.waitSeconds = qMin(waitTime, maxBackoffSeconds());
-      m_items.append(waitItem);
-      endInsertRows();
-      m_jobsSinceLastWait = 0;
-    }
-    m_jobsSinceLastWait++;
-  }
-
-  // Recalculate if we appended a wait item (although wait items are typically added at the very end and
-  // calculateInsertPosition ignores them, they shouldn't shift insertPos unless insertPos was exactly at the end).
-  if (insertPos == m_items.size() - 1 && m_items.last().isWaitItem) {
-    insertPos = m_items.size();
-  } else {
-    insertPos = calculateInsertPosition(priority);
-  }
 
   beginInsertRows(QModelIndex(), insertPos, insertPos);
   m_items.insert(insertPos, item);
@@ -422,9 +300,6 @@ void QueueModel::enqueueItem(const QueueItem &item) {
 int QueueModel::calculateInsertPosition(int priority) const {
   for (int i = 0; i < m_items.size(); ++i) {
     const QueueItem &existingItem = m_items.at(i);
-    if (existingItem.isWaitItem || existingItem.isDailyLimitWait) {
-      continue;
-    }
     int existingPriority = existingItem.requestData.value(QStringLiteral("priority")).toInt(0);
     if (priority > existingPriority) {
       return i;
@@ -445,8 +320,6 @@ void QueueModel::insertItem(int index, const QueueItem &item) {
   m_items.insert(index, item);
   endInsertRows();
 
-  mergeWaitItems();
-
   save();
 }
 
@@ -455,7 +328,6 @@ void QueueModel::updateItem(int index, const QueueItem &item) {
     m_items[index] = item;
     QModelIndex idx = this->index(index, 0);
     Q_EMIT dataChanged(idx, idx);
-    mergeWaitItems();
     save();
   }
 }
@@ -467,8 +339,6 @@ QueueItem QueueModel::dequeue() {
   beginRemoveRows(QModelIndex(), 0, 0);
   QueueItem item = m_items.takeFirst();
   endRemoveRows();
-  removeTrailingWaitItems();
-  mergeWaitItems();
   save();
   return item;
 }
@@ -500,8 +370,6 @@ void QueueModel::removeItem(int index) {
     beginRemoveRows(QModelIndex(), index, index);
     m_items.removeAt(index);
     endRemoveRows();
-    removeTrailingWaitItems();
-    mergeWaitItems();
     save();
   }
 }
@@ -526,39 +394,13 @@ void QueueModel::moveItem(int from, int to) {
     else
       std::rotate(m_items.begin() + to, m_items.begin() + from, m_items.begin() + from + 1);
     endMoveRows();
-    mergeWaitItems();
     save();
-  }
-}
-
-void QueueModel::refreshWaitItems() {
-  int start = -1;
-  for (int i = 0; i < m_items.size(); ++i) {
-    const auto &item = m_items.at(i);
-    if (item.isWaitItem && item.waitStartTime.isValid()) {
-      if (start == -1)
-        start = i;
-    } else if (start != -1) {
-      Q_EMIT dataChanged(index(start, 0), index(i - 1, 0), {StatusRole});
-      start = -1;
-    }
-  }
-  if (start != -1) {
-    Q_EMIT dataChanged(index(start, 0), index(m_items.size() - 1, 0), {StatusRole});
   }
 }
 
 bool QueueModel::isEmpty() const { return m_items.isEmpty(); }
 
 int QueueModel::size() const { return m_items.size(); }
-
-void QueueModel::prependWaitItem(const QueueItem &item) {
-  beginInsertRows(QModelIndex(), 0, 0);
-  m_items.prepend(item);
-  endInsertRows();
-  mergeWaitItems();
-  save();
-}
 
 void QueueModel::pruneRunTimestamps() {
   QDateTime cutoff = QDateTime::currentDateTimeUtc().addSecs(-24 * 3600);
@@ -573,55 +415,6 @@ void QueueModel::recordRun() {
   save();
 }
 
-void QueueModel::checkAndPrependDailyLimitWait() {
-  if (m_isHolding) {
-    return;
-  }
-  if (m_items.isEmpty()) {
-    return;
-  }
-
-  pruneRunTimestamps();
-
-  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
-  QString tier = config.readEntry("Tier", QStringLiteral("free"));
-  int dailyLimit = 15;
-  if (tier == QStringLiteral("pro")) {
-    dailyLimit = 100;
-  } else if (tier == QStringLiteral("max")) {
-    dailyLimit = 300;
-  }
-
-  if (m_runTimestamps.size() >= dailyLimit) {
-    bool hasDailyLimitWait = false;
-    for (const QueueItem &existingItem : std::as_const(m_items)) {
-      if (existingItem.isWaitItem && existingItem.isDailyLimitWait) {
-        hasDailyLimitWait = true;
-        break;
-      }
-    }
-
-    if (!hasDailyLimitWait) {
-      QueueItem waitItem;
-      waitItem.isWaitItem = true;
-      waitItem.isDailyLimitWait = true;
-
-      qint64 secondsUntilNext = 12 * 3600; // Default fallback
-      if (!m_runTimestamps.isEmpty()) {
-        QDateTime oldest = m_runTimestamps.first();
-        QDateTime nextAvailable = oldest.addSecs(24 * 3600);
-        qint64 diff = QDateTime::currentDateTimeUtc().secsTo(nextAvailable);
-        if (diff > 0) {
-          secondsUntilNext = diff;
-        }
-      }
-
-      waitItem.waitSeconds = qMin(secondsUntilNext, maxBackoffSeconds());
-      prependWaitItem(waitItem);
-    }
-  }
-}
-
 void QueueModel::clear() {
   if (!m_items.isEmpty()) {
     beginResetModel();
@@ -631,8 +424,16 @@ void QueueModel::clear() {
   }
 }
 
+QString QueueModel::filePath() const {
+  if (QFileInfo(m_filename).isAbsolute()) {
+    return m_filename;
+  }
+  QString dirPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  return dirPath + QStringLiteral("/") + m_filename;
+}
+
 void QueueModel::load() {
-  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + m_filename;
+  QString path = filePath();
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
     return;
@@ -644,9 +445,6 @@ void QueueModel::load() {
 
   if (doc.isObject()) {
     QJsonObject topObj = doc.object();
-    if (topObj.contains(QStringLiteral("m_jobsSinceLastWait"))) {
-      m_jobsSinceLastWait = topObj.value(QStringLiteral("m_jobsSinceLastWait")).toInt();
-    }
     if (topObj.contains(QStringLiteral("m_runTimestamps"))) {
       QJsonArray tsArr = topObj.value(QStringLiteral("m_runTimestamps")).toArray();
       m_runTimestamps.clear();
@@ -665,55 +463,7 @@ void QueueModel::load() {
     m_items.append(QueueItem::fromJson(arr[i].toObject()));
   }
 
-  // Clean up trailing wait items from loaded state
-  while (!m_items.isEmpty() && m_items.last().isWaitItem) {
-    m_items.removeLast();
-  }
-
-  if (m_items.size() >= 2) {
-    for (int i = m_items.size() - 2; i >= 0; --i) {
-      if (m_items[i].isWaitItem && m_items[i + 1].isWaitItem) {
-        m_items[i].waitSeconds += m_items[i + 1].waitSeconds;
-        if (m_items[i + 1].isDailyLimitWait) {
-          m_items[i].isDailyLimitWait = true;
-        }
-        m_items.removeAt(i + 1);
-      }
-    }
-  }
-
   endResetModel();
-}
-
-void QueueModel::mergeWaitItems() {
-  if (m_items.size() < 2)
-    return;
-  for (int i = m_items.size() - 2; i >= 0; --i) {
-    if (m_items[i].isWaitItem && m_items[i + 1].isWaitItem) {
-      m_items[i].waitSeconds += m_items[i + 1].waitSeconds;
-      if (m_items[i + 1].isDailyLimitWait) {
-        m_items[i].isDailyLimitWait = true;
-      }
-      beginRemoveRows(QModelIndex(), i + 1, i + 1);
-      m_items.removeAt(i + 1);
-      endRemoveRows();
-
-      Q_EMIT dataChanged(index(i, 0), index(i, 0), {SummaryRole, StatusRole});
-    }
-  }
-}
-
-void QueueModel::removeTrailingWaitItems() {
-  int firstWaitToRemove = m_items.size();
-  while (firstWaitToRemove > 0 && m_items.at(firstWaitToRemove - 1).isWaitItem) {
-    firstWaitToRemove--;
-  }
-
-  if (firstWaitToRemove < m_items.size()) {
-    beginRemoveRows(QModelIndex(), firstWaitToRemove, m_items.size() - 1);
-    m_items.remove(firstWaitToRemove, m_items.size() - firstWaitToRemove);
-    endRemoveRows();
-  }
 }
 
 void QueueModel::beginBatchUpdate() { m_batchUpdating = true; }
@@ -727,13 +477,13 @@ void QueueModel::save() {
   if (m_batchUpdating)
     return;
 
-  QString dirPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir dir(dirPath);
+  QString path = filePath();
+  QFileInfo fileInfo(path);
+  QDir dir = fileInfo.dir();
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
 
-  QString path = dirPath + QStringLiteral("/") + m_filename;
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly)) {
     qWarning() << "Failed to open queue.json for writing:" << file.errorString();
@@ -748,7 +498,6 @@ void QueueModel::save() {
   }
 
   QJsonObject topObj;
-  topObj[QStringLiteral("m_jobsSinceLastWait")] = m_jobsSinceLastWait;
 
   QJsonArray tsArr;
   for (const QDateTime &dt : std::as_const(m_runTimestamps)) {
