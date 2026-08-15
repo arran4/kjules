@@ -1,3 +1,4 @@
+#include "../src/api/apierror.h"
 #include "../src/errorsmodel.h"
 #include "../src/queuemodel.h"
 #include "../src/queuescheduler.h"
@@ -14,114 +15,158 @@ private Q_SLOTS:
   void testImmediateDispatchEstablishesNextOrdinaryInterval();
   void testBackoffBlocksDirectProcessing();
   void testRetryBackoffOverridesLongerOrdinaryInterval();
-  void testRetryableItemsRemainQueued();
+  void testPreconditionErrorAppliesBackoffAndRetainsItem();
+  void testRateLimitErrorAppliesDailyLimitRetryInterval();
   void testNonRetryableFailuresDoNotBlockUnrelatedWork();
-  void testRetryExhaustionMovesToErrors();
+  void testRetryExhaustionMovesToErrorsWithoutGlobalBackoff();
+  void testSuccessfulRecoveryClearsBackoff();
+  void testSettingsIntervalUpdatePreservesActiveBackoff();
   void testCountdownDisplayDoesNotMutateSchedulingState();
 };
 
 void TestQueueScheduling::testOrdinaryTimerIntervalRespected() {
-  QueueScheduler::State state;
+  QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
   // Initially uninitialized nextProcessAt -> isDue is true
-  QVERIFY(state.isDue(now));
+  QVERIFY(scheduler.isDue(now));
 
   // Advance for 15-minute interval
-  state.advanceOnDispatch(now, 15);
-  QCOMPARE(state.nextProcessAt, now.addSecs(15 * 60));
+  scheduler.recordDispatch(now, 15);
+  QCOMPARE(scheduler.nextQueueProcessAt(), now.addSecs(15 * 60));
 
   // Before 15 minutes, not due
-  QVERIFY(!state.isDue(now.addSecs(14 * 60)));
+  QVERIFY(!scheduler.isDue(now.addSecs(14 * 60)));
 
   // At 15 minutes, due
-  QVERIFY(state.isDue(now.addSecs(15 * 60)));
+  QVERIFY(scheduler.isDue(now.addSecs(15 * 60)));
 
   // After 15 minutes, due
-  QVERIFY(state.isDue(now.addSecs(16 * 60)));
+  QVERIFY(scheduler.isDue(now.addSecs(16 * 60)));
 }
 
 void TestQueueScheduling::testImmediateDispatchEstablishesNextOrdinaryInterval() {
-  QueueScheduler::State state;
+  QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
   // Immediate dispatch at 'now' with 10-minute interval
-  state.advanceOnDispatch(now, 10);
-  QCOMPARE(state.nextProcessAt, now.addSecs(10 * 60));
-  QVERIFY(!state.backoffUntil.isValid());
-  QVERIFY(state.backoffReason.isEmpty());
+  scheduler.recordDispatch(now, 10);
+  QCOMPARE(scheduler.nextQueueProcessAt(), now.addSecs(10 * 60));
+  QVERIFY(!scheduler.queueBackoffUntil().isValid());
+  QVERIFY(scheduler.queueBackoffReason().isEmpty());
+  QVERIFY(!scheduler.isBackoffActive(now));
 }
 
 void TestQueueScheduling::testBackoffBlocksDirectProcessing() {
-  QueueScheduler::State state;
+  QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
-  // Ordinary schedule would be due
-  state.nextProcessAt = now.addSecs(-60); // 1 minute overdue
+  // Ordinary schedule would be overdue
+  scheduler.setNextProcessAt(now.addSecs(-60));
 
   // Apply QBI backoff for 15 minutes
-  state.applyBackoff(now, 15 * 60, QStringLiteral("Concurrent Limit Reached"));
-  QVERIFY(state.isBackoffActive(now));
-  QVERIFY(!state.isDue(now));
-  QVERIFY(!state.isDue(now.addSecs(14 * 60)));
+  scheduler.applyBackoff(now, 15 * 60, QStringLiteral("Concurrent Limit Reached"));
+  QVERIFY(scheduler.isBackoffActive(now));
+  QVERIFY(!scheduler.isDue(now));
+  QVERIFY(!scheduler.isDue(now.addSecs(14 * 60)));
 
-  // Once backoff expires, backoff is no longer active
-  QVERIFY(!state.isBackoffActive(now.addSecs(15 * 60)));
-  QVERIFY(state.isDue(now.addSecs(15 * 60)));
+  // Once backoff expires, isBackoffActive is false and isDue is true
+  QDateTime expiredTime = now.addSecs(15 * 60);
+  QVERIFY(!scheduler.isBackoffActive(expiredTime));
+  QVERIFY(scheduler.isDue(expiredTime));
 }
 
 void TestQueueScheduling::testRetryBackoffOverridesLongerOrdinaryInterval() {
-  QueueScheduler::State state;
+  QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
-  // TimerInterval = 60 minutes
-  state.advanceOnDispatch(now, 60);
-  QCOMPARE(state.nextProcessAt, now.addSecs(3600));
+  // Ordinary TimerInterval = 60 minutes
+  scheduler.recordDispatch(now, 60);
+  QCOMPARE(scheduler.nextQueueProcessAt(), now.addSecs(3600));
 
-  // Error occurs 1 minute later, QBI = 15 minutes applied
+  // Failure occurs 1 minute later, QBI = 15 minutes applied
   QDateTime errTime = now.addSecs(60);
-  state.applyBackoff(errTime, 15 * 60, QStringLiteral("Error Processing Task"));
+  scheduler.applyBackoff(errTime, 15 * 60, QStringLiteral("Error Processing Task"));
+
+  // The effective next queue attempt is now the backoff expiry (errTime + 15m)
+  QCOMPARE(scheduler.nextQueueProcessAt(), errTime.addSecs(15 * 60));
 
   // At 10 minutes from errTime (now + 11 min), backoff still active
-  QVERIFY(state.isBackoffActive(errTime.addSecs(10 * 60)));
-  QVERIFY(!state.isDue(errTime.addSecs(10 * 60)));
+  QVERIFY(scheduler.isBackoffActive(errTime.addSecs(10 * 60)));
+  QVERIFY(!scheduler.isDue(errTime.addSecs(10 * 60)));
 
   // At 15 minutes from errTime (now + 16 min), backoff has expired
-  // isDue must be true even though nextProcessAt is still at now + 60 min!
+  // isDue is true approximately 15 minutes after failure, not waiting 60 minutes!
   QDateTime retryTime = errTime.addSecs(15 * 60);
-  QVERIFY(!state.isBackoffActive(retryTime));
-  QVERIFY(state.isDue(retryTime));
+  QVERIFY(!scheduler.isBackoffActive(retryTime));
+  QVERIFY(scheduler.isDue(retryTime));
 }
 
-void TestQueueScheduling::testRetryableItemsRemainQueued() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_retry.json"), true);
+void TestQueueScheduling::testPreconditionErrorAppliesBackoffAndRetainsItem() {
+  QueueModel queueModel(nullptr, QStringLiteral("test_queue_precond.json"), true);
   queueModel.clear();
 
   QueueItem item;
-  item.requestData[QStringLiteral("prompt")] = QStringLiteral("Test prompt");
-  item.errorCount = 0;
+  item.requestData[QStringLiteral("prompt")] = QStringLiteral("Precondition task");
   queueModel.enqueueItem(item);
-  QCOMPARE(queueModel.rowCount(), 1);
 
-  // Simulate retryable error attempt
-  QDateTime now = QDateTime::currentDateTimeUtc();
+  QueueScheduler scheduler;
+  QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
+
+  // Simulate precondition error handling
   QueueItem current = queueModel.peek();
-  current.errorCount++;
-  current.lastError = QStringLiteral("Temporary network timeout");
+  current.lastError = QStringLiteral("FAILED_PRECONDITION: Concurrent limit reached");
   current.lastTry = now;
   queueModel.updateItem(0, current);
 
-  // Item remains in queue with updated error count
+  int backoffMins = 15;
+  scheduler.applyBackoff(now, backoffMins * 60, QStringLiteral("Concurrent Limit Reached"));
+
+  // Item retained in queue
   QCOMPARE(queueModel.rowCount(), 1);
-  QCOMPARE(queueModel.peek().errorCount, 1);
-  QCOMPARE(queueModel.peek().lastError, QStringLiteral("Temporary network timeout"));
+  QCOMPARE(queueModel.peek().lastError, QStringLiteral("FAILED_PRECONDITION: Concurrent limit reached"));
+
+  // Scheduler is backed off
+  QVERIFY(scheduler.isBackoffActive(now));
+  QCOMPARE(scheduler.queueBackoffUntil(), now.addSecs(15 * 60));
+  QCOMPARE(scheduler.queueBackoffReason(), QStringLiteral("Concurrent Limit Reached"));
+}
+
+void TestQueueScheduling::testRateLimitErrorAppliesDailyLimitRetryInterval() {
+  QueueModel queueModel(nullptr, QStringLiteral("test_queue_ratelimit.json"), true);
+  queueModel.clear();
+
+  QueueItem item;
+  item.requestData[QStringLiteral("prompt")] = QStringLiteral("Rate limited task");
+  queueModel.enqueueItem(item);
+
+  QueueScheduler scheduler;
+  QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
+
+  // Simulate 429 / RESOURCE_EXHAUSTED error handling
+  QueueItem current = queueModel.peek();
+  current.lastError = QStringLiteral("RESOURCE_EXHAUSTED: Rate limit exceeded");
+  current.lastTry = now;
+  queueModel.updateItem(0, current);
+
+  scheduler.applyBackoff(now, 3600, QStringLiteral("API Rate/Daily Limit Reached"));
+
+  // Item retained
+  QCOMPARE(queueModel.rowCount(), 1);
+
+  // 1-hour DLRI backoff applied
+  QVERIFY(scheduler.isBackoffActive(now));
+  QCOMPARE(scheduler.queueBackoffUntil(), now.addSecs(3600));
+  QCOMPARE(scheduler.queueBackoffReason(), QStringLiteral("API Rate/Daily Limit Reached"));
 }
 
 void TestQueueScheduling::testNonRetryableFailuresDoNotBlockUnrelatedWork() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_nonretry.json"), true);
+  QueueModel queueModel(nullptr, QStringLiteral("test_queue_nonretry2.json"), true);
   queueModel.clear();
 
   ErrorsModel errorsModel(nullptr);
+  QueueScheduler scheduler;
+  QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
   QueueItem item1;
   item1.requestData[QStringLiteral("prompt")] = QStringLiteral("Invalid task 1");
@@ -131,74 +176,105 @@ void TestQueueScheduling::testNonRetryableFailuresDoNotBlockUnrelatedWork() {
   item2.requestData[QStringLiteral("prompt")] = QStringLiteral("Valid task 2");
   queueModel.enqueueItem(item2);
 
-  QCOMPARE(queueModel.rowCount(), 2);
-
-  // Non-retryable error on item 0 (e.g. 400 Validation Error)
+  // Non-retryable failure (e.g. 400 Validation Error): remove item and add to ErrorsModel
   QueueItem failedItem = queueModel.peek();
   queueModel.removeItem(0);
 
   QJsonObject errObj;
   errObj[QStringLiteral("request")] = failedItem.requestData;
-  errObj[QStringLiteral("message")] = QStringLiteral("Invalid parameters");
+  errObj[QStringLiteral("message")] = QStringLiteral("Invalid prompt parameter");
+  errObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
   errorsModel.addErrorObj(errObj);
 
-  // Queue now has remaining item2 immediately ready
+  // Item 1 moved to errors, Item 2 ready in queue
   QCOMPARE(queueModel.rowCount(), 1);
   QCOMPARE(queueModel.peek().requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Valid task 2"));
   QCOMPARE(errorsModel.rowCount(), 1);
 
-  // Scheduling state for unrelated work has no active backoff
-  QueueScheduler::State state;
-  QDateTime now = QDateTime::currentDateTimeUtc();
-  QVERIFY(!state.isBackoffActive(now));
+  // No global backoff applied to scheduler; next queue attempt remains unblocked
+  QVERIFY(!scheduler.isBackoffActive(now));
 }
 
-void TestQueueScheduling::testRetryExhaustionMovesToErrors() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_exhaustion.json"), true);
+void TestQueueScheduling::testRetryExhaustionMovesToErrorsWithoutGlobalBackoff() {
+  QueueModel queueModel(nullptr, QStringLiteral("test_queue_exhaustion2.json"), true);
   queueModel.clear();
 
   ErrorsModel errorsModel(nullptr);
+  QueueScheduler scheduler;
+  QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
   QueueItem item;
   item.requestData[QStringLiteral("prompt")] = QStringLiteral("Failing task");
   item.errorCount = 3;
   queueModel.enqueueItem(item);
 
-  // 4th failure triggers exhaustion
+  // 4th failure occurs
   QueueItem current = queueModel.peek();
   current.errorCount++;
   if (current.errorCount >= 4) {
     queueModel.removeItem(0);
     QJsonObject errObj;
     errObj[QStringLiteral("request")] = current.requestData;
-    errObj[QStringLiteral("message")] = QStringLiteral("Server 500 error");
+    errObj[QStringLiteral("message")] = QStringLiteral("Internal Server Error 500");
+    errObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
     errorsModel.addErrorObj(errObj);
   }
 
   QCOMPARE(queueModel.rowCount(), 0);
   QCOMPARE(errorsModel.rowCount(), 1);
+
+  // Exhausted failures do NOT apply global backoff to unrelated tasks
+  QVERIFY(!scheduler.isBackoffActive(now));
+}
+
+void TestQueueScheduling::testSuccessfulRecoveryClearsBackoff() {
+  QueueScheduler scheduler;
+  QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
+
+  scheduler.applyBackoff(now, 15 * 60, QStringLiteral("Error"));
+  QVERIFY(scheduler.isBackoffActive(now));
+
+  // Successful dispatch clears backoff state
+  scheduler.recordDispatch(now.addSecs(15 * 60), 10);
+  QVERIFY(!scheduler.isBackoffActive(now.addSecs(15 * 60)));
+  QVERIFY(!scheduler.queueBackoffUntil().isValid());
+  QVERIFY(scheduler.queueBackoffReason().isEmpty());
+}
+
+void TestQueueScheduling::testSettingsIntervalUpdatePreservesActiveBackoff() {
+  QueueScheduler scheduler;
+  QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
+
+  // Backoff active for next 15 minutes
+  scheduler.applyBackoff(now, 15 * 60, QStringLiteral("Concurrent Limit Reached"));
+  QDateTime originalBackoff = scheduler.queueBackoffUntil();
+
+  // Changing TimerInterval to 1 minute in Settings must NOT shorten active backoff
+  scheduler.updateInterval(now, 1);
+  QCOMPARE(scheduler.queueBackoffUntil(), originalBackoff);
+  QCOMPARE(scheduler.nextQueueProcessAt(), originalBackoff);
+  QVERIFY(scheduler.isBackoffActive(now));
 }
 
 void TestQueueScheduling::testCountdownDisplayDoesNotMutateSchedulingState() {
-  QueueScheduler::State state;
+  QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
-  state.nextProcessAt = now.addSecs(180);
-  state.backoffUntil = now.addSecs(300);
-  state.backoffReason = QStringLiteral("Rate Limited");
+  scheduler.setNextProcessAt(now.addSecs(180));
+  scheduler.setBackoffUntil(now.addSecs(300));
+  scheduler.setBackoffReason(QStringLiteral("Rate Limited"));
 
-  // Read-only inspection
-  QDateTime savedNext = state.nextProcessAt;
-  QDateTime savedBackoff = state.backoffUntil;
-  QString savedReason = state.backoffReason;
+  QDateTime savedNext = scheduler.nextQueueProcessAt();
+  QDateTime savedBackoff = scheduler.queueBackoffUntil();
+  QString savedReason = scheduler.queueBackoffReason();
 
-  qint64 secondsLeft = now.secsTo(state.backoffUntil);
+  qint64 secondsLeft = now.secsTo(scheduler.queueBackoffUntil());
   QString durationStr = Utils::formatDuration(secondsLeft);
   QCOMPARE(durationStr, QStringLiteral("5m 0s"));
 
-  // Verify state is completely unchanged
-  QCOMPARE(state.nextProcessAt, savedNext);
-  QCOMPARE(state.backoffUntil, savedBackoff);
-  QCOMPARE(state.backoffReason, savedReason);
+  // Verify state is completely untouched
+  QCOMPARE(scheduler.nextQueueProcessAt(), savedNext);
+  QCOMPARE(scheduler.queueBackoffUntil(), savedBackoff);
+  QCOMPARE(scheduler.queueBackoffReason(), savedReason);
 }
 
 QTEST_MAIN(TestQueueScheduling)

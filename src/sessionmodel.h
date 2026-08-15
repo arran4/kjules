@@ -125,6 +125,8 @@ Q_SIGNALS:
   void sessionsLoadedOrUpdated();
 
 private:
+  QString cacheFilePath() const;
+
   QVector<SessionData> m_sessions;
   QHash<QString, int> m_idToIndex;
   QString m_nextPageToken;

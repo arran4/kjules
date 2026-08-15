@@ -14,7 +14,54 @@ private Q_SLOTS:
   void testUnrelatedUpdatesDoNotAlterLastRefreshed();
   void testRawAndParsedStateConsistency();
   void testLastRefreshedRole();
+  void testPersistedLastRefreshedSurvivesModelRestart();
 };
+
+void TestSessionModel::testPersistedLastRefreshedSurvivesModelRestart() {
+  QString cacheFile = QDir::current().absoluteFilePath(QStringLiteral("test_sm_restart.json"));
+  QFile::remove(cacheFile);
+
+  // Step 1: Populate model, set lastRefreshed and metadata, then save to disk
+  {
+    SessionModel model(cacheFile);
+    model.clearSessions();
+
+    QJsonObject initial;
+    initial[QStringLiteral("id")] = QStringLiteral("sess-persist");
+    initial[QStringLiteral("title")] = QStringLiteral("Persisted Session");
+    initial[QStringLiteral("local_favourite")] = 5;
+    initial[QStringLiteral("local_snooze_until")] = QStringLiteral("2026-08-25T15:30:00Z");
+    initial[QStringLiteral("local_refreshInterval")] = 25;
+    initial[QStringLiteral("lastRefreshed")] = QStringLiteral("2026-08-15T06:45:00Z");
+
+    model.addSession(initial);
+    model.saveSessions();
+  }
+
+  // Step 2: Create a completely fresh model instance with the same file and load
+  {
+    SessionModel reloadedModel(cacheFile);
+    reloadedModel.loadSessions();
+
+    QCOMPARE(reloadedModel.rowCount(), 1);
+    QJsonObject result = reloadedModel.getSession(0);
+
+    QCOMPARE(result.value(QStringLiteral("id")).toString(), QStringLiteral("sess-persist"));
+    QCOMPARE(result.value(QStringLiteral("title")).toString(), QStringLiteral("Persisted Session"));
+    QCOMPARE(result.value(QStringLiteral("local_favourite")).toInt(), 5);
+    QCOMPARE(result.value(QStringLiteral("local_snooze_until")).toString(), QStringLiteral("2026-08-25T15:30:00Z"));
+    QCOMPARE(result.value(QStringLiteral("local_refreshInterval")).toInt(), 25);
+    QCOMPARE(result.value(QStringLiteral("lastRefreshed")).toString(), QStringLiteral("2026-08-15T06:45:00Z"));
+
+    QModelIndex idx = reloadedModel.index(0, 0);
+    QVariant lrVal = reloadedModel.data(idx, SessionModel::LastRefreshedRole);
+    QVERIFY(lrVal.isValid());
+    QCOMPARE(lrVal.toDateTime(), QDateTime::fromString(QStringLiteral("2026-08-15T06:45:00Z"), Qt::ISODate));
+    QCOMPARE(reloadedModel.data(idx, SessionModel::FavouriteRole).toInt(), 5);
+  }
+
+  QFile::remove(cacheFile);
+}
 
 void TestSessionModel::testClientFieldsSurviveUpdateSession() {
   SessionModel model(QStringLiteral("test_sm_update.json"));

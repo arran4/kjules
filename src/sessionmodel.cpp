@@ -601,9 +601,17 @@ void SessionModel::removeSession(int row) {
   Q_EMIT sessionsLoadedOrUpdated();
 }
 
-void SessionModel::loadSessions() {
+QString SessionModel::cacheFilePath() const {
+  if (QFileInfo(m_cacheFileName).isAbsolute()) {
+    return m_cacheFileName;
+  }
   QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QFile file(path + QLatin1Char('/') + m_cacheFileName);
+  return path + QLatin1Char('/') + m_cacheFileName;
+}
+
+void SessionModel::loadSessions() {
+  QString filePath = cacheFilePath();
+  QFile file(filePath);
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     if (doc.isObject()) {
@@ -618,12 +626,13 @@ void SessionModel::loadSessions() {
 }
 
 void SessionModel::saveSessions() {
-  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir dir(path);
+  QString filePath = cacheFilePath();
+  QFileInfo fileInfo(filePath);
+  QDir dir = fileInfo.dir();
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
-  QFile file(path + QLatin1Char('/') + m_cacheFileName);
+  QFile file(filePath);
   if (file.open(QIODevice::WriteOnly)) {
     file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
     QJsonObject obj;

@@ -6,52 +6,60 @@
 
 class QueueScheduler {
 public:
-  struct State {
-    QDateTime nextProcessAt;
-    QDateTime backoffUntil;
-    QString backoffReason;
-
-    bool isBackoffActive(const QDateTime &now) const { return backoffUntil.isValid() && now < backoffUntil; }
-
-    bool isDue(const QDateTime &now) const {
-      if (isBackoffActive(now)) {
-        return false;
-      }
-      if (backoffUntil.isValid() && now >= backoffUntil) {
-        return true;
-      }
-      return !nextProcessAt.isValid() || now >= nextProcessAt;
+  bool isDue(const QDateTime &now) const {
+    if (isBackoffActive(now)) {
+      return false;
     }
+    return !m_nextQueueProcessAt.isValid() || now >= m_nextQueueProcessAt;
+  }
 
-    void advanceOnDispatch(const QDateTime &now, int intervalMinutes) {
-      nextProcessAt = now.addSecs(static_cast<qint64>(intervalMinutes) * 60);
-      backoffUntil = QDateTime();
-      backoffReason.clear();
-    }
+  bool isBackoffActive(const QDateTime &now) const {
+    return m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil;
+  }
 
-    void advanceOnCheckNoWork(const QDateTime &now, int intervalMinutes) {
-      if (backoffUntil.isValid() && now >= backoffUntil) {
-        backoffUntil = QDateTime();
-        backoffReason.clear();
-      }
-      nextProcessAt = now.addSecs(static_cast<qint64>(intervalMinutes) * 60);
-    }
+  QDateTime nextQueueProcessAt() const { return m_nextQueueProcessAt; }
+  QDateTime queueBackoffUntil() const { return m_queueBackoffUntil; }
+  QString queueBackoffReason() const { return m_queueBackoffReason; }
 
-    void applyBackoff(const QDateTime &now, int backoffSeconds, const QString &reason) {
-      backoffUntil = now.addSecs(backoffSeconds);
-      backoffReason = reason;
-    }
+  void recordDispatch(const QDateTime &now, int intervalMinutes) {
+    m_nextQueueProcessAt = now.addSecs(static_cast<qint64>(intervalMinutes) * 60);
+    clearBackoff();
+  }
 
-    void clearBackoff() {
-      backoffUntil = QDateTime();
-      backoffReason.clear();
+  void recordNoWork(const QDateTime &now, int intervalMinutes) {
+    if (m_queueBackoffUntil.isValid() && now >= m_queueBackoffUntil) {
+      clearBackoff();
     }
+    m_nextQueueProcessAt = now.addSecs(static_cast<qint64>(intervalMinutes) * 60);
+  }
 
-    void updateInterval(const QDateTime &now, int intervalMinutes) {
-      nextProcessAt = now.addSecs(static_cast<qint64>(intervalMinutes) * 60);
-      // Active backoff is NOT modified or shortened
+  void applyBackoff(const QDateTime &now, int backoffSeconds, const QString &reason) {
+    m_queueBackoffUntil = now.addSecs(backoffSeconds);
+    m_queueBackoffReason = reason;
+    m_nextQueueProcessAt = m_queueBackoffUntil;
+  }
+
+  void clearBackoff() {
+    m_queueBackoffUntil = QDateTime();
+    m_queueBackoffReason.clear();
+  }
+
+  void updateInterval(const QDateTime &now, int intervalMinutes) {
+    if (isBackoffActive(now)) {
+      m_nextQueueProcessAt = m_queueBackoffUntil;
+    } else {
+      m_nextQueueProcessAt = now.addSecs(static_cast<qint64>(intervalMinutes) * 60);
     }
-  };
+  }
+
+  void setNextProcessAt(const QDateTime &dt) { m_nextQueueProcessAt = dt; }
+  void setBackoffUntil(const QDateTime &dt) { m_queueBackoffUntil = dt; }
+  void setBackoffReason(const QString &reason) { m_queueBackoffReason = reason; }
+
+private:
+  QDateTime m_nextQueueProcessAt;
+  QDateTime m_queueBackoffUntil;
+  QString m_queueBackoffReason;
 };
 
 #endif // QUEUESCHEDULER_H

@@ -12,6 +12,7 @@
 #include <QSystemTrayIcon>
 
 #include "clickablelabel.h"
+#include "queuescheduler.h"
 #include "sessionswindow.h"
 
 class APIManager;
@@ -326,9 +327,7 @@ private:
   QTimer *m_masterSecondTimer;
   bool m_isProcessingQueue;
   bool m_isProcessingMinuteTimer;
-  QDateTime m_nextQueueProcessAt;
-  QDateTime m_queueBackoffUntil;
-  QString m_queueBackoffReason;
+  QueueScheduler m_queueScheduler;
   bool m_queuePaused;
   QSet<QString> m_pendingRefreshIds;
   QSet<QString> m_inFlightSessionReloads;
