@@ -6,7 +6,9 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
-ErrorsModel::ErrorsModel(QObject *parent) : QAbstractListModel(parent) { loadErrors(); }
+ErrorsModel::ErrorsModel(QObject *parent, const QString &filename) : QAbstractListModel(parent), m_filename(filename) {
+  loadErrors();
+}
 
 int ErrorsModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
@@ -74,6 +76,7 @@ void ErrorsModel::clear() {
   beginResetModel();
   m_errors = QJsonArray();
   endResetModel();
+  saveErrors();
 }
 
 void ErrorsModel::removeError(int row) {
@@ -92,9 +95,17 @@ QJsonObject ErrorsModel::getError(int row) const {
   return QJsonObject();
 }
 
-void ErrorsModel::loadErrors() {
+QString ErrorsModel::cacheFilePath() const {
+  if (QFileInfo(m_filename).isAbsolute()) {
+    return m_filename;
+  }
   QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QFile file(path + QStringLiteral("/errors.json"));
+  return path + QLatin1Char('/') + m_filename;
+}
+
+void ErrorsModel::loadErrors() {
+  QString filePath = cacheFilePath();
+  QFile file(filePath);
   if (file.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     m_errors = doc.array();
@@ -103,12 +114,13 @@ void ErrorsModel::loadErrors() {
 }
 
 void ErrorsModel::saveErrors() {
-  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir dir(path);
+  QString filePath = cacheFilePath();
+  QFileInfo fileInfo(filePath);
+  QDir dir = fileInfo.dir();
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
-  QFile file(path + QStringLiteral("/errors.json"));
+  QFile file(filePath);
   if (file.open(QIODevice::WriteOnly)) {
     file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
     QJsonDocument doc(m_errors);

@@ -22,6 +22,7 @@ private Q_SLOTS:
   void testSuccessfulRecoveryClearsBackoff();
   void testSettingsIntervalUpdatePreservesActiveBackoff();
   void testCountdownDisplayDoesNotMutateSchedulingState();
+  void testSuccessfulQueueContinuationContract();
 };
 
 void TestQueueScheduling::testOrdinaryTimerIntervalRespected() {
@@ -164,7 +165,9 @@ void TestQueueScheduling::testNonRetryableFailuresDoNotBlockUnrelatedWork() {
   QueueModel queueModel(nullptr, QStringLiteral("test_queue_nonretry2.json"), true);
   queueModel.clear();
 
-  ErrorsModel errorsModel(nullptr);
+  ErrorsModel errorsModel(nullptr, QStringLiteral("test_errors_nonretry2.json"));
+  errorsModel.clear();
+
   QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
@@ -199,7 +202,9 @@ void TestQueueScheduling::testRetryExhaustionMovesToErrorsWithoutGlobalBackoff()
   QueueModel queueModel(nullptr, QStringLiteral("test_queue_exhaustion2.json"), true);
   queueModel.clear();
 
-  ErrorsModel errorsModel(nullptr);
+  ErrorsModel errorsModel(nullptr, QStringLiteral("test_errors_exhaustion2.json"));
+  errorsModel.clear();
+
   QueueScheduler scheduler;
   QDateTime now = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
 
@@ -275,6 +280,32 @@ void TestQueueScheduling::testCountdownDisplayDoesNotMutateSchedulingState() {
   QCOMPARE(scheduler.nextQueueProcessAt(), savedNext);
   QCOMPARE(scheduler.queueBackoffUntil(), savedBackoff);
   QCOMPARE(scheduler.queueBackoffReason(), savedReason);
+}
+
+void TestQueueScheduling::testSuccessfulQueueContinuationContract() {
+  // Explanatory Contract:
+  // TimerInterval defines the periodic interval for the next scheduled check when idle or waiting.
+  // When a queued item finishes successfully, the production result handlers immediately trigger
+  // processQueue() (via QTimer::singleShot(0)) so queued batches continue processing without
+  // inserting an artificial TimerInterval pause between items, provided concurrency permits and
+  // no backoff is active.
+  QueueScheduler scheduler;
+  QDateTime t0 = QDateTime::fromString(QStringLiteral("2026-08-15T12:00:00Z"), Qt::ISODate);
+
+  // Dispatch item 1: sets nextQueueProcessAt to t0 + 15 mins
+  scheduler.recordDispatch(t0, 15);
+  QCOMPARE(scheduler.nextQueueProcessAt(), t0.addSecs(15 * 60));
+  QVERIFY(!scheduler.isBackoffActive(t0));
+
+  // Item 1 succeeds at t0 + 5s: result handler clears backoff and immediately dispatches item 2
+  QDateTime t1 = t0.addSecs(5);
+  scheduler.clearBackoff();
+  QVERIFY(!scheduler.isBackoffActive(t1));
+
+  // Immediate dispatch of item 2 succeeds and advances nextQueueProcessAt from t1
+  scheduler.recordDispatch(t1, 15);
+  QCOMPARE(scheduler.nextQueueProcessAt(), t1.addSecs(15 * 60));
+  QVERIFY(!scheduler.isBackoffActive(t1));
 }
 
 QTEST_MAIN(TestQueueScheduling)

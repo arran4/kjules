@@ -11,7 +11,7 @@ class ErrorsModel : public QAbstractListModel {
 public:
   enum ErrorRoles { RequestRole = Qt::UserRole + 1, ResponseRole, MessageRole, HttpDetailsRole, TimestampRole };
 
-  explicit ErrorsModel(QObject *parent = nullptr);
+  explicit ErrorsModel(QObject *parent = nullptr, const QString &filename = QStringLiteral("errors.json"));
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
@@ -39,7 +39,10 @@ public:
   void clear();
 
 private:
+  QString cacheFilePath() const;
+
   QJsonArray m_errors;
+  QString m_filename;
 };
 
 #endif // ERRORSMODEL_H
