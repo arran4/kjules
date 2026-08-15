@@ -120,7 +120,7 @@ private Q_SLOTS:
   void increaseFavouriteRank();
   void decreaseFavouriteRank();
   void setFavouriteRank();
-  void processQueue();
+  bool processQueue();
   void scheduleNextQueueAttempt();
   void onMasterMinuteTimer();
   void onMasterSecondTimer();
@@ -129,7 +129,6 @@ private Q_SLOTS:
   QStringList getActiveFollowingSessionIds() const;
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
-  void processErrorRetries();
 
   void onSessionCreatedResult(bool success, const QJsonObject &session, const ApiError &apiError = ApiError(),
                               const QString &rawResponse = QString());

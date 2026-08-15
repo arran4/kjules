@@ -3443,7 +3443,14 @@ void MainWindow::showSettingsDialog() {
   }
 }
 
-void MainWindow::loadQueueSettings() { updateBlockedTabVisibility(); }
+void MainWindow::loadQueueSettings() {
+  updateBlockedTabVisibility();
+
+  // Recompute next normal queue due time appropriately
+  if (!m_queueBackoffUntil.isValid() || m_queueBackoffUntil <= QDateTime::currentDateTimeUtc()) {
+      scheduleNextQueueAttempt(); // Enforce immediately
+  }
+}
 
 void MainWindow::updateFollowingRefreshTimer() {
   // Legacy method now empty
@@ -3458,26 +3465,16 @@ void MainWindow::updateCountdownStatus() {
   QDateTime now = QDateTime::currentDateTimeUtc();
   qint64 secondsLeft = 0;
 
-  if (!m_isProcessingQueue) {
-    if (!m_nextQueueProcessAt.isValid()) {
-      // Startup state logic applied here too
-      KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-      int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
-      m_nextQueueProcessAt = now.addSecs(queueIntervalMins * 60);
-    }
-
-    if (m_nextQueueProcessAt > now) {
-      secondsLeft = now.secsTo(m_nextQueueProcessAt);
-    }
+  if (m_nextQueueProcessAt.isValid() && m_nextQueueProcessAt > now) {
+    secondsLeft = now.secsTo(m_nextQueueProcessAt);
   }
 
   if (secondsLeft > 0) {
     QString timeStr = Utils::formatDuration(secondsLeft);
-    if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil == m_nextQueueProcessAt &&
-        !m_queueBackoffReason.isEmpty()) {
-      m_queueCountdownLabel->setText(i18n("Waiting (%1): Next attempt in %2...", m_queueBackoffReason, timeStr));
+    if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil == m_nextQueueProcessAt && !m_queueBackoffReason.isEmpty()) {
+        m_queueCountdownLabel->setText(i18n("Waiting (%1): Next attempt in %2...", m_queueBackoffReason, timeStr));
     } else {
-      m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
+        m_queueCountdownLabel->setText(i18n("Next attempt in %1...", timeStr));
     }
     m_queueCountdownLabel->show();
   } else {
@@ -3577,7 +3574,6 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
-void MainWindow::processErrorRetries() {}
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
   QStringList activeIds;
@@ -3627,18 +3623,23 @@ void MainWindow::scheduleNextQueueAttempt() {
   int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
 
   if (m_queueBackoffUntil.isValid() && m_queueBackoffUntil > QDateTime::currentDateTimeUtc()) {
-    m_nextQueueProcessAt = m_queueBackoffUntil;
+      m_nextQueueProcessAt = m_queueBackoffUntil;
   } else {
-    m_nextQueueProcessAt = QDateTime::currentDateTimeUtc().addSecs(queueIntervalMins * 60);
+      m_nextQueueProcessAt = QDateTime::currentDateTimeUtc().addSecs(queueIntervalMins * 60);
   }
 }
 
-void MainWindow::processQueue() {
+bool MainWindow::processQueue() {
   if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
-    return;
+    return false;
+
+  QDateTime now = QDateTime::currentDateTimeUtc();
+  if (m_queueBackoffUntil.isValid() && now < m_queueBackoffUntil) {
+    return false;
+  }
 
   if (m_queueModel->isEmpty()) {
-    return;
+    return false;
   }
 
   KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
@@ -3820,6 +3821,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requ
     } else {
       m_queueModel->updateItem(0, item);
       m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffSeconds);
+      m_nextQueueProcessAt = m_queueBackoffUntil;
       m_queueBackoffReason = i18n("Repository creation failed");
       updateStatus(i18n("Repository creation failed. Retrying in %1 seconds.", backoffSeconds));
     }
@@ -3876,10 +3878,12 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
         KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
         int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
         m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+        m_nextQueueProcessAt = m_queueBackoffUntil;
         m_queueBackoffReason = i18n("Concurrent Limit Reached");
         updateStatus(i18n("Concurrent limit reached, waiting %1 mins before retrying...", backoffMins));
       } else if (isResourceExhausted) {
         m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(3600); // 1 hour DLRI
+        m_nextQueueProcessAt = m_queueBackoffUntil;
         m_queueBackoffReason = i18n("API Rate/Daily Limit Reached");
         updateStatus(i18n("API rate limit hit, waiting 1 hour..."));
       }
@@ -3890,6 +3894,7 @@ void MainWindow::onSessionCreatedResult(bool success, const QJsonObject &session
       KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
       int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
       m_queueBackoffUntil = QDateTime::currentDateTimeUtc().addSecs(backoffMins * 60);
+      m_nextQueueProcessAt = m_queueBackoffUntil;
       m_queueBackoffReason = i18n("Error Processing Task");
     }
   }
@@ -6052,14 +6057,16 @@ void MainWindow::onMasterMinuteTimer() {
 
   // 3. Process queue if due
   if (!m_nextQueueProcessAt.isValid()) {
-    KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-    int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
-    m_nextQueueProcessAt = now.addSecs(queueIntervalMins * 60);
+      scheduleNextQueueAttempt();
   }
 
-  if (m_nextQueueProcessAt <= now) {
-    if (!m_isProcessingQueue && !m_queuePaused && !m_queueModel->isEmpty()) {
-      processQueue();
+  if (now >= m_nextQueueProcessAt) {
+    bool dispatched = processQueue();
+    if (!dispatched) {
+      // If we failed to dispatch (e.g. empty queue or preconditions not met),
+      // we still advance the schedule so we don't spam checks every minute.
+      // QBI handles its own overrides when processQueue returns early due to backoff.
+      scheduleNextQueueAttempt();
     }
   }
 
