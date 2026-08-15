@@ -76,6 +76,7 @@ private:
   void pruneRunTimestamps();
   QString m_filename;
   bool m_isHolding;
+  QString filePath() const;
   void load();
   void save();
 };

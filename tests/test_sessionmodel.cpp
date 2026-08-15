@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QTemporaryDir>
 #include <QtTest>
 
 class TestSessionModel : public QObject {
@@ -18,8 +19,9 @@ private Q_SLOTS:
 };
 
 void TestSessionModel::testPersistedLastRefreshedSurvivesModelRestart() {
-  QString cacheFile = QDir::current().absoluteFilePath(QStringLiteral("test_sm_restart.json"));
-  QFile::remove(cacheFile);
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QString cacheFile = tempDir.filePath(QStringLiteral("test_sm_restart.json"));
 
   // Step 1: Populate model, set lastRefreshed and metadata, then save to disk
   {
@@ -59,12 +61,12 @@ void TestSessionModel::testPersistedLastRefreshedSurvivesModelRestart() {
     QCOMPARE(lrVal.toDateTime(), QDateTime::fromString(QStringLiteral("2026-08-15T06:45:00Z"), Qt::ISODate));
     QCOMPARE(reloadedModel.data(idx, SessionModel::FavouriteRole).toInt(), 5);
   }
-
-  QFile::remove(cacheFile);
 }
 
 void TestSessionModel::testClientFieldsSurviveUpdateSession() {
-  SessionModel model(QStringLiteral("test_sm_update.json"));
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SessionModel model(tempDir.filePath(QStringLiteral("test_sm_update.json")));
   model.clearSessions();
 
   QJsonObject initial;
@@ -103,7 +105,9 @@ void TestSessionModel::testClientFieldsSurviveUpdateSession() {
 }
 
 void TestSessionModel::testClientFieldsSurviveAddSessions() {
-  SessionModel model(QStringLiteral("test_sm_addsessions.json"));
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SessionModel model(tempDir.filePath(QStringLiteral("test_sm_addsessions.json")));
   model.clearSessions();
 
   QJsonObject initial;
@@ -134,7 +138,9 @@ void TestSessionModel::testClientFieldsSurviveAddSessions() {
 }
 
 void TestSessionModel::testClientFieldsSurviveUpdateSessionAt() {
-  SessionModel model(QStringLiteral("test_sm_updateat.json"));
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SessionModel model(tempDir.filePath(QStringLiteral("test_sm_updateat.json")));
   model.clearSessions();
 
   QJsonObject initial;
@@ -162,7 +168,9 @@ void TestSessionModel::testClientFieldsSurviveUpdateSessionAt() {
 }
 
 void TestSessionModel::testUnrelatedUpdatesDoNotAlterLastRefreshed() {
-  SessionModel model(QStringLiteral("test_sm_unrelated.json"));
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SessionModel model(tempDir.filePath(QStringLiteral("test_sm_unrelated.json")));
   model.clearSessions();
 
   QJsonObject initial;
@@ -188,7 +196,9 @@ void TestSessionModel::testUnrelatedUpdatesDoNotAlterLastRefreshed() {
 }
 
 void TestSessionModel::testRawAndParsedStateConsistency() {
-  SessionModel model(QStringLiteral("test_sm_consistency.json"));
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SessionModel model(tempDir.filePath(QStringLiteral("test_sm_consistency.json")));
   model.clearSessions();
 
   QJsonObject initial;
@@ -211,7 +221,9 @@ void TestSessionModel::testRawAndParsedStateConsistency() {
 }
 
 void TestSessionModel::testLastRefreshedRole() {
-  SessionModel model(QStringLiteral("test_sm_lastrefreshed.json"));
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SessionModel model(tempDir.filePath(QStringLiteral("test_sm_lastrefreshed.json")));
   model.clearSessions();
 
   QJsonObject initial;

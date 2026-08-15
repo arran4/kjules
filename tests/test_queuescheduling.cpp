@@ -5,6 +5,7 @@
 #include "../src/utils.h"
 #include <QDateTime>
 #include <QJsonObject>
+#include <QTemporaryDir>
 #include <QtTest>
 
 class TestQueueScheduling : public QObject {
@@ -104,7 +105,9 @@ void TestQueueScheduling::testRetryBackoffOverridesLongerOrdinaryInterval() {
 }
 
 void TestQueueScheduling::testPreconditionErrorAppliesBackoffAndRetainsItem() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_precond.json"), true);
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")), true);
   queueModel.clear();
 
   QueueItem item;
@@ -134,7 +137,9 @@ void TestQueueScheduling::testPreconditionErrorAppliesBackoffAndRetainsItem() {
 }
 
 void TestQueueScheduling::testRateLimitErrorAppliesDailyLimitRetryInterval() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_ratelimit.json"), true);
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")), true);
   queueModel.clear();
 
   QueueItem item;
@@ -162,10 +167,12 @@ void TestQueueScheduling::testRateLimitErrorAppliesDailyLimitRetryInterval() {
 }
 
 void TestQueueScheduling::testNonRetryableFailuresDoNotBlockUnrelatedWork() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_nonretry2.json"), true);
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")), true);
   queueModel.clear();
 
-  ErrorsModel errorsModel(nullptr, QStringLiteral("test_errors_nonretry2.json"));
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   errorsModel.clear();
 
   QueueScheduler scheduler;
@@ -199,10 +206,12 @@ void TestQueueScheduling::testNonRetryableFailuresDoNotBlockUnrelatedWork() {
 }
 
 void TestQueueScheduling::testRetryExhaustionMovesToErrorsWithoutGlobalBackoff() {
-  QueueModel queueModel(nullptr, QStringLiteral("test_queue_exhaustion2.json"), true);
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")), true);
   queueModel.clear();
 
-  ErrorsModel errorsModel(nullptr, QStringLiteral("test_errors_exhaustion2.json"));
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   errorsModel.clear();
 
   QueueScheduler scheduler;

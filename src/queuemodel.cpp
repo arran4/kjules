@@ -424,8 +424,16 @@ void QueueModel::clear() {
   }
 }
 
+QString QueueModel::filePath() const {
+  if (QFileInfo(m_filename).isAbsolute()) {
+    return m_filename;
+  }
+  QString dirPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  return dirPath + QStringLiteral("/") + m_filename;
+}
+
 void QueueModel::load() {
-  QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + m_filename;
+  QString path = filePath();
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
     return;
@@ -469,13 +477,13 @@ void QueueModel::save() {
   if (m_batchUpdating)
     return;
 
-  QString dirPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir dir(dirPath);
+  QString path = filePath();
+  QFileInfo fileInfo(path);
+  QDir dir = fileInfo.dir();
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
 
-  QString path = dirPath + QStringLiteral("/") + m_filename;
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly)) {
     qWarning() << "Failed to open queue.json for writing:" << file.errorString();
