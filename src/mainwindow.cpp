@@ -3773,7 +3773,7 @@ bool MainWindow::processQueue() {
   } else {
     m_apiManager->createSessionAsync(item.requestData);
   }
-  return true;
+  return false;
 }
 
 void MainWindow::onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
