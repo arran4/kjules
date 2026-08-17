@@ -1338,7 +1338,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
   QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
   if (currentQueueMode.isEmpty()) {
     currentQueueMode =
-        queueConfig.readEntry("OneAtATimeMode", false) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
+        queueConfig.readEntry("OneAtATimeMode", true) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
 
   bool hasAnyConcurrencyLimits = (currentQueueMode == QStringLiteral("one_at_a_time"));
