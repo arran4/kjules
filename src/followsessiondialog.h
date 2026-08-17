@@ -3,8 +3,10 @@
 
 #include <QDialog>
 #include <QJsonObject>
+#include <QMap>
+#include <QStringList>
 
-class QLineEdit;
+class QTextEdit;
 class QLabel;
 class QPushButton;
 class APIManager;
@@ -13,8 +15,8 @@ class FollowSessionDialog : public QDialog {
   Q_OBJECT
 public:
   explicit FollowSessionDialog(APIManager *apiManager, QWidget *parent = nullptr);
-  QString sessionId() const;
-  QJsonObject sessionData() const;
+  QStringList sessionIds() const;
+  QMap<QString, QJsonObject> sessionDataMap() const;
 
 private Q_SLOTS:
   void onPreviewClicked();
@@ -23,14 +25,16 @@ private Q_SLOTS:
   void updateButtons();
 
 private:
-  QString extractSessionId(const QString &input) const;
+  QStringList extractSessionIds(const QString &input) const;
 
   APIManager *m_apiManager;
-  QLineEdit *m_inputEdit;
+  QTextEdit *m_inputEdit;
   QLabel *m_previewLabel;
   QPushButton *m_previewBtn;
   QPushButton *m_followBtn;
-  QJsonObject m_sessionData;
+  QMap<QString, QJsonObject> m_sessionDataMap;
+  int m_pendingPreviewCount = 0;
+  QStringList m_previewIds;
 };
 
 #endif // FOLLOWSESSIONDIALOG_H

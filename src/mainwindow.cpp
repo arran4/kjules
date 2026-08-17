@@ -2125,35 +2125,56 @@ void MainWindow::createSessionActions() {
   connect(m_followFromIdAction, &QAction::triggered, this, [this]() {
     FollowSessionDialog dialog(m_apiManager, this);
     if (dialog.exec() == QDialog::Accepted) {
-      QString id = dialog.sessionId();
-      if (!id.isEmpty()) {
-        QJsonObject session = dialog.sessionData();
-        if (!session.isEmpty()) {
-          m_sessionModel->addSession(session);
-          m_sessionModel->saveSessions();
-          updateStatus(i18n("Started following session %1", id));
-        } else {
-          QMetaObject::Connection *connection = new QMetaObject::Connection;
-          *connection = connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
-                                [this, id, connection](const QJsonObject &session) {
-                                  if (session.value(QStringLiteral("id")).toString() == id) {
-                                    m_sessionModel->addSession(session);
-                                    m_sessionModel->saveSessions();
-                                    updateStatus(i18n("Started following session %1", id));
-                                    disconnect(*connection);
-                                    delete connection;
-                                  }
-                                });
+      QStringList ids = dialog.sessionIds();
+      QMap<QString, QJsonObject> dataMap = dialog.sessionDataMap();
 
-          // Also clean up on error to prevent memory leaks
-          QMetaObject::Connection *errorConnection = new QMetaObject::Connection;
-          *errorConnection = connect(m_apiManager, &APIManager::errorOccurred, this, [connection, errorConnection]() {
-            disconnect(*connection);
-            delete connection;
-            disconnect(*errorConnection);
-            delete errorConnection;
-          });
+      auto pendingIds = std::make_shared<QSet<QString>>();
+      for (const QString &id : ids) {
+        if (!id.isEmpty()) {
+          QJsonObject session = dataMap.value(id);
+          if (!session.isEmpty()) {
+            m_sessionModel->addSession(session);
+            m_sessionModel->saveSessions();
+            updateStatus(i18n("Started following session %1", id));
+          } else {
+            pendingIds->insert(id);
+          }
+        }
+      }
 
+      if (!pendingIds->isEmpty()) {
+        auto connections = std::make_shared<std::vector<QMetaObject::Connection>>(2);
+
+        auto cleanup = [connections]() {
+          for (auto &conn : *connections) {
+            QObject::disconnect(conn);
+          }
+          connections->clear();
+        };
+
+        (*connections)[0] = connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+                                    [this, pendingIds, cleanup](const QJsonObject &session) {
+                                      QString id = session.value(QStringLiteral("id")).toString();
+                                      if (pendingIds->contains(id)) {
+                                        pendingIds->remove(id);
+                                        m_sessionModel->addSession(session);
+                                        m_sessionModel->saveSessions();
+                                        updateStatus(i18n("Started following session %1", id));
+
+                                        if (pendingIds->isEmpty()) {
+                                          cleanup();
+                                        }
+                                      }
+                                    });
+
+        (*connections)[1] =
+            connect(m_apiManager, &APIManager::errorOccurred, this, [pendingIds, cleanup](const QString & /*error*/) {
+              // If any error occurs, to prevent memory leaks from
+              // hanging requests, we abort all pending fetches.
+              cleanup();
+            });
+
+        for (const QString &id : *pendingIds) {
           m_apiManager->getSession(id);
         }
       }

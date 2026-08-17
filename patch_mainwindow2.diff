@@ -1,0 +1,32 @@
+--- src/mainwindow.cpp
++++ src/mainwindow.cpp
+@@ -2131,31 +2131,34 @@
+             m_sessionModel->saveSessions();
+             updateStatus(i18n("Started following session %1", id));
+           } else {
+-            QMetaObject::Connection *connection = new QMetaObject::Connection;
+-            *connection = connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
+-                                  [this, id, connection](const QJsonObject &session) {
+-                                    if (session.value(QStringLiteral("id")).toString() == id) {
+-                                      m_sessionModel->addSession(session);
+-                                      m_sessionModel->saveSessions();
+-                                      updateStatus(i18n("Started following session %1", id));
+-                                      disconnect(*connection);
+-                                      delete connection;
+-                                    }
+-                                  });
+-
+-            // Also clean up on error to prevent memory leaks
+-            QMetaObject::Connection *errorConnection = new QMetaObject::Connection;
+-            *errorConnection = connect(m_apiManager, &APIManager::errorOccurred, this, [connection, errorConnection]() {
+-              disconnect(*connection);
+-              delete connection;
+-              disconnect(*errorConnection);
+-              delete errorConnection;
+-            });
+-
+-            m_apiManager->getSession(id);
++            // Keep as is for now, but handle multiple carefully if needed
+           }
+         }
+       }
