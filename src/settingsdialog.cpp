@@ -82,7 +82,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   if (currentQueueMode.isEmpty()) {
     // Backwards compatibility
     currentQueueMode =
-        queueConfig.readEntry("OneAtATimeMode", false) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
+        queueConfig.readEntry("OneAtATimeMode", true) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
 
   int modeIndex = m_queueModeCombo->findData(currentQueueMode);

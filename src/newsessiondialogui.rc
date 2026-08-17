@@ -18,11 +18,6 @@
       <Action name="load_template"/>
       <Action name="save_template"/>
       <Action name="save_draft"/>
-      <Separator/>
-      <Action name="require_plan_approval"/>
-      <Action name="keep_open_after_saving"/>
-      <Action name="keep_source_selected"/>
-      <Action name="keep_prompt_after_saving"/>
     </Menu>
     <Menu name="view"><text>&amp;View</text>
       <Action name="hide_selected_sources"/>
@@ -33,6 +28,7 @@
       <Action name="require_plan_approval"/>
       <Action name="keep_open_after_saving"/>
       <Action name="keep_source_selected"/>
+      <Action name="keep_prompt_after_saving"/>
       <Separator/>
       <Action name="set_default_filter"/>
     </Menu>
