@@ -608,8 +608,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
         });
       }
     }
-    QAction *showStatusAction = menu.addAction(tr("Show Status"));
-    connect(showStatusAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceStatusRequested(id); });
+    QAction *viewSourceAction = menu.addAction(tr("View Source"));
+    connect(viewSourceAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceRequested(id); });
 
     const QJsonObject rawSource = sourceIdx.data(SourceModel::RawDataRole).toJsonObject();
     const QString owner = SourceModel::githubOwner(rawSource);
@@ -992,8 +992,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
     });
 
     QString id = sourceIdx.isValid() ? m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString() : QString();
-    QAction *showStatusAction = menu.addAction(tr("Show Status"));
-    connect(showStatusAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceStatusRequested(id); });
+    QAction *viewSourceAction = menu.addAction(tr("View Source"));
+    connect(viewSourceAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceRequested(id); });
 
     const QJsonObject rawSource = sourceIdx.data(SourceModel::RawDataRole).toJsonObject();
     const QString owner = SourceModel::githubOwner(rawSource);

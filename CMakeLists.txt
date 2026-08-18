@@ -82,6 +82,7 @@ set(kjules_SRCS
     src/errorsmodel.cpp
     src/newsessiondialog.cpp
     src/sourcestatusdialog.cpp
+    src/sourcestatuswidget.cpp
     src/savedialog.cpp
     src/templateselectiondialog.cpp
     src/templateeditdialog.cpp
@@ -96,6 +97,7 @@ set(kjules_SRCS
     src/clickablelabel.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
+    src/sourcewindow.cpp
     src/errorwindow.cpp
     src/sessionswindow.cpp
     src/kjules.qrc
@@ -131,7 +133,7 @@ install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES org.kde.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
-install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/org.kde.kjules)
+install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc src/sourcewindowui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/org.kde.kjules)
 install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 
 enable_testing()
