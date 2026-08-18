@@ -828,7 +828,9 @@ void APIManager::cancelListSessions() {
 
 void APIManager::getSession(const QString &sessionId) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot get session details: No token or previous failure."));
+    QString msg = QStringLiteral("Cannot get session details: No token or previous failure.");
+    Q_EMIT errorOccurred(msg);
+    Q_EMIT sessionDetailsFailed(sessionId, msg);
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
@@ -842,7 +844,9 @@ void APIManager::getSession(const QString &sessionId) {
   }
 
   if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
-    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    QString msg = QStringLiteral("Invalid session ID.");
+    Q_EMIT errorOccurred(msg);
+    Q_EMIT sessionDetailsFailed(sessionId, msg);
     return;
   }
 
@@ -850,7 +854,7 @@ void APIManager::getSession(const QString &sessionId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, cleanId]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -860,7 +864,9 @@ void APIManager::getSession(const QString &sessionId) {
       if (statusCode == 401 || statusCode == 403) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to get session details: ") + reply->errorString());
+      QString msg = QStringLiteral("Failed to get session details: ") + reply->errorString();
+      Q_EMIT errorOccurred(msg);
+      Q_EMIT sessionDetailsFailed(cleanId, msg);
     }
     reply->deleteLater();
   });

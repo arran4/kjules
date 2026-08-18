@@ -72,6 +72,7 @@ Q_SIGNALS:
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
+  void sessionDetailsFailed(const QString &sessionId, const QString &message);
   void sessionReloaded(const QJsonObject &session);
   void sessionReloadFailed(const QString &sessionId, const QString &message);
   void sourceDetailsReceived(const QJsonObject &source);
