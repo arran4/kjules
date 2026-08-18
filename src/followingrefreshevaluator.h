@@ -7,6 +7,19 @@
 
 class FollowingRefreshEvaluator {
 public:
+  static bool isSessionEligible(const QString &state, const QString &githubPrStatus) {
+    if (state == QStringLiteral("CANCELED") || state == QStringLiteral("ERROR")) {
+      return false;
+    }
+
+    if (state == QStringLiteral("COMPLETED")) {
+      return githubPrStatus.compare(QStringLiteral("merged"), Qt::CaseInsensitive) != 0 &&
+             githubPrStatus.compare(QStringLiteral("closed"), Qt::CaseInsensitive) != 0;
+    }
+
+    return true;
+  }
+
   static int effectiveIntervalSeconds(int globalIntervalSeconds,
                                       const std::optional<int> &localRefreshIntervalMinutes) {
     if (localRefreshIntervalMinutes.has_value()) {

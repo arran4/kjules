@@ -3606,7 +3606,8 @@ QStringList MainWindow::getActiveFollowingSessionIds() const {
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
     QModelIndex index = m_sessionModel->index(i, 0);
     QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
-    if (state == JulesStatus::COMPLETED || state == JulesStatus::CANCELED || state == JulesStatus::ERROR_STATE)
+    QString prStatus = m_sessionModel->data(index, SessionModel::PrStatusRole).toString();
+    if (!FollowingRefreshEvaluator::isSessionEligible(state, prStatus))
       continue;
     QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
     if (!currentId.isEmpty()) {
