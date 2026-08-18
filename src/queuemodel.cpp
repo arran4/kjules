@@ -509,3 +509,5 @@ void QueueModel::save() {
   QJsonDocument doc(topObj);
   file.write(doc.toJson());
 }
+
+void QueueModel::triggerQueueProcessing() { Q_EMIT queueStateChanged(); }

@@ -649,6 +649,25 @@ void SourceModel::updateSource(const QJsonObject &sourceConst) {
   saveSources();
 }
 
+void SourceModel::updateSourceRaw(int row, const QJsonObject &obj) {
+  if (row >= 0 && row < m_sources.size()) {
+    m_sources[row] = obj;
+    QModelIndex changedIndex = index(row, 0);
+    Q_EMIT dataChanged(changedIndex, changedIndex, {RawDataRole});
+    saveSources();
+  }
+}
+
+void SourceModel::setAutoFollow(const QString &id, bool follow) {
+  QModelIndexList matches = match(index(0, 0), SourceModel::IdRole, id, 1, Qt::MatchExactly);
+  if (!matches.isEmpty()) {
+    int row = matches.first().row();
+    QJsonObject obj = m_sources[row].toObject();
+    obj[QStringLiteral("local_autoFollowNewSessions")] = follow;
+    updateSourceRaw(row, obj);
+  }
+}
+
 void SourceModel::removeSource(const QString &id) {
   for (int i = 0; i < m_sources.size(); ++i) {
     if (resourceName(m_sources[i].toObject()) == id) {
@@ -901,6 +920,36 @@ void SourceModel::recalculateQueueStats(QueueModel *queueModel, SessionModel *se
       Q_EMIT dataChanged(idx, idx);
     }
   }
+}
+
+QStringList SourceModel::getEffectiveDefaultBranches(const QString &id) const {
+  QModelIndexList matches = match(index(0, 0), SourceModel::IdRole, id, 1, Qt::MatchExactly);
+  if (matches.isEmpty()) {
+    return {QStringLiteral("main")};
+  }
+
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+
+  // 1. Local override
+  if (rawData.contains(QStringLiteral("local_defaultBranches"))) {
+    QStringList defaults;
+    QJsonArray arr = rawData.value(QStringLiteral("local_defaultBranches")).toArray();
+    for (const QJsonValue &v : arr) {
+      defaults.append(v.toString());
+    }
+    if (!defaults.isEmpty()) {
+      return defaults;
+    }
+  }
+
+  // 2. API default
+  QString apiDefault = extractApiDefaultBranch(rawData);
+  if (!apiDefault.isEmpty()) {
+    return {apiDefault};
+  }
+
+  // 3. Fallback
+  return {QStringLiteral("main")};
 }
 
 QString SourceModel::extractApiDefaultBranch(const QJsonObject &rawData) {

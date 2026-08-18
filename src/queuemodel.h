@@ -23,7 +23,12 @@ struct QueueItem {
 
 class QueueModel : public QAbstractListModel {
   Q_OBJECT
+Q_SIGNALS:
+  void queueStateChanged();
+
 public:
+  void triggerQueueProcessing();
+
   enum Roles {
     RequestDataRole = Qt::UserRole + 1,
     ErrorCountRole,

@@ -44,6 +44,8 @@ public:
   void loadSources();
   void saveSources();
   void updateSource(const QJsonObject &sourceConst);
+  void updateSourceRaw(int row, const QJsonObject &obj);
+  void setAutoFollow(const QString &id, bool follow);
   void removeSource(const QString &id);
   void toggleFavourite(const QString &id);
   void setFavouriteRank(const QString &id, int rank);
@@ -54,6 +56,7 @@ public:
   static QString githubOwner(const QJsonObject &rawData);
   static QString githubRepository(const QJsonObject &rawData);
   static QString repositoryUrl(const QJsonObject &rawData);
+  QStringList getEffectiveDefaultBranches(const QString &id) const;
   static QString extractApiDefaultBranch(const QJsonObject &rawData);
   void clear();
   void recordSessionCreated(const QString &sourceId);
