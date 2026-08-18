@@ -46,6 +46,7 @@ FollowSessionDialog::FollowSessionDialog(APIManager *apiManager, QWidget *parent
   connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &FollowSessionDialog::onSessionReceived);
+  connect(m_apiManager, &APIManager::sessionDetailsFailed, this, &FollowSessionDialog::onSessionFailed);
   connect(m_apiManager, &APIManager::errorOccurred, this, &FollowSessionDialog::onErrorOccurred);
 }
 
@@ -147,14 +148,26 @@ void FollowSessionDialog::onSessionReceived(const QJsonObject &session) {
 
 QMap<QString, QJsonObject> FollowSessionDialog::sessionDataMap() const { return m_sessionDataMap; }
 
-void FollowSessionDialog::onErrorOccurred(const QString &error) {
+void FollowSessionDialog::onSessionFailed(const QString &sessionId, const QString &message) {
   if (!isVisible())
     return;
 
-  if (m_pendingPreviewCount > 0 && m_previewIds.size() == 1) {
-    m_pendingPreviewCount = 0;
+  if (!m_previewIds.contains(sessionId)) {
+    return;
+  }
+
+  if (m_pendingPreviewCount > 0) {
+    m_pendingPreviewCount--;
+  }
+
+  if (m_pendingPreviewCount <= 0 && m_previewIds.size() == 1) {
     m_previewBtn->setEnabled(true);
-    m_previewLabel->setText(i18n("Error: %1", error));
+    m_previewLabel->setText(i18n("Error: %1", message));
     m_previewLabel->setStyleSheet(QStringLiteral("color: red;"));
   }
+}
+
+void FollowSessionDialog::onErrorOccurred(const QString & /*error*/) {
+  // Ignored to avoid unrelated application errors affecting the dialog's preview state.
+  // The dialog now relies on onSessionFailed for accurate per-session error tracking.
 }

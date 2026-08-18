@@ -21,6 +21,7 @@ public:
 private Q_SLOTS:
   void onPreviewClicked();
   void onSessionReceived(const QJsonObject &session);
+  void onSessionFailed(const QString &sessionId, const QString &message);
   void onErrorOccurred(const QString &error);
   void updateButtons();
 

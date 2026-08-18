@@ -2144,7 +2144,6 @@ void MainWindow::createSessionActions() {
 
       if (!pendingIds->isEmpty()) {
         auto connections = std::make_shared<std::vector<QMetaObject::Connection>>(2);
-        auto pendingCount = std::make_shared<int>(pendingIds->size());
 
         auto cleanup = [connections]() {
           for (auto &conn : *connections) {
@@ -2154,7 +2153,7 @@ void MainWindow::createSessionActions() {
         };
 
         (*connections)[0] = connect(m_apiManager, &APIManager::sessionDetailsReceived, this,
-                                    [this, pendingIds, pendingCount, cleanup](const QJsonObject &session) {
+                                    [this, pendingIds, cleanup](const QJsonObject &session) {
                                       QString id = session.value(QStringLiteral("id")).toString();
                                       if (pendingIds->contains(id)) {
                                         pendingIds->remove(id);
@@ -2162,22 +2161,21 @@ void MainWindow::createSessionActions() {
                                         m_sessionModel->saveSessions();
                                         updateStatus(i18n("Started following session %1", id));
 
-                                        (*pendingCount)--;
-                                        if (*pendingCount <= 0) {
+                                        if (pendingIds->isEmpty()) {
                                           cleanup();
                                         }
                                       }
                                     });
 
-        (*connections)[1] =
-            connect(m_apiManager, &APIManager::errorOccurred, this, [pendingCount, cleanup](const QString & /*error*/) {
-              // Decrement pending count on error to avoid memory leaks
-              // while still processing parallel successful requests.
-              (*pendingCount)--;
-              if (*pendingCount <= 0) {
-                cleanup();
-              }
-            });
+        (*connections)[1] = connect(m_apiManager, &APIManager::sessionDetailsFailed, this,
+                                    [pendingIds, cleanup](const QString &sessionId, const QString & /*message*/) {
+                                      if (pendingIds->contains(sessionId)) {
+                                        pendingIds->remove(sessionId);
+                                        if (pendingIds->isEmpty()) {
+                                          cleanup();
+                                        }
+                                      }
+                                    });
 
         for (const QString &id : *pendingIds) {
           m_apiManager->getSession(id);
