@@ -100,19 +100,20 @@ void FollowSessionDialog::onPreviewClicked() {
   if (m_previewIds.isEmpty()) {
     return;
   }
-  m_previewBtn->setEnabled(false);
   m_sessionDataMap.clear();
-  m_pendingPreviewCount = m_previewIds.size();
 
   if (m_previewIds.size() == 1) {
+    m_previewBtn->setEnabled(false);
+    m_pendingPreviewCount = 1;
     m_previewLabel->setText(i18n("Fetching details..."));
+    m_previewLabel->show();
+    m_apiManager->getSession(m_previewIds.first());
   } else {
-    m_previewLabel->setText(i18n("Fetching details for %1 sessions...", m_previewIds.size()));
-  }
-  m_previewLabel->show();
-
-  for (const QString &id : m_previewIds) {
-    m_apiManager->getSession(id);
+    m_pendingPreviewCount = 0;
+    m_previewLabel->setText(i18n("Ready to follow %1 sessions", m_previewIds.size()));
+    m_previewLabel->setStyleSheet(QStringLiteral("color: green;"));
+    m_previewLabel->show();
+    m_followBtn->setEnabled(true);
   }
 }
 
@@ -131,23 +132,16 @@ void FollowSessionDialog::onSessionReceived(const QJsonObject &session) {
     m_pendingPreviewCount--;
   }
 
-  if (m_pendingPreviewCount <= 0) {
+  if (m_pendingPreviewCount <= 0 && m_previewIds.size() == 1) {
     m_previewBtn->setEnabled(true);
-    if (m_previewIds.size() == 1) {
-      QString title = session.value(QStringLiteral("title")).toString();
-      if (title.isEmpty()) {
-        title = i18n("No title");
-      }
-      QString state = session.value(QStringLiteral("state")).toString();
-      m_previewLabel->setText(i18n("Found: %1 (State: %2)", title, state));
-    } else {
-      m_previewLabel->setText(i18n("Found %1 sessions", m_sessionDataMap.size()));
+    QString title = session.value(QStringLiteral("title")).toString();
+    if (title.isEmpty()) {
+      title = i18n("No title");
     }
+    QString state = session.value(QStringLiteral("state")).toString();
+    m_previewLabel->setText(i18n("Found: %1 (State: %2)", title, state));
     m_previewLabel->setStyleSheet(QStringLiteral("color: green;"));
     m_followBtn->setEnabled(true);
-  } else {
-    m_previewLabel->setText(
-        i18n("Fetching details... (%1/%2)", m_previewIds.size() - m_pendingPreviewCount, m_previewIds.size()));
   }
 }
 
@@ -157,22 +151,10 @@ void FollowSessionDialog::onErrorOccurred(const QString &error) {
   if (!isVisible())
     return;
 
-  if (m_pendingPreviewCount > 0) {
-    m_pendingPreviewCount--;
-  }
-
-  if (m_pendingPreviewCount <= 0) {
+  if (m_pendingPreviewCount > 0 && m_previewIds.size() == 1) {
+    m_pendingPreviewCount = 0;
     m_previewBtn->setEnabled(true);
-    if (m_previewIds.size() == 1) {
-      m_previewLabel->setText(i18n("Error: %1", error));
-      m_previewLabel->setStyleSheet(QStringLiteral("color: red;"));
-    } else {
-      m_previewLabel->setText(i18n("Finished with some errors. Found %1 valid sessions.", m_sessionDataMap.size()));
-      if (m_sessionDataMap.isEmpty()) {
-        m_previewLabel->setStyleSheet(QStringLiteral("color: red;"));
-      } else {
-        m_previewLabel->setStyleSheet(QStringLiteral("color: orange;"));
-      }
-    }
+    m_previewLabel->setText(i18n("Error: %1", error));
+    m_previewLabel->setStyleSheet(QStringLiteral("color: red;"));
   }
 }
