@@ -9,6 +9,7 @@ class TestFollowingRefresh : public QObject {
 
 private Q_SLOTS:
   void testGlobalIntervalEvaluated();
+  void testSessionEligibility();
   void testInheritedPerSessionInterval();
   void testPerSessionDisabledState();
   void testPositivePerSessionOverride();
@@ -17,6 +18,17 @@ private Q_SLOTS:
   void testFailureDoesNotModifyLastRefreshed();
   void testSuccessfulRefreshUpdatesAndPersistsLastRefreshed();
 };
+
+void TestFollowingRefresh::testSessionEligibility() {
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("RUNNING"), QString()));
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"), QString()));
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"), QStringLiteral("open")));
+
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"), QStringLiteral("merged")));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"), QStringLiteral("CLOSED")));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("CANCELED"), QString()));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("ERROR"), QString()));
+}
 
 void TestFollowingRefresh::testGlobalIntervalEvaluated() {
   int globalIntervalSecs = 900; // 15 mins
