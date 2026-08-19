@@ -100,6 +100,7 @@ set(kjules_SRCS
     src/sourcewindow.cpp
     src/errorwindow.cpp
     src/sessionswindow.cpp
+    src/sessionswidget.cpp
     src/kjules.qrc
     src/filterparser.cpp
     src/filtereditor.cpp

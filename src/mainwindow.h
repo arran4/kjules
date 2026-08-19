@@ -28,6 +28,9 @@ struct QueueItem;
 class ErrorsModel;
 class BlockedTreeModel;
 class QAbstractItemView;
+class QAbstractItemModel;
+class QSortFilterProxyModel;
+
 class QListView;
 class QTreeView;
 class FilterEditor;
@@ -168,10 +171,10 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
-  QList<int> getUniqueSortedRows(const QModelIndexList &selectedRows, const QAbstractItemView *view) const;
+  QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
+  void applyFavouriteAction(std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QList<QModelIndex> &, int)> action);
 
-  void applyFavouriteAction(
-      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QModelIndexList &, int)> action);
+
 
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
