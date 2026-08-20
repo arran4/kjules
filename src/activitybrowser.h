@@ -26,7 +26,8 @@ private Q_SLOTS:
 private:
   void renderHtml();
   QString generatePromptHtml() const;
-  QJsonArray deduplicateActivities(QList<int> &repeatCounts) const;
+  QJsonArray deduplicateActivities(QList<int> &repeatCounts, QList<QDateTime> &firstTimes,
+                                   QList<QDateTime> &lastTimes) const;
   QString generateHtmlForActivity(const QJsonObject &activity, bool expanded);
   QString generateRawJsonHtml(const QJsonObject &activity, bool expanded);
 

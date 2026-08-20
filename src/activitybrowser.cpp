@@ -86,7 +86,9 @@ void ActivityBrowser::renderHtml() {
     QDateTime lastTime;
 
     QList<int> repeatCounts;
-    QJsonArray dedupedActivities = deduplicateActivities(repeatCounts);
+    QList<QDateTime> firstTimes;
+    QList<QDateTime> lastTimes;
+    QJsonArray dedupedActivities = deduplicateActivities(repeatCounts, firstTimes, lastTimes);
 
     for (int i = 0; i < dedupedActivities.size(); ++i) {
       QJsonObject activity = dedupedActivities[i].toObject();
@@ -140,15 +142,32 @@ void ActivityBrowser::renderHtml() {
               QStringLiteral("</div>");
 
       if (count > 1) {
+        QString repeatMsg;
+        if (firstTimes[i].isValid() && lastTimes[i].isValid()) {
+          QString firstStr = QLocale::system().toString(firstTimes[i], QLocale::ShortFormat);
+          QString lastStr = QLocale::system().toString(lastTimes[i], QLocale::ShortFormat);
+          if (firstTimes[i] > lastTimes[i]) {
+            QString temp = firstStr;
+            firstStr = lastStr;
+            lastStr = temp;
+          }
+          if (firstStr != lastStr) {
+            repeatMsg = i18n("Repeated %1 times over %2 to %3", count, firstStr, lastStr);
+          } else {
+            repeatMsg = i18n("Repeated %1 times on %2", count, firstStr);
+          }
+        } else {
+          repeatMsg = i18n("Repeated %1 times", count);
+        }
+
         if (!expanded) {
-          html += QStringLiteral("<div style='color: #888;'><i>") + i18n("Repeated %1 times", count) +
-                  QStringLiteral("</i></div>");
+          html += QStringLiteral("<div style='color: #888;'><i>") + repeatMsg + QStringLiteral("</i></div>");
           html += QStringLiteral("<div style='margin-top: 10px;'><a href='expand:") + id +
                   QStringLiteral("' style='color: #3498db; text-decoration: none;'>") + i18n("Show All") +
                   QStringLiteral("</a></div>");
         } else {
-          html += QStringLiteral("<div style='color: #888; margin-bottom: 10px;'><i>") +
-                  i18n("Repeated %1 times", count) + QStringLiteral("</i></div>");
+          html += QStringLiteral("<div style='color: #888; margin-bottom: 10px;'><i>") + repeatMsg +
+                  QStringLiteral("</i></div>");
           html += generateHtmlForActivity(activity, expanded);
           html += QStringLiteral("<div style='margin-top: 15px; border-top: 1px dashed "
                                  "#ccc; padding-top: 10px;'><a href='collapse:") +
@@ -203,7 +222,8 @@ QString ActivityBrowser::generatePromptHtml() const {
   return html;
 }
 
-QJsonArray ActivityBrowser::deduplicateActivities(QList<int> &repeatCounts) const {
+QJsonArray ActivityBrowser::deduplicateActivities(QList<int> &repeatCounts, QList<QDateTime> &firstTimes,
+                                                  QList<QDateTime> &lastTimes) const {
   QJsonArray dedupedActivities;
   QJsonObject lastComp;
 
@@ -214,15 +234,27 @@ QJsonArray ActivityBrowser::deduplicateActivities(QList<int> &repeatCounts) cons
     currComp.remove(QStringLiteral("name"));
     currComp.remove(QStringLiteral("createTime"));
 
+    QString createTimeStr = current.value(QStringLiteral("createTime")).toString();
+    QDateTime createTime = QDateTime::fromString(createTimeStr, Qt::ISODateWithMs);
+    if (!createTime.isValid())
+      createTime = QDateTime::fromString(createTimeStr, Qt::ISODate);
+
     if (dedupedActivities.isEmpty()) {
       dedupedActivities.append(current);
       repeatCounts.append(1);
+      firstTimes.append(createTime);
+      lastTimes.append(createTime);
       lastComp = currComp;
     } else if (currComp == lastComp) {
       repeatCounts.last()++;
+      if (createTime.isValid()) {
+        lastTimes.last() = createTime;
+      }
     } else {
       dedupedActivities.append(current);
       repeatCounts.append(1);
+      firstTimes.append(createTime);
+      lastTimes.append(createTime);
       lastComp = currComp;
     }
   }
