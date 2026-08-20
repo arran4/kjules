@@ -146,11 +146,6 @@ void ActivityBrowser::renderHtml() {
         if (firstTimes[i].isValid() && lastTimes[i].isValid()) {
           QString firstStr = QLocale::system().toString(firstTimes[i], QLocale::ShortFormat);
           QString lastStr = QLocale::system().toString(lastTimes[i], QLocale::ShortFormat);
-          if (firstTimes[i] > lastTimes[i]) {
-            QString temp = firstStr;
-            firstStr = lastStr;
-            lastStr = temp;
-          }
           if (firstStr != lastStr) {
             repeatMsg = i18n("Repeated %1 times over %2 to %3", count, firstStr, lastStr);
           } else {
