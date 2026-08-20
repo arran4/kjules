@@ -15,6 +15,8 @@ class QCheckBox;
 class QSpinBox;
 class QListWidget;
 class QTextEdit;
+class QTreeView;
+class QStandardItemModel;
 
 class SourceWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -38,7 +40,14 @@ private:
   void setupSettingsTab();
   void setupRawDataTab();
   void populateDefaultBranches();
+  void setupGithubIssuesTab();
+  void setupGithubPRsTab();
 
+private Q_SLOTS:
+  void onGithubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
+  void onGithubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
+
+private:
   QString m_sourceId;
   SourceModel *m_sourceModel;
   SessionModel *m_sessionModel;
@@ -54,6 +63,11 @@ private:
   QSpinBox *m_concurrencySpinBox;
   QListWidget *m_defaultBranchesList;
   QTextEdit *m_rawDataEdit;
+
+  QTreeView *m_issuesView;
+  QTreeView *m_prsView;
+  QStandardItemModel *m_issuesModel;
+  QStandardItemModel *m_prsModel;
 };
 
 #endif // SOURCEWINDOW_H
