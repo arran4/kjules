@@ -115,6 +115,8 @@ private:
   QNetworkRequest createRequest(const QString &endpoint, const QString &overrideApiKey = QString());
 
   void fetchGithubPaginated(const QUrl &initialUrl, const QString &sourceId, bool isIssues);
+  void continueGithubPaginated(const QUrl &url, const QString &sourceId, bool isIssues,
+                               QSharedPointer<QJsonArray> results);
 };
 
 #endif // APIMANAGER_H

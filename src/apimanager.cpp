@@ -872,81 +872,78 @@ void APIManager::getSession(const QString &sessionId) {
   });
 }
 
-void APIManager::fetchGithubPaginated(const QUrl &initialUrl, const QString &sourceId, bool isIssues) {
-  QJsonArray *results = new QJsonArray();
+void APIManager::continueGithubPaginated(const QUrl &url, const QString &sourceId, bool isIssues,
+                                         QSharedPointer<QJsonArray> results) {
+  if (!checkGithubRateLimit()) {
+    return;
+  }
 
-  std::function<void(QUrl)> fetchNextPage = [this, sourceId, isIssues, results, fetchNextPage](const QUrl &url) {
-    if (!checkGithubRateLimit()) {
-      delete results;
-      return;
-    }
+  QNetworkRequest request(url);
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
 
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
-    request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
-    request.setRawHeader("Accept", "application/vnd.github.v3+json");
-    QString auth = QStringLiteral("Bearer ") + m_githubToken;
-    request.setRawHeader("Authorization", auth.toUtf8());
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId, isIssues, results]() {
+    reply->deleteLater();
+    updateGithubRateLimit(reply);
 
-    QNetworkReply *reply = m_nam->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId, isIssues, results, fetchNextPage]() {
-      reply->deleteLater();
-      updateGithubRateLimit(reply);
-
-      if (reply->error() == QNetworkReply::NoError) {
-        QByteArray data = reply->readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(data);
-        if (doc.isArray()) {
-          QJsonArray pageArray = doc.array();
-          for (const QJsonValue &v : pageArray) {
-            if (isIssues && v.toObject().contains(QStringLiteral("pull_request"))) {
-              continue;
-            }
-            results->append(v);
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      if (doc.isArray()) {
+        QJsonArray pageArray = doc.array();
+        for (const QJsonValue &v : pageArray) {
+          if (isIssues && v.toObject().contains(QStringLiteral("pull_request"))) {
+            continue;
           }
+          results->append(v);
         }
-
-        QString linkHeader = QString::fromUtf8(reply->rawHeader("Link"));
-        QUrl nextUrl;
-        if (!linkHeader.isEmpty()) {
-          QStringList links = linkHeader.split(QLatin1Char(','));
-          for (const QString &link : links) {
-            if (link.contains(QStringLiteral("rel=\"next\""))) {
-              int start = link.indexOf(QLatin1Char('<'));
-              int end = link.indexOf(QLatin1Char('>'));
-              if (start != -1 && end != -1 && end > start) {
-                nextUrl = QUrl(link.mid(start + 1, end - start - 1));
-              }
-              break;
-            }
-          }
-        }
-
-        if (nextUrl.isValid()) {
-          fetchNextPage(nextUrl);
-        } else {
-          if (isIssues) {
-            Q_EMIT githubIssuesReceived(sourceId, *results);
-          } else {
-            Q_EMIT githubPullRequestsReceived(sourceId, *results);
-          }
-          delete results;
-        }
-      } else {
-        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (statusCode == 401 || statusCode == 403) {
-          m_githubTokenFailed = true;
-          Q_EMIT logMessage(
-              QStringLiteral(
-                  "GitHub API authentication failed (HTTP %1). Future requests blocked until token is updated.")
-                  .arg(statusCode));
-        }
-        delete results;
       }
-    });
-  };
 
-  fetchNextPage(initialUrl);
+      QString linkHeader = QString::fromUtf8(reply->rawHeader("Link"));
+      QUrl nextUrl;
+      if (!linkHeader.isEmpty()) {
+        QStringList links = linkHeader.split(QLatin1Char(','));
+        for (const QString &link : links) {
+          if (link.contains(QStringLiteral("rel=\"next\""))) {
+            int start = link.indexOf(QLatin1Char('<'));
+            int end = link.indexOf(QLatin1Char('>'));
+            if (start != -1 && end != -1 && end > start) {
+              nextUrl = QUrl(link.mid(start + 1, end - start - 1));
+            }
+            break;
+          }
+        }
+      }
+
+      if (nextUrl.isValid()) {
+        continueGithubPaginated(nextUrl, sourceId, isIssues, results);
+      } else {
+        if (isIssues) {
+          Q_EMIT githubIssuesReceived(sourceId, *results);
+        } else {
+          Q_EMIT githubPullRequestsReceived(sourceId, *results);
+        }
+      }
+    } else {
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(
+            QStringLiteral(
+                "GitHub API authentication failed (HTTP %1). Future requests blocked until token is updated.")
+                .arg(statusCode));
+      }
+    }
+  });
+}
+
+void APIManager::fetchGithubPaginated(const QUrl &initialUrl, const QString &sourceId, bool isIssues) {
+  auto results = QSharedPointer<QJsonArray>::create();
+  continueGithubPaginated(initialUrl, sourceId, isIssues, results);
 }
 
 void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository) {
