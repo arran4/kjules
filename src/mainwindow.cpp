@@ -3672,6 +3672,7 @@ bool MainWindow::processQueue() {
         queueConfig.readEntry("OneAtATimeMode", true) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
   bool oneAtATimeMode = currentQueueMode == QStringLiteral("one_at_a_time");
+  bool oneAtATimePerBranchMode = currentQueueMode == QStringLiteral("one_at_a_time_per_branch");
 
   int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
   KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
@@ -3693,7 +3694,19 @@ bool MainWindow::processQueue() {
       }
 
       QString source = m_sessionModel->data(idx, SessionModel::SourceRole).toString();
-      activeCountCache[source]++;
+      QString cacheKey = source;
+      if (oneAtATimePerBranchMode) {
+        QString branch = rawObject.value(QStringLiteral("sourceContext"))
+                             .toObject()
+                             .value(QStringLiteral("githubRepoContext"))
+                             .toObject()
+                             .value(QStringLiteral("startingBranch"))
+                             .toString();
+        if (!branch.isEmpty()) {
+          cacheKey += QStringLiteral(":") + branch;
+        }
+      }
+      activeCountCache[cacheKey]++;
     }
   }
 
@@ -3710,8 +3723,21 @@ bool MainWindow::processQueue() {
     }
 
     int sourceLimit = sourceConcurrencyConfig.readEntry(source, -1);
-    bool checkLimit = (sourceLimit != 0) && (oneAtATimeMode || sourceLimit > 0);
+    bool checkLimit = (sourceLimit != 0) && (oneAtATimeMode || oneAtATimePerBranchMode || sourceLimit > 0);
     int effectiveLimit = (sourceLimit > 0) ? sourceLimit : globalOneAtATimeLimit;
+
+    QString cacheKey = source;
+    if (oneAtATimePerBranchMode) {
+      QString branch = item.requestData.value(QStringLiteral("sourceContext"))
+                           .toObject()
+                           .value(QStringLiteral("githubRepoContext"))
+                           .toObject()
+                           .value(QStringLiteral("startingBranch"))
+                           .toString();
+      if (!branch.isEmpty()) {
+        cacheKey += QStringLiteral(":") + branch;
+      }
+    }
 
     if (item.blockMetadata.value(QStringLiteral("forced")).toBool()) {
       checkLimit = false;
@@ -3734,13 +3760,13 @@ bool MainWindow::processQueue() {
       if (processIndex == -1) {
         processIndex = i;
       }
-      activeCountCache[source]++;
+      activeCountCache[cacheKey]++;
       if (needsUpdate)
         m_queueModel->updateItem(i, item);
       continue;
     }
 
-    if (activeCountCache[source] >= effectiveLimit) {
+    if (activeCountCache[cacheKey] >= effectiveLimit) {
       if (!item.isBlocked) {
         item.isBlocked = true;
         QJsonObject meta;
