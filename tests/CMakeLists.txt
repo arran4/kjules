@@ -9,6 +9,8 @@ add_executable(test_queuescheduling test_queuescheduling.cpp ../src/queuemodel.c
 add_executable(test_followingrefresh test_followingrefresh.cpp ../src/sessionmodel.cpp)
 add_executable(test_sessionmodel test_sessionmodel.cpp ../src/sessionmodel.cpp)
 add_executable(test_configmigration test_configmigration.cpp)
+add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/draftdelegate.cpp ../src/queuedelegate.cpp ../src/sessiondelegate.cpp ../src/sourcestatuswidget.cpp ../src/kjules.qrc)
+add_executable(test_sessionswidget test_sessionswidget.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionmodel.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/sessiondelegate.cpp ../src/kjules.qrc)
 
 target_link_libraries(test_dummy Qt6::Test)
 target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core)
@@ -21,6 +23,8 @@ target_link_libraries(test_queuescheduling Qt6::Test Qt6::Widgets Qt6::Core Qt6:
 target_link_libraries(test_followingrefresh Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
 target_link_libraries(test_sessionmodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
 target_link_libraries(test_configmigration Qt6::Test Qt6::Core KF6::ConfigCore)
+target_link_libraries(test_sourcewindow Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
+target_link_libraries(test_sessionswidget Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
 
 add_test(NAME DummyTest COMMAND test_dummy)
 add_test(NAME FilterTest COMMAND test_filter)
@@ -33,6 +37,8 @@ add_test(NAME QueueSchedulingTest COMMAND test_queuescheduling)
 add_test(NAME FollowingRefreshTest COMMAND test_followingrefresh)
 add_test(NAME SessionModelTest COMMAND test_sessionmodel)
 add_test(NAME ConfigMigrationTest COMMAND test_configmigration)
+add_test(NAME SourceWindowTest COMMAND test_sourcewindow)
+add_test(NAME SessionsWidgetTest COMMAND test_sessionswidget)
 
-set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest QueueSchedulingTest FollowingRefreshTest SessionModelTest ConfigMigrationTest
-                     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest QueueSchedulingTest FollowingRefreshTest SessionModelTest ConfigMigrationTest SourceWindowTest SessionsWidgetTest
+                     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;KDE_HOME_READONLY=1;CANBERRA_DRIVER=null;KNOTIFICATIONS_DEFAULT_BACKEND=null")

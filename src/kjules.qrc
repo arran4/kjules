@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/kxmlgui6/org.kde.kjules">
+        <file>sourcewindowui.rc</file>
         <file>kjulesui.rc</file>
         <file>sessionswindowui.rc</file>
         <file>newsessiondialogui.rc</file>
@@ -9,5 +10,5 @@
         <file alias="icons/kjules-tray-red.png">../icons/kjules-tray-red.png</file>
         <file alias="icons/kjules-tray-yellow.png">../icons/kjules-tray-yellow.png</file>
         <file alias="icons/kjules-tray.png">../icons/kjules-tray.png</file>
-    </qresource>
+        </qresource>
 </RCC>

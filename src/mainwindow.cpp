@@ -28,6 +28,8 @@
 #include "settingsdialog.h"
 #include "sourcefixer.h"
 #include "sourcemodel.h"
+#include "sourcewindow.h"
+
 #include "sourceremapdialog.h"
 #include "sourcesrefreshprogresswindow.h"
 #include "sourcestatusdialog.h"
@@ -428,29 +430,19 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
         }
       });
 
-      QAction *sourceViewSessionsAction = menu.addAction(i18n("View Sessions"));
-      connect(sourceViewSessionsAction, &QAction::triggered, [this]() {
+      QAction *viewSourceAction = menu.addAction(i18n("View Source"));
+      connect(viewSourceAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_sourceView->selectionModel()->selectedRows();
         const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sourceView->model());
         for (const QModelIndex &idx : selectedRows) {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QString currentId = m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
-          SessionsWindow *window = new SessionsWindow(currentId, m_apiManager, m_sessionModel, this);
-          connect(window, &SessionsWindow::watchRequested, this, [this](const QJsonObject &s) {
-            m_sessionModel->addSession(s);
-            m_sessionModel->saveSessions();
-          });
-          window->show();
+          openSourceWindow(currentId);
         }
       });
-      QAction *showStatusAction = menu.addAction(i18n("Show Status"));
-      connect(showStatusAction, &QAction::triggered, [this, id]() { showSourceStatusDialog(id); });
 
       menu.addAction(m_refreshSourceAction);
-      menu.addAction(m_viewSessionsAction);
-      menu.addAction(m_showFollowingNewSessionsAction);
-      menu.addAction(m_viewRawDataAction);
-      menu.addAction(m_sourceSettingsAction);
+
       menu.addAction(m_openUrlAction);
       menu.addAction(m_copyUrlAction);
 
@@ -547,28 +539,6 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
           });
         }
       }
-
-      QAction *configLimitAction = menu.addAction(i18n("Configure Concurrency Limit"));
-      connect(configLimitAction, &QAction::triggered, [this, id]() {
-        KConfigGroup sourceConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
-        int currentLimit = sourceConfig.readEntry(id, -1); // -1 means defer to global
-
-        bool ok;
-        int newLimit = QInputDialog::getInt(this, i18n("Concurrency Limit"),
-                                            i18n("Enter max active sessions for %1 (0 to disable limit, -1 "
-                                                 "to defer to global):",
-                                                 id),
-                                            currentLimit, -1, 1000, 1, &ok);
-        if (ok) {
-          if (newLimit == -1) {
-            sourceConfig.deleteEntry(id);
-          } else {
-            sourceConfig.writeEntry(id, newLimit);
-          }
-          sourceConfig.sync();
-          updateStatus(i18n("Concurrency limit for %1 updated to %2", id, newLimit));
-        }
-      });
 
       menu.exec(m_sourceView->mapToGlobal(pos));
     }
@@ -3351,6 +3321,23 @@ void MainWindow::showSourceStatusDialog(const QString &sourceName) {
   dialog->show();
 }
 
+void MainWindow::openSourceWindow(const QString &sourceId) {
+  if (sourceId.isEmpty())
+    return;
+  SourceWindow *window = new SourceWindow(sourceId, m_sourceModel, m_sessionModel, m_archiveModel, m_queueModel,
+                                          m_errorsModel, m_blockedTreeModel, m_apiManager, this);
+  connect(window, &SourceWindow::newSessionRequested, this, [this](const QString &source) {
+    QJsonObject initialData;
+    QJsonArray sourcesArr;
+    sourcesArr.append(source);
+    initialData[QStringLiteral("sources")] = sourcesArr;
+    showNewSessionDialog(initialData, true);
+  });
+  connect(window, &SourceWindow::queueProcessingRequested, this,
+          [this]() { QTimer::singleShot(0, this, &MainWindow::processQueue); });
+  window->show();
+}
+
 void MainWindow::showManageCustomSourcesDialog() {
   QDialog dialog(this);
   dialog.setWindowTitle(i18n("Manage Custom Sources"));
@@ -4124,28 +4111,8 @@ void MainWindow::onBlockedContextMenu(const QPoint &pos) {
   QMenu menu(this);
   if (isSource) {
     QString id = m_blockedTreeModel->data(index, BlockedTreeModel::SourceIdRole).toString();
-    QAction *configLimitAction = menu.addAction(i18n("Configure Concurrency Limit"));
-    connect(configLimitAction, &QAction::triggered, [this, id]() {
-      KConfigGroup sourceConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
-      int currentLimit = sourceConfig.readEntry(id, -1);
-
-      bool ok;
-      int newLimit = QInputDialog::getInt(this, i18n("Concurrency Limit"),
-                                          i18n("Enter max active sessions for %1 (0 to "
-                                               "disable limit, -1 to defer to global):",
-                                               id),
-                                          currentLimit, -1, 1000, 1, &ok);
-      if (ok) {
-        if (newLimit == -1) {
-          sourceConfig.deleteEntry(id);
-        } else {
-          sourceConfig.writeEntry(id, newLimit);
-        }
-        sourceConfig.sync();
-        updateStatus(i18n("Concurrency limit for %1 updated to %2", id, newLimit));
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      }
-    });
+    QAction *viewSourceAction = menu.addAction(i18n("View Source"));
+    connect(viewSourceAction, &QAction::triggered, this, [this, id]() { openSourceWindow(id); });
   } else {
     QAction *forceAction = menu.addAction(i18n("Force into queue (unblock)"));
     connect(forceAction, &QAction::triggered, this, [this, queueIndex]() {
@@ -4776,7 +4743,7 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
   connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
           [this](const QString &id) { m_apiManager->getSource(id); });
-  connect(window, &NewSessionDialog::showSourceStatusRequested, this, &MainWindow::showSourceStatusDialog);
+  connect(window, &NewSessionDialog::showSourceRequested, this, &MainWindow::openSourceWindow);
   connect(window, &NewSessionDialog::previewQueuePositionRequested, this, [this, window](int priority) {
     int pos = m_queueModel->calculateInsertPosition(priority);
     QMessageBox::information(window, i18n("Queue Position Preview"),
@@ -5775,7 +5742,7 @@ void MainWindow::updateFavouritesMenu() {
 }
 
 void MainWindow::applyFavouriteAction(
-    std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QModelIndexList &, int)> action) {
+    std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QList<QModelIndex> &, int)> action) {
   QAbstractItemView *view = nullptr;
   QAbstractItemModel *model = nullptr;
   int idRole = -1;
@@ -6150,7 +6117,8 @@ void MainWindow::addGithubLink(QMenu *githubMenu, const QString &urlStr, const Q
 
 QString MainWindow::urlFromSource(const QJsonObject &source) const { return SourceModel::repositoryUrl(source); }
 
-QList<int> MainWindow::getUniqueSortedRows(const QModelIndexList &selectedRows, const QAbstractItemView *view) const {
+QList<int> MainWindow::getUniqueSortedRows(const QList<QModelIndex> &selectedRows,
+                                           const QAbstractItemView *view) const {
   QSet<int> uniqueRows;
   const auto *proxy = qobject_cast<const QSortFilterProxyModel *>(view->model());
   for (const QModelIndex &idx : selectedRows) {

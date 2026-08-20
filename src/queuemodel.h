@@ -23,6 +23,8 @@ struct QueueItem {
 
 class QueueModel : public QAbstractListModel {
   Q_OBJECT
+Q_SIGNALS:
+
 public:
   enum Roles {
     RequestDataRole = Qt::UserRole + 1,

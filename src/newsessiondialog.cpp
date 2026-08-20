@@ -608,8 +608,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
         });
       }
     }
-    QAction *showStatusAction = menu.addAction(tr("Show Status"));
-    connect(showStatusAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceStatusRequested(id); });
+    QAction *viewSourceAction = menu.addAction(tr("View Source"));
+    connect(viewSourceAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceRequested(id); });
 
     const QJsonObject rawSource = sourceIdx.data(SourceModel::RawDataRole).toJsonObject();
     const QString owner = SourceModel::githubOwner(rawSource);
@@ -992,8 +992,8 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
     });
 
     QString id = sourceIdx.isValid() ? m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString() : QString();
-    QAction *showStatusAction = menu.addAction(tr("Show Status"));
-    connect(showStatusAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceStatusRequested(id); });
+    QAction *viewSourceAction = menu.addAction(tr("View Source"));
+    connect(viewSourceAction, &QAction::triggered, this, [this, id]() { Q_EMIT showSourceRequested(id); });
 
     const QJsonObject rawSource = sourceIdx.data(SourceModel::RawDataRole).toJsonObject();
     const QString owner = SourceModel::githubOwner(rawSource);
@@ -1931,35 +1931,8 @@ bool NewSessionDialog::eventFilter(QObject *obj, QEvent *event) {
 }
 
 QStringList NewSessionDialog::getDefaultBranches(const QModelIndex &sourceIdx) {
-  QJsonObject rawData = m_sourceModel->data(sourceIdx, SourceModel::RawDataRole).toJsonObject();
-
-  if (rawData.contains(QStringLiteral("local_defaultBranches"))) {
-    QStringList defaults;
-    QJsonArray arr = rawData.value(QStringLiteral("local_defaultBranches")).toArray();
-    for (const QJsonValue &v : arr) {
-      defaults.append(v.toString());
-    }
-    if (!defaults.isEmpty()) {
-      return defaults;
-    }
-  }
-
-  QJsonObject githubRepo = rawData.value(QStringLiteral("githubRepo")).toObject();
-  if (githubRepo.contains(QStringLiteral("defaultBranch"))) {
-    QJsonObject db = githubRepo.value(QStringLiteral("defaultBranch")).toObject();
-    if (db.contains(QStringLiteral("displayName"))) {
-      return QStringList{db.value(QStringLiteral("displayName")).toString()};
-    }
-  }
-
-  if (rawData.contains(QStringLiteral("defaultBranch"))) {
-    return QStringList{rawData.value(QStringLiteral("defaultBranch")).toString()};
-  }
-  QJsonObject github = rawData.value(QStringLiteral("github")).toObject();
-  if (github.contains(QStringLiteral("default_branch"))) {
-    return QStringList{github.value(QStringLiteral("default_branch")).toString()};
-  }
-  return QStringList{QStringLiteral("main")};
+  QString id = m_sourceModel->data(sourceIdx, SourceModel::IdRole).toString();
+  return m_sourceModel->getEffectiveDefaultBranches(id);
 }
 
 QStringList NewSessionDialog::getAvailableBranches(const QModelIndex &sourceIdx) {

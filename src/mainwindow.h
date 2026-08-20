@@ -28,6 +28,9 @@ struct QueueItem;
 class ErrorsModel;
 class BlockedTreeModel;
 class QAbstractItemView;
+class QAbstractItemModel;
+class QSortFilterProxyModel;
+
 class QListView;
 class QTreeView;
 class FilterEditor;
@@ -81,6 +84,7 @@ private Q_SLOTS:
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(), bool ignoreSelection = false);
   void showCreateRepoDialog();
   void showSourceStatusDialog(const QString &sourceName);
+  void openSourceWindow(const QString &sourceId);
   void showManageCustomSourcesDialog();
   void showSettingsDialog();
   void onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
@@ -168,10 +172,9 @@ private Q_SLOTS:
   void updateFavouritesMenu();
 
 private:
-  QList<int> getUniqueSortedRows(const QModelIndexList &selectedRows, const QAbstractItemView *view) const;
-
+  QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
   void applyFavouriteAction(
-      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QModelIndexList &, int)> action);
+      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QList<QModelIndex> &, int)> action);
 
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
