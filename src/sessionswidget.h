@@ -70,6 +70,8 @@ public Q_SLOTS:
   void increaseFavouriteRank();
   void decreaseFavouriteRank();
   void setFavouriteRank();
+  void watchSelectedSessions();
+  void archiveSelectedSessions();
   void unmanageSelectedSessions();
   void openSessionUrls();
   void copySessionUrls();

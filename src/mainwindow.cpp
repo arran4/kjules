@@ -437,9 +437,7 @@ void MainWindow::setupSourcesTab(QWidget *tab) {
         for (const QModelIndex &idx : selectedRows) {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QString currentId = m_sourceModel->data(mappedIdx, SourceModel::IdRole).toString();
-          SourceWindow *window = new SourceWindow(currentId, m_sourceModel, m_sessionModel, m_queueModel, m_errorsModel,
-                                                  m_blockedTreeModel, m_apiManager, this);
-          window->show();
+          openSourceWindow(currentId);
         }
       });
 
@@ -3323,6 +3321,23 @@ void MainWindow::showSourceStatusDialog(const QString &sourceName) {
   dialog->show();
 }
 
+void MainWindow::openSourceWindow(const QString &sourceId) {
+  if (sourceId.isEmpty())
+    return;
+  SourceWindow *window = new SourceWindow(sourceId, m_sourceModel, m_sessionModel, m_archiveModel, m_queueModel,
+                                          m_errorsModel, m_blockedTreeModel, m_apiManager, this);
+  connect(window, &SourceWindow::newSessionRequested, this, [this](const QString &source) {
+    QJsonObject initialData;
+    QJsonArray sourcesArr;
+    sourcesArr.append(source);
+    initialData[QStringLiteral("sources")] = sourcesArr;
+    showNewSessionDialog(initialData, true);
+  });
+  connect(window, &SourceWindow::queueProcessingRequested, this,
+          [this]() { QTimer::singleShot(0, this, &MainWindow::processQueue); });
+  window->show();
+}
+
 void MainWindow::showManageCustomSourcesDialog() {
   QDialog dialog(this);
   dialog.setWindowTitle(i18n("Manage Custom Sources"));
@@ -4069,7 +4084,8 @@ void MainWindow::onBlockedContextMenu(const QPoint &pos) {
   QMenu menu(this);
   if (isSource) {
     QString id = m_blockedTreeModel->data(index, BlockedTreeModel::SourceIdRole).toString();
-
+    QAction *viewSourceAction = menu.addAction(i18n("View Source"));
+    connect(viewSourceAction, &QAction::triggered, this, [this, id]() { openSourceWindow(id); });
   } else {
     QAction *forceAction = menu.addAction(i18n("Force into queue (unblock)"));
     connect(forceAction, &QAction::triggered, this, [this, queueIndex]() {
@@ -4700,11 +4716,7 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
   connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
           [this](const QString &id) { m_apiManager->getSource(id); });
-  connect(window, &NewSessionDialog::showSourceRequested, this, [this](const QString &id) {
-    SourceWindow *sw = new SourceWindow(id, m_sourceModel, m_sessionModel, m_queueModel, m_errorsModel,
-                                        m_blockedTreeModel, m_apiManager, this);
-    sw->show();
-  });
+  connect(window, &NewSessionDialog::showSourceRequested, this, &MainWindow::openSourceWindow);
   connect(window, &NewSessionDialog::previewQueuePositionRequested, this, [this, window](int priority) {
     int pos = m_queueModel->calculateInsertPosition(priority);
     QMessageBox::information(window, i18n("Queue Position Preview"),

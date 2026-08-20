@@ -84,6 +84,7 @@ private Q_SLOTS:
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(), bool ignoreSelection = false);
   void showCreateRepoDialog();
   void showSourceStatusDialog(const QString &sourceName);
+  void openSourceWindow(const QString &sourceId);
   void showManageCustomSourcesDialog();
   void showSettingsDialog();
   void onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,

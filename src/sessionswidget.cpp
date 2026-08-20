@@ -28,56 +28,87 @@
 SessionsProxyModel::SessionsProxyModel(QObject *parent) : QSortFilterProxyModel(parent) {}
 
 void SessionsProxyModel::setTextFilter(const QString &text) {
+  if (m_textFilter == text)
+    return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+  beginFilterChange();
+  m_textFilter = text;
+  endFilterChange();
+#else
   m_textFilter = text;
   invalidateFilter();
+#endif
 }
 
 void SessionsProxyModel::setStatusFilter(const QString &status) {
+  if (m_statusFilter == status)
+    return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+  beginFilterChange();
+  m_statusFilter = status;
+  endFilterChange();
+#else
   m_statusFilter = status;
   invalidateFilter();
+#endif
 }
 
 void SessionsProxyModel::setRepoFilter(const QString &repo) {
+  if (m_repoFilter == repo)
+    return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+  beginFilterChange();
+  m_repoFilter = repo;
+  endFilterChange();
+#else
   m_repoFilter = repo;
   invalidateFilter();
+#endif
 }
 
 bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
   if (!sourceModel()) {
     return false;
   }
-  QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-  QString title = sourceModel()->data(index, SessionModel::ColTitle).toString();
-  QString source = sourceModel()->data(index, SessionModel::SourceRole).toString();
-  QString state = sourceModel()->data(index, SessionModel::ColState).toString();
-  QString repo = sourceModel()->data(index, SessionModel::ColRepo).toString();
+  QModelIndex indexTitle = sourceModel()->index(source_row, SessionModel::ColTitle, source_parent);
+  QModelIndex indexOwner = sourceModel()->index(source_row, SessionModel::ColOwner, source_parent);
+  QModelIndex indexRepo = sourceModel()->index(source_row, SessionModel::ColRepo, source_parent);
+  QModelIndex indexState = sourceModel()->index(source_row, SessionModel::ColState, source_parent);
+
+  QString title = sourceModel()->data(indexTitle, Qt::DisplayRole).toString();
+  QString owner = sourceModel()->data(indexOwner, Qt::DisplayRole).toString();
+  QString repo = sourceModel()->data(indexRepo, Qt::DisplayRole).toString();
+  QString state = sourceModel()->data(indexState, Qt::DisplayRole).toString();
+  QString fullSource = sourceModel()->data(indexTitle, SessionModel::SourceRole).toString();
 
   bool textMatch = m_textFilter.isEmpty() || title.contains(m_textFilter, Qt::CaseInsensitive) ||
-                   source.contains(m_textFilter, Qt::CaseInsensitive);
+                   owner.contains(m_textFilter, Qt::CaseInsensitive) ||
+                   repo.contains(m_textFilter, Qt::CaseInsensitive) ||
+                   fullSource.contains(m_textFilter, Qt::CaseInsensitive);
 
-  bool statusMatch = m_statusFilter.isEmpty() || m_statusFilter == i18n("All") || state == m_statusFilter;
+  bool statusMatch =
+      m_statusFilter.isEmpty() || m_statusFilter == i18n("All") || state.contains(m_statusFilter, Qt::CaseInsensitive);
 
   bool repoMatch = m_repoFilter.isEmpty() || m_repoFilter == i18n("All Repos") || repo == m_repoFilter;
 
-  return textMatch && statusMatch && repoMatch;
+  return textMatch && statusMatch && repoMatch && QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent);
 }
 
 bool SessionsProxyModel::lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const {
-  QVariant leftData = sourceModel()->data(source_left, Qt::UserRole);
-  QVariant rightData = sourceModel()->data(source_right, Qt::UserRole);
+  QAbstractItemModel *m = sourceModel();
+  if (qobject_cast<SessionModel *>(m)) {
+    bool leftFav = m->data(source_left, SessionModel::FavouriteRole).toBool();
+    bool rightFav = m->data(source_right, SessionModel::FavouriteRole).toBool();
 
-  if (leftData.typeId() == QMetaType::QDateTime && rightData.typeId() == QMetaType::QDateTime) {
-    return leftData.toDateTime() < rightData.toDateTime();
+    if (leftFav != rightFav) {
+      if (sortOrder() == Qt::AscendingOrder) {
+        return leftFav;
+      } else {
+        return !leftFav;
+      }
+    }
   }
-  if (leftData.typeId() == QMetaType::Int && rightData.typeId() == QMetaType::Int) {
-    return leftData.toInt() < rightData.toInt();
-  }
-
-  if (leftData.typeId() == QMetaType::QString && rightData.typeId() == QMetaType::QString) {
-    return leftData.toString() < rightData.toString();
-  }
-
-  return source_left.row() < source_right.row();
+  return QSortFilterProxyModel::lessThan(source_left, source_right);
 }
 
 SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
@@ -211,10 +242,11 @@ void SessionsWidget::setupListView() {
 }
 
 void SessionsWidget::onVerticalScrollBarValueChanged(int value) {
-  if (value == m_listView->verticalScrollBar()->maximum() && !m_nextPageToken.isEmpty() && !m_isRefreshing) {
-    if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
-        (m_autoLoadGroup->checkedAction()->data().toString() == QStringLiteral("load_bottom") ||
-         m_autoLoadGroup->checkedAction()->data().toString() == QStringLiteral("load_all"))) {
+  if (m_autoLoadGroup && m_autoLoadGroup->checkedAction() &&
+      (m_autoLoadGroup->checkedAction()->data().toString() == QStringLiteral("auto_bottom") ||
+       m_autoLoadGroup->checkedAction()->data().toString() == QStringLiteral("load_all"))) {
+    QScrollBar *vBar = m_listView->verticalScrollBar();
+    if (value >= vBar->maximum() - 5 && !m_isRefreshing && !m_nextPageToken.isEmpty()) {
       resumeRefresh();
     }
   }
@@ -225,18 +257,29 @@ void SessionsWidget::focusFilter() {
   m_searchEdit->selectAll();
 }
 
-void SessionsWidget::unmanageSelectedSessions() {
-  if (!m_managedModel)
-    return;
+void SessionsWidget::watchSelectedSessions() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(idx);
+    QJsonObject sessionData = m_model->getSession(sourceIndex.row());
+    Q_EMIT watchRequested(sessionData);
+  }
+  updateActionStates();
+}
 
+void SessionsWidget::archiveSelectedSessions() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   for (const QModelIndex &idx : selectedRows) {
     QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
-    QModelIndexList matches =
-        m_managedModel->match(m_managedModel->index(0, 0), SessionModel::IdRole, id, 1, Qt::MatchExactly);
-    if (!matches.isEmpty()) {
-      m_managedModel->removeSession(matches.first().row());
-    }
+    Q_EMIT archiveRequested(id);
+  }
+  updateActionStates();
+}
+
+void SessionsWidget::unmanageSelectedSessions() {
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  for (const QModelIndex &idx : selectedRows) {
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
     Q_EMIT deleteRequested(id);
   }
   updateActionStates();
@@ -245,8 +288,11 @@ void SessionsWidget::unmanageSelectedSessions() {
 void SessionsWidget::onListViewDoubleClicked(const QModelIndex &index) {
   if (!index.isValid())
     return;
-  QJsonObject session = m_proxyModel->data(index, Qt::UserRole).toJsonObject();
-  SessionWindow *sessionWindow = new SessionWindow(session, m_apiManager, m_managedModel, this);
+  QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+  QJsonObject session = m_model->getSession(sourceIndex.row());
+  QString id = session.value(QStringLiteral("id")).toString();
+  bool isManaged = m_managedModel && m_managedModel->contains(id);
+  SessionWindow *sessionWindow = new SessionWindow(session, m_apiManager, isManaged, this);
   sessionWindow->show();
 }
 
@@ -254,6 +300,12 @@ void SessionsWidget::showContextMenu(const QPoint &pos) {
   QModelIndex index = m_listView->indexAt(pos);
   if (!index.isValid())
     return;
+
+  QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  if (!selectedRows.contains(index)) {
+    m_listView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    selectedRows = m_listView->selectionModel()->selectedRows();
+  }
 
   QMenu menu(this);
 
@@ -271,12 +323,22 @@ void SessionsWidget::showContextMenu(const QPoint &pos) {
   QAction *copySourceAction = menu.addAction(i18n("Copy Source URL"));
   connect(copySourceAction, &QAction::triggered, this, &SessionsWidget::copySourceUrls);
 
-  menu.addSeparator();
+  bool hasPr = false;
+  for (const QModelIndex &idx : selectedRows) {
+    QString prUrl = m_proxyModel->data(idx, SessionModel::PrUrlRole).toString();
+    if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
+      hasPr = true;
+      break;
+    }
+  }
 
-  QAction *openPrAction = menu.addAction(i18n("Open PR"));
-  connect(openPrAction, &QAction::triggered, this, &SessionsWidget::openPrUrls);
-  QAction *copyPrAction = menu.addAction(i18n("Copy PR URL"));
-  connect(copyPrAction, &QAction::triggered, this, &SessionsWidget::copyPrUrls);
+  if (hasPr) {
+    menu.addSeparator();
+    QAction *openPrAction = menu.addAction(i18n("Open PR"));
+    connect(openPrAction, &QAction::triggered, this, &SessionsWidget::openPrUrls);
+    QAction *copyPrAction = menu.addAction(i18n("Copy PR URL"));
+    connect(copyPrAction, &QAction::triggered, this, &SessionsWidget::copyPrUrls);
+  }
 
   menu.addSeparator();
 
@@ -294,6 +356,31 @@ void SessionsWidget::showContextMenu(const QPoint &pos) {
   connect(decAction, &QAction::triggered, this, &SessionsWidget::decreaseFavouriteRank);
   QAction *setAction = favMenu->addAction(i18n("Set Rank..."));
   connect(setAction, &QAction::triggered, this, &SessionsWidget::setFavouriteRank);
+
+  menu.addSeparator();
+
+  bool allManaged = true;
+  bool allUnmanaged = true;
+  for (const QModelIndex &idx : selectedRows) {
+    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+    if (m_managedModel && m_managedModel->contains(id)) {
+      allUnmanaged = false;
+    } else {
+      allManaged = false;
+    }
+  }
+
+  QAction *watchAction = menu.addAction(QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"));
+  watchAction->setEnabled(allUnmanaged);
+  connect(watchAction, &QAction::triggered, this, &SessionsWidget::watchSelectedSessions);
+
+  QAction *archiveAction = menu.addAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"));
+  archiveAction->setEnabled(allManaged);
+  connect(archiveAction, &QAction::triggered, this, &SessionsWidget::archiveSelectedSessions);
+
+  QAction *deleteAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage Session"));
+  deleteAction->setEnabled(allManaged);
+  connect(deleteAction, &QAction::triggered, this, &SessionsWidget::unmanageSelectedSessions);
 
   menu.exec(m_listView->viewport()->mapToGlobal(pos));
 }
@@ -325,17 +412,15 @@ void SessionsWidget::copySessionUrls() {
 }
 
 QString SessionsWidget::getSourceUrl(const QModelIndex &idx) const {
-  QJsonObject rawData = m_proxyModel->data(idx, Qt::UserRole).toJsonObject();
-  QJsonObject sourceContext = rawData.value(QStringLiteral("sourceContext")).toObject();
-  QString provider = sourceContext.value(QStringLiteral("provider")).toString();
-  QString owner = sourceContext.value(QStringLiteral("owner")).toString();
-  QString repo = sourceContext.value(QStringLiteral("repository")).toString();
+  QString provider = m_proxyModel->data(idx, SessionModel::ProviderRole).toString();
+  QString owner = m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColOwner)).toString();
+  QString repo = m_proxyModel->data(m_proxyModel->index(idx.row(), SessionModel::ColRepo)).toString();
 
-  if (provider == QLatin1String("github")) {
+  if (provider == QStringLiteral("github")) {
     return QStringLiteral("https://github.com/") + owner + QLatin1Char('/') + repo;
-  } else if (provider == QLatin1String("gitlab")) {
+  } else if (provider == QStringLiteral("gitlab")) {
     return QStringLiteral("https://gitlab.com/") + owner + QLatin1Char('/') + repo;
-  } else if (provider == QLatin1String("bitbucket")) {
+  } else if (provider == QStringLiteral("bitbucket")) {
     return QStringLiteral("https://bitbucket.org/") + owner + QLatin1Char('/') + repo;
   } else if (!provider.isEmpty()) {
     return QStringLiteral("https://") + provider + QStringLiteral(".com/") + owner + QLatin1Char('/') + repo;

@@ -10,7 +10,9 @@
 #include <KSharedConfig>
 #include <QAction>
 #include <QActionGroup>
+#include <QHeaderView>
 #include <QTabWidget>
+#include <QTreeView>
 #include <QVBoxLayout>
 
 SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
@@ -35,7 +37,7 @@ SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManag
 
   setupActions();
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc"));
+  setupGUI(ToolBar | Keys | StatusBar | Create, QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc"));
 }
 
 SessionsWindow::~SessionsWindow() {}
@@ -60,6 +62,11 @@ void SessionsWindow::setupActions() {
 
   connect(m_sessionsWidget, &SessionsWidget::canResumeChanged, m_loadRemainingAction, &QAction::setEnabled);
 
+  QAction *closeAction = new QAction(i18n("Close"), this);
+  actionCollection()->addAction(QStringLiteral("file_close"), closeAction);
+  connect(closeAction, &QAction::triggered, this, &SessionsWindow::close);
+  actionCollection()->setDefaultShortcut(closeAction, QKeySequence(Qt::CTRL | Qt::Key_W));
+
   QAction *focusFilterAction = new QAction(i18n("Focus Filter"), this);
   actionCollection()->addAction(QStringLiteral("focus_filter"), focusFilterAction);
   actionCollection()->setDefaultShortcut(focusFilterAction, QKeySequence(Qt::CTRL | Qt::Key_F));
@@ -68,14 +75,17 @@ void SessionsWindow::setupActions() {
   m_watchMenuAction = new QAction(i18n("Watch Session"), this);
   actionCollection()->addAction(QStringLiteral("watch_session"), m_watchMenuAction);
   m_watchMenuAction->setEnabled(false);
+  connect(m_watchMenuAction, &QAction::triggered, m_sessionsWidget, &SessionsWidget::watchSelectedSessions);
 
   m_archiveMenuAction = new QAction(i18n("Archive Session"), this);
   actionCollection()->addAction(QStringLiteral("archive_session"), m_archiveMenuAction);
   m_archiveMenuAction->setEnabled(false);
+  connect(m_archiveMenuAction, &QAction::triggered, m_sessionsWidget, &SessionsWidget::archiveSelectedSessions);
 
   m_deleteMenuAction = new QAction(i18n("Unmanage Session"), this);
   actionCollection()->addAction(QStringLiteral("delete_session"), m_deleteMenuAction);
   m_deleteMenuAction->setEnabled(false);
+  connect(m_deleteMenuAction, &QAction::triggered, m_sessionsWidget, &SessionsWidget::unmanageSelectedSessions);
 
   connect(m_sessionsWidget, &SessionsWidget::actionStatesChanged, this,
           [this](bool canWatch, bool canArchive, bool canDelete) {
@@ -100,7 +110,7 @@ void SessionsWindow::setupActions() {
 
   QAction *autoLoadBottomAction = new QAction(i18n("Load When Scrolling to Bottom"), this);
   autoLoadBottomAction->setCheckable(true);
-  autoLoadBottomAction->setData(QStringLiteral("load_bottom"));
+  autoLoadBottomAction->setData(QStringLiteral("auto_bottom"));
   m_autoLoadGroup->addAction(autoLoadBottomAction);
   actionCollection()->addAction(QStringLiteral("auto_load_bottom"), autoLoadBottomAction);
 
@@ -111,27 +121,70 @@ void SessionsWindow::setupActions() {
   m_sessionsWidget->setAutoLoadBehavior(m_autoLoadGroup);
 
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
-  QString autoLoadBehavior = config.readEntry("AutoLoadBehavior", QStringLiteral("manual"));
-  if (autoLoadBehavior == QStringLiteral("load_all")) {
+  QString autoLoadMode = config.readEntry("AutoLoadMode", QString());
+  if (autoLoadMode.isEmpty()) {
+    QString migrated = config.readEntry("AutoLoadBehavior", QStringLiteral("manual"));
+    if (migrated == QStringLiteral("load_bottom")) {
+      autoLoadMode = QStringLiteral("auto_bottom");
+    } else {
+      autoLoadMode = migrated;
+    }
+  }
+
+  if (autoLoadMode == QStringLiteral("load_all")) {
     autoLoadAllAction->setChecked(true);
-  } else if (autoLoadBehavior == QStringLiteral("load_bottom")) {
+  } else if (autoLoadMode == QStringLiteral("auto_bottom")) {
     autoLoadBottomAction->setChecked(true);
   } else {
     autoLoadManualAction->setChecked(true);
   }
 
-  bool autoFollow = config.readEntry("AutoFollowActive", false);
+  bool autoFollow = config.readEntry("AutoFollowRefresh", false);
+  if (!config.hasKey("AutoFollowRefresh") && config.hasKey("AutoFollowActive")) {
+    autoFollow = config.readEntry("AutoFollowActive", false);
+  }
   m_autoFollowAction->setChecked(autoFollow);
   m_sessionsWidget->setAutoFollowOnRefresh(autoFollow);
 
   connect(m_autoLoadGroup, &QActionGroup::triggered, this, [this](QAction *action) {
     KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
-    config.writeEntry("AutoLoadBehavior", action->data().toString());
+    config.writeEntry("AutoLoadMode", action->data().toString());
+    config.sync();
   });
 
   connect(m_autoFollowAction, &QAction::toggled, this, [this](bool checked) {
     KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
-    config.writeEntry("AutoFollowActive", checked);
+    config.writeEntry("AutoFollowRefresh", checked);
+    config.sync();
     m_sessionsWidget->setAutoFollowOnRefresh(checked);
   });
+
+  auto addColumnToggle = [this, &config](const QString &label, int colIndex, const QString &actionName) {
+    QAction *action = new QAction(label, this);
+    action->setCheckable(true);
+
+    QString key = QStringLiteral("ShowColumn_%1").arg(colIndex);
+    bool isVisible = config.readEntry(key, true);
+    action->setChecked(isVisible);
+    m_sessionsWidget->listView()->header()->setSectionHidden(colIndex, !isVisible);
+
+    connect(action, &QAction::toggled, [this, colIndex](bool checked) {
+      m_sessionsWidget->listView()->header()->setSectionHidden(colIndex, !checked);
+      KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionsWindow"));
+      config.writeEntry(QStringLiteral("ShowColumn_%1").arg(colIndex), checked);
+      config.sync();
+    });
+
+    actionCollection()->addAction(actionName, action);
+  };
+
+  addColumnToggle(i18n("Title"), SessionModel::ColTitle, QStringLiteral("col_title"));
+  addColumnToggle(i18n("State"), SessionModel::ColState, QStringLiteral("col_state"));
+  addColumnToggle(i18n("Change Set"), SessionModel::ColChangeSet, QStringLiteral("col_changeset"));
+  addColumnToggle(i18n("PR"), SessionModel::ColPR, QStringLiteral("col_pr"));
+  addColumnToggle(i18n("Updated At"), SessionModel::ColUpdatedAt, QStringLiteral("col_updatedat"));
+  addColumnToggle(i18n("Created At"), SessionModel::ColCreatedAt, QStringLiteral("col_createdat"));
+  addColumnToggle(i18n("Owner"), SessionModel::ColOwner, QStringLiteral("col_owner"));
+  addColumnToggle(i18n("Repo"), SessionModel::ColRepo, QStringLiteral("col_repo"));
+  addColumnToggle(i18n("ID"), SessionModel::ColId, QStringLiteral("col_id"));
 }

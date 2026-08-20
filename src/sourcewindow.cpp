@@ -1,6 +1,12 @@
 #include "sourcewindow.h"
+#include "blockedtreemodel.h"
+#include "draftdelegate.h"
+#include "errorsmodel.h"
+#include "queuedelegate.h"
 #include "queuemodel.h"
-#include "sessionswindow.h"
+#include "sessionmodel.h"
+#include "sessionswidget.h"
+#include "sessionwindow.h"
 #include "sourcemodel.h"
 #include "sourcestatuswidget.h"
 #include <KActionCollection>
@@ -10,29 +16,59 @@
 #include <KSharedConfig>
 #include <QCheckBox>
 #include <QFormLayout>
+#include <QHeaderView>
 #include <QInputDialog>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QListView>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSortFilterProxyModel>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTextEdit>
+#include <QTreeView>
 #include <QVBoxLayout>
 
+class SourceSessionFilterProxyModel : public QSortFilterProxyModel {
+  Q_OBJECT
+public:
+  explicit SourceSessionFilterProxyModel(const QString &sourceId, QObject *parent = nullptr)
+      : QSortFilterProxyModel(parent), m_sourceId(sourceId) {}
+
+protected:
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
+    if (!sourceModel())
+      return false;
+    QModelIndex idx = sourceModel()->index(source_row, 0, source_parent);
+    QString src = sourceModel()->data(idx, SessionModel::SourceRole).toString();
+    return src == m_sourceId;
+  }
+
+private:
+  QString m_sourceId;
+};
+
 SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, SessionModel *sessionModel,
-                           QueueModel *queueModel, ErrorsModel *errorsModel, BlockedTreeModel *blockedTreeModel,
-                           APIManager *apiManager, QWidget *parent)
+                           SessionModel *archiveModel, QueueModel *queueModel, ErrorsModel *errorsModel,
+                           BlockedTreeModel *blockedTreeModel, APIManager *apiManager, QWidget *parent)
     : KXmlGuiWindow(parent), m_sourceId(sourceId), m_sourceModel(sourceModel), m_sessionModel(sessionModel),
-      m_queueModel(queueModel), m_errorsModel(errorsModel), m_blockedTreeModel(blockedTreeModel),
-      m_apiManager(apiManager) {
+      m_archiveModel(archiveModel), m_queueModel(queueModel), m_errorsModel(errorsModel),
+      m_blockedTreeModel(blockedTreeModel), m_apiManager(apiManager), m_tabWidget(nullptr), m_sessionsWidget(nullptr),
+      m_autoFollowCheckBox(nullptr), m_concurrencySpinBox(nullptr), m_defaultBranchesList(nullptr),
+      m_rawDataEdit(nullptr) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Source: %1").arg(sourceId));
   resize(800, 600);
 
   setupUi();
+
+  QAction *newSessionAction = new QAction(QIcon::fromTheme(QStringLiteral("document-new")), tr("New Session"), this);
+  actionCollection()->addAction(QStringLiteral("new_session"), newSessionAction);
+  connect(newSessionAction, &QAction::triggered, this, [this]() { Q_EMIT newSessionRequested(m_sourceId); });
 
   QAction *favAction = new QAction(QIcon::fromTheme(QStringLiteral("emblem-favorite")), tr("Toggle Favourite"), this);
   actionCollection()->addAction(QStringLiteral("toggle_favourite"), favAction);
@@ -43,7 +79,7 @@ SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, Se
   connect(closeAction, &QAction::triggered, this, &SourceWindow::close);
   actionCollection()->setDefaultShortcut(closeAction, QKeySequence(Qt::CTRL | Qt::Key_W));
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/sourcewindowui.rc"));
+  setupGUI(ToolBar | Keys | StatusBar | Create, QStringLiteral(":/kxmlgui6/org.kde.kjules/sourcewindowui.rc"));
 }
 
 SourceWindow::~SourceWindow() = default;
@@ -57,16 +93,150 @@ void SourceWindow::setupUi() {
   m_tabWidget = new QTabWidget(this);
   layout->addWidget(m_tabWidget);
 
-  SessionsWindow *sessionsWidget = new SessionsWindow(m_sourceId, m_apiManager, m_sessionModel, this);
-  m_tabWidget->addTab(sessionsWidget, tr("Sessions"));
-
-  SourceStatusWidget *statusWidget =
-      new SourceStatusWidget(m_sourceId, m_sessionModel, m_queueModel, m_errorsModel, m_blockedTreeModel, this);
-  m_tabWidget->addTab(statusWidget, tr("Status"));
-
+  setupFollowingTab();
+  setupArchivedTab();
+  setupQueuedBlockedTab();
+  setupSessionsTab();
+  setupSettingsTab();
   setupRawDataTab();
 
-  setupSettingsTab();
+  m_tabWidget->setCurrentIndex(0);
+}
+
+void SourceWindow::setupFollowingTab() {
+  QWidget *followingTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(followingTab);
+
+  QTreeView *view = new QTreeView(followingTab);
+  SourceSessionFilterProxyModel *proxy = new SourceSessionFilterProxyModel(m_sourceId, view);
+  proxy->setSourceModel(m_sessionModel);
+  view->setModel(proxy);
+  view->setSortingEnabled(true);
+  view->setSelectionBehavior(QAbstractItemView::SelectRows);
+  view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  view->header()->setMinimumSectionSize(80);
+  view->header()->resizeSection(SessionModel::ColTitle, SessionModel::DefaultTitleWidth);
+  view->header()->setStretchLastSection(true);
+  view->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
+
+  connect(view, &QTreeView::doubleClicked, this, [this, proxy](const QModelIndex &index) {
+    if (!index.isValid() || !m_sessionModel)
+      return;
+    QModelIndex sourceIdx = proxy->mapToSource(index);
+    QJsonObject session = m_sessionModel->getSession(sourceIdx.row());
+    SessionWindow *win = new SessionWindow(session, m_apiManager, true, this);
+    win->show();
+  });
+
+  layout->addWidget(view);
+  m_tabWidget->addTab(followingTab, tr("Following"));
+}
+
+void SourceWindow::setupArchivedTab() {
+  QWidget *archivedTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(archivedTab);
+
+  QTreeView *view = new QTreeView(archivedTab);
+  SourceSessionFilterProxyModel *proxy = new SourceSessionFilterProxyModel(m_sourceId, view);
+  proxy->setSourceModel(m_archiveModel);
+  view->setModel(proxy);
+  view->setSortingEnabled(true);
+  view->setSelectionBehavior(QAbstractItemView::SelectRows);
+  view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  view->header()->setMinimumSectionSize(80);
+  view->header()->resizeSection(SessionModel::ColTitle, SessionModel::DefaultTitleWidth);
+  view->header()->setStretchLastSection(true);
+  view->sortByColumn(SessionModel::ColTitle, Qt::AscendingOrder);
+
+  connect(view, &QTreeView::doubleClicked, this, [this, proxy](const QModelIndex &index) {
+    if (!index.isValid() || !m_archiveModel)
+      return;
+    QModelIndex sourceIdx = proxy->mapToSource(index);
+    QJsonObject session = m_archiveModel->getSession(sourceIdx.row());
+    SessionWindow *win = new SessionWindow(session, m_apiManager, false, this);
+    win->show();
+  });
+
+  layout->addWidget(view);
+  m_tabWidget->addTab(archivedTab, tr("Archived"));
+}
+
+void SourceWindow::setupQueuedBlockedTab() {
+  QWidget *queuedBlockedTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(queuedBlockedTab);
+
+  QTabWidget *subTabWidget = new QTabWidget(queuedBlockedTab);
+
+  // In Queue
+  QWidget *queueTab = new QWidget(subTabWidget);
+  QVBoxLayout *queueLayout = new QVBoxLayout(queueTab);
+  QListView *queueView = new QListView(queueTab);
+  queueView->setItemDelegate(new QueueDelegate(queueView));
+  SourceFilterProxyModel *queueProxy = new SourceFilterProxyModel(m_sourceId, queueTab);
+  queueProxy->setSourceModel(m_queueModel);
+  queueView->setModel(queueProxy);
+  queueLayout->addWidget(queueView);
+  subTabWidget->addTab(queueTab, tr("In Queue"));
+
+  // Blocked / Error
+  QWidget *blockedTab = new QWidget(subTabWidget);
+  QVBoxLayout *blockedLayout = new QVBoxLayout(blockedTab);
+  blockedLayout->addWidget(new QLabel(tr("Errors:"), blockedTab));
+  QListView *errorView = new QListView(blockedTab);
+  errorView->setItemDelegate(new DraftDelegate(errorView));
+  ErrorFilterProxyModel *errorProxy = new ErrorFilterProxyModel(m_sourceId, blockedTab);
+  errorProxy->setSourceModel(m_errorsModel);
+  errorView->setModel(errorProxy);
+  blockedLayout->addWidget(errorView);
+
+  blockedLayout->addWidget(new QLabel(tr("Blocked Items:"), blockedTab));
+  QTreeView *blockedView = new QTreeView(blockedTab);
+  blockedView->setHeaderHidden(true);
+  BlockedErrorProxyModel *blockedProxy = new BlockedErrorProxyModel(m_sourceId, blockedTab);
+  blockedProxy->setSourceModel(m_blockedTreeModel);
+  blockedView->setModel(blockedProxy);
+  blockedLayout->addWidget(blockedView);
+
+  subTabWidget->addTab(blockedTab, tr("Blocked / Error"));
+
+  layout->addWidget(subTabWidget);
+  m_tabWidget->addTab(queuedBlockedTab, tr("Queued/Blocked"));
+}
+
+void SourceWindow::setupSessionsTab() {
+  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, this);
+  connect(m_sessionsWidget, &SessionsWidget::watchRequested, this, [this](const QJsonObject &session) {
+    if (m_sessionModel) {
+      m_sessionModel->addSession(session);
+      m_sessionModel->saveSessions();
+    }
+  });
+  connect(m_sessionsWidget, &SessionsWidget::archiveRequested, this, [this](const QString &id) {
+    if (m_sessionModel) {
+      QModelIndexList matches =
+          m_sessionModel->match(m_sessionModel->index(0, 0), SessionModel::IdRole, id, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        QJsonObject session = m_sessionModel->getSession(matches.first().row());
+        m_sessionModel->removeSession(matches.first().row());
+        m_sessionModel->saveSessions();
+        if (m_archiveModel) {
+          m_archiveModel->addSession(session);
+          m_archiveModel->saveSessions();
+        }
+      }
+    }
+  });
+  connect(m_sessionsWidget, &SessionsWidget::deleteRequested, this, [this](const QString &id) {
+    if (m_sessionModel) {
+      QModelIndexList matches =
+          m_sessionModel->match(m_sessionModel->index(0, 0), SessionModel::IdRole, id, 1, Qt::MatchExactly);
+      if (!matches.isEmpty()) {
+        m_sessionModel->removeSession(matches.first().row());
+        m_sessionModel->saveSessions();
+      }
+    }
+  });
+  m_tabWidget->addTab(m_sessionsWidget, tr("Sessions"));
 }
 
 void SourceWindow::setupSettingsTab() {
@@ -77,24 +247,20 @@ void SourceWindow::setupSettingsTab() {
   m_autoFollowCheckBox = new QCheckBox(tr("Start Following New Sessions"), this);
   QModelIndexList matches =
       m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  bool autoFollow = false;
   if (!matches.isEmpty()) {
     QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    m_autoFollowCheckBox->setChecked(rawData.value(QStringLiteral("local_autoFollowNewSessions")).toBool(false));
+    autoFollow = rawData.value(QStringLiteral("local_autoFollowNewSessions")).toBool(false);
+  }
+  m_autoFollowCheckBox->setChecked(autoFollow);
+  if (m_sessionsWidget) {
+    m_sessionsWidget->setAutoFollowOnRefresh(autoFollow);
   }
 
   connect(m_autoFollowCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
     m_sourceModel->setAutoFollow(m_sourceId, checked);
-    if (m_tabWidget) {
-      // Look for SessionsWidget inside
-      for (int i = 0; i < m_tabWidget->count(); ++i) {
-        SessionsWindow *w = qobject_cast<SessionsWindow *>(m_tabWidget->widget(i));
-        if (w) {
-          // We should probably expose something or find the inner widget,
-          // but the requirement said: "The SourceWindow checkbox must control the refresh behavior of its embedded
-          // sessions widget." We can rely on SessionsWidget checking the local_autoFollowNewSessions on refresh, or
-          // wiring it up here.
-        }
-      }
+    if (m_sessionsWidget) {
+      m_sessionsWidget->setAutoFollowOnRefresh(checked);
     }
   });
   formLayout->addRow(m_autoFollowCheckBox);
@@ -115,12 +281,10 @@ void SourceWindow::setupSettingsTab() {
       sourceConfig.writeEntry(m_sourceId, value);
     }
     sourceConfig.sync();
-    if (m_queueModel) {
-      // Trigger queue processing
-      m_queueModel->triggerQueueProcessing();
-    }
+    Q_EMIT queueProcessingRequested();
   });
   formLayout->addRow(tr("Concurrency Limit:"), m_concurrencySpinBox);
+
   // Default Branches
   QWidget *branchesWidget = new QWidget(this);
   QVBoxLayout *branchesLayout = new QVBoxLayout(branchesWidget);
@@ -174,7 +338,6 @@ void SourceWindow::setupSettingsTab() {
         QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
         QStringList branches;
 
-        // Use effective branches as starting point if local is not set
         if (rawData.contains(QStringLiteral("local_defaultBranches"))) {
           QJsonArray branchesArr = rawData.value(QStringLiteral("local_defaultBranches")).toArray();
           for (const QJsonValue &v : branchesArr) {
@@ -187,9 +350,7 @@ void SourceWindow::setupSettingsTab() {
         branches.removeAll(branch);
 
         if (branches.isEmpty()) {
-          // Clear local override so it falls back to API default
-          rawData.remove(QStringLiteral("local_defaultBranches"));
-          m_sourceModel->updateSource(rawData);
+          m_sourceModel->clearDefaultBranches(m_sourceId);
         } else {
           m_sourceModel->setDefaultBranches(m_sourceId, branches);
         }
@@ -243,19 +404,16 @@ void SourceWindow::setupRawDataTab() {
     QJsonObject obj = newDoc.object();
 
     // Protect Identity
-    if (obj.value(QStringLiteral("id")).toString() != m_sourceId) {
+    if (SourceModel::resourceName(obj) != m_sourceId) {
       QMessageBox::warning(this, tr("Identity Change Rejected"),
                            tr("Changing the source ID via raw data is not allowed."));
       return;
     }
 
-    // Instead of merge-oriented updateSource(), replace local file completely
-    QModelIndexList matches =
-        m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-    if (!matches.isEmpty()) {
-      int row = matches.first().row();
-      m_sourceModel->updateSourceRaw(row, obj);
+    if (m_sourceModel->updateSourceRaw(m_sourceId, obj)) {
       QMessageBox::information(this, tr("Saved"), tr("Source settings saved successfully."));
+    } else {
+      QMessageBox::warning(this, tr("Save Failed"), tr("Could not save source settings."));
     }
   });
   QHBoxLayout *btnLayout = new QHBoxLayout();
@@ -265,3 +423,5 @@ void SourceWindow::setupRawDataTab() {
 
   m_tabWidget->addTab(rawDataTab, tr("Raw Data"));
 }
+
+#include "sourcewindow.moc"

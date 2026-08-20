@@ -82,15 +82,6 @@ bool BlockedErrorProxyModel::filterAcceptsRow(int source_row, const QModelIndex 
   return source == m_sourceName;
 }
 
-#include "blockedtreemodel.h"
-#include "draftdelegate.h"
-#include "errorsmodel.h"
-#include "queuedelegate.h"
-#include "queuemodel.h"
-#include "sessiondelegate.h"
-#include "sessionmodel.h"
-#include "sourcestatusdialog.h" // for proxy models
-
 #include <QLabel>
 #include <QListView>
 #include <QTabWidget>
