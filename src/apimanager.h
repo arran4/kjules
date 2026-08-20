@@ -113,6 +113,8 @@ private:
   void updateGithubRateLimit(QNetworkReply *reply);
 
   QNetworkRequest createRequest(const QString &endpoint, const QString &overrideApiKey = QString());
+
+  void fetchGithubPaginated(const QUrl &initialUrl, const QString &sourceId, bool isIssues);
 };
 
 #endif // APIMANAGER_H

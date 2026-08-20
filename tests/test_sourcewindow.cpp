@@ -42,6 +42,7 @@ private Q_SLOTS:
   void testRawDataEditingCanonicalAndLegacy();
   void testManualFollowAddsAndPersistsSession();
   void testRefreshSessionsActionWired();
+  void testGithubIssuesAndPRsTabs();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -351,6 +352,65 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
 
   // Triggering the action calls refreshSessions
   refreshAction->trigger();
+}
+
+void TestSourceWindow::testGithubIssuesAndPRsTabs() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
+  ErrorsModel errorsModel;
+  BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
+
+  QString sourceId = QStringLiteral("sources/github/kde/kjules");
+
+  QJsonObject srcObj;
+  srcObj[QStringLiteral("name")] = sourceId;
+  sourceModel.addSources(QJsonArray{srcObj});
+
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+                                               &errorsModel, &blockedTreeModel, nullptr);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
+  QVERIFY(tabWidget != nullptr);
+
+  bool foundIssuesTab = false;
+  bool foundPRsTab = false;
+  for (int i = 0; i < tabWidget->count(); ++i) {
+    if (tabWidget->tabText(i) == tr("GitHub Issues")) {
+      foundIssuesTab = true;
+    } else if (tabWidget->tabText(i) == tr("GitHub PRs")) {
+      foundPRsTab = true;
+    }
+  }
+
+  QVERIFY(foundIssuesTab);
+  QVERIFY(foundPRsTab);
+
+  QJsonArray mixedIssues;
+  QJsonObject issue1;
+  issue1[QStringLiteral("number")] = 1;
+  issue1[QStringLiteral("title")] = QStringLiteral("Issue 1");
+  QJsonObject issue2;
+  issue2[QStringLiteral("number")] = 2;
+  issue2[QStringLiteral("title")] = QStringLiteral("Issue 2");
+  issue2[QStringLiteral("pull_request")] = QJsonObject();
+  mixedIssues.append(issue1);
+  mixedIssues.append(issue2);
+
+  QMetaObject::invokeMethod(window.get(), "onGithubIssuesReceived", Q_ARG(QString, sourceId),
+                            Q_ARG(QJsonArray, mixedIssues));
+
+  QModelIndex idx = sourceModel.index(0, 0);
+  QJsonObject updated = sourceModel.data(idx, SourceModel::RawDataRole).toJsonObject();
+  QJsonArray cachedIssues = updated.value(QStringLiteral("local_githubIssues")).toArray();
+
+  QCOMPARE(cachedIssues.size(), 1);
+  QCOMPARE(cachedIssues.at(0).toObject().value(QStringLiteral("number")).toInt(), 1);
 }
 
 int main(int argc, char *argv[]) {

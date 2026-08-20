@@ -1,4 +1,5 @@
 #include "sourcewindow.h"
+#include "apimanager.h"
 #include "blockedtreemodel.h"
 #include "draftdelegate.h"
 #include "errorsmodel.h"
@@ -9,13 +10,13 @@
 #include "sessionwindow.h"
 #include "sourcemodel.h"
 #include "sourcestatuswidget.h"
-#include "apimanager.h"
 #include <KActionCollection>
 
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QCheckBox>
+#include <QDesktopServices>
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -29,13 +30,12 @@
 #include <QPushButton>
 #include <QSortFilterProxyModel>
 #include <QSpinBox>
+#include <QStandardItemModel>
 #include <QTabWidget>
 #include <QTextEdit>
 #include <QTreeView>
-#include <QVBoxLayout>
-#include <QStandardItemModel>
-#include <QDesktopServices>
 #include <QUrl>
+#include <QVBoxLayout>
 
 class SourceSessionFilterProxyModel : public QSortFilterProxyModel {
   Q_OBJECT
@@ -412,7 +412,8 @@ void SourceWindow::setupGithubIssuesTab() {
     }
   }
 
-  QPushButton *refreshBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
+  QPushButton *refreshBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
   connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
     if (!matches.isEmpty()) {
       QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
@@ -457,7 +458,8 @@ void SourceWindow::setupGithubPRsTab() {
     }
   }
 
-  QPushButton *refreshBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Pull Requests"), this);
+  QPushButton *refreshBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Pull Requests"), this);
   connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
     if (!matches.isEmpty()) {
       QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
@@ -540,13 +542,13 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
   for (const QJsonValue &v : issues) {
     QJsonObject issue = v.toObject();
     if (issue.contains(QStringLiteral("pull_request"))) {
-        continue;
+      continue;
     }
 
     QList<QStandardItem *> row;
 
-    QStandardItem *numItem = new QStandardItem(QString::number(issue.value(QStringLiteral("number")).toInt()));
-    numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::UserRole);
+    QStandardItem *numItem = new QStandardItem();
+    numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::DisplayRole);
     row.append(numItem);
 
     QStandardItem *titleItem = new QStandardItem(issue.value(QStringLiteral("title")).toString());
@@ -570,12 +572,34 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
       m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
   if (!matches.isEmpty()) {
     QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    rawData[QStringLiteral("local_githubIssues")] = issues;
-    m_sourceModel->updateSourceRaw(m_sourceId, rawData);
 
-    if (m_rawDataEdit) {
-      QJsonDocument doc(rawData);
-      m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    QJsonArray compactIssues;
+    for (const QJsonValue &v : issues) {
+      QJsonObject issue = v.toObject();
+      if (issue.contains(QStringLiteral("pull_request"))) {
+        continue;
+      }
+      QJsonObject compactIssue;
+      compactIssue[QStringLiteral("number")] = issue.value(QStringLiteral("number"));
+      compactIssue[QStringLiteral("title")] = issue.value(QStringLiteral("title"));
+      compactIssue[QStringLiteral("state")] = issue.value(QStringLiteral("state"));
+      compactIssue[QStringLiteral("html_url")] = issue.value(QStringLiteral("html_url"));
+
+      QJsonObject userObj;
+      userObj[QStringLiteral("login")] = issue.value(QStringLiteral("user")).toObject().value(QStringLiteral("login"));
+      compactIssue[QStringLiteral("user")] = userObj;
+
+      compactIssues.append(compactIssue);
+    }
+
+    if (rawData.value(QStringLiteral("local_githubIssues")).toArray() != compactIssues) {
+      rawData[QStringLiteral("local_githubIssues")] = compactIssues;
+      m_sourceModel->updateSourceRaw(m_sourceId, rawData);
+
+      if (m_rawDataEdit) {
+        QJsonDocument doc(rawData);
+        m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      }
     }
   }
 }
@@ -591,8 +615,8 @@ void SourceWindow::onGithubPullRequestsReceived(const QString &sourceId, const Q
     QJsonObject pr = v.toObject();
     QList<QStandardItem *> row;
 
-    QStandardItem *numItem = new QStandardItem(QString::number(pr.value(QStringLiteral("number")).toInt()));
-    numItem->setData(pr.value(QStringLiteral("number")).toInt(), Qt::UserRole);
+    QStandardItem *numItem = new QStandardItem();
+    numItem->setData(pr.value(QStringLiteral("number")).toInt(), Qt::DisplayRole);
     row.append(numItem);
 
     QStandardItem *titleItem = new QStandardItem(pr.value(QStringLiteral("title")).toString());
@@ -616,12 +640,31 @@ void SourceWindow::onGithubPullRequestsReceived(const QString &sourceId, const Q
       m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
   if (!matches.isEmpty()) {
     QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    rawData[QStringLiteral("local_githubPRs")] = prs;
-    m_sourceModel->updateSourceRaw(m_sourceId, rawData);
 
-    if (m_rawDataEdit) {
-      QJsonDocument doc(rawData);
-      m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    QJsonArray compactPRs;
+    for (const QJsonValue &v : prs) {
+      QJsonObject pr = v.toObject();
+      QJsonObject compactPR;
+      compactPR[QStringLiteral("number")] = pr.value(QStringLiteral("number"));
+      compactPR[QStringLiteral("title")] = pr.value(QStringLiteral("title"));
+      compactPR[QStringLiteral("state")] = pr.value(QStringLiteral("state"));
+      compactPR[QStringLiteral("html_url")] = pr.value(QStringLiteral("html_url"));
+
+      QJsonObject userObj;
+      userObj[QStringLiteral("login")] = pr.value(QStringLiteral("user")).toObject().value(QStringLiteral("login"));
+      compactPR[QStringLiteral("user")] = userObj;
+
+      compactPRs.append(compactPR);
+    }
+
+    if (rawData.value(QStringLiteral("local_githubPRs")).toArray() != compactPRs) {
+      rawData[QStringLiteral("local_githubPRs")] = compactPRs;
+      m_sourceModel->updateSourceRaw(m_sourceId, rawData);
+
+      if (m_rawDataEdit) {
+        QJsonDocument doc(rawData);
+        m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+      }
     }
   }
 }
