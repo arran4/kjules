@@ -37,6 +37,11 @@ public:
   FilterInputDialog(const QString &promptKey, bool requireKey, const QStringList &completions,
                     const QString &itemKey = QString(), QWidget *parent = nullptr)
       : QDialog(parent) {
+    QString title = tr("Filter Input");
+    if (!itemKey.isEmpty()) {
+      title += QStringLiteral(" - ") + itemKey;
+    }
+    setWindowTitle(title);
     QVBoxLayout *layout = new QVBoxLayout(this);
     if (requireKey) {
       layout->addWidget(new QLabel(tr("Filter Key:"), this));

@@ -101,6 +101,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   ConfigMigration::migrate();
   setObjectName(QStringLiteral("MainWindow"));
+  setWindowTitle(i18n("kJules"));
   setupUi();
   connect(m_masterSecondTimer, &QTimer::timeout, this, &MainWindow::onMasterSecondTimer);
   m_masterSecondTimer->start(1000);
@@ -1920,6 +1921,10 @@ void MainWindow::updateSelectionDependentActions() {
       m_refreshCurrentTabAction->setText(i18n("Refresh"));
     }
   }
+
+  QString tabText = m_tabWidget->tabText(m_tabWidget->currentIndex());
+  tabText.remove(QRegularExpression(QStringLiteral(" \\(\\d+\\)")));
+  setWindowTitle(i18n("kJules - %1", tabText));
 }
 
 void MainWindow::updateTabTitles() {
