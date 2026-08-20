@@ -10,9 +10,8 @@
 #include <KSharedConfig>
 #include <QAction>
 #include <QActionGroup>
-#include <QVBoxLayout>
 #include <QTabWidget>
-
+#include <QVBoxLayout>
 
 SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
                                QWidget *parent)
@@ -78,11 +77,12 @@ void SessionsWindow::setupActions() {
   actionCollection()->addAction(QStringLiteral("delete_session"), m_deleteMenuAction);
   m_deleteMenuAction->setEnabled(false);
 
-  connect(m_sessionsWidget, &SessionsWidget::actionStatesChanged, this, [this](bool canWatch, bool canArchive, bool canDelete) {
-      m_watchMenuAction->setEnabled(canWatch);
-      m_archiveMenuAction->setEnabled(canArchive);
-      m_deleteMenuAction->setEnabled(canDelete);
-  });
+  connect(m_sessionsWidget, &SessionsWidget::actionStatesChanged, this,
+          [this](bool canWatch, bool canArchive, bool canDelete) {
+            m_watchMenuAction->setEnabled(canWatch);
+            m_archiveMenuAction->setEnabled(canArchive);
+            m_deleteMenuAction->setEnabled(canDelete);
+          });
 
   m_autoLoadGroup = new QActionGroup(this);
 

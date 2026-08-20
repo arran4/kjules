@@ -6078,7 +6078,8 @@ void MainWindow::addGithubLink(QMenu *githubMenu, const QString &urlStr, const Q
 
 QString MainWindow::urlFromSource(const QJsonObject &source) const { return SourceModel::repositoryUrl(source); }
 
-QList<int> MainWindow::getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const {
+QList<int> MainWindow::getUniqueSortedRows(const QList<QModelIndex> &selectedRows,
+                                           const QAbstractItemView *view) const {
   QSet<int> uniqueRows;
   const auto *proxy = qobject_cast<const QSortFilterProxyModel *>(view->model());
   for (const QModelIndex &idx : selectedRows) {

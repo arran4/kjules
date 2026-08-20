@@ -172,9 +172,8 @@ private Q_SLOTS:
 
 private:
   QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
-  void applyFavouriteAction(std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QList<QModelIndex> &, int)> action);
-
-
+  void applyFavouriteAction(
+      std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QList<QModelIndex> &, int)> action);
 
   QStringList getSelectedSessionIds() const;
   QString urlFromSource(const QJsonObject &source) const;
