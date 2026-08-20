@@ -69,7 +69,8 @@ CreateRepoDialog::CreateRepoDialog(APIManager *apiManager, QWidget *parent)
         queueConfig.readEntry("OneAtATimeMode", true) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
   }
 
-  bool hasAnyConcurrencyLimits = (currentQueueMode == QStringLiteral("one_at_a_time"));
+  bool hasAnyConcurrencyLimits = (currentQueueMode == QStringLiteral("one_at_a_time") ||
+                                  currentQueueMode == QStringLiteral("one_at_a_time_per_branch"));
   if (!hasAnyConcurrencyLimits) {
     const QStringList sources = sourceConcurrencyConfig.keyList();
     for (const QString &source : sources) {

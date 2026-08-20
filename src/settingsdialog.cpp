@@ -77,6 +77,7 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   m_queueModeCombo = new QComboBox(this);
   m_queueModeCombo->addItem(i18n("ASAP (Process all sequentially)"), QStringLiteral("asap"));
   m_queueModeCombo->addItem(i18n("Per Source Concurrency"), QStringLiteral("one_at_a_time"));
+  m_queueModeCombo->addItem(i18n("Per Branch Concurrency"), QStringLiteral("one_at_a_time_per_branch"));
 
   QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
   if (currentQueueMode.isEmpty()) {
@@ -105,7 +106,9 @@ SettingsDialog::SettingsDialog(APIManager *apiManager, QWidget *parent) : QDialo
   queueLayout->addRow(QString(), limitContainer);
 
   auto updateLimitVisibility = [this, limitContainer]() {
-    bool show = m_queueModeCombo->currentData().toString() == QStringLiteral("one_at_a_time");
+    QString currentMode = m_queueModeCombo->currentData().toString();
+    bool show =
+        currentMode == QStringLiteral("one_at_a_time") || currentMode == QStringLiteral("one_at_a_time_per_branch");
     limitContainer->setVisible(show);
   };
   connect(m_queueModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, updateLimitVisibility);
