@@ -24,6 +24,8 @@ class SessionsProxyModel : public QSortFilterProxyModel {
 public:
   explicit SessionsProxyModel(QObject *parent = nullptr);
 
+  void setSourceFilter(const QString &source);
+  QString sourceFilter() const;
   void setTextFilter(const QString &text);
   void setStatusFilter(const QString &status);
   void setRepoFilter(const QString &repo);
@@ -33,6 +35,7 @@ protected:
   bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const override;
 
 private:
+  QString m_sourceFilter;
   QString m_textFilter;
   QString m_statusFilter;
   QString m_repoFilter;

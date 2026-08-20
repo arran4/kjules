@@ -41,6 +41,7 @@ private Q_SLOTS:
   void testDefaultBranchesRemovalRestoresApiDefault();
   void testRawDataEditingCanonicalAndLegacy();
   void testManualFollowAddsAndPersistsSession();
+  void testRefreshSessionsActionWired();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -322,6 +323,34 @@ void TestSourceWindow::testManualFollowAddsAndPersistsSession() {
 
   QCOMPARE(sessionModel.rowCount(), 1);
   QCOMPARE(sessionModel.getSession(0).value(QStringLiteral("id")).toString(), QStringLiteral("sess-new-123"));
+}
+
+void TestSourceWindow::testRefreshSessionsActionWired() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
+  ErrorsModel errorsModel;
+  BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
+
+  QString sourceId = QStringLiteral("sources/github/kde/kjules");
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+                                               &errorsModel, &blockedTreeModel, nullptr);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  QAction *refreshAction = window->actionCollection()->action(QStringLiteral("refresh_sessions"));
+  QVERIFY(refreshAction != nullptr);
+  QCOMPARE(refreshAction->text(), tr("Refresh Sessions"));
+  QCOMPARE(refreshAction->shortcut(), QKeySequence(Qt::Key_F5));
+
+  SessionsWidget *sessionsWidget = window->findChild<SessionsWidget *>();
+  QVERIFY(sessionsWidget != nullptr);
+
+  // Triggering the action calls refreshSessions
+  refreshAction->trigger();
 }
 
 int main(int argc, char *argv[]) {

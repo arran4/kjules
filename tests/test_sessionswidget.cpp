@@ -9,6 +9,7 @@
 #include <QActionGroup>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QLineEdit>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTreeView>
@@ -20,6 +21,9 @@ class TestSessionsWidget : public QObject {
 private Q_SLOTS:
   void initTestCase();
   void testSessionFiltering();
+  void testExactSourceBoundaryAndUserSearchIsolation();
+  void testPerSourceAutoFollowIgnoresForeignAndInactiveSessions();
+  void testGlobalSessionsWindowPreservesGlobalAutoFollow();
   void testFavouriteAwareSorting();
   void testSourceUrlConstruction();
   void testActionStatesAndTriggeredConnections();
@@ -97,6 +101,151 @@ void TestSessionsWidget::testSessionFiltering() {
   proxy.setRepoFilter(QStringLiteral("kjules"));
   QCOMPARE(proxy.rowCount(), 1);
   QCOMPARE(proxy.data(proxy.index(0, SessionModel::ColTitle)).toString(), QStringLiteral("Fix memory leak in parser"));
+}
+
+void TestSessionsWidget::testExactSourceBoundaryAndUserSearchIsolation() {
+  const QString sourceA = QStringLiteral("sources/github/kde/kjules");
+  const QString sourceB = QStringLiteral("sources/github/qt/qtbase");
+
+  SessionsWidget widget(sourceA);
+  SessionModel *model = widget.model();
+
+  QJsonObject s1;
+  s1[QStringLiteral("id")] = QStringLiteral("s1");
+  s1[QStringLiteral("title")] = QStringLiteral("Feature in KJules");
+  s1[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
+  QJsonObject src1;
+  src1[QStringLiteral("source")] = sourceA;
+  s1[QStringLiteral("sourceContext")] = src1;
+
+  QJsonObject s2;
+  s2[QStringLiteral("id")] = QStringLiteral("s2");
+  s2[QStringLiteral("title")] = QStringLiteral("Bugfix in KJules parser");
+  s2[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  s2[QStringLiteral("sourceContext")] = src1;
+
+  QJsonObject s3;
+  s3[QStringLiteral("id")] = QStringLiteral("s3");
+  s3[QStringLiteral("title")] = QStringLiteral("Feature in QtBase core");
+  s3[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
+  QJsonObject src3;
+  src3[QStringLiteral("source")] = sourceB;
+  s3[QStringLiteral("sourceContext")] = src3;
+
+  model->addSessions(QJsonArray{s1, s2, s3});
+
+  // 1. Source-scoped widget displays ONLY sessions from sourceA (2 sessions, not 3)
+  QCOMPARE(widget.proxyModel()->rowCount(), 2);
+
+  // 2. User search does not have source pre-filled
+  QLineEdit *searchEdit = widget.findChild<QLineEdit *>();
+  QVERIFY(searchEdit != nullptr);
+  QCOMPARE(searchEdit->text(), QString());
+
+  // 3. User search narrows within sourceA
+  searchEdit->setText(QStringLiteral("parser"));
+  QCOMPARE(widget.proxyModel()->rowCount(), 1);
+  QCOMPARE(widget.proxyModel()->data(widget.proxyModel()->index(0, SessionModel::ColTitle)).toString(),
+           QStringLiteral("Bugfix in KJules parser"));
+
+  // 4. Searching for sourceB content or sourceB ID yields 0 results (cannot break boundary)
+  searchEdit->setText(QStringLiteral("QtBase"));
+  QCOMPARE(widget.proxyModel()->rowCount(), 0);
+
+  searchEdit->setText(sourceB);
+  QCOMPARE(widget.proxyModel()->rowCount(), 0);
+
+  // 5. Clearing user search restores exactly all sourceA sessions
+  searchEdit->setText(QString());
+  QCOMPARE(widget.proxyModel()->rowCount(), 2);
+}
+
+void TestSessionsWidget::testPerSourceAutoFollowIgnoresForeignAndInactiveSessions() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  SessionModel managedModel(tempDir.filePath(QStringLiteral("managed.json")));
+  const QString sourceA = QStringLiteral("sources/github/kde/kjules");
+  const QString sourceB = QStringLiteral("sources/github/qt/qtbase");
+
+  SessionsWidget widget(sourceA, nullptr, &managedModel);
+  widget.setAutoFollowOnRefresh(true);
+
+  QSignalSpy watchSpy(&widget, &SessionsWidget::watchRequested);
+
+  // Mixed incoming payload:
+  // 1: Active in sourceA -> SHOULD follow
+  QJsonObject s1;
+  s1[QStringLiteral("id")] = QStringLiteral("s1");
+  s1[QStringLiteral("title")] = QStringLiteral("Active Session A");
+  s1[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
+  QJsonObject src1;
+  src1[QStringLiteral("source")] = sourceA;
+  s1[QStringLiteral("sourceContext")] = src1;
+
+  // 2: Inactive in sourceA -> should NOT follow
+  QJsonObject s2;
+  s2[QStringLiteral("id")] = QStringLiteral("s2");
+  s2[QStringLiteral("title")] = QStringLiteral("Inactive Session A");
+  s2[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  s2[QStringLiteral("sourceContext")] = src1;
+
+  // 3: Active in sourceB -> should NOT follow (foreign source)
+  QJsonObject s3;
+  s3[QStringLiteral("id")] = QStringLiteral("s3");
+  s3[QStringLiteral("title")] = QStringLiteral("Active Session B");
+  s3[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
+  QJsonObject src3;
+  src3[QStringLiteral("source")] = sourceB;
+  s3[QStringLiteral("sourceContext")] = src3;
+
+  // 4: Inactive in sourceB -> should NOT follow
+  QJsonObject s4;
+  s4[QStringLiteral("id")] = QStringLiteral("s4");
+  s4[QStringLiteral("title")] = QStringLiteral("Inactive Session B");
+  s4[QStringLiteral("state")] = QStringLiteral("FAILED");
+  s4[QStringLiteral("sourceContext")] = src3;
+
+  // Simulate API arrival via onSessionsReceived
+  QJsonArray mixedBatch{s1, s2, s3, s4};
+  QMetaObject::invokeMethod(&widget, "onSessionsReceived", Q_ARG(QJsonArray, mixedBatch), Q_ARG(QString, QString()));
+
+  QCOMPARE(watchSpy.count(), 1);
+  QCOMPARE(watchSpy.first().at(0).toJsonObject().value(QStringLiteral("id")).toString(), QStringLiteral("s1"));
+}
+
+void TestSessionsWidget::testGlobalSessionsWindowPreservesGlobalAutoFollow() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  SessionModel managedModel(tempDir.filePath(QStringLiteral("managed.json")));
+  const QString sourceA = QStringLiteral("sources/github/kde/kjules");
+  const QString sourceB = QStringLiteral("sources/github/qt/qtbase");
+
+  SessionsWidget widget(QString(), nullptr, &managedModel);
+  widget.setAutoFollowOnRefresh(true);
+
+  QSignalSpy watchSpy(&widget, &SessionsWidget::watchRequested);
+
+  QJsonObject s1;
+  s1[QStringLiteral("id")] = QStringLiteral("s1");
+  s1[QStringLiteral("state")] = JulesStatus::IN_PROGRESS;
+  QJsonObject src1;
+  src1[QStringLiteral("source")] = sourceA;
+  s1[QStringLiteral("sourceContext")] = src1;
+
+  QJsonObject s2;
+  s2[QStringLiteral("id")] = QStringLiteral("s2");
+  s2[QStringLiteral("state")] = JulesStatus::IN_PROGRESS;
+  QJsonObject src2;
+  src2[QStringLiteral("source")] = sourceB;
+  s2[QStringLiteral("sourceContext")] = src2;
+
+  QJsonArray globalBatch{s1, s2};
+  QMetaObject::invokeMethod(&widget, "onSessionsReceived", Q_ARG(QJsonArray, globalBatch), Q_ARG(QString, QString()));
+
+  // Global widget follows active sessions from all sources
+  QCOMPARE(watchSpy.count(), 2);
 }
 
 void TestSessionsWidget::testFavouriteAwareSorting() {

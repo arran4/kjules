@@ -70,6 +70,16 @@ SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, Se
   actionCollection()->addAction(QStringLiteral("new_session"), newSessionAction);
   connect(newSessionAction, &QAction::triggered, this, [this]() { Q_EMIT newSessionRequested(m_sourceId); });
 
+  QAction *refreshSessionsAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Sessions"), this);
+  actionCollection()->addAction(QStringLiteral("refresh_sessions"), refreshSessionsAction);
+  actionCollection()->setDefaultShortcut(refreshSessionsAction, QKeySequence(Qt::Key_F5));
+  connect(refreshSessionsAction, &QAction::triggered, this, [this]() {
+    if (m_sessionsWidget) {
+      m_sessionsWidget->refreshSessions();
+    }
+  });
+
   QAction *favAction = new QAction(QIcon::fromTheme(QStringLiteral("emblem-favorite")), tr("Toggle Favourite"), this);
   actionCollection()->addAction(QStringLiteral("toggle_favourite"), favAction);
   connect(favAction, &QAction::triggered, this, [this]() { m_sourceModel->toggleFavourite(m_sourceId); });

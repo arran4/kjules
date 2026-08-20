@@ -27,6 +27,21 @@
 
 SessionsProxyModel::SessionsProxyModel(QObject *parent) : QSortFilterProxyModel(parent) {}
 
+void SessionsProxyModel::setSourceFilter(const QString &source) {
+  if (m_sourceFilter == source)
+    return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+  beginFilterChange();
+  m_sourceFilter = source;
+  endFilterChange();
+#else
+  m_sourceFilter = source;
+  invalidateFilter();
+#endif
+}
+
+QString SessionsProxyModel::sourceFilter() const { return m_sourceFilter; }
+
 void SessionsProxyModel::setTextFilter(const QString &text) {
   if (m_textFilter == text)
     return;
@@ -71,6 +86,12 @@ bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sou
     return false;
   }
   QModelIndex indexTitle = sourceModel()->index(source_row, SessionModel::ColTitle, source_parent);
+  QString fullSource = sourceModel()->data(indexTitle, SessionModel::SourceRole).toString();
+
+  if (!m_sourceFilter.isEmpty() && fullSource != m_sourceFilter) {
+    return false;
+  }
+
   QModelIndex indexOwner = sourceModel()->index(source_row, SessionModel::ColOwner, source_parent);
   QModelIndex indexRepo = sourceModel()->index(source_row, SessionModel::ColRepo, source_parent);
   QModelIndex indexState = sourceModel()->index(source_row, SessionModel::ColState, source_parent);
@@ -79,7 +100,6 @@ bool SessionsProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sou
   QString owner = sourceModel()->data(indexOwner, Qt::DisplayRole).toString();
   QString repo = sourceModel()->data(indexRepo, Qt::DisplayRole).toString();
   QString state = sourceModel()->data(indexState, Qt::DisplayRole).toString();
-  QString fullSource = sourceModel()->data(indexTitle, SessionModel::SourceRole).toString();
 
   bool textMatch = m_textFilter.isEmpty() || title.contains(m_textFilter, Qt::CaseInsensitive) ||
                    owner.contains(m_textFilter, Qt::CaseInsensitive) ||
@@ -121,11 +141,11 @@ SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManag
   m_proxyModel->setSourceModel(m_model);
 
   if (!m_filterSource.isEmpty()) {
-    m_proxyModel->setTextFilter(m_filterSource);
-  } else {
-    m_model->loadSessions();
-    m_nextPageToken = m_model->nextPageToken();
+    m_proxyModel->setSourceFilter(m_filterSource);
   }
+
+  m_model->loadSessions();
+  m_nextPageToken = m_model->nextPageToken();
 
   setupUi();
 
@@ -142,7 +162,7 @@ SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManag
     });
   }
 
-  m_statusLabel->setText(i18n("Loaded %1 cached sessions.", m_model->rowCount()));
+  m_statusLabel->setText(i18n("Loaded %1 cached sessions.", m_proxyModel->rowCount()));
 }
 
 SessionsWidget::~SessionsWidget() {}
@@ -188,9 +208,6 @@ void SessionsWidget::setupFilters(QVBoxLayout *layout) {
   QHBoxLayout *filterLayout = new QHBoxLayout();
   m_searchEdit = new QLineEdit(this);
   m_searchEdit->setPlaceholderText(i18n("Search title or source..."));
-  if (!m_filterSource.isEmpty()) {
-    m_searchEdit->setText(m_filterSource);
-  }
   connect(m_searchEdit, &QLineEdit::textChanged, m_proxyModel, &SessionsProxyModel::setTextFilter);
   filterLayout->addWidget(m_searchEdit);
 
@@ -603,6 +620,16 @@ void SessionsWidget::onSessionsReceived(const QJsonArray &sessions, const QStrin
   if (m_managedModel && m_autoFollow) {
     for (const QJsonValue &sessionValue : sessions) {
       const QJsonObject obj = sessionValue.toObject();
+      if (!m_filterSource.isEmpty()) {
+        QString sessionSource =
+            obj.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+        if (sessionSource.isEmpty()) {
+          sessionSource = obj.value(QStringLiteral("source")).toString();
+        }
+        if (sessionSource != m_filterSource) {
+          continue;
+        }
+      }
       const QString state = obj.value(QStringLiteral("state")).toString();
       if (state == JulesStatus::IN_PROGRESS || state == JulesStatus::AWAITING_USER_FEEDBACK ||
           state == QStringLiteral("WAITING_APPROVAL")) {
@@ -623,6 +650,12 @@ void SessionsWidget::updateRepoFilterList() {
 
   QSet<QString> uniqueRepos;
   for (int i = 0; i < m_model->rowCount(); ++i) {
+    if (!m_filterSource.isEmpty()) {
+      QString src = m_model->data(m_model->index(i, SessionModel::ColTitle), SessionModel::SourceRole).toString();
+      if (src != m_filterSource) {
+        continue;
+      }
+    }
     QString repo = m_model->data(m_model->index(i, SessionModel::ColRepo), Qt::DisplayRole).toString();
     if (!repo.isEmpty()) {
       uniqueRepos.insert(repo);
