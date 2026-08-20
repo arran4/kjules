@@ -1520,6 +1520,7 @@ void MainWindow::setupQueueTab() {
 
 void MainWindow::setupHoldingTab() {
   m_holdingView = new QListView(this);
+  m_holdingView->hide();
   m_holdingView->setModel(m_holdingModel);
   m_holdingView->setItemDelegate(new QueueDelegate(this));
   m_holdingView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1566,6 +1567,7 @@ void MainWindow::setupBlockedTab() {
   // Blocked View
   m_blockedTreeModel = new BlockedTreeModel(m_sourceModel, m_queueModel, this);
   m_blockedView = new QTreeView(this);
+  m_blockedView->hide();
   m_blockedView->setModel(m_blockedTreeModel);
   m_blockedView->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(m_blockedView, &QTreeView::customContextMenuRequested, this, &MainWindow::onBlockedContextMenu);
@@ -4053,6 +4055,7 @@ void MainWindow::updateHoldingTabVisibility() {
   if (m_holdingModel->isEmpty()) {
     if (holdingIdx != -1) {
       m_tabWidget->removeTab(holdingIdx);
+      m_holdingView->hide();
     }
   } else {
     if (holdingIdx == -1) {
@@ -4075,6 +4078,7 @@ void MainWindow::updateBlockedTabVisibility() {
   if (blockedItems == 0) {
     if (blockedIdx != -1) {
       m_tabWidget->removeTab(blockedIdx);
+      m_blockedView->hide();
     }
   } else {
     if (blockedIdx == -1) {
