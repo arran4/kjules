@@ -24,10 +24,10 @@ int main(int argc, char *argv[]) {
 
   KAboutData aboutData(QStringLiteral("org.kde.kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
                        i18n("A KDE native desktop client for tracking and managing GitHub tasks"), KAboutLicense::GPL,
-                       i18n("(c) 2024"), QStringLiteral("https://github.com/yourusername/kjules"),
-                       QStringLiteral("submit@bugs.kde.org"));
+                       i18n("(c) 2024"), QStringLiteral("https://github.com/arran4/kjules"),
+                       QStringLiteral("https://github.com/arran4/kjules/issues"));
 
-  aboutData.addAuthor(i18n("Jules"), i18n("Developer"), QStringLiteral("jules@kde.org"));
+  aboutData.addAuthor(i18n("Arran Ubels"), i18n("Developer"), QStringLiteral("kde@arran4.com"));
   aboutData.setDesktopFileName(QStringLiteral("org.kde.kjules"));
   KAboutData::setApplicationData(aboutData);
 
