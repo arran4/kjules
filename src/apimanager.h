@@ -54,6 +54,8 @@ public:
   void fetchGithubInfo(const QString &sourceName, const QString &owner, const QString &repository);
   void fetchGithubBranches(const QString &sourceName, const QString &owner, const QString &repository);
   void fetchGithubPullRequest(const QString &prUrl);
+  void fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository);
+  void fetchGithubPullRequests(const QString &sourceId, const QString &owner, const QString &repository);
   void createGithubRepoAsync(const QJsonObject &requestData);
 
 Q_SIGNALS:
@@ -66,6 +68,8 @@ Q_SIGNALS:
   void githubBranchesReceived(const QString &sourceId, const QJsonArray &branches);
   void githubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
   void githubPullRequestFailed(const QString &prUrl, const QString &message);
+  void githubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
+  void githubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished(bool complete);
   void sessionsRefreshFinished();

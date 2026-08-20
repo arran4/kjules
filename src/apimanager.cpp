@@ -872,6 +872,86 @@ void APIManager::getSession(const QString &sessionId) {
   });
 }
 
+void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
+    return;
+  }
+
+  if (sourceId.isEmpty() || owner.isEmpty() || repository.isEmpty())
+    return;
+
+  const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
+                                 QString::fromLatin1(QUrl::toPercentEncoding(repository));
+  QNetworkRequest request(
+      QUrl(QStringLiteral("https://api.github.com/repos/") + repositoryPath + QStringLiteral("/issues?state=all&per_page=100")));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
+    reply->deleteLater();
+    updateGithubRateLimit(reply);
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      if (doc.isArray()) {
+        Q_EMIT githubIssuesReceived(sourceId, doc.array());
+      }
+    } else {
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                                         "requests blocked until token is updated.")
+                              .arg(statusCode));
+      }
+    }
+  });
+}
+
+void APIManager::fetchGithubPullRequests(const QString &sourceId, const QString &owner, const QString &repository) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
+    return;
+  }
+
+  if (sourceId.isEmpty() || owner.isEmpty() || repository.isEmpty())
+    return;
+
+  const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
+                                 QString::fromLatin1(QUrl::toPercentEncoding(repository));
+  QNetworkRequest request(
+      QUrl(QStringLiteral("https://api.github.com/repos/") + repositoryPath + QStringLiteral("/pulls?state=all&per_page=100")));
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId]() {
+    reply->deleteLater();
+    updateGithubRateLimit(reply);
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonDocument doc = QJsonDocument::fromJson(data);
+      if (doc.isArray()) {
+        Q_EMIT githubPullRequestsReceived(sourceId, doc.array());
+      }
+    } else {
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+        Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
+                                         "requests blocked until token is updated.")
+                              .arg(statusCode));
+      }
+    }
+  });
+}
+
 void APIManager::fetchGithubBranches(const QString &sourceName, const QString &owner, const QString &repository) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
     return;

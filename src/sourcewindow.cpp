@@ -9,6 +9,7 @@
 #include "sessionwindow.h"
 #include "sourcemodel.h"
 #include "sourcestatuswidget.h"
+#include "apimanager.h"
 #include <KActionCollection>
 
 #include <KConfigGroup>
@@ -32,6 +33,9 @@
 #include <QTextEdit>
 #include <QTreeView>
 #include <QVBoxLayout>
+#include <QStandardItemModel>
+#include <QDesktopServices>
+#include <QUrl>
 
 class SourceSessionFilterProxyModel : public QSortFilterProxyModel {
   Q_OBJECT
@@ -109,6 +113,8 @@ void SourceWindow::setupUi() {
   setupSessionsTab();
   setupSettingsTab();
   setupRawDataTab();
+  setupGithubIssuesTab();
+  setupGithubPRsTab();
 
   m_tabWidget->setCurrentIndex(0);
 }
@@ -383,6 +389,96 @@ void SourceWindow::populateDefaultBranches() {
   }
 }
 
+void SourceWindow::setupGithubIssuesTab() {
+  QWidget *issuesTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(issuesTab);
+
+  m_issuesView = new QTreeView(this);
+  m_issuesModel = new QStandardItemModel(this);
+  m_issuesModel->setHorizontalHeaderLabels({tr("Number"), tr("Title"), tr("State"), tr("User")});
+  m_issuesView->setModel(m_issuesModel);
+  m_issuesView->setAlternatingRowColors(true);
+  m_issuesView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_issuesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  m_issuesView->setSortingEnabled(true);
+  layout->addWidget(m_issuesView);
+
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (!matches.isEmpty()) {
+    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+    if (rawData.contains(QStringLiteral("local_githubIssues"))) {
+      onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
+    }
+  }
+
+  QPushButton *refreshBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
+  connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
+    if (!matches.isEmpty()) {
+      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+      QString owner = SourceModel::githubOwner(rawData);
+      QString repo = SourceModel::githubRepository(rawData);
+      if (!owner.isEmpty() && !repo.isEmpty()) {
+        m_apiManager->fetchGithubIssues(m_sourceId, owner, repo);
+      }
+    }
+  });
+
+  connect(m_apiManager, &APIManager::githubIssuesReceived, this, &SourceWindow::onGithubIssuesReceived);
+
+  QHBoxLayout *btnLayout = new QHBoxLayout();
+  btnLayout->addStretch();
+  btnLayout->addWidget(refreshBtn);
+  layout->addLayout(btnLayout);
+
+  m_tabWidget->addTab(issuesTab, tr("GitHub Issues"));
+}
+
+void SourceWindow::setupGithubPRsTab() {
+  QWidget *prsTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(prsTab);
+
+  m_prsView = new QTreeView(this);
+  m_prsModel = new QStandardItemModel(this);
+  m_prsModel->setHorizontalHeaderLabels({tr("Number"), tr("Title"), tr("State"), tr("User")});
+  m_prsView->setModel(m_prsModel);
+  m_prsView->setAlternatingRowColors(true);
+  m_prsView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_prsView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  m_prsView->setSortingEnabled(true);
+  layout->addWidget(m_prsView);
+
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (!matches.isEmpty()) {
+    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+    if (rawData.contains(QStringLiteral("local_githubPRs"))) {
+      onGithubPullRequestsReceived(m_sourceId, rawData.value(QStringLiteral("local_githubPRs")).toArray());
+    }
+  }
+
+  QPushButton *refreshBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Pull Requests"), this);
+  connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
+    if (!matches.isEmpty()) {
+      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+      QString owner = SourceModel::githubOwner(rawData);
+      QString repo = SourceModel::githubRepository(rawData);
+      if (!owner.isEmpty() && !repo.isEmpty()) {
+        m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo);
+      }
+    }
+  });
+
+  connect(m_apiManager, &APIManager::githubPullRequestsReceived, this, &SourceWindow::onGithubPullRequestsReceived);
+
+  QHBoxLayout *btnLayout = new QHBoxLayout();
+  btnLayout->addStretch();
+  btnLayout->addWidget(refreshBtn);
+  layout->addLayout(btnLayout);
+
+  m_tabWidget->addTab(prsTab, tr("GitHub PRs"));
+}
+
 void SourceWindow::setupRawDataTab() {
   QWidget *rawDataTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(rawDataTab);
@@ -432,6 +528,102 @@ void SourceWindow::setupRawDataTab() {
   layout->addLayout(btnLayout);
 
   m_tabWidget->addTab(rawDataTab, tr("Raw Data"));
+}
+
+void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonArray &issues) {
+  if (sourceId != m_sourceId) {
+    return;
+  }
+
+  m_issuesModel->removeRows(0, m_issuesModel->rowCount());
+
+  for (const QJsonValue &v : issues) {
+    QJsonObject issue = v.toObject();
+    if (issue.contains(QStringLiteral("pull_request"))) {
+        continue;
+    }
+
+    QList<QStandardItem *> row;
+
+    QStandardItem *numItem = new QStandardItem(QString::number(issue.value(QStringLiteral("number")).toInt()));
+    numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::UserRole);
+    row.append(numItem);
+
+    QStandardItem *titleItem = new QStandardItem(issue.value(QStringLiteral("title")).toString());
+    row.append(titleItem);
+
+    QStandardItem *stateItem = new QStandardItem(issue.value(QStringLiteral("state")).toString());
+    row.append(stateItem);
+
+    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
+    QStandardItem *userItem = new QStandardItem(user.value(QStringLiteral("login")).toString());
+    row.append(userItem);
+
+    m_issuesModel->appendRow(row);
+  }
+
+  m_issuesView->resizeColumnToContents(0);
+  m_issuesView->resizeColumnToContents(2);
+  m_issuesView->resizeColumnToContents(3);
+
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (!matches.isEmpty()) {
+    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+    rawData[QStringLiteral("local_githubIssues")] = issues;
+    m_sourceModel->updateSourceRaw(m_sourceId, rawData);
+
+    if (m_rawDataEdit) {
+      QJsonDocument doc(rawData);
+      m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    }
+  }
+}
+
+void SourceWindow::onGithubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs) {
+  if (sourceId != m_sourceId) {
+    return;
+  }
+
+  m_prsModel->removeRows(0, m_prsModel->rowCount());
+
+  for (const QJsonValue &v : prs) {
+    QJsonObject pr = v.toObject();
+    QList<QStandardItem *> row;
+
+    QStandardItem *numItem = new QStandardItem(QString::number(pr.value(QStringLiteral("number")).toInt()));
+    numItem->setData(pr.value(QStringLiteral("number")).toInt(), Qt::UserRole);
+    row.append(numItem);
+
+    QStandardItem *titleItem = new QStandardItem(pr.value(QStringLiteral("title")).toString());
+    row.append(titleItem);
+
+    QStandardItem *stateItem = new QStandardItem(pr.value(QStringLiteral("state")).toString());
+    row.append(stateItem);
+
+    QJsonObject user = pr.value(QStringLiteral("user")).toObject();
+    QStandardItem *userItem = new QStandardItem(user.value(QStringLiteral("login")).toString());
+    row.append(userItem);
+
+    m_prsModel->appendRow(row);
+  }
+
+  m_prsView->resizeColumnToContents(0);
+  m_prsView->resizeColumnToContents(2);
+  m_prsView->resizeColumnToContents(3);
+
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (!matches.isEmpty()) {
+    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+    rawData[QStringLiteral("local_githubPRs")] = prs;
+    m_sourceModel->updateSourceRaw(m_sourceId, rawData);
+
+    if (m_rawDataEdit) {
+      QJsonDocument doc(rawData);
+      m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
+    }
+  }
 }
 
 #include "sourcewindow.moc"
