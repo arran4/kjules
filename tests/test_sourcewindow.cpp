@@ -369,10 +369,18 @@ void TestSourceWindow::testGithubIssuesAndPRsTabs() {
 
   QJsonObject srcObj;
   srcObj[QStringLiteral("name")] = sourceId;
+  QJsonObject ghRepo;
+  ghRepo[QStringLiteral("owner")] = QStringLiteral("kde");
+  ghRepo[QStringLiteral("repo")] = QStringLiteral("kjules");
+  srcObj[QStringLiteral("githubRepo")] = ghRepo;
   sourceModel.addSources(QJsonArray{srcObj});
 
+  APIManager apiManager;
+  // Mock valid token so canConnectGithub is true
+  apiManager.setGithubToken(QStringLiteral("fake_token"));
+
   auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
-                                               &errorsModel, &blockedTreeModel, nullptr);
+                                               &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
   QTabWidget *tabWidget = window->findChild<QTabWidget *>();
@@ -395,12 +403,19 @@ void TestSourceWindow::testGithubIssuesAndPRsTabs() {
   QJsonObject issue1;
   issue1[QStringLiteral("number")] = 1;
   issue1[QStringLiteral("title")] = QStringLiteral("Issue 1");
+  issue1[QStringLiteral("state")] = QStringLiteral("open");
   QJsonObject issue2;
   issue2[QStringLiteral("number")] = 2;
   issue2[QStringLiteral("title")] = QStringLiteral("Issue 2");
+  issue2[QStringLiteral("state")] = QStringLiteral("open");
   issue2[QStringLiteral("pull_request")] = QJsonObject();
+  QJsonObject issue3;
+  issue3[QStringLiteral("number")] = 3;
+  issue3[QStringLiteral("title")] = QStringLiteral("Closed Issue");
+  issue3[QStringLiteral("state")] = QStringLiteral("closed");
   mixedIssues.append(issue1);
   mixedIssues.append(issue2);
+  mixedIssues.append(issue3);
 
   QMetaObject::invokeMethod(window.get(), "onGithubIssuesReceived", Q_ARG(QString, sourceId),
                             Q_ARG(QJsonArray, mixedIssues));
@@ -411,6 +426,25 @@ void TestSourceWindow::testGithubIssuesAndPRsTabs() {
 
   QCOMPARE(cachedIssues.size(), 1);
   QCOMPARE(cachedIssues.at(0).toObject().value(QStringLiteral("number")).toInt(), 1);
+
+  // Test Context received signal creates session initial data properly
+  QSignalSpy spy(window.get(), &SourceWindow::newSessionFromIssueRequested);
+  QJsonArray comments;
+  QJsonObject comment1;
+  comment1[QStringLiteral("body")] = QStringLiteral("This is a comment");
+  comments.append(comment1);
+
+  QMetaObject::invokeMethod(window.get(), "onGithubIssueContextReceived", Q_ARG(QString, sourceId), Q_ARG(int, 1),
+                            Q_ARG(QJsonObject, issue1), Q_ARG(QJsonArray, comments));
+
+  QCOMPARE(spy.count(), 1);
+  QList<QVariant> args = spy.takeFirst();
+  QCOMPARE(args.at(0).toString(), sourceId);
+  QJsonObject initialData = args.at(1).toJsonObject();
+  QVERIFY(initialData.contains(QStringLiteral("prompt")));
+  QString prompt = initialData.value(QStringLiteral("prompt")).toString();
+  QVERIFY(prompt.contains(QStringLiteral("Implement GitHub issue #1: Issue 1")));
+  QVERIFY(prompt.contains(QStringLiteral("This is a comment")));
 }
 
 int main(int argc, char *argv[]) {

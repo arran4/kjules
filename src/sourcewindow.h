@@ -29,6 +29,7 @@ public:
 
 Q_SIGNALS:
   void newSessionRequested(const QString &sourceId);
+  void newSessionFromIssueRequested(const QString &sourceId, const QJsonObject &initialData);
   void queueProcessingRequested();
 
 private:
@@ -43,9 +44,15 @@ private:
   void setupGithubIssuesTab();
   void setupGithubPRsTab();
 
+  static QString generateGithubIssuePrompt(const QString &sourceName, const QString &owner, const QString &repository,
+                                           const QJsonObject &issue, const QJsonArray &comments);
+
 private Q_SLOTS:
   void onGithubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
   void onGithubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
+  void onGithubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
+                                    const QJsonArray &comments);
+  void onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const QString &error);
 
 private:
   QString m_sourceId;
@@ -68,6 +75,7 @@ private:
   QTreeView *m_prsView;
   QStandardItemModel *m_issuesModel;
   QStandardItemModel *m_prsModel;
+  QAction *m_createSessionFromIssueAction = nullptr;
 };
 
 #endif // SOURCEWINDOW_H

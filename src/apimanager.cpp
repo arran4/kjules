@@ -114,6 +114,8 @@ QNetworkRequest APIManager::createRequest(const QString &endpoint, const QString
 
 bool APIManager::canConnect() const { return !m_apiKey.isEmpty() && !m_tokenFailed; }
 
+bool APIManager::canConnectGithub() const { return !m_githubToken.isEmpty() && !m_githubTokenFailed; }
+
 QString APIManager::githubUsername() const { return m_githubUsername; }
 
 QString APIManager::githubScopes() const { return m_githubScopes; }
@@ -946,6 +948,116 @@ void APIManager::fetchGithubPaginated(const QUrl &initialUrl, const QString &sou
   continueGithubPaginated(initialUrl, sourceId, isIssues, results);
 }
 
+void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString &owner, const QString &repository,
+                                         int issueNumber) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
+    Q_EMIT githubIssueContextFailed(sourceId, issueNumber,
+                                    QStringLiteral("No valid GitHub token or rate limit exhausted."));
+    return;
+  }
+
+  if (sourceId.isEmpty() || owner.isEmpty() || repository.isEmpty()) {
+    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, QStringLiteral("Invalid source metadata."));
+    return;
+  }
+
+  const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
+                                 QString::fromLatin1(QUrl::toPercentEncoding(repository));
+
+  QUrl issueUrl(QStringLiteral("https://api.github.com/repos/") + repositoryPath + QStringLiteral("/issues/") +
+                QString::number(issueNumber));
+
+  QNetworkRequest request(issueUrl);
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
+  request.setRawHeader("Accept", "application/vnd.github.v3+json");
+  QString auth = QStringLiteral("Bearer ") + m_githubToken;
+  request.setRawHeader("Authorization", auth.toUtf8());
+
+  QNetworkReply *reply = m_nam->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId, issueNumber, repositoryPath]() {
+    reply->deleteLater();
+    updateGithubRateLimit(reply);
+
+    if (reply->error() == QNetworkReply::NoError) {
+      QByteArray data = reply->readAll();
+      QJsonObject issueObj = QJsonDocument::fromJson(data).object();
+
+      // Fetch comments paginated
+      QUrl commentsUrl(QStringLiteral("https://api.github.com/repos/") + repositoryPath + QStringLiteral("/issues/") +
+                       QString::number(issueNumber) + QStringLiteral("/comments?per_page=100"));
+      auto comments = QSharedPointer<QJsonArray>::create();
+
+      // We will create a local helper to do the pagination so we can emit when it finishes
+      auto fetchComments = [this](auto fetchCommentsRef, QUrl url, const QString &sId, int iNum, QJsonObject iObj,
+                                  QSharedPointer<QJsonArray> res) -> void {
+        if (!checkGithubRateLimit()) {
+          Q_EMIT githubIssueContextFailed(sId, iNum, QStringLiteral("Rate limit exhausted while fetching comments."));
+          return;
+        }
+
+        QNetworkRequest req(url);
+        req.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/json")));
+        req.setHeader(QNetworkRequest::UserAgentHeader, QVariant(QStringLiteral("kjules")));
+        req.setRawHeader("Accept", "application/vnd.github.v3+json");
+        QString tkAuth = QStringLiteral("Bearer ") + m_githubToken;
+        req.setRawHeader("Authorization", tkAuth.toUtf8());
+
+        QNetworkReply *rep = m_nam->get(req);
+        connect(rep, &QNetworkReply::finished, this, [this, rep, fetchCommentsRef, sId, iNum, iObj, res]() {
+          rep->deleteLater();
+          updateGithubRateLimit(rep);
+
+          if (rep->error() == QNetworkReply::NoError) {
+            QJsonArray pageArray = QJsonDocument::fromJson(rep->readAll()).array();
+            for (const QJsonValue &v : pageArray) {
+              res->append(v);
+            }
+
+            QString linkHeader = QString::fromUtf8(rep->rawHeader("Link"));
+            QUrl nextUrl;
+            if (!linkHeader.isEmpty()) {
+              QStringList links = linkHeader.split(QLatin1Char(','));
+              for (const QString &link : links) {
+                if (link.contains(QStringLiteral("rel=\"next\""))) {
+                  int start = link.indexOf(QLatin1Char('<'));
+                  int end = link.indexOf(QLatin1Char('>'));
+                  if (start != -1 && end != -1 && end > start) {
+                    nextUrl = QUrl(link.mid(start + 1, end - start - 1));
+                  }
+                  break;
+                }
+              }
+            }
+
+            if (nextUrl.isValid()) {
+              fetchCommentsRef(fetchCommentsRef, nextUrl, sId, iNum, iObj, res);
+            } else {
+              Q_EMIT githubIssueContextReceived(sId, iNum, iObj, *res);
+            }
+          } else {
+            int statusCode = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode == 401 || statusCode == 403) {
+              m_githubTokenFailed = true;
+            }
+            Q_EMIT githubIssueContextFailed(sId, iNum,
+                                            QStringLiteral("Failed to fetch comments: ") + rep->errorString());
+          }
+        });
+      };
+
+      fetchComments(fetchComments, commentsUrl, sourceId, issueNumber, issueObj, comments);
+    } else {
+      int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      if (statusCode == 401 || statusCode == 403) {
+        m_githubTokenFailed = true;
+      }
+      Q_EMIT githubIssueContextFailed(sourceId, issueNumber,
+                                      QStringLiteral("Failed to fetch issue context: ") + reply->errorString());
+    }
+  });
+}
+
 void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
     return;
@@ -957,7 +1069,7 @@ void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner
   const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
                                  QString::fromLatin1(QUrl::toPercentEncoding(repository));
   QUrl url(QStringLiteral("https://api.github.com/repos/") + repositoryPath +
-           QStringLiteral("/issues?state=all&per_page=100"));
+           QStringLiteral("/issues?state=open&per_page=100"));
   fetchGithubPaginated(url, sourceId, true);
 }
 

@@ -98,6 +98,101 @@ SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, Se
 
 SourceWindow::~SourceWindow() = default;
 
+QString SourceWindow::generateGithubIssuePrompt(const QString &sourceName, const QString &owner,
+                                                const QString &repository, const QJsonObject &issue,
+                                                const QJsonArray &comments) {
+  QString prompt;
+  int issueNumber = issue.value(QStringLiteral("number")).toInt();
+  QString title = issue.value(QStringLiteral("title")).toString();
+  QString canonicalUrl = QStringLiteral("https://github.com/%1/%2/issues/%3").arg(owner, repository).arg(issueNumber);
+
+  prompt += QStringLiteral("Implement GitHub issue #%1: %2\n\n").arg(issueNumber).arg(title);
+  prompt += QStringLiteral("Repository/source: %1\n").arg(sourceName);
+  prompt += QStringLiteral("Issue: #%1\n").arg(issueNumber);
+  prompt += QStringLiteral("Reference URL: %1\n").arg(canonicalUrl);
+
+  if (issue.contains(QStringLiteral("user"))) {
+    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
+    prompt += QStringLiteral("Author: @%1\n").arg(user.value(QStringLiteral("login")).toString());
+  }
+
+  prompt += QStringLiteral("State: %1\n").arg(issue.value(QStringLiteral("state")).toString());
+
+  if (issue.contains(QStringLiteral("labels"))) {
+    QJsonArray labelsArr = issue.value(QStringLiteral("labels")).toArray();
+    QStringList labels;
+    for (const QJsonValue &lv : labelsArr) {
+      if (lv.isObject()) {
+        labels.append(lv.toObject().value(QStringLiteral("name")).toString());
+      } else {
+        labels.append(lv.toString());
+      }
+    }
+    if (!labels.isEmpty()) {
+      prompt += QStringLiteral("Labels: %1\n").arg(labels.join(QStringLiteral(", ")));
+    }
+  }
+
+  if (issue.contains(QStringLiteral("assignees"))) {
+    QJsonArray assigneesArr = issue.value(QStringLiteral("assignees")).toArray();
+    QStringList assignees;
+    for (const QJsonValue &av : assigneesArr) {
+      assignees.append(av.toObject().value(QStringLiteral("login")).toString());
+    }
+    if (!assignees.isEmpty()) {
+      prompt += QStringLiteral("Assignees: %1\n").arg(assignees.join(QStringLiteral(", ")));
+    }
+  }
+
+  if (issue.contains(QStringLiteral("milestone")) && !issue.value(QStringLiteral("milestone")).isNull()) {
+    QJsonObject milestone = issue.value(QStringLiteral("milestone")).toObject();
+    prompt += QStringLiteral("Milestone: %1\n").arg(milestone.value(QStringLiteral("title")).toString());
+  }
+
+  if (issue.contains(QStringLiteral("created_at"))) {
+    prompt += QStringLiteral("Created: %1\n").arg(issue.value(QStringLiteral("created_at")).toString());
+  }
+
+  if (issue.contains(QStringLiteral("updated_at"))) {
+    prompt += QStringLiteral("Updated: %1\n").arg(issue.value(QStringLiteral("updated_at")).toString());
+  }
+
+  prompt += QStringLiteral("\nIMPORTANT: This GitHub repository and/or issue may be private. Your execution\n"
+                           "environment may not be able to access the GitHub URL. Do not rely on being\n"
+                           "able to open the issue. The issue content and discussion available to kjules\n"
+                           "have been copied below and should be treated as the issue context.\n\n");
+
+  prompt += QStringLiteral("## Issue description\n\n");
+  QString body = issue.value(QStringLiteral("body")).toString();
+  if (body.isEmpty()) {
+    body = QStringLiteral("*No description provided.*");
+  }
+  prompt += body + QStringLiteral("\n\n");
+
+  if (!comments.isEmpty()) {
+    prompt += QStringLiteral("## Discussion\n\n");
+    for (const QJsonValue &cv : comments) {
+      QJsonObject comment = cv.toObject();
+      QString author = QStringLiteral("unknown");
+      if (comment.contains(QStringLiteral("user"))) {
+        author = comment.value(QStringLiteral("user")).toObject().value(QStringLiteral("login")).toString();
+      }
+      QString timestamp = comment.value(QStringLiteral("created_at")).toString();
+      prompt += QStringLiteral("### @%1 — %2\n\n").arg(author, timestamp);
+      prompt += comment.value(QStringLiteral("body")).toString() + QStringLiteral("\n\n");
+    }
+  }
+
+  prompt += QStringLiteral("## Task\n\n"
+                           "Implement the issue described above in the selected source repository.\n\n"
+                           "Use the checked-out source as the authority for the current implementation.\n"
+                           "Reconcile the requested change with the current code rather than assuming\n"
+                           "the issue was written against exactly the current revision.\n\n"
+                           "Run the relevant tests and add/update tests for the changed behaviour.\n");
+
+  return prompt;
+}
+
 void SourceWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
@@ -390,6 +485,20 @@ void SourceWindow::populateDefaultBranches() {
 }
 
 void SourceWindow::setupGithubIssuesTab() {
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty()) {
+    return;
+  }
+
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+  QString owner = SourceModel::githubOwner(rawData);
+  QString repo = SourceModel::githubRepository(rawData);
+
+  if (!m_apiManager || !m_apiManager->canConnectGithub() || owner.isEmpty() || repo.isEmpty()) {
+    return;
+  }
+
   QWidget *issuesTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(issuesTab);
 
@@ -401,31 +510,50 @@ void SourceWindow::setupGithubIssuesTab() {
   m_issuesView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_issuesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_issuesView->setSortingEnabled(true);
+  m_issuesView->setContextMenuPolicy(Qt::ActionsContextMenu);
+
+  m_createSessionFromIssueAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("document-new")), tr("Create Session..."), this);
+  m_createSessionFromIssueAction->setEnabled(false);
+  m_issuesView->addAction(m_createSessionFromIssueAction);
+
+  connect(m_issuesView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+          [this]() { m_createSessionFromIssueAction->setEnabled(m_issuesView->selectionModel()->hasSelection()); });
+
+  connect(m_createSessionFromIssueAction, &QAction::triggered, this, [this, owner, repo]() {
+    QModelIndexList selected = m_issuesView->selectionModel()->selectedRows();
+    if (selected.isEmpty())
+      return;
+    int issueNumber = m_issuesModel->itemFromIndex(selected.first())->data(Qt::UserRole).toInt();
+
+    m_createSessionFromIssueAction->setEnabled(false);
+    m_createSessionFromIssueAction->setText(tr("Fetching..."));
+    m_apiManager->fetchGithubIssueContext(m_sourceId, owner, repo, issueNumber);
+  });
+
+  connect(m_issuesView, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
+    if (index.isValid() && m_createSessionFromIssueAction->isEnabled()) {
+      m_createSessionFromIssueAction->trigger();
+    }
+  });
+
   layout->addWidget(m_issuesView);
 
-  QModelIndexList matches =
-      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-  if (!matches.isEmpty()) {
-    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    if (rawData.contains(QStringLiteral("local_githubIssues"))) {
-      onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
-    }
+  if (rawData.contains(QStringLiteral("local_githubIssues"))) {
+    onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
+  } else {
+    // Initial fetch if cache is empty
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo);
   }
 
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
-  connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
-    if (!matches.isEmpty()) {
-      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-      QString owner = SourceModel::githubOwner(rawData);
-      QString repo = SourceModel::githubRepository(rawData);
-      if (!owner.isEmpty() && !repo.isEmpty()) {
-        m_apiManager->fetchGithubIssues(m_sourceId, owner, repo);
-      }
-    }
-  });
+  connect(refreshBtn, &QPushButton::clicked, this,
+          [this, owner, repo]() { m_apiManager->fetchGithubIssues(m_sourceId, owner, repo); });
 
   connect(m_apiManager, &APIManager::githubIssuesReceived, this, &SourceWindow::onGithubIssuesReceived);
+  connect(m_apiManager, &APIManager::githubIssueContextReceived, this, &SourceWindow::onGithubIssueContextReceived);
+  connect(m_apiManager, &APIManager::githubIssueContextFailed, this, &SourceWindow::onGithubIssueContextFailed);
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
   btnLayout->addStretch();
@@ -436,6 +564,20 @@ void SourceWindow::setupGithubIssuesTab() {
 }
 
 void SourceWindow::setupGithubPRsTab() {
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty()) {
+    return;
+  }
+
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+  QString owner = SourceModel::githubOwner(rawData);
+  QString repo = SourceModel::githubRepository(rawData);
+
+  if (!m_apiManager || !m_apiManager->canConnectGithub() || owner.isEmpty() || repo.isEmpty()) {
+    return;
+  }
+
   QWidget *prsTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(prsTab);
 
@@ -449,26 +591,14 @@ void SourceWindow::setupGithubPRsTab() {
   m_prsView->setSortingEnabled(true);
   layout->addWidget(m_prsView);
 
-  QModelIndexList matches =
-      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-  if (!matches.isEmpty()) {
-    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    if (rawData.contains(QStringLiteral("local_githubPRs"))) {
-      onGithubPullRequestsReceived(m_sourceId, rawData.value(QStringLiteral("local_githubPRs")).toArray());
-    }
+  if (rawData.contains(QStringLiteral("local_githubPRs"))) {
+    onGithubPullRequestsReceived(m_sourceId, rawData.value(QStringLiteral("local_githubPRs")).toArray());
   }
 
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Pull Requests"), this);
-  connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
-    if (!matches.isEmpty()) {
-      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-      QString owner = SourceModel::githubOwner(rawData);
-      QString repo = SourceModel::githubRepository(rawData);
-      if (!owner.isEmpty() && !repo.isEmpty()) {
-        m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo);
-      }
-    }
+  connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo]() {
+    m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo);
   });
 
   connect(m_apiManager, &APIManager::githubPullRequestsReceived, this, &SourceWindow::onGithubPullRequestsReceived);
@@ -545,10 +675,16 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
       continue;
     }
 
+    // Skip closed issues from old cache robustly
+    if (issue.value(QStringLiteral("state")).toString() != QStringLiteral("open")) {
+      continue;
+    }
+
     QList<QStandardItem *> row;
 
     QStandardItem *numItem = new QStandardItem();
     numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::DisplayRole);
+    numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::UserRole);
     row.append(numItem);
 
     QStandardItem *titleItem = new QStandardItem(issue.value(QStringLiteral("title")).toString());
@@ -579,6 +715,9 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
       if (issue.contains(QStringLiteral("pull_request"))) {
         continue;
       }
+      if (issue.value(QStringLiteral("state")).toString() != QStringLiteral("open")) {
+        continue;
+      }
       QJsonObject compactIssue;
       compactIssue[QStringLiteral("number")] = issue.value(QStringLiteral("number"));
       compactIssue[QStringLiteral("title")] = issue.value(QStringLiteral("title"));
@@ -601,6 +740,52 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
         m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
       }
     }
+  }
+}
+
+void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int /*issueNumber*/, const QJsonObject &issue,
+                                                const QJsonArray &comments) {
+  if (sourceId != m_sourceId)
+    return;
+
+  if (m_createSessionFromIssueAction) {
+    m_createSessionFromIssueAction->setText(tr("Create Session..."));
+    m_createSessionFromIssueAction->setEnabled(true);
+  }
+
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  QString sourceName = m_sourceId;
+  QString owner = QStringLiteral("");
+  QString repo = QStringLiteral("");
+  if (!matches.isEmpty()) {
+    sourceName = matches.first().data(SourceModel::NameRole).toString();
+    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+    owner = SourceModel::githubOwner(rawData);
+    repo = SourceModel::githubRepository(rawData);
+  }
+
+  QString prompt = generateGithubIssuePrompt(sourceName, owner, repo, issue, comments);
+
+  QJsonObject initialData;
+  initialData[QStringLiteral("prompt")] = prompt;
+  Q_EMIT newSessionFromIssueRequested(m_sourceId, initialData);
+}
+
+void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int /*issueNumber*/, const QString &error) {
+  if (sourceId != m_sourceId)
+    return;
+
+  if (m_createSessionFromIssueAction) {
+    m_createSessionFromIssueAction->setText(tr("Create Session..."));
+    m_createSessionFromIssueAction->setEnabled(true);
+  }
+
+  // Inform the user
+  if (m_errorsModel) {
+    // We don't have direct access to emit a user message from here, but we can log it or show a messagebox
+    // We will just log it using qDebug for simplicity, or the user can check network logs.
+    qDebug() << "Failed to fetch issue context:" << error;
   }
 }
 

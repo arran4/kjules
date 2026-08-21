@@ -36,6 +36,7 @@ public:
   void saveGithubTokenToWallet(const QString &token);
 
   bool canConnect() const;
+  bool canConnectGithub() const;
   void testConnection(const QString &apiKey = QString());
   void testGithubConnection(const QString &token = QString());
   QString githubUsername() const;
@@ -53,6 +54,8 @@ public:
   void sendMessage(const QString &sessionId, const QString &message);
   void fetchGithubInfo(const QString &sourceName, const QString &owner, const QString &repository);
   void fetchGithubBranches(const QString &sourceName, const QString &owner, const QString &repository);
+  void fetchGithubIssueContext(const QString &sourceId, const QString &owner, const QString &repository,
+                               int issueNumber);
   void fetchGithubPullRequest(const QString &prUrl);
   void fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository);
   void fetchGithubPullRequests(const QString &sourceId, const QString &owner, const QString &repository);
@@ -70,6 +73,9 @@ Q_SIGNALS:
   void githubPullRequestFailed(const QString &prUrl, const QString &message);
   void githubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
   void githubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
+  void githubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
+                                  const QJsonArray &comments);
+  void githubIssueContextFailed(const QString &sourceId, int issueNumber, const QString &error);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished(bool complete);
   void sessionsRefreshFinished();
