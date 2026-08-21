@@ -597,9 +597,8 @@ void SourceWindow::setupGithubPRsTab() {
 
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Pull Requests"), this);
-  connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo]() {
-    m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo);
-  });
+  connect(refreshBtn, &QPushButton::clicked, this,
+          [this, owner, repo]() { m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo); });
 
   connect(m_apiManager, &APIManager::githubPullRequestsReceived, this, &SourceWindow::onGithubPullRequestsReceived);
 
