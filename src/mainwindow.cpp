@@ -3340,6 +3340,15 @@ void MainWindow::openSourceWindow(const QString &sourceId) {
     initialData[QStringLiteral("sources")] = sourcesArr;
     showNewSessionDialog(initialData, true);
   });
+  connect(window, &SourceWindow::newSessionFromIssueRequested, this,
+          [this](const QString &source, QJsonObject initialData) {
+            if (!initialData.contains(QStringLiteral("sources"))) {
+              QJsonArray sourcesArr;
+              sourcesArr.append(source);
+              initialData[QStringLiteral("sources")] = sourcesArr;
+            }
+            showNewSessionDialog(initialData, true);
+          });
   connect(window, &SourceWindow::queueProcessingRequested, this,
           [this]() { QTimer::singleShot(0, this, &MainWindow::processQueue); });
   window->show();
