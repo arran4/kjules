@@ -58,7 +58,8 @@ public:
                                int issueNumber);
   void cancelGithubIssueContextFetch(const QString &sourceId, int issueNumber);
   void fetchGithubPullRequest(const QString &prUrl);
-  void fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository, const QString &state = QStringLiteral("open"));
+  void fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository,
+                         const QString &state = QStringLiteral("open"));
   void fetchGithubPullRequests(const QString &sourceId, const QString &owner, const QString &repository);
   void createGithubRepoAsync(const QJsonObject &requestData);
 
@@ -115,7 +116,7 @@ private:
   int m_githubRateLimitRemaining;
   QNetworkReply *m_listSourcesReply;
   QNetworkReply *m_listSessionsReply;
-  QMap<QString, QNetworkReply*> m_githubIssueContextReplies;
+  QMap<QString, QNetworkReply *> m_githubIssueContextReplies;
 
   bool checkGithubRateLimit();
   void updateGithubRateLimit(QNetworkReply *reply);

@@ -997,8 +997,8 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
       auto comments = QSharedPointer<QJsonArray>::create();
 
       // We will create a local helper to do the pagination so we can emit when it finishes
-      auto fetchComments = [this, requestKey](auto fetchCommentsRef, QUrl url, const QString &sId, int iNum, QJsonObject iObj,
-                                  QSharedPointer<QJsonArray> res) -> void {
+      auto fetchComments = [this, requestKey](auto fetchCommentsRef, QUrl url, const QString &sId, int iNum,
+                                              QJsonObject iObj, QSharedPointer<QJsonArray> res) -> void {
         if (!checkGithubRateLimit()) {
           Q_EMIT githubIssueContextFailed(sId, iNum, QStringLiteral("Rate limit exhausted while fetching comments."));
           return;
@@ -1079,7 +1079,8 @@ void APIManager::cancelGithubIssueContextFetch(const QString &sourceId, int issu
   }
 }
 
-void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository, const QString &state) {
+void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository,
+                                   const QString &state) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
     return;
   }
@@ -1089,8 +1090,8 @@ void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner
 
   const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
                                  QString::fromLatin1(QUrl::toPercentEncoding(repository));
-  QUrl url(QStringLiteral("https://api.github.com/repos/") + repositoryPath +
-           QStringLiteral("/issues?state=") + state + QStringLiteral("&per_page=100"));
+  QUrl url(QStringLiteral("https://api.github.com/repos/") + repositoryPath + QStringLiteral("/issues?state=") + state +
+           QStringLiteral("&per_page=100"));
   fetchGithubPaginated(url, sourceId, true);
 }
 
