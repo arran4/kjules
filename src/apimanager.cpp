@@ -974,9 +974,17 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
 
+  QString requestKey = sourceId + QString::number(issueNumber);
+  if (m_githubIssueContextReplies.contains(requestKey)) {
+    return; // Request already in progress
+  }
+
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId, issueNumber, repositoryPath]() {
+  m_githubIssueContextReplies.insert(requestKey, reply);
+
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sourceId, issueNumber, repositoryPath, requestKey]() {
     reply->deleteLater();
+    m_githubIssueContextReplies.remove(requestKey);
     updateGithubRateLimit(reply);
 
     if (reply->error() == QNetworkReply::NoError) {
@@ -989,7 +997,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
       auto comments = QSharedPointer<QJsonArray>::create();
 
       // We will create a local helper to do the pagination so we can emit when it finishes
-      auto fetchComments = [this](auto fetchCommentsRef, QUrl url, const QString &sId, int iNum, QJsonObject iObj,
+      auto fetchComments = [this, requestKey](auto fetchCommentsRef, QUrl url, const QString &sId, int iNum, QJsonObject iObj,
                                   QSharedPointer<QJsonArray> res) -> void {
         if (!checkGithubRateLimit()) {
           Q_EMIT githubIssueContextFailed(sId, iNum, QStringLiteral("Rate limit exhausted while fetching comments."));
@@ -1004,8 +1012,10 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
         req.setRawHeader("Authorization", tkAuth.toUtf8());
 
         QNetworkReply *rep = m_nam->get(req);
-        connect(rep, &QNetworkReply::finished, this, [this, rep, fetchCommentsRef, sId, iNum, iObj, res]() {
+        m_githubIssueContextReplies.insert(requestKey, rep);
+        connect(rep, &QNetworkReply::finished, this, [this, rep, fetchCommentsRef, sId, iNum, iObj, res, requestKey]() {
           rep->deleteLater();
+          m_githubIssueContextReplies.remove(requestKey);
           updateGithubRateLimit(rep);
 
           if (rep->error() == QNetworkReply::NoError) {
@@ -1058,7 +1068,18 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
   });
 }
 
-void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository) {
+void APIManager::cancelGithubIssueContextFetch(const QString &sourceId, int issueNumber) {
+  QString requestKey = sourceId + QString::number(issueNumber);
+  if (m_githubIssueContextReplies.contains(requestKey)) {
+    QNetworkReply *reply = m_githubIssueContextReplies.take(requestKey);
+    if (reply && reply->isRunning()) {
+      reply->abort();
+    }
+    reply->deleteLater();
+  }
+}
+
+void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository, const QString &state) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
     return;
   }
@@ -1069,7 +1090,7 @@ void APIManager::fetchGithubIssues(const QString &sourceId, const QString &owner
   const QString repositoryPath = QString::fromLatin1(QUrl::toPercentEncoding(owner)) + QLatin1Char('/') +
                                  QString::fromLatin1(QUrl::toPercentEncoding(repository));
   QUrl url(QStringLiteral("https://api.github.com/repos/") + repositoryPath +
-           QStringLiteral("/issues?state=open&per_page=100"));
+           QStringLiteral("/issues?state=") + state + QStringLiteral("&per_page=100"));
   fetchGithubPaginated(url, sourceId, true);
 }
 
