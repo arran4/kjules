@@ -131,10 +131,11 @@ bool SessionsProxyModel::lessThan(const QModelIndex &source_left, const QModelIn
   return QSortFilterProxyModel::lessThan(source_left, source_right);
 }
 
-SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel, ErrorsModel *errorsModel,
-                               QWidget *parent)
-    : QWidget(parent), m_apiManager(apiManager), m_managedModel(managedModel), m_errorsModel(errorsModel), m_filterSource(filterSource),
-      m_sessionsLoaded(0), m_isRefreshing(false), m_pagesLoaded(0), m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
+SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
+                               ErrorsModel *errorsModel, QWidget *parent)
+    : QWidget(parent), m_apiManager(apiManager), m_managedModel(managedModel), m_errorsModel(errorsModel),
+      m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false), m_pagesLoaded(0),
+      m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
 
   m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), this);
   m_proxyModel = new SessionsProxyModel(this);

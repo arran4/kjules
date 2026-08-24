@@ -21,8 +21,8 @@ Q_SIGNALS:
   void openPreviousAttemptRequested(const QString &previousAttemptId);
 
 public:
-  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel = nullptr, bool isManaged = true,
-                         QWidget *parent = nullptr);
+  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel = nullptr,
+                         bool isManaged = true, QWidget *parent = nullptr);
   ~SessionWindow();
 
 private:

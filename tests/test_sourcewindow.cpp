@@ -1,5 +1,3 @@
-#include <QComboBox>
-#include <QPushButton>
 #include "../src/api/apierror.h"
 #include "../src/apimanager.h"
 #include "../src/blockedtreemodel.h"
@@ -10,6 +8,8 @@
 #include "../src/sessionswindow.h"
 #include "../src/sourcemodel.h"
 #include "../src/sourcewindow.h"
+#include <QComboBox>
+#include <QPushButton>
 
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -448,15 +448,6 @@ void TestSourceWindow::testGithubIssuesAndPRsTabs() {
   QVERIFY(prompt.contains(QStringLiteral("Implement GitHub issue #1: Issue 1")));
   QVERIFY(prompt.contains(QStringLiteral("This is a comment")));
 }
-
-
-
-
-
-
-
-
-
 
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
