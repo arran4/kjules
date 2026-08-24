@@ -1,6 +1,10 @@
 #include "sessionwindow.h"
 
 #include "activitybrowser.h"
+#include "errorsmodel.h"
+#include "sourcestatuswidget.h"
+#include "clickablelabel.h"
+#include <QStatusBar>
 #include "apimanager.h"
 #include "utils.h"
 #include <KActionCollection>
@@ -28,7 +32,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged, QWidget *parent)
+SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel, bool isManaged, QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged),
       m_tabWidget(nullptr), m_statusLabel(nullptr), m_autoRefreshTimer(nullptr), m_autoRefreshCombo(nullptr),
       m_detailsBrowser(nullptr), m_promptBrowser(nullptr), m_diffBrowser(nullptr), m_activityBrowser(nullptr),

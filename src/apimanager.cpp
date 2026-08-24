@@ -55,6 +55,7 @@ void APIManager::setBaseUrl(const QString &url) { m_baseUrl = url; }
 void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
   m_githubTokenFailed = false;
+  Q_EMIT githubAvailabilityChanged(canConnectGithub());
   saveGithubTokenToWallet(token);
 }
 
@@ -188,6 +189,7 @@ void APIManager::testGithubConnection(const QString &token) {
       Q_EMIT githubConnectionTested(false, QStringLiteral("GitHub connection failed: ") + reply->errorString());
       if ((statusCode == 401) && tk == m_githubToken) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
       }
     }
     reply->deleteLater();
@@ -534,6 +536,7 @@ void APIManager::fetchGithubPullRequest(const QString &prUrl) {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
         Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
                                          "requests blocked until token is updated.")
                               .arg(statusCode));
@@ -603,6 +606,7 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
         Q_EMIT errorOccurred(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
                                             "requests will be blocked until the token is verified.")
                                  .arg(statusCode));
@@ -667,6 +671,7 @@ void APIManager::fetchGithubInfo(const QString &sourceName, const QString &owner
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
         Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
                                          "requests blocked until token is updated.")
                               .arg(statusCode));
@@ -934,6 +939,7 @@ void APIManager::continueGithubPaginated(const QUrl &url, const QString &sourceI
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
         Q_EMIT logMessage(
             QStringLiteral(
                 "GitHub API authentication failed (HTTP %1). Future requests blocked until token is updated.")
@@ -1057,6 +1063,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
             int statusCode = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (statusCode == 401) {
               m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
             }
             Q_EMIT githubIssueContextFailed(sId, iNum, ApiErrorDetector::detect(rep, rep->readAll()));
           }
@@ -1068,6 +1075,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
       }
       Q_EMIT githubIssueContextFailed(sourceId, issueNumber, ApiErrorDetector::detect(reply, reply->readAll()));
     }
@@ -1148,6 +1156,7 @@ void APIManager::fetchGithubBranches(const QString &sourceName, const QString &o
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_githubTokenFailed = true;
+  Q_EMIT githubAvailabilityChanged(false);
         Q_EMIT logMessage(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
                                          "requests blocked until token is updated.")
                               .arg(statusCode));

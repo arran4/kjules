@@ -8,6 +8,7 @@
 
 class APIManager;
 class SessionModel;
+class ErrorsModel;
 class QTreeView;
 class QLabel;
 class QProgressBar;
@@ -46,7 +47,7 @@ class SessionsWidget : public QWidget {
 
 public:
   explicit SessionsWidget(const QString &filterSource = QString(), APIManager *apiManager = nullptr,
-                          SessionModel *managedModel = nullptr, QWidget *parent = nullptr);
+                          SessionModel *managedModel = nullptr, ErrorsModel *errorsModel = nullptr, QWidget *parent = nullptr);
   ~SessionsWidget() override;
 
   SessionsProxyModel *proxyModel() const;
@@ -104,6 +105,7 @@ private:
   QString getSourceUrl(const QModelIndex &idx) const;
 
   APIManager *m_apiManager;
+  ErrorsModel *m_errorsModel;
   SessionModel *m_model;
   SessionModel *m_managedModel;
   SessionsProxyModel *m_proxyModel;

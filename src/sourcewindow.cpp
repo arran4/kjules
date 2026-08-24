@@ -214,8 +214,17 @@ void SourceWindow::setupUi() {
 
   connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
     for (int i = 0; i < m_tabWidget->count(); ++i) {
-      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("blockedTab")) {
+      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("queuedBlockedTab")) {
         m_tabWidget->setCurrentIndex(i);
+        QTabWidget *subTabWidget = m_tabWidget->widget(i)->findChild<QTabWidget *>();
+        if (subTabWidget) {
+          for (int j = 0; j < subTabWidget->count(); ++j) {
+            if (subTabWidget->widget(j)->objectName() == QStringLiteral("blockedTab")) {
+              subTabWidget->setCurrentIndex(j);
+              break;
+            }
+          }
+        }
         break;
       }
     }
@@ -252,7 +261,7 @@ void SourceWindow::setupUi() {
   }
 
   connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
-    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("blockedTab")) {
+    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("queuedBlockedTab")) {
       if (m_errorsModel) {
         for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
           QModelIndex idx = m_errorsModel->index(i, 0);
@@ -301,7 +310,7 @@ void SourceWindow::setupFollowingTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_sessionModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, true, this);
+    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, true, this);
     win->show();
   });
 
@@ -330,7 +339,7 @@ void SourceWindow::setupArchivedTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_archiveModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, false, this);
+    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
     win->show();
   });
 
@@ -381,7 +390,7 @@ void SourceWindow::setupQueuedBlockedTab() {
 }
 
 void SourceWindow::setupSessionsTab() {
-  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, this);
+  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, m_errorsModel, this);
   connect(m_sessionsWidget, &SessionsWidget::watchRequested, this, [this](const QJsonObject &session) {
     if (m_sessionModel) {
       m_sessionModel->addSession(session);
@@ -614,13 +623,20 @@ void SourceWindow::setupGithubIssuesTab() {
   connect(m_apiManager, &APIManager::githubIssueContextReceived, this, &SourceWindow::onGithubIssueContextReceived);
   connect(m_apiManager, &APIManager::githubIssueContextFailed, this, &SourceWindow::onGithubIssueContextFailed);
 
-  QComboBox *stateCombo = new QComboBox(this);
+  m_issuesStateCombo = new QComboBox(this);
+  QComboBox *stateCombo = m_issuesStateCombo;
   stateCombo->addItem(tr("Open"), QStringLiteral("open"));
   stateCombo->addItem(tr("Closed"), QStringLiteral("closed"));
   stateCombo->addItem(tr("All"), QStringLiteral("all"));
 
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
+
+  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this, [refreshBtn, stateCombo](bool available) {
+    refreshBtn->setEnabled(available);
+    stateCombo->setEnabled(available);
+  });
+
   connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo, stateCombo]() {
     m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
   });
@@ -628,16 +644,6 @@ void SourceWindow::setupGithubIssuesTab() {
   connect(stateCombo, &QComboBox::currentIndexChanged, this, [this, owner, repo, stateCombo]() {
     m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
   });
-
-  bool githubEnabled = (m_apiManager && m_apiManager->canConnectGithub());
-  refreshBtn->setEnabled(githubEnabled);
-  stateCombo->setEnabled(githubEnabled);
-  m_createSessionFromIssueAction->setEnabled(false); // only enabled on selection
-
-  // Since we might not have a specific signal for token available, if githubIssueContextFailed throws Authentication,
-  // that's it. We can just rely on the existing canConnectGithub() in a refresh if needed. Actually, there is a signal
-  // in APIManager for when credentials change or token is loaded but APIManager doesn't expose it directly. We will
-  // assume it might change, but for now we'll set it at creation. Let's see if APIManager has token status signals.
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
   btnLayout->addWidget(new QLabel(tr("State:")));
@@ -686,6 +692,8 @@ void SourceWindow::setupGithubPRsTab() {
           [this, owner, repo]() { m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo); });
 
   connect(m_apiManager, &APIManager::githubPullRequestsReceived, this, &SourceWindow::onGithubPullRequestsReceived);
+  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this,
+          [refreshBtn](bool available) { refreshBtn->setEnabled(available); });
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
   btnLayout->addStretch();
@@ -759,9 +767,12 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
       continue;
     }
 
-    // Skip closed issues from old cache robustly
-    if (issue.value(QStringLiteral("state")).toString() != QStringLiteral("open")) {
-      continue;
+    if (m_issuesStateCombo) {
+      QString selectedState = m_issuesStateCombo->currentData().toString();
+      QString issueState = issue.value(QStringLiteral("state")).toString();
+      if (selectedState != QStringLiteral("all") && issueState != selectedState) {
+        continue;
+      }
     }
 
     QList<QStandardItem *> row;
@@ -836,6 +847,10 @@ void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int /*i
     m_createSessionFromIssueAction->setText(tr("Create Session..."));
     m_createSessionFromIssueAction->setEnabled(true);
   }
+  if (m_cancelFetchAction) {
+    m_cancelFetchAction->setEnabled(false);
+  }
+  m_fetchingIssueNumber = -1;
 
   QModelIndexList matches =
       m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
@@ -864,6 +879,10 @@ void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issue
     m_createSessionFromIssueAction->setText(tr("Create Session..."));
     m_createSessionFromIssueAction->setEnabled(true);
   }
+  if (m_cancelFetchAction) {
+    m_cancelFetchAction->setEnabled(false);
+  }
+  m_fetchingIssueNumber = -1;
 
   if (error.type() == ApiError::Type::Canceled) {
     Q_EMIT statusMessage(tr("GitHub issue fetch cancelled"));

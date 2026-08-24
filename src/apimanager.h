@@ -64,6 +64,7 @@ public:
   void createGithubRepoAsync(const QJsonObject &requestData);
 
 Q_SIGNALS:
+  void githubAvailabilityChanged(bool available);
   void githubUsernameFetched(const QString &username);
   void githubRepoCreated(const QJsonObject &requestData, const QJsonObject &response);
   void githubRepoCreationFailed(const QJsonObject &requestData, const ApiError &apiError);

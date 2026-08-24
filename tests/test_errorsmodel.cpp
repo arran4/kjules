@@ -10,6 +10,42 @@ class ErrorsModelTest : public QObject {
   Q_OBJECT
 
 private Q_SLOTS:
+
+  void testTrimming() {
+    QTemporaryDir dir;
+    QString path = dir.path() + QStringLiteral("/errors.json");
+
+    // Create an oversized file
+    QJsonArray array;
+    for (int i = 0; i < 250; ++i) {
+      QJsonObject obj;
+      obj[QStringLiteral("message")] = QString(QStringLiteral("Error %1")).arg(i);
+      array.append(obj);
+    }
+
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly)) {
+      QJsonDocument doc(array);
+      file.write(doc.toJson());
+      file.close();
+    }
+
+    // Load it
+    ErrorsModel model(nullptr, path);
+    QCOMPARE(model.rowCount(), 200);
+    QCOMPARE(model.data(model.index(0, 0), ErrorsModel::MessageRole).toString(), QStringLiteral("Error 0"));
+    QCOMPARE(model.data(model.index(199, 0), ErrorsModel::MessageRole).toString(), QStringLiteral("Error 199"));
+
+    // Check if it was saved
+    QFile file2(path);
+    if (file2.open(QIODevice::ReadOnly)) {
+      QJsonDocument doc = QJsonDocument::fromJson(file2.readAll());
+      QCOMPARE(doc.array().size(), 200);
+    } else {
+      QFAIL("File not saved");
+    }
+  }
+
   void testMax200() {
     QTemporaryDir dir;
     QString path = dir.path() + QStringLiteral("/errors.json");

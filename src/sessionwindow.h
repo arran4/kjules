@@ -11,6 +11,8 @@ class QTimer;
 class QComboBox;
 class APIManager;
 class ActivityBrowser;
+class ErrorsModel;
+class ClickableLabel;
 
 class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -19,7 +21,7 @@ Q_SIGNALS:
   void openPreviousAttemptRequested(const QString &previousAttemptId);
 
 public:
-  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged = true,
+  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel = nullptr, bool isManaged = true,
                          QWidget *parent = nullptr);
   ~SessionWindow();
 
@@ -39,7 +41,9 @@ private:
   APIManager *m_apiManager;
   bool m_isManaged;
   QTabWidget *m_tabWidget;
+  ErrorsModel *m_errorsModel;
   QLabel *m_statusLabel;
+  ClickableLabel *m_unseenErrorLabel;
   QTimer *m_autoRefreshTimer;
   QComboBox *m_autoRefreshCombo;
   QTextBrowser *m_detailsBrowser;

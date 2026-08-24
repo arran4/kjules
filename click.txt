@@ -1,7 +1,0 @@
-The user pointed out: "the menu loads but it doesn't have the status text log in it, it should be logging all status text changes, and including extra details and presenting the time htey happened."
-
-Looking at the code, I only added `logMessage` for a few places in `MainWindow` but the user wants ALL status text changes to be logged in the `ActivityLogWindow`.
-
-So in `MainWindow::updateStatus(const QString &message)`, I should call `ActivityLogWindow::instance()->logMessage(formattedMessage);`.
-
-Let's modify `MainWindow::updateStatus` to do this!

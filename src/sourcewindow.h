@@ -8,6 +8,7 @@ class SourceModel;
 class SessionModel;
 class QueueModel;
 class ErrorsModel;
+class QComboBox;
 class QLabel;
 class ClickableLabel;
 class BlockedTreeModel;
@@ -77,10 +78,12 @@ private:
 
   QTreeView *m_issuesView;
   QTreeView *m_prsView;
+  QComboBox *m_issuesStateCombo = nullptr;
   QStandardItemModel *m_issuesModel;
   QStandardItemModel *m_prsModel;
   QAction *m_createSessionFromIssueAction = nullptr;
   QAction *m_cancelFetchAction = nullptr;
+  int m_fetchingIssueNumber = -1;
   QLabel *m_statusLabel = nullptr;
   ClickableLabel *m_unseenErrorLabel = nullptr;
 };

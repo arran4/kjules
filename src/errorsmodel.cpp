@@ -144,8 +144,13 @@ void ErrorsModel::loadErrors() {
     file.close();
 
     // Trim to 200 on load
+    bool trimmed = false;
     while (m_errors.size() > 200) {
       m_errors.removeLast();
+      trimmed = true;
+    }
+    if (trimmed) {
+      saveErrors();
     }
   }
 
