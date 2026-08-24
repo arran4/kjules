@@ -1,6 +1,7 @@
 #ifndef SOURCEWINDOW_H
 #define SOURCEWINDOW_H
 
+#include "api/apierror.h"
 #include <KXmlGuiWindow>
 
 class SourceModel;
@@ -53,7 +54,7 @@ private Q_SLOTS:
   void onGithubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
   void onGithubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
                                     const QJsonArray &comments);
-  void onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const QString &error);
+  void onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const ApiError &error);
 
 private:
   QString m_sourceId;

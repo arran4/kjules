@@ -771,7 +771,7 @@ void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int /*i
   Q_EMIT newSessionFromIssueRequested(m_sourceId, initialData);
 }
 
-void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const QString &error) {
+void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const ApiError &error) {
   if (sourceId != m_sourceId)
     return;
 
@@ -780,22 +780,48 @@ void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issue
     m_createSessionFromIssueAction->setEnabled(true);
   }
 
-  // Determine if this was a cancelation
-  if (error.contains(QStringLiteral("Operation canceled"), Qt::CaseInsensitive)) {
+  if (error.type() == ApiError::Type::Canceled) {
     Q_EMIT statusMessage(tr("GitHub issue fetch cancelled"));
-    return; // Do not record this as an error
+    return;
   }
 
-  // Produce concise status-bar error
-  Q_EMIT statusMessage(tr("Failed to fetch issue context for #%1").arg(issueNumber));
+  // Determine concise status message
+  QString statusMsg;
+  switch (error.type()) {
+  case ApiError::Type::Authentication:
+    statusMsg = tr("Authentication failed — check credentials");
+    break;
+  case ApiError::Type::PermissionDenied:
+    statusMsg = tr("GitHub access denied — check repository/token permissions");
+    break;
+  case ApiError::Type::RateLimit:
+    statusMsg = tr("GitHub rate limit reached — retry later"); // Or extract retry-after if available
+    break;
+  case ApiError::Type::NotFound:
+    statusMsg = tr("GitHub issue #%1 could not be loaded").arg(issueNumber);
+    break;
+  case ApiError::Type::ServerError:
+    statusMsg = tr("Service unavailable — try again later");
+    break;
+  default:
+    statusMsg = tr("Failed to fetch issue context for #%1").arg(issueNumber);
+    break;
+  }
 
-  // Add to detailed errors list
+  Q_EMIT statusMessage(statusMsg);
+
   if (m_errorsModel) {
-    QJsonObject errorObj;
-    errorObj[QStringLiteral("message")] = tr("Failed to fetch issue context for #%1: %2").arg(issueNumber).arg(error);
-    errorObj[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    QJsonObject errorObj = error.toJson();
     errorObj[QStringLiteral("sourceId")] = sourceId;
     errorObj[QStringLiteral("issueNumber")] = issueNumber;
+    errorObj[QStringLiteral("operation")] = QStringLiteral("fetch GitHub issue context");
+    errorObj[QStringLiteral("provider")] = QStringLiteral("GitHub");
+    errorObj[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    // Remove the message overwrite if ApiError already has one, or use a rich one
+    if (errorObj.value(QStringLiteral("message")).toString().isEmpty()) {
+      errorObj[QStringLiteral("message")] =
+          tr("Failed to fetch issue context for #%1: %2").arg(issueNumber).arg(error.message());
+    }
     m_errorsModel->addErrorObj(errorObj);
   }
 }

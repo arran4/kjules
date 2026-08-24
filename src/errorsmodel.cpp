@@ -41,6 +41,18 @@ QVariant ErrorsModel::data(const QModelIndex &index, int role) const {
     return QVariant();
   case Qt::DisplayRole:
     return error.value(QStringLiteral("message")).toString(); // Display error message as title
+  case SeenRole:
+    return m_seenState.at(index.row());
+  case UnseenRole:
+    return !m_seenState.at(index.row());
+  case SourceIdRole:
+    return error.value(QStringLiteral("sourceId")).toString();
+  case SessionIdRole:
+    return error.value(QStringLiteral("sessionId")).toString();
+  case OperationRole:
+    return error.value(QStringLiteral("operation")).toString();
+  case ProviderRole:
+    return error.value(QStringLiteral("provider")).toString();
   default:
     return QVariant();
   }
@@ -53,13 +65,29 @@ QHash<int, QByteArray> ErrorsModel::roleNames() const {
   roles[MessageRole] = "message";
   roles[HttpDetailsRole] = "httpDetails";
   roles[TimestampRole] = "timestamp";
+  roles[SeenRole] = "seen";
+  roles[UnseenRole] = "unseen";
+  roles[SourceIdRole] = "sourceId";
+  roles[SessionIdRole] = "sessionId";
+  roles[OperationRole] = "operation";
+  roles[ProviderRole] = "provider";
   return roles;
 }
 
 void ErrorsModel::addErrorObj(const QJsonObject &errorObj) {
   beginInsertRows(QModelIndex(), 0, 0);
   m_errors.insert(0, errorObj);
+  m_seenState.insert(0, false); // New errors start as unseen
   endInsertRows();
+
+  while (m_errors.size() > 200) {
+    beginRemoveRows(QModelIndex(), m_errors.size() - 1, m_errors.size() - 1);
+    m_errors.removeLast();
+    m_seenState.removeLast();
+    endRemoveRows();
+  }
+
+  updateUnseenCount();
   saveErrors();
 }
 
@@ -75,7 +103,9 @@ void ErrorsModel::updateError(int row, const QJsonObject &errorObj) {
 void ErrorsModel::clear() {
   beginResetModel();
   m_errors = QJsonArray();
+  m_seenState.clear();
   endResetModel();
+  updateUnseenCount();
   saveErrors();
 }
 
@@ -83,7 +113,9 @@ void ErrorsModel::removeError(int row) {
   if (row >= 0 && row < m_errors.size()) {
     beginRemoveRows(QModelIndex(), row, row);
     m_errors.removeAt(row);
+    m_seenState.removeAt(row);
     endRemoveRows();
+    updateUnseenCount();
     saveErrors();
   }
 }
@@ -110,7 +142,18 @@ void ErrorsModel::loadErrors() {
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     m_errors = doc.array();
     file.close();
+
+    // Trim to 200 on load
+    while (m_errors.size() > 200) {
+      m_errors.removeLast();
+    }
   }
+
+  m_seenState.clear();
+  for (int i = 0; i < m_errors.size(); ++i) {
+    m_seenState.append(true); // Loaded errors start as seen
+  }
+  updateUnseenCount();
 }
 
 void ErrorsModel::saveErrors() {
@@ -126,5 +169,41 @@ void ErrorsModel::saveErrors() {
     QJsonDocument doc(m_errors);
     file.write(doc.toJson());
     file.close();
+  }
+}
+
+int ErrorsModel::unseenCount() const { return m_unseenCount; }
+
+void ErrorsModel::updateUnseenCount() {
+  int count = 0;
+  for (bool seen : m_seenState) {
+    if (!seen)
+      count++;
+  }
+  if (m_unseenCount != count) {
+    m_unseenCount = count;
+    Q_EMIT unseenCountChanged(m_unseenCount);
+  }
+}
+
+void ErrorsModel::markSeen(int row) {
+  if (row >= 0 && row < m_seenState.size() && !m_seenState[row]) {
+    m_seenState[row] = true;
+    Q_EMIT dataChanged(index(row, 0), index(row, 0), {SeenRole, UnseenRole});
+    updateUnseenCount();
+  }
+}
+
+void ErrorsModel::markAllSeen() {
+  bool changed = false;
+  for (int i = 0; i < m_seenState.size(); ++i) {
+    if (!m_seenState[i]) {
+      m_seenState[i] = true;
+      changed = true;
+    }
+  }
+  if (changed) {
+    Q_EMIT dataChanged(index(0, 0), index(m_seenState.size() - 1, 0), {SeenRole, UnseenRole});
+    updateUnseenCount();
   }
 }

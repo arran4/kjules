@@ -77,7 +77,7 @@ Q_SIGNALS:
   void githubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
   void githubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
                                   const QJsonArray &comments);
-  void githubIssueContextFailed(const QString &sourceId, int issueNumber, const QString &error);
+  void githubIssueContextFailed(const QString &sourceId, int issueNumber, const ApiError &error);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished(bool complete);
   void sessionsRefreshFinished();

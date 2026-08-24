@@ -9,7 +9,19 @@ class ErrorsModel : public QAbstractListModel {
   Q_OBJECT
 
 public:
-  enum ErrorRoles { RequestRole = Qt::UserRole + 1, ResponseRole, MessageRole, HttpDetailsRole, TimestampRole };
+  enum ErrorRoles {
+    RequestRole = Qt::UserRole + 1,
+    ResponseRole,
+    MessageRole,
+    HttpDetailsRole,
+    TimestampRole,
+    SeenRole,
+    UnseenRole,
+    SourceIdRole,
+    SessionIdRole,
+    OperationRole,
+    ProviderRole
+  };
 
   explicit ErrorsModel(QObject *parent = nullptr, const QString &filename = QStringLiteral("errors.json"));
 
@@ -38,10 +50,20 @@ public:
   void saveErrors();
   void clear();
 
+  int unseenCount() const;
+  void markSeen(int row);
+  void markAllSeen();
+
+Q_SIGNALS:
+  void unseenCountChanged(int count);
+
 private:
   QString cacheFilePath() const;
 
   QJsonArray m_errors;
+  QList<bool> m_seenState;
+  int m_unseenCount = 0;
+  void updateUnseenCount();
   QString m_filename;
 };
 

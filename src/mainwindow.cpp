@@ -1752,9 +1752,22 @@ void MainWindow::setupStatusBar() {
   });
   statusBar()->addWidget(m_statusLabel);
 
+  m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->hide(); // Initially hidden if no errors
+  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("errorsTab")) {
+        m_tabWidget->setCurrentIndex(i);
+        break;
+      }
+    }
+  });
+  statusBar()->addWidget(m_unseenErrorLabel);
+
   m_sessionStatsLabel = new QLabel(this);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
+  onUnseenErrorsCountChanged(m_errorsModel->unseenCount());
 
   m_queueCountdownLabel = new QLabel(this);
   m_queueCountdownLabel->hide();
@@ -6160,6 +6173,7 @@ void MainWindow::onMasterMinuteTimer() {
 
   // 1. Update inexpensive once-per-minute UI/session stats
   updateSessionStats();
+  onUnseenErrorsCountChanged(m_errorsModel->unseenCount());
 
   // 2. Refresh only following sessions whose individual/global FRI has expired
   autoRefreshFollowing();
@@ -6173,4 +6187,13 @@ void MainWindow::onMasterMinuteTimer() {
   }
 
   m_isProcessingMinuteTimer = false;
+}
+
+void MainWindow::onUnseenErrorsCountChanged(int count) {
+  if (count > 0) {
+    m_unseenErrorLabel->setText(i18np("[Error: %1]", "[Errors: %1]", count));
+    m_unseenErrorLabel->show();
+  } else {
+    m_unseenErrorLabel->hide();
+  }
 }

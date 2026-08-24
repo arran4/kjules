@@ -951,13 +951,18 @@ void APIManager::fetchGithubPaginated(const QUrl &initialUrl, const QString &sou
 void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString &owner, const QString &repository,
                                          int issueNumber) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
-    Q_EMIT githubIssueContextFailed(sourceId, issueNumber,
-                                    QStringLiteral("No valid GitHub token or rate limit exhausted."));
+    ApiError err;
+    err.setType(ApiError::Type::Authentication);
+    err.setMessage(QStringLiteral("No valid GitHub token or rate limit exhausted."));
+    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, err);
     return;
   }
 
   if (sourceId.isEmpty() || owner.isEmpty() || repository.isEmpty()) {
-    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, QStringLiteral("Invalid source metadata."));
+    ApiError err;
+    err.setType(ApiError::Type::Validation);
+    err.setMessage(QStringLiteral("Invalid source metadata."));
+    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, err);
     return;
   }
 
@@ -1000,7 +1005,10 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
       auto fetchComments = [this, requestKey](auto fetchCommentsRef, QUrl url, const QString &sId, int iNum,
                                               QJsonObject iObj, QSharedPointer<QJsonArray> res) -> void {
         if (!checkGithubRateLimit()) {
-          Q_EMIT githubIssueContextFailed(sId, iNum, QStringLiteral("Rate limit exhausted while fetching comments."));
+          ApiError err;
+          err.setType(ApiError::Type::RateLimit);
+          err.setMessage(QStringLiteral("Rate limit exhausted while fetching comments."));
+          Q_EMIT githubIssueContextFailed(sId, iNum, err);
           return;
         }
 
@@ -1050,8 +1058,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
             if (statusCode == 401) {
               m_githubTokenFailed = true;
             }
-            Q_EMIT githubIssueContextFailed(sId, iNum,
-                                            QStringLiteral("Failed to fetch comments: ") + rep->errorString());
+            Q_EMIT githubIssueContextFailed(sId, iNum, ApiErrorDetector::detect(rep, rep->readAll()));
           }
         });
       };
@@ -1062,8 +1069,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
       if (statusCode == 401) {
         m_githubTokenFailed = true;
       }
-      Q_EMIT githubIssueContextFailed(sourceId, issueNumber,
-                                      QStringLiteral("Failed to fetch issue context: ") + reply->errorString());
+      Q_EMIT githubIssueContextFailed(sourceId, issueNumber, ApiErrorDetector::detect(reply, reply->readAll()));
     }
   });
 }

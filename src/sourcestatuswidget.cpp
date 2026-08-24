@@ -60,8 +60,15 @@ bool ErrorFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &
     return false;
   }
   QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-  QJsonObject req = sourceModel()->data(index, ErrorsModel::RequestRole).toJsonObject();
 
+  // Use SourceIdRole first
+  QString explicitSourceId = sourceModel()->data(index, ErrorsModel::SourceIdRole).toString();
+  if (!explicitSourceId.isEmpty()) {
+    return explicitSourceId == m_sourceName;
+  }
+
+  // Fallback to request payload
+  QJsonObject req = sourceModel()->data(index, ErrorsModel::RequestRole).toJsonObject();
   QString source = req.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
   if (source.isEmpty()) {
     source = req.value(QStringLiteral("source")).toString();
