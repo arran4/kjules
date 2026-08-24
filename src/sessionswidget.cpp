@@ -133,7 +133,7 @@ bool SessionsProxyModel::lessThan(const QModelIndex &source_left, const QModelIn
 
 SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
                                ErrorsModel *errorsModel, QWidget *parent)
-    : QWidget(parent), m_apiManager(apiManager), m_managedModel(managedModel), m_errorsModel(errorsModel),
+    : QWidget(parent), m_apiManager(apiManager), m_errorsModel(errorsModel), m_managedModel(managedModel),
       m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false), m_pagesLoaded(0),
       m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
 

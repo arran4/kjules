@@ -612,13 +612,6 @@ void SourceWindow::setupGithubIssuesTab() {
 
   layout->addWidget(m_issuesView);
 
-  if (rawData.contains(QStringLiteral("local_githubIssues"))) {
-    onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
-  } else {
-    // Initial fetch if cache is empty
-    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo);
-  }
-
   connect(m_apiManager, &APIManager::githubIssuesReceived, this, &SourceWindow::onGithubIssuesReceived);
   connect(m_apiManager, &APIManager::githubIssueContextReceived, this, &SourceWindow::onGithubIssueContextReceived);
   connect(m_apiManager, &APIManager::githubIssueContextFailed, this, &SourceWindow::onGithubIssueContextFailed);
@@ -642,7 +635,25 @@ void SourceWindow::setupGithubIssuesTab() {
   });
 
   connect(stateCombo, &QComboBox::currentIndexChanged, this, [this, owner, repo, stateCombo]() {
-    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
+    QString currentState = stateCombo->currentData().toString();
+    QString cacheKey = QStringLiteral("local_githubIssues_") + currentState;
+
+    QModelIndexList matches =
+        m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+    if (!matches.isEmpty()) {
+      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+      if (rawData.contains(cacheKey)) {
+        onGithubIssuesReceived(m_sourceId, rawData.value(cacheKey).toArray());
+      } else if (currentState == QStringLiteral("open") && rawData.contains(QStringLiteral("local_githubIssues"))) {
+        // Fallback to legacy cache
+        onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
+      } else {
+        m_issuesModel->removeRows(0, m_issuesModel->rowCount()); // clear until loaded
+      }
+    }
+
+    // Always refresh network too if available
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
   });
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
@@ -652,6 +663,17 @@ void SourceWindow::setupGithubIssuesTab() {
   btnLayout->addWidget(refreshBtn);
 
   layout->addLayout(btnLayout);
+
+  QString currentState = stateCombo->currentData().toString();
+  QString cacheKey = QStringLiteral("local_githubIssues_") + currentState;
+  if (rawData.contains(cacheKey)) {
+    onGithubIssuesReceived(m_sourceId, rawData.value(cacheKey).toArray());
+  } else if (rawData.contains(QStringLiteral("local_githubIssues"))) {
+    // Fallback to legacy cache
+    onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
+  } else {
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
+  }
 
   m_tabWidget->addTab(issuesTab, tr("GitHub Issues"));
 }
@@ -845,7 +867,7 @@ void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int /*i
 
   if (m_createSessionFromIssueAction) {
     m_createSessionFromIssueAction->setText(tr("Create Session..."));
-    m_createSessionFromIssueAction->setEnabled(true);
+    m_createSessionFromIssueAction->setEnabled(m_issuesView && m_issuesView->selectionModel()->hasSelection());
   }
   if (m_cancelFetchAction) {
     m_cancelFetchAction->setEnabled(false);
@@ -877,7 +899,7 @@ void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issue
 
   if (m_createSessionFromIssueAction) {
     m_createSessionFromIssueAction->setText(tr("Create Session..."));
-    m_createSessionFromIssueAction->setEnabled(true);
+    m_createSessionFromIssueAction->setEnabled(m_issuesView && m_issuesView->selectionModel()->hasSelection());
   }
   if (m_cancelFetchAction) {
     m_cancelFetchAction->setEnabled(false);
