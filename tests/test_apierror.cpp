@@ -67,6 +67,30 @@ void TestApiError::testApiErrorDetector() {
     QCOMPARE(err.type(), ApiError::Type::RateLimit);
   }
   {
+    MockNetworkReply reply(403);
+    reply.addRawHeader("retry-after", "60");
+    ApiError err = ApiErrorDetector::detect(&reply);
+    QCOMPARE(err.type(), ApiError::Type::RateLimit);
+  }
+  {
+    QByteArray body = "{\"error\": {\"status\": \"RESOURCE_EXHAUSTED\"}}";
+    MockNetworkReply reply(403, body);
+    ApiError err = ApiErrorDetector::detect(&reply, body);
+    QCOMPARE(err.type(), ApiError::Type::RateLimit);
+  }
+  {
+    QByteArray body = "{\"error\": {\"status\": \"INVALID_ARGUMENT\"}}";
+    MockNetworkReply reply(400, body);
+    ApiError err = ApiErrorDetector::detect(&reply, body);
+    QCOMPARE(err.type(), ApiError::Type::Validation);
+  }
+  {
+    MockNetworkReply reply(200);
+    reply.setReplyError(QNetworkReply::ConnectionRefusedError, QStringLiteral("Connection refused"));
+    ApiError err = ApiErrorDetector::detect(&reply);
+    QCOMPARE(err.type(), ApiError::Type::Network);
+  }
+  {
     MockNetworkReply reply(404);
     ApiError err = ApiErrorDetector::detect(&reply);
     QCOMPARE(err.type(), ApiError::Type::NotFound);

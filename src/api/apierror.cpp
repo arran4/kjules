@@ -82,17 +82,15 @@ ApiError ApiErrorDetector::detect(QNetworkReply *reply, const QByteArray &respon
   if (statusCode == 401) {
     apiError.setType(ApiError::Type::Authentication);
     apiError.setMessage(apiMessage.isEmpty() ? QStringLiteral("Authentication failed.") : apiMessage);
-  } else if (statusCode == 403) {
-    if (reply->hasRawHeader("x-ratelimit-remaining") && reply->rawHeader("x-ratelimit-remaining") == "0") {
-      apiError.setType(ApiError::Type::RateLimit);
-      apiError.setMessage(apiMessage.isEmpty() ? QStringLiteral("Rate limit exceeded.") : apiMessage);
-    } else {
-      apiError.setType(ApiError::Type::PermissionDenied);
-      apiError.setMessage(apiMessage.isEmpty() ? QStringLiteral("Permission denied.") : apiMessage);
-    }
-  } else if (statusCode == 429 || status == QStringLiteral("RESOURCE_EXHAUSTED")) {
+  } else if (statusCode == 429 || status == QStringLiteral("RESOURCE_EXHAUSTED") ||
+             (statusCode == 403 && reply->hasRawHeader("x-ratelimit-remaining") &&
+              reply->rawHeader("x-ratelimit-remaining") == "0") ||
+             (statusCode == 403 && reply->hasRawHeader("retry-after"))) {
     apiError.setType(ApiError::Type::RateLimit);
     apiError.setMessage(apiMessage.isEmpty() ? QStringLiteral("Rate limit exceeded.") : apiMessage);
+  } else if (statusCode == 403) {
+    apiError.setType(ApiError::Type::PermissionDenied);
+    apiError.setMessage(apiMessage.isEmpty() ? QStringLiteral("Permission denied.") : apiMessage);
   } else if (statusCode == 404 || status == QStringLiteral("NOT_FOUND")) {
     apiError.setType(ApiError::Type::NotFound);
     apiError.setMessage(apiMessage.isEmpty() ? QStringLiteral("Resource not found.") : apiMessage);
