@@ -771,7 +771,7 @@ void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int /*i
   Q_EMIT newSessionFromIssueRequested(m_sourceId, initialData);
 }
 
-void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int /*issueNumber*/, const QString &error) {
+void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const QString &error) {
   if (sourceId != m_sourceId)
     return;
 
@@ -780,11 +780,23 @@ void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int /*iss
     m_createSessionFromIssueAction->setEnabled(true);
   }
 
-  // Inform the user
+  // Determine if this was a cancelation
+  if (error.contains(QStringLiteral("Operation canceled"), Qt::CaseInsensitive)) {
+    Q_EMIT statusMessage(tr("GitHub issue fetch cancelled"));
+    return; // Do not record this as an error
+  }
+
+  // Produce concise status-bar error
+  Q_EMIT statusMessage(tr("Failed to fetch issue context for #%1").arg(issueNumber));
+
+  // Add to detailed errors list
   if (m_errorsModel) {
-    // We don't have direct access to emit a user message from here, but we can log it or show a messagebox
-    // We will just log it using qDebug for simplicity, or the user can check network logs.
-    qDebug() << "Failed to fetch issue context:" << error;
+    QJsonObject errorObj;
+    errorObj[QStringLiteral("message")] = tr("Failed to fetch issue context for #%1: %2").arg(issueNumber).arg(error);
+    errorObj[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    errorObj[QStringLiteral("sourceId")] = sourceId;
+    errorObj[QStringLiteral("issueNumber")] = issueNumber;
+    m_errorsModel->addErrorObj(errorObj);
   }
 }
 

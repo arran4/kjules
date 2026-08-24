@@ -31,6 +31,7 @@ Q_SIGNALS:
   void newSessionRequested(const QString &sourceId);
   void newSessionFromIssueRequested(const QString &sourceId, const QJsonObject &initialData);
   void queueProcessingRequested();
+  void statusMessage(const QString &message);
 
 private:
   void setupUi();
