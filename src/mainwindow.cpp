@@ -338,6 +338,12 @@ void MainWindow::setupUi() {
 
   mainLayout->addWidget(m_tabWidget);
 
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
+    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("errorsTab")) {
+      m_errorsModel->markAllSeen();
+    }
+  });
+
   setupStatusBar();
 
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc

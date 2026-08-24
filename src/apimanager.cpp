@@ -979,7 +979,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
   QString auth = QStringLiteral("Bearer ") + m_githubToken;
   request.setRawHeader("Authorization", auth.toUtf8());
 
-  QString requestKey = sourceId + QString::number(issueNumber);
+  QString requestKey = QStringLiteral("%1#%2").arg(sourceId).arg(issueNumber);
   if (m_githubIssueContextReplies.contains(requestKey)) {
     return; // Request already in progress
   }
@@ -1075,7 +1075,7 @@ void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString 
 }
 
 void APIManager::cancelGithubIssueContextFetch(const QString &sourceId, int issueNumber) {
-  QString requestKey = sourceId + QString::number(issueNumber);
+  QString requestKey = QStringLiteral("%1#%2").arg(sourceId).arg(issueNumber);
   if (m_githubIssueContextReplies.contains(requestKey)) {
     QNetworkReply *reply = m_githubIssueContextReplies.take(requestKey);
     if (reply && reply->isRunning()) {

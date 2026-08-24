@@ -1,6 +1,7 @@
 #include "sourcewindow.h"
 #include "apimanager.h"
 #include "blockedtreemodel.h"
+#include "clickablelabel.h"
 #include "draftdelegate.h"
 #include "errorsmodel.h"
 #include "queuedelegate.h"
@@ -11,11 +12,14 @@
 #include "sourcemodel.h"
 #include "sourcestatuswidget.h"
 #include <KActionCollection>
+#include <QLabel>
+#include <QStatusBar>
 
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDesktopServices>
 #include <QFormLayout>
 #include <QHeaderView>
@@ -200,6 +204,68 @@ void SourceWindow::setupUi() {
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
   m_tabWidget = new QTabWidget(this);
+
+  m_statusLabel = new QLabel(this);
+  m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->hide();
+
+  statusBar()->addWidget(m_statusLabel);
+  statusBar()->addWidget(m_unseenErrorLabel);
+
+  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("blockedTab")) {
+        m_tabWidget->setCurrentIndex(i);
+        break;
+      }
+    }
+  });
+
+  auto updateUnseenErrors = [this]() {
+    if (!m_errorsModel)
+      return;
+    int count = 0;
+    for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+      QModelIndex idx = m_errorsModel->index(i, 0);
+      if (m_errorsModel->data(idx, ErrorsModel::SourceIdRole).toString() == m_sourceId &&
+          m_errorsModel->data(idx, ErrorsModel::UnseenRole).toBool()) {
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_unseenErrorLabel->setText(i18np("[Error: %1]", "[Errors: %1]", count));
+      m_unseenErrorLabel->show();
+    } else {
+      m_unseenErrorLabel->hide();
+    }
+  };
+
+  if (m_errorsModel) {
+    connect(m_errorsModel, &ErrorsModel::unseenCountChanged, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::dataChanged, this,
+            [updateUnseenErrors](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+              if (roles.contains(ErrorsModel::SeenRole) || roles.contains(ErrorsModel::UnseenRole) || roles.isEmpty()) {
+                updateUnseenErrors();
+              }
+            });
+    updateUnseenErrors();
+  }
+
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
+    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("blockedTab")) {
+      if (m_errorsModel) {
+        for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+          QModelIndex idx = m_errorsModel->index(i, 0);
+          if (m_errorsModel->data(idx, ErrorsModel::SourceIdRole).toString() == m_sourceId) {
+            m_errorsModel->markSeen(i);
+          }
+        }
+      }
+    }
+  });
+
+  connect(this, &SourceWindow::statusMessage, this, [this](const QString &msg) { m_statusLabel->setText(msg); });
+
   layout->addWidget(m_tabWidget);
 
   setupFollowingTab();
@@ -494,11 +560,9 @@ void SourceWindow::setupGithubIssuesTab() {
   QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
   QString owner = SourceModel::githubOwner(rawData);
   QString repo = SourceModel::githubRepository(rawData);
-
-  if (!m_apiManager || !m_apiManager->canConnectGithub() || owner.isEmpty() || repo.isEmpty()) {
+  if (owner.isEmpty() || repo.isEmpty()) {
     return;
   }
-
   QWidget *issuesTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(issuesTab);
 
@@ -546,18 +610,41 @@ void SourceWindow::setupGithubIssuesTab() {
     m_apiManager->fetchGithubIssues(m_sourceId, owner, repo);
   }
 
-  QPushButton *refreshBtn =
-      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
-  connect(refreshBtn, &QPushButton::clicked, this,
-          [this, owner, repo]() { m_apiManager->fetchGithubIssues(m_sourceId, owner, repo); });
-
   connect(m_apiManager, &APIManager::githubIssuesReceived, this, &SourceWindow::onGithubIssuesReceived);
   connect(m_apiManager, &APIManager::githubIssueContextReceived, this, &SourceWindow::onGithubIssueContextReceived);
   connect(m_apiManager, &APIManager::githubIssueContextFailed, this, &SourceWindow::onGithubIssueContextFailed);
 
+  QComboBox *stateCombo = new QComboBox(this);
+  stateCombo->addItem(tr("Open"), QStringLiteral("open"));
+  stateCombo->addItem(tr("Closed"), QStringLiteral("closed"));
+  stateCombo->addItem(tr("All"), QStringLiteral("all"));
+
+  QPushButton *refreshBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
+  connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo, stateCombo]() {
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
+  });
+
+  connect(stateCombo, &QComboBox::currentIndexChanged, this, [this, owner, repo, stateCombo]() {
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
+  });
+
+  bool githubEnabled = (m_apiManager && m_apiManager->canConnectGithub());
+  refreshBtn->setEnabled(githubEnabled);
+  stateCombo->setEnabled(githubEnabled);
+  m_createSessionFromIssueAction->setEnabled(false); // only enabled on selection
+
+  // Since we might not have a specific signal for token available, if githubIssueContextFailed throws Authentication,
+  // that's it. We can just rely on the existing canConnectGithub() in a refresh if needed. Actually, there is a signal
+  // in APIManager for when credentials change or token is loaded but APIManager doesn't expose it directly. We will
+  // assume it might change, but for now we'll set it at creation. Let's see if APIManager has token status signals.
+
   QHBoxLayout *btnLayout = new QHBoxLayout();
+  btnLayout->addWidget(new QLabel(tr("State:")));
+  btnLayout->addWidget(stateCombo);
   btnLayout->addStretch();
   btnLayout->addWidget(refreshBtn);
+
   layout->addLayout(btnLayout);
 
   m_tabWidget->addTab(issuesTab, tr("GitHub Issues"));
@@ -573,11 +660,9 @@ void SourceWindow::setupGithubPRsTab() {
   QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
   QString owner = SourceModel::githubOwner(rawData);
   QString repo = SourceModel::githubRepository(rawData);
-
-  if (!m_apiManager || !m_apiManager->canConnectGithub() || owner.isEmpty() || repo.isEmpty()) {
+  if (owner.isEmpty() || repo.isEmpty()) {
     return;
   }
-
   QWidget *prsTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(prsTab);
 

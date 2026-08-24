@@ -8,6 +8,8 @@ class SourceModel;
 class SessionModel;
 class QueueModel;
 class ErrorsModel;
+class QLabel;
+class ClickableLabel;
 class BlockedTreeModel;
 class APIManager;
 class SessionsWidget;
@@ -78,6 +80,9 @@ private:
   QStandardItemModel *m_issuesModel;
   QStandardItemModel *m_prsModel;
   QAction *m_createSessionFromIssueAction = nullptr;
+  QAction *m_cancelFetchAction = nullptr;
+  QLabel *m_statusLabel = nullptr;
+  ClickableLabel *m_unseenErrorLabel = nullptr;
 };
 
 #endif // SOURCEWINDOW_H
