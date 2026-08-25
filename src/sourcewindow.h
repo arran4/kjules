@@ -88,7 +88,7 @@ private:
   QAction *m_createSessionFromIssueAction = nullptr;
   QAction *m_cancelFetchAction = nullptr;
   int m_fetchingIssueNumber = -1;
-  QLabel *m_statusLabel = nullptr;
+  ClickableLabel *m_statusLabel = nullptr;
   ClickableLabel *m_unseenErrorLabel = nullptr;
 };
 

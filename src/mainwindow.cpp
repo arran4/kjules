@@ -1773,6 +1773,7 @@ void MainWindow::setupStatusBar() {
   m_sessionStatsLabel = new QLabel(this);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
+  onUnseenErrorsCountChanged(m_errorsModel->unseenCount());
 
   m_queueCountdownLabel = new QLabel(this);
   m_queueCountdownLabel->hide();

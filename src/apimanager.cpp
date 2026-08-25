@@ -56,6 +56,7 @@ void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
   m_githubTokenFailed = false;
   Q_EMIT githubAvailabilityChanged(canConnectGithub());
+  Q_EMIT githubAvailabilityChanged(canConnectGithub());
   saveGithubTokenToWallet(token);
 }
 

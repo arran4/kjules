@@ -205,7 +205,13 @@ void SourceWindow::setupUi() {
 
   m_tabWidget = new QTabWidget(this);
 
-  m_statusLabel = new QLabel(this);
+  m_statusLabel = new ClickableLabel(this);
+  connect(m_statusLabel, &ClickableLabel::clicked, this, [this]() {
+    if (m_queuedBlockedTab && m_errorTab) {
+      m_tabWidget->setCurrentWidget(m_queuedBlockedTab);
+      m_subTabWidget->setCurrentWidget(m_errorTab);
+    }
+  });
   m_unseenErrorLabel = new ClickableLabel(this);
   m_unseenErrorLabel->hide();
 
@@ -213,20 +219,9 @@ void SourceWindow::setupUi() {
   statusBar()->addWidget(m_unseenErrorLabel);
 
   connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("queuedBlockedTab")) {
-        m_tabWidget->setCurrentIndex(i);
-        QTabWidget *subTabWidget = m_tabWidget->widget(i)->findChild<QTabWidget *>();
-        if (subTabWidget) {
-          for (int j = 0; j < subTabWidget->count(); ++j) {
-            if (subTabWidget->widget(j)->objectName() == QStringLiteral("blockedTab")) {
-              subTabWidget->setCurrentIndex(j);
-              break;
-            }
-          }
-        }
-        break;
-      }
+    if (m_queuedBlockedTab && m_errorTab) {
+      m_tabWidget->setCurrentWidget(m_queuedBlockedTab);
+      m_subTabWidget->setCurrentWidget(m_errorTab);
     }
   });
 
@@ -261,7 +256,8 @@ void SourceWindow::setupUi() {
   }
 
   connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
-    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("queuedBlockedTab")) {
+    if (m_queuedBlockedTab && m_tabWidget->currentWidget() == m_queuedBlockedTab && m_subTabWidget &&
+        m_subTabWidget->currentWidget() == m_errorTab) {
       if (m_errorsModel) {
         for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
           QModelIndex idx = m_errorsModel->index(i, 0);
@@ -272,6 +268,8 @@ void SourceWindow::setupUi() {
       }
     }
   });
+  // Add sub-tab tracking too but we can't do it here because m_subTabWidget is null. Wait, we can do it in
+  // setupQueuedBlockedTab.
 
   connect(this, &SourceWindow::statusMessage, this, [this](const QString &msg) { m_statusLabel->setText(msg); });
 
@@ -348,13 +346,13 @@ void SourceWindow::setupArchivedTab() {
 }
 
 void SourceWindow::setupQueuedBlockedTab() {
-  QWidget *queuedBlockedTab = new QWidget(this);
-  QVBoxLayout *layout = new QVBoxLayout(queuedBlockedTab);
+  m_queuedBlockedTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(m_queuedBlockedTab);
 
-  QTabWidget *subTabWidget = new QTabWidget(queuedBlockedTab);
+  m_subTabWidget = new QTabWidget(m_queuedBlockedTab);
 
   // In Queue
-  QWidget *queueTab = new QWidget(subTabWidget);
+  QWidget *queueTab = new QWidget(m_subTabWidget);
   QVBoxLayout *queueLayout = new QVBoxLayout(queueTab);
   QListView *queueView = new QListView(queueTab);
   queueView->setItemDelegate(new QueueDelegate(queueView));
@@ -362,31 +360,31 @@ void SourceWindow::setupQueuedBlockedTab() {
   queueProxy->setSourceModel(m_queueModel);
   queueView->setModel(queueProxy);
   queueLayout->addWidget(queueView);
-  subTabWidget->addTab(queueTab, tr("In Queue"));
+  m_subTabWidget->addTab(queueTab, tr("In Queue"));
 
   // Blocked / Error
-  QWidget *blockedTab = new QWidget(subTabWidget);
-  QVBoxLayout *blockedLayout = new QVBoxLayout(blockedTab);
-  blockedLayout->addWidget(new QLabel(tr("Errors:"), blockedTab));
-  QListView *errorView = new QListView(blockedTab);
+  m_errorTab = new QWidget(m_subTabWidget);
+  QVBoxLayout *blockedLayout = new QVBoxLayout(m_errorTab);
+  blockedLayout->addWidget(new QLabel(tr("Errors:"), m_errorTab));
+  QListView *errorView = new QListView(m_errorTab);
   errorView->setItemDelegate(new DraftDelegate(errorView));
-  ErrorFilterProxyModel *errorProxy = new ErrorFilterProxyModel(m_sourceId, blockedTab);
+  ErrorFilterProxyModel *errorProxy = new ErrorFilterProxyModel(m_sourceId, m_errorTab);
   errorProxy->setSourceModel(m_errorsModel);
   errorView->setModel(errorProxy);
   blockedLayout->addWidget(errorView);
 
-  blockedLayout->addWidget(new QLabel(tr("Blocked Items:"), blockedTab));
-  QTreeView *blockedView = new QTreeView(blockedTab);
+  blockedLayout->addWidget(new QLabel(tr("Blocked Items:"), m_errorTab));
+  QTreeView *blockedView = new QTreeView(m_errorTab);
   blockedView->setHeaderHidden(true);
-  BlockedErrorProxyModel *blockedProxy = new BlockedErrorProxyModel(m_sourceId, blockedTab);
+  BlockedErrorProxyModel *blockedProxy = new BlockedErrorProxyModel(m_sourceId, m_errorTab);
   blockedProxy->setSourceModel(m_blockedTreeModel);
   blockedView->setModel(blockedProxy);
   blockedLayout->addWidget(blockedView);
 
-  subTabWidget->addTab(blockedTab, tr("Blocked / Error"));
+  m_subTabWidget->addTab(m_errorTab, tr("Blocked / Error"));
 
-  layout->addWidget(subTabWidget);
-  m_tabWidget->addTab(queuedBlockedTab, tr("Queued/Blocked"));
+  layout->addWidget(m_subTabWidget);
+  m_tabWidget->addTab(m_queuedBlockedTab, tr("Queued/Blocked"));
 }
 
 void SourceWindow::setupSessionsTab() {
@@ -590,6 +588,20 @@ void SourceWindow::setupGithubIssuesTab() {
   m_createSessionFromIssueAction->setEnabled(false);
   m_issuesView->addAction(m_createSessionFromIssueAction);
 
+  m_cancelFetchAction = new QAction(QIcon::fromTheme(QStringLiteral("process-stop")), tr("Cancel Fetch"), this);
+  m_cancelFetchAction->setEnabled(false);
+  m_issuesView->addAction(m_cancelFetchAction);
+
+  connect(m_cancelFetchAction, &QAction::triggered, this, [this, owner, repo]() {
+    if (m_fetchingIssueNumber != -1) {
+      m_apiManager->cancelGithubIssueContextFetch(m_sourceId, m_fetchingIssueNumber);
+      m_fetchingIssueNumber = -1;
+      m_createSessionFromIssueAction->setText(tr("Create Session..."));
+      m_createSessionFromIssueAction->setEnabled(true);
+      m_cancelFetchAction->setEnabled(false);
+    }
+  });
+
   connect(m_issuesView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
           [this]() { m_createSessionFromIssueAction->setEnabled(m_issuesView->selectionModel()->hasSelection()); });
 
@@ -601,6 +613,10 @@ void SourceWindow::setupGithubIssuesTab() {
 
     m_createSessionFromIssueAction->setEnabled(false);
     m_createSessionFromIssueAction->setText(tr("Fetching..."));
+    m_fetchingIssueNumber = issueNumber;
+    if (m_cancelFetchAction) {
+      m_cancelFetchAction->setEnabled(true);
+    }
     m_apiManager->fetchGithubIssueContext(m_sourceId, owner, repo, issueNumber);
   });
 
@@ -636,7 +652,7 @@ void SourceWindow::setupGithubIssuesTab() {
 
   connect(stateCombo, &QComboBox::currentIndexChanged, this, [this, owner, repo, stateCombo]() {
     QString currentState = stateCombo->currentData().toString();
-    QString cacheKey = QStringLiteral("local_githubIssues_") + currentState;
+    QString cacheKey = QStringLiteral("local_githubIssues");
 
     QModelIndexList matches =
         m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
@@ -665,7 +681,7 @@ void SourceWindow::setupGithubIssuesTab() {
   layout->addLayout(btnLayout);
 
   QString currentState = stateCombo->currentData().toString();
-  QString cacheKey = QStringLiteral("local_githubIssues_") + currentState;
+  QString cacheKey = QStringLiteral("local_githubIssues");
   if (rawData.contains(cacheKey)) {
     onGithubIssuesReceived(m_sourceId, rawData.value(cacheKey).toArray());
   } else if (rawData.contains(QStringLiteral("local_githubIssues"))) {
