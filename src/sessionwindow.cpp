@@ -1,9 +1,9 @@
 #include "sessionwindow.h"
 
 #include "activitybrowser.h"
+#include "activitylogwindow.h"
 #include "apimanager.h"
 #include "clickablelabel.h"
-#include "activitylogwindow.h"
 #include "errorsmodel.h"
 #include "sourcestatuswidget.h"
 #include "utils.h"
@@ -201,10 +201,11 @@ void SessionWindow::setupActions() {
   }
 
   m_statusLabel = new ClickableLabel(i18n("Ready"), this);
-  connect(m_statusLabel, &ClickableLabel::clicked, this,
-          []() { ActivityLogWindow::instance()->show();
+  connect(m_statusLabel, &ClickableLabel::clicked, this, []() {
+    ActivityLogWindow::instance()->show();
     ActivityLogWindow::instance()->raise();
-    ActivityLogWindow::instance()->activateWindow(); });
+    ActivityLogWindow::instance()->activateWindow();
+  });
   statusBar()->addWidget(m_statusLabel);
 
   if (m_apiManager) {

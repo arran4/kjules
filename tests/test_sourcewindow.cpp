@@ -405,16 +405,17 @@ void TestSourceWindow::testGithubIssuesTabs() {
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
   apiManager.setGithubToken(QStringLiteral("dummy_token"));
-    auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
-  QTabWidget *tabWidget = window->findChild<QTabWidget*>();
+  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
   QVERIFY(tabWidget != nullptr);
 
   bool foundIssuesTab = false;
   for (int i = 0; i < tabWidget->count(); ++i) {
-    if (tabWidget->tabText(i) == tr("GitHub Issues")) foundIssuesTab = true;
+    if (tabWidget->tabText(i) == tr("GitHub Issues"))
+      foundIssuesTab = true;
   }
   QVERIFY(foundIssuesTab);
 }
@@ -434,7 +435,7 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   sourceModel.addSources(QJsonArray{QJsonObject{{QStringLiteral("name"), sourceId}}});
 
   apiManager.setGithubToken(QStringLiteral("dummy_token"));
-    auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
@@ -444,7 +445,6 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
 
   QCOMPARE(errorsModel.unseenCount(), 1);
 }
-
 
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
