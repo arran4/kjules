@@ -44,6 +44,8 @@ private Q_SLOTS:
   void testRawDataEditingCanonicalAndLegacy();
   void testManualFollowAddsAndPersistsSession();
   void testRefreshSessionsActionWired();
+  void testGithubIssuesTabs();
+  void testSourceWindowNavigationAndUnseen();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -355,7 +357,7 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   refreshAction->trigger();
 }
 
-/* void TestSourceWindow::testGithubIssuesTabs() {
+void TestSourceWindow::testGithubIssuesTabs() {
   QTemporaryDir tempDir;
   QVERIFY(tempDir.isValid());
 
@@ -366,11 +368,13 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   ErrorsModel errorsModel;
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
   APIManager apiManager;
+  apiManager.setGithubToken(QStringLiteral("dummy_token"));
 
   QJsonObject srcObj;
   srcObj[QStringLiteral("name")] = QStringLiteral("sources/github/kde/kjules");
   QJsonObject repoObj;
-  repoObj[QStringLiteral("url")] = QStringLiteral("https://github.com/kde/kjules");
+  repoObj[QStringLiteral("owner")] = QStringLiteral("kde");
+  repoObj[QStringLiteral("repo")] = QStringLiteral("kjules");
   srcObj[QStringLiteral("githubRepo")] = repoObj;
 
   QJsonArray localIssues;
@@ -400,7 +404,8 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   sourceModel.addSources(QJsonArray{srcObj});
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
-  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+  apiManager.setGithubToken(QStringLiteral("dummy_token"));
+    auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
@@ -414,7 +419,7 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   QVERIFY(foundIssuesTab);
 }
 
-*/ /* void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
+void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   QTemporaryDir tempDir;
   QVERIFY(tempDir.isValid());
   SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
@@ -424,10 +429,12 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   ErrorsModel errorsModel;
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
   APIManager apiManager;
+  apiManager.setGithubToken(QStringLiteral("dummy_token"));
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
   sourceModel.addSources(QJsonArray{QJsonObject{{QStringLiteral("name"), sourceId}}});
 
-  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+  apiManager.setGithubToken(QStringLiteral("dummy_token"));
+    auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
@@ -438,7 +445,7 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   QCOMPARE(errorsModel.unseenCount(), 1);
 }
 
-*/
+
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   qputenv("KDE_HOME_READONLY", "1");
