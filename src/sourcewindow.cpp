@@ -781,7 +781,16 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
     return;
   }
 
-  m_issuesModel->removeRows(0, m_issuesModel->rowCount());
+  QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty()) return;
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+
+  QJsonArray compactIssues = rawData.value(QStringLiteral("local_githubIssues")).toArray();
+  QHash<int, QJsonObject> merged;
+  for (const QJsonValue &v : compactIssues) {
+    QJsonObject issue = v.toObject();
+    merged.insert(issue.value(QStringLiteral("number")).toInt(), issue);
+  }
 
   for (const QJsonValue &v : issues) {
     QJsonObject issue = v.toObject();
@@ -789,74 +798,57 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
       continue;
     }
 
-    if (m_issuesStateCombo) {
-      QString selectedState = m_issuesStateCombo->currentData().toString();
-      QString issueState = issue.value(QStringLiteral("state")).toString();
-      if (selectedState != QStringLiteral("all") && issueState != selectedState) {
-        continue;
-      }
+    QJsonObject compactIssue;
+    compactIssue[QStringLiteral("number")] = issue.value(QStringLiteral("number")).toInt();
+    compactIssue[QStringLiteral("title")] = issue.value(QStringLiteral("title")).toString();
+    compactIssue[QStringLiteral("state")] = issue.value(QStringLiteral("state")).toString();
+    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
+    compactIssue[QStringLiteral("user")] = user.value(QStringLiteral("login")).toString();
+
+    merged.insert(compactIssue.value(QStringLiteral("number")).toInt(), compactIssue);
+  }
+
+  QJsonArray updatedIssues;
+  QList<int> keys = merged.keys();
+  std::sort(keys.begin(), keys.end(), std::greater<int>());
+  for (int key : keys) {
+    updatedIssues.append(merged.value(key));
+  }
+
+  if (rawData.value(QStringLiteral("local_githubIssues")).toArray() != updatedIssues) {
+    rawData[QStringLiteral("local_githubIssues")] = updatedIssues;
+    m_sourceModel->updateSource(rawData);
+  }
+
+  updateGithubIssuesDisplay(updatedIssues);
+}
+
+void SourceWindow::updateGithubIssuesDisplay(const QJsonArray &issues) {
+  m_issuesModel->removeRows(0, m_issuesModel->rowCount());
+
+  QString selectedState = QStringLiteral("open");
+  if (m_issuesStateCombo) {
+    selectedState = m_issuesStateCombo->currentData().toString();
+  }
+
+  for (const QJsonValue &v : issues) {
+    QJsonObject issue = v.toObject();
+
+    QString issueState = issue.value(QStringLiteral("state")).toString();
+    if (selectedState != QStringLiteral("all") && issueState != selectedState) {
+      continue;
     }
 
     QList<QStandardItem *> row;
-
     QStandardItem *numItem = new QStandardItem();
     numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::DisplayRole);
     numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::UserRole);
     row.append(numItem);
-
-    QStandardItem *titleItem = new QStandardItem(issue.value(QStringLiteral("title")).toString());
-    row.append(titleItem);
-
-    QStandardItem *stateItem = new QStandardItem(issue.value(QStringLiteral("state")).toString());
-    row.append(stateItem);
-
-    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
-    QStandardItem *userItem = new QStandardItem(user.value(QStringLiteral("login")).toString());
-    row.append(userItem);
+    row.append(new QStandardItem(issue.value(QStringLiteral("title")).toString()));
+    row.append(new QStandardItem(issueState));
+    row.append(new QStandardItem(issue.value(QStringLiteral("user")).toString()));
 
     m_issuesModel->appendRow(row);
-  }
-
-  m_issuesView->resizeColumnToContents(0);
-  m_issuesView->resizeColumnToContents(2);
-  m_issuesView->resizeColumnToContents(3);
-
-  QModelIndexList matches =
-      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-  if (!matches.isEmpty()) {
-    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-
-    QJsonArray compactIssues;
-    for (const QJsonValue &v : issues) {
-      QJsonObject issue = v.toObject();
-      if (issue.contains(QStringLiteral("pull_request"))) {
-        continue;
-      }
-      if (issue.value(QStringLiteral("state")).toString() != QStringLiteral("open")) {
-        continue;
-      }
-      QJsonObject compactIssue;
-      compactIssue[QStringLiteral("number")] = issue.value(QStringLiteral("number"));
-      compactIssue[QStringLiteral("title")] = issue.value(QStringLiteral("title"));
-      compactIssue[QStringLiteral("state")] = issue.value(QStringLiteral("state"));
-      compactIssue[QStringLiteral("html_url")] = issue.value(QStringLiteral("html_url"));
-
-      QJsonObject userObj;
-      userObj[QStringLiteral("login")] = issue.value(QStringLiteral("user")).toObject().value(QStringLiteral("login"));
-      compactIssue[QStringLiteral("user")] = userObj;
-
-      compactIssues.append(compactIssue);
-    }
-
-    if (rawData.value(QStringLiteral("local_githubIssues")).toArray() != compactIssues) {
-      rawData[QStringLiteral("local_githubIssues")] = compactIssues;
-      m_sourceModel->updateSourceRaw(m_sourceId, rawData);
-
-      if (m_rawDataEdit) {
-        QJsonDocument doc(rawData);
-        m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
-      }
-    }
   }
 }
 

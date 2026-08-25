@@ -54,6 +54,7 @@ private:
 
 private Q_SLOTS:
   void onGithubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
+  void updateGithubIssuesDisplay(const QJsonArray &issues);
   void onGithubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
   void onGithubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
                                     const QJsonArray &comments);
@@ -70,6 +71,9 @@ private:
   APIManager *m_apiManager;
 
   QTabWidget *m_tabWidget;
+  QWidget *m_queuedBlockedTab = nullptr;
+  QTabWidget *m_subTabWidget = nullptr;
+  QWidget *m_errorTab = nullptr;
   SessionsWidget *m_sessionsWidget;
   QCheckBox *m_autoFollowCheckBox;
   QSpinBox *m_concurrencySpinBox;
