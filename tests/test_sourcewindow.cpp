@@ -44,7 +44,6 @@ private Q_SLOTS:
   void testRawDataEditingCanonicalAndLegacy();
   void testManualFollowAddsAndPersistsSession();
   void testRefreshSessionsActionWired();
-
 };
 
 void TestSourceWindow::initTestCase() {

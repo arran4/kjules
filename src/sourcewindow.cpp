@@ -781,8 +781,10 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
     return;
   }
 
-  QModelIndexList matches = m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-  if (matches.isEmpty()) return;
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty())
+    return;
   QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
 
   QJsonArray compactIssues = rawData.value(QStringLiteral("local_githubIssues")).toArray();
