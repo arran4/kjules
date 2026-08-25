@@ -14,7 +14,7 @@ add_executable(test_configmigration test_configmigration.cpp)
 add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp ../src/draftdelegate.cpp ../src/queuedelegate.cpp ../src/sessiondelegate.cpp ../src/sourcestatuswidget.cpp ../src/kjules.qrc)
 add_executable(test_sessionswidget test_sessionswidget.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionmodel.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
-  ../src/clickablelabel.cpp ../src/sessiondelegate.cpp ../src/kjules.qrc)
+  ../src/clickablelabel.cpp ../src/sessiondelegate.cpp ../src/kjules.qrc ../src/errorsmodel.cpp)
 add_executable(test_apimanager_pagination test_apimanager_pagination.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp)
 

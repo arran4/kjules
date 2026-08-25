@@ -595,10 +595,10 @@ void SourceWindow::setupGithubIssuesTab() {
   connect(m_cancelFetchAction, &QAction::triggered, this, [this, owner, repo]() {
     if (m_fetchingIssueNumber != -1) {
       m_apiManager->cancelGithubIssueContextFetch(m_sourceId, m_fetchingIssueNumber);
-      m_fetchingIssueNumber = -1;
-      m_createSessionFromIssueAction->setText(tr("Create Session..."));
-      m_createSessionFromIssueAction->setEnabled(true);
-      m_cancelFetchAction->setEnabled(false);
+      // Do not reset UI state immediately. Let the cancellation callback handle it.
+      // Wait, APIManager::cancelGithubIssueContextFetch currently just aborts the reply.
+      // If it doesn't emit a failure, we might hang in fetching state forever.
+      // Let's emit a canceled failure in APIManager.
     }
   });
 
@@ -931,7 +931,18 @@ void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issue
     statusMsg = tr("GitHub access denied — check repository/token permissions");
     break;
   case ApiError::Type::RateLimit:
-    statusMsg = tr("GitHub rate limit reached — retry later"); // Or extract retry-after if available
+    if (QJsonDocument::fromJson(error.details().toUtf8()).object().contains(QStringLiteral("x-ratelimit-reset"))) {
+      long long resetTime = QJsonDocument::fromJson(error.details().toUtf8())
+                                .object()
+                                .value(QStringLiteral("x-ratelimit-reset"))
+                                .toVariant()
+                                .toLongLong();
+      QString timeStr =
+          QDateTime::fromSecsSinceEpoch(resetTime).toString(QLocale::system().dateTimeFormat(QLocale::ShortFormat));
+      statusMsg = tr("GitHub rate limit reached — retry after %1").arg(timeStr);
+    } else {
+      statusMsg = tr("GitHub rate limit reached — retry later");
+    }
     break;
   case ApiError::Type::NotFound:
     statusMsg = tr("GitHub issue #%1 could not be loaded").arg(issueNumber);

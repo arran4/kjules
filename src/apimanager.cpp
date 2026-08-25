@@ -56,7 +56,6 @@ void APIManager::setGithubToken(const QString &token) {
   m_githubToken = token;
   m_githubTokenFailed = false;
   Q_EMIT githubAvailabilityChanged(canConnectGithub());
-  Q_EMIT githubAvailabilityChanged(canConnectGithub());
   saveGithubTokenToWallet(token);
 }
 
@@ -98,6 +97,8 @@ void APIManager::onWalletOpened(bool success) {
       m_githubToken = token;
       Q_EMIT logMessage(QStringLiteral("GitHub Token loaded from KWallet"));
     }
+    m_githubTokenFailed = false;
+    Q_EMIT githubAvailabilityChanged(canConnectGithub());
   } else {
     Q_EMIT errorOccurred(QStringLiteral("Failed to open KWallet"));
   }
@@ -957,10 +958,21 @@ void APIManager::fetchGithubPaginated(const QUrl &initialUrl, const QString &sou
 
 void APIManager::fetchGithubIssueContext(const QString &sourceId, const QString &owner, const QString &repository,
                                          int issueNumber) {
-  if (m_githubToken.isEmpty() || m_githubTokenFailed || !checkGithubRateLimit()) {
+  if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     ApiError err;
     err.setType(ApiError::Type::Authentication);
-    err.setMessage(QStringLiteral("No valid GitHub token or rate limit exhausted."));
+    err.setMessage(QStringLiteral("No valid GitHub token."));
+    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, err);
+    return;
+  }
+  if (!checkGithubRateLimit()) {
+    ApiError err;
+    err.setType(ApiError::Type::RateLimit);
+    err.setMessage(QStringLiteral("GitHub rate limit exhausted."));
+    QJsonObject details;
+    details[QStringLiteral("x-ratelimit-reset")] = m_githubRateLimitReset;
+    QJsonDocument doc(details);
+    err.setDetails(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
     Q_EMIT githubIssueContextFailed(sourceId, issueNumber, err);
     return;
   }
@@ -1091,6 +1103,10 @@ void APIManager::cancelGithubIssueContextFetch(const QString &sourceId, int issu
       reply->abort();
     }
     reply->deleteLater();
+    ApiError canceledError;
+    canceledError.setType(ApiError::Type::Network);
+    canceledError.setMessage(QStringLiteral("Operation canceled."));
+    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, canceledError);
   }
 }
 

@@ -44,6 +44,7 @@ private Q_SLOTS:
   void testRawDataEditingCanonicalAndLegacy();
   void testManualFollowAddsAndPersistsSession();
   void testRefreshSessionsActionWired();
+
 };
 
 void TestSourceWindow::initTestCase() {
@@ -355,6 +356,91 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   refreshAction->trigger();
 }
 
+
+/* void TestSourceWindow::testGithubIssuesTabs() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+
+  SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
+  ErrorsModel errorsModel;
+  BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
+  APIManager apiManager;
+
+  QJsonObject srcObj;
+  srcObj[QStringLiteral("name")] = QStringLiteral("sources/github/kde/kjules");
+  QJsonObject repoObj;
+  repoObj[QStringLiteral("url")] = QStringLiteral("https://github.com/kde/kjules");
+  srcObj[QStringLiteral("githubRepo")] = repoObj;
+
+  QJsonArray localIssues;
+  QJsonObject issue1;
+  issue1[QStringLiteral("number")] = 101;
+  issue1[QStringLiteral("title")] = QStringLiteral("Open Issue");
+  issue1[QStringLiteral("state")] = QStringLiteral("open");
+  issue1[QStringLiteral("user")] = QStringLiteral("testuser");
+
+  QJsonObject issue2;
+  issue2[QStringLiteral("number")] = 102;
+  issue2[QStringLiteral("title")] = QStringLiteral("Closed Issue");
+  issue2[QStringLiteral("state")] = QStringLiteral("closed");
+  issue2[QStringLiteral("user")] = QStringLiteral("testuser2");
+
+  QJsonObject issue3;
+  issue3[QStringLiteral("number")] = 103;
+  issue3[QStringLiteral("title")] = QStringLiteral("Pull Request");
+  issue3[QStringLiteral("state")] = QStringLiteral("open");
+  issue3[QStringLiteral("pull_request")] = QJsonObject();
+
+  localIssues.append(issue1);
+  localIssues.append(issue2);
+  localIssues.append(issue3);
+  srcObj[QStringLiteral("local_githubIssues")] = localIssues;
+
+  sourceModel.addSources(QJsonArray{srcObj});
+
+  QString sourceId = QStringLiteral("sources/github/kde/kjules");
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+                                               &errorsModel, &blockedTreeModel, &apiManager);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  QTabWidget *tabWidget = window->findChild<QTabWidget*>();
+  QVERIFY(tabWidget != nullptr);
+
+  bool foundIssuesTab = false;
+  for (int i = 0; i < tabWidget->count(); ++i) {
+    if (tabWidget->tabText(i) == tr("GitHub Issues")) foundIssuesTab = true;
+  }
+  QVERIFY(foundIssuesTab);
+}
+
+*/ /* void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
+  ErrorsModel errorsModel;
+  BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
+  APIManager apiManager;
+  QString sourceId = QStringLiteral("sources/github/kde/kjules");
+  sourceModel.addSources(QJsonArray{QJsonObject{{QStringLiteral("name"), sourceId}}});
+
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+                                               &errorsModel, &blockedTreeModel, &apiManager);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  QJsonObject err1;
+  err1[QStringLiteral("sourceId")] = sourceId;
+  errorsModel.addErrorObj(err1);
+
+  QCOMPARE(errorsModel.unseenCount(), 1);
+}
+
+*/
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   qputenv("KDE_HOME_READONLY", "1");

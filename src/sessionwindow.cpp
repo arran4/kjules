@@ -21,8 +21,10 @@
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QMenuBar>
+#include <QProcess>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -197,7 +199,9 @@ void SessionWindow::setupActions() {
     }
   }
 
-  m_statusLabel = new QLabel(i18n("Ready"), this);
+  m_statusLabel = new ClickableLabel(i18n("Ready"), this);
+  connect(m_statusLabel, &ClickableLabel::clicked, this,
+          []() { QProcess::startDetached(QStringLiteral("kjules-activity-log"), QStringList()); });
   statusBar()->addWidget(m_statusLabel);
 
   if (m_apiManager) {
@@ -590,6 +594,62 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));
   m_tabWidget->addTab(m_rawActivitiesBrowser, i18n("Raw Activities"));
   m_tabWidget->addTab(m_textBrowser, i18n("Raw JSON"));
+
+  m_errorTab = new QWidget(this);
+  QVBoxLayout *errorLayout = new QVBoxLayout(m_errorTab);
+  QListView *errorView = new QListView(m_errorTab);
+  // Need a delegate for errorView? Let's just use standard or DraftDelegate if available.
+  // Actually the prompt says "filter by SessionIdRole for the current session; contextual unseen count; clickable
+  // contextual error control/view; viewing those errors marks the shared ErrorsModel entries seen"
+  SessionErrorFilterProxyModel *errorProxy =
+      new SessionErrorFilterProxyModel(m_sessionData.value(QStringLiteral("id")).toString(), m_errorTab);
+  errorProxy->setSourceModel(m_errorsModel);
+  errorView->setModel(errorProxy);
+  errorLayout->addWidget(errorView);
+  m_tabWidget->addTab(m_errorTab, i18n("Errors"));
+
+  m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->hide();
+
+  auto updateUnseenErrors = [this, errorProxy]() {
+    if (!m_errorsModel || !m_unseenErrorLabel)
+      return;
+    int unseenCount = 0;
+    for (int i = 0; i < errorProxy->rowCount(); ++i) {
+      if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
+        unseenCount++;
+      }
+    }
+    if (unseenCount > 0) {
+      m_unseenErrorLabel->setText(i18np("1 Unseen Error", "%1 Unseen Errors", unseenCount));
+      m_unseenErrorLabel->show();
+    } else {
+      m_unseenErrorLabel->hide();
+    }
+  };
+
+  if (m_errorsModel) {
+    connect(m_errorsModel, &ErrorsModel::dataChanged, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::rowsInserted, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::rowsRemoved, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::modelReset, this, updateUnseenErrors);
+    updateUnseenErrors();
+  }
+
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this, errorProxy](int index) {
+    if (m_tabWidget->widget(index) == m_errorTab && m_errorsModel) {
+      for (int i = 0; i < errorProxy->rowCount(); ++i) {
+        if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
+          QModelIndex sourceIndex = errorProxy->mapToSource(errorProxy->index(i, 0));
+          m_errorsModel->markSeen(sourceIndex.row());
+        }
+      }
+    }
+  });
+
+  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() { m_tabWidget->setCurrentWidget(m_errorTab); });
+
+  statusBar()->addWidget(m_unseenErrorLabel); // Need a statusBar? SessionWindow is a KXmlGuiWindow, it has statusBar()
 
   QString title = sessionData.value(QStringLiteral("title")).toString();
   QString sessionId = sessionData.value(QStringLiteral("id")).toString();

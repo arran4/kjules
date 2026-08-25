@@ -3,6 +3,7 @@
 
 #include <KXmlGuiWindow>
 #include <QJsonObject>
+#include <QSortFilterProxyModel>
 
 class QTextBrowser;
 class QTabWidget;
@@ -13,6 +14,22 @@ class APIManager;
 class ActivityBrowser;
 class ErrorsModel;
 class ClickableLabel;
+
+#include "errorsmodel.h"
+class SessionErrorFilterProxyModel : public QSortFilterProxyModel {
+  Q_OBJECT
+public:
+  explicit SessionErrorFilterProxyModel(const QString &sessionId, QObject *parent = nullptr)
+      : QSortFilterProxyModel(parent), m_sessionId(sessionId) {}
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
+    QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+    return sourceModel()->data(index, ErrorsModel::SessionIdRole).toString() ==
+           m_sessionId; // SessionIdRole is usually +4 in ErrorsModel
+  }
+
+private:
+  QString m_sessionId;
+};
 
 class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -42,7 +59,7 @@ private:
   bool m_isManaged;
   QTabWidget *m_tabWidget;
   ErrorsModel *m_errorsModel;
-  QLabel *m_statusLabel;
+  ClickableLabel *m_statusLabel;
   ClickableLabel *m_unseenErrorLabel;
   QTimer *m_autoRefreshTimer;
   QComboBox *m_autoRefreshCombo;
@@ -55,6 +72,7 @@ private:
   QTextBrowser *m_textBrowser;
 
   QWidget *m_activityTabWidget;
+  QWidget *m_errorTab;
   class QLineEdit *m_chatInput;
   class QPushButton *m_sendButton;
   QString m_pendingMessage;
