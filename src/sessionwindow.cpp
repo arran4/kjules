@@ -3,6 +3,7 @@
 #include "activitybrowser.h"
 #include "apimanager.h"
 #include "clickablelabel.h"
+#include "activitylogwindow.h"
 #include "errorsmodel.h"
 #include "sourcestatuswidget.h"
 #include "utils.h"
@@ -201,7 +202,9 @@ void SessionWindow::setupActions() {
 
   m_statusLabel = new ClickableLabel(i18n("Ready"), this);
   connect(m_statusLabel, &ClickableLabel::clicked, this,
-          []() { QProcess::startDetached(QStringLiteral("kjules-activity-log"), QStringList()); });
+          []() { ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow(); });
   statusBar()->addWidget(m_statusLabel);
 
   if (m_apiManager) {
@@ -290,7 +293,7 @@ void SessionWindow::onMessageSendFailed(const QString &sessionId, const QString 
     m_statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
 
     // Disconnect any previous connections to avoid accumulating handlers
-    m_statusLabel->disconnect(this);
+    // m_statusLabel->disconnect(this);
 
     connect(m_statusLabel, &QLabel::linkActivated, this, [this, httpDetails]() {
       m_textBrowser->setPlainText(httpDetails);

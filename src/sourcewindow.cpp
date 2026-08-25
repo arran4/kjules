@@ -2,6 +2,7 @@
 #include "apimanager.h"
 #include "blockedtreemodel.h"
 #include "clickablelabel.h"
+#include "activitylogwindow.h"
 #include "draftdelegate.h"
 #include "errorsmodel.h"
 #include "queuedelegate.h"
@@ -207,10 +208,9 @@ void SourceWindow::setupUi() {
 
   m_statusLabel = new ClickableLabel(this);
   connect(m_statusLabel, &ClickableLabel::clicked, this, [this]() {
-    if (m_queuedBlockedTab && m_errorTab) {
-      m_tabWidget->setCurrentWidget(m_queuedBlockedTab);
-      m_subTabWidget->setCurrentWidget(m_errorTab);
-    }
+    ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow();
   });
   m_unseenErrorLabel = new ClickableLabel(this);
   m_unseenErrorLabel->hide();
