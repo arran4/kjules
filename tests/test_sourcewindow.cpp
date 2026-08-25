@@ -420,7 +420,6 @@ void TestSourceWindow::testGithubIssuesTabs() {
   QVERIFY(foundIssuesTab);
 }
 
-
 void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   QTemporaryDir tempDir;
   QVERIFY(tempDir.isValid());
@@ -449,30 +448,31 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   QCOMPARE(errorsModel.unseenCount(), 2);
 
   // Find the subtab
-  QTabWidget *tabWidget = window->findChild<QTabWidget*>();
+  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
   QVERIFY(tabWidget != nullptr);
 
   // Set to Queued/Blocked
-  for(int i = 0; i < tabWidget->count(); ++i) {
-      if (tabWidget->tabText(i) == tr("Queued/Blocked") || tabWidget->tabText(i) == tr("Queue & Issues")) {
-          tabWidget->setCurrentIndex(i);
-      }
+  for (int i = 0; i < tabWidget->count(); ++i) {
+    if (tabWidget->tabText(i) == tr("Queued/Blocked") || tabWidget->tabText(i) == tr("Queue & Issues")) {
+      tabWidget->setCurrentIndex(i);
+    }
   }
 
-  QTabWidget *subTab = tabWidget->currentWidget()->findChild<QTabWidget*>();
+  QTabWidget *subTab = tabWidget->currentWidget()->findChild<QTabWidget *>();
   if (subTab) {
-      for(int i = 0; i < subTab->count(); ++i) {
-          if (subTab->tabText(i).contains(tr("Error"))) {
-              subTab->setCurrentIndex(i);
-          }
+    for (int i = 0; i < subTab->count(); ++i) {
+      if (subTab->tabText(i).contains(tr("Error"))) {
+        subTab->setCurrentIndex(i);
       }
+    }
   }
 
   // It should have marked the matching error seen, leaving the unrelated one unseen
-  if (window->findChild<QTabWidget*>()) { QMetaObject::invokeMethod(window.get(), "markVisibleSourceErrorsSeen", Qt::DirectConnection); }
+  if (window->findChild<QTabWidget *>()) {
+    QMetaObject::invokeMethod(window.get(), "markVisibleSourceErrorsSeen", Qt::DirectConnection);
+  }
   QCOMPARE(errorsModel.unseenCount(), 1);
 }
-
 
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");

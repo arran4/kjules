@@ -854,6 +854,8 @@ void SourceWindow::updateGithubIssuesDisplay(const QJsonArray &issues) {
   for (const QJsonValue &v : issues) {
     QJsonObject issue = v.toObject();
 
+    if (issue.contains(QStringLiteral("pull_request"))) continue;
+
     QString issueState = issue.value(QStringLiteral("state")).toString();
     if (selectedState != QStringLiteral("all") && issueState != selectedState) {
       continue;
@@ -908,6 +910,10 @@ void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int /*i
 void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const ApiError &error) {
   if (sourceId != m_sourceId)
     return;
+
+  if (issueNumber != m_fetchingIssueNumber) {
+    return;
+  }
 
   if (m_createSessionFromIssueAction) {
     m_createSessionFromIssueAction->setText(tr("Create Session..."));
