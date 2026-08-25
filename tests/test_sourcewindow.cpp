@@ -44,7 +44,6 @@ private Q_SLOTS:
   void testRawDataEditingCanonicalAndLegacy();
   void testManualFollowAddsAndPersistsSession();
   void testRefreshSessionsActionWired();
-
 };
 
 void TestSourceWindow::initTestCase() {
@@ -355,7 +354,6 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   // Triggering the action calls refreshSessions
   refreshAction->trigger();
 }
-
 
 /* void TestSourceWindow::testGithubIssuesTabs() {
   QTemporaryDir tempDir;
