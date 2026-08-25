@@ -350,6 +350,7 @@ void SourceWindow::setupQueuedBlockedTab() {
   QVBoxLayout *layout = new QVBoxLayout(m_queuedBlockedTab);
 
   m_subTabWidget = new QTabWidget(m_queuedBlockedTab);
+  connect(m_subTabWidget, &QTabWidget::currentChanged, this, [this](int) { markVisibleSourceErrorsSeen(); });
 
   // In Queue
   QWidget *queueTab = new QWidget(m_subTabWidget);
@@ -602,8 +603,10 @@ void SourceWindow::setupGithubIssuesTab() {
     }
   });
 
-  connect(m_issuesView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
-          [this]() { m_createSessionFromIssueAction->setEnabled(m_fetchingIssueNumber == -1 && m_issuesView->selectionModel()->hasSelection()); });
+  connect(m_issuesView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+    m_createSessionFromIssueAction->setEnabled(m_fetchingIssueNumber == -1 &&
+                                               m_issuesView->selectionModel()->hasSelection());
+  });
 
   connect(m_createSessionFromIssueAction, &QAction::triggered, this, [this, owner, repo]() {
     QModelIndexList selected = m_issuesView->selectionModel()->selectedRows();
@@ -641,9 +644,8 @@ void SourceWindow::setupGithubIssuesTab() {
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
 
-  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this, [refreshBtn](bool available) {
-    refreshBtn->setEnabled(available);
-  });
+  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this,
+          [refreshBtn](bool available) { refreshBtn->setEnabled(available); });
   refreshBtn->setEnabled(m_apiManager->canConnectGithub());
 
   connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo, stateCombo]() {
@@ -1041,7 +1043,8 @@ void SourceWindow::onGithubPullRequestsReceived(const QString &sourceId, const Q
 #include "sourcewindow.moc"
 
 void SourceWindow::markVisibleSourceErrorsSeen() {
-  if (!m_errorsModel || !m_queuedBlockedTab || !m_subTabWidget || !m_errorTab) return;
+  if (!m_errorsModel || !m_queuedBlockedTab || !m_subTabWidget || !m_errorTab)
+    return;
   if (m_tabWidget->currentWidget() == m_queuedBlockedTab && m_subTabWidget->currentWidget() == m_errorTab) {
     for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
       QModelIndex idx = m_errorsModel->index(i, 0);
