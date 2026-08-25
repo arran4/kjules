@@ -1773,7 +1773,12 @@ void MainWindow::setupStatusBar() {
   m_sessionStatsLabel = new QLabel(this);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
-  onUnseenErrorsCountChanged(m_errorsModel->unseenCount());
+
+  connect(m_errorsModel,
+          &ErrorsModel::unseenCountChanged,
+          this,
+          &MainWindow::onUnseenErrorsCountChanged);
+onUnseenErrorsCountChanged(m_errorsModel->unseenCount());
 
   m_queueCountdownLabel = new QLabel(this);
   m_queueCountdownLabel->hide();
@@ -4957,7 +4962,7 @@ void MainWindow::refreshGithubDataForSources(const QStringList &sourceIds) {
 
 void MainWindow::onError(const QString &message) {
   updateStatus(i18n("Error: %1", message));
-  ActivityLogWindow::instance()->logMessage(i18n("Error: %1", message));
+  // Duplicate logging removed
 
   if (m_errorsModel) {
     QJsonObject errObj;
