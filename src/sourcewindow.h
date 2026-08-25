@@ -55,6 +55,7 @@ private:
 private Q_SLOTS:
   void onGithubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
   void updateGithubIssuesDisplay(const QJsonArray &issues);
+  void markVisibleSourceErrorsSeen();
   void onGithubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
   void onGithubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
                                     const QJsonArray &comments);

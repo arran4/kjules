@@ -603,7 +603,7 @@ void SourceWindow::setupGithubIssuesTab() {
   });
 
   connect(m_issuesView->selectionModel(), &QItemSelectionModel::selectionChanged, this,
-          [this]() { m_createSessionFromIssueAction->setEnabled(m_issuesView->selectionModel()->hasSelection()); });
+          [this]() { m_createSessionFromIssueAction->setEnabled(m_fetchingIssueNumber == -1 && m_issuesView->selectionModel()->hasSelection()); });
 
   connect(m_createSessionFromIssueAction, &QAction::triggered, this, [this, owner, repo]() {
     QModelIndexList selected = m_issuesView->selectionModel()->selectedRows();
@@ -641,10 +641,10 @@ void SourceWindow::setupGithubIssuesTab() {
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
 
-  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this, [refreshBtn, stateCombo](bool available) {
+  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this, [refreshBtn](bool available) {
     refreshBtn->setEnabled(available);
-    stateCombo->setEnabled(available);
   });
+  refreshBtn->setEnabled(m_apiManager->canConnectGithub());
 
   connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo, stateCombo]() {
     m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
@@ -659,17 +659,18 @@ void SourceWindow::setupGithubIssuesTab() {
     if (!matches.isEmpty()) {
       QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
       if (rawData.contains(cacheKey)) {
-        onGithubIssuesReceived(m_sourceId, rawData.value(cacheKey).toArray());
+        updateGithubIssuesDisplay(rawData.value(cacheKey).toArray());
       } else if (currentState == QStringLiteral("open") && rawData.contains(QStringLiteral("local_githubIssues"))) {
-        // Fallback to legacy cache
-        onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
+        updateGithubIssuesDisplay(rawData.value(QStringLiteral("local_githubIssues")).toArray());
       } else {
         m_issuesModel->removeRows(0, m_issuesModel->rowCount()); // clear until loaded
       }
     }
 
     // Always refresh network too if available
-    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
+    if (m_apiManager->canConnectGithub()) {
+      m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
+    }
   });
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
@@ -683,10 +684,9 @@ void SourceWindow::setupGithubIssuesTab() {
   QString currentState = stateCombo->currentData().toString();
   QString cacheKey = QStringLiteral("local_githubIssues");
   if (rawData.contains(cacheKey)) {
-    onGithubIssuesReceived(m_sourceId, rawData.value(cacheKey).toArray());
+    updateGithubIssuesDisplay(rawData.value(cacheKey).toArray());
   } else if (rawData.contains(QStringLiteral("local_githubIssues"))) {
-    // Fallback to legacy cache
-    onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
+    updateGithubIssuesDisplay(rawData.value(QStringLiteral("local_githubIssues")).toArray());
   } else {
     m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
   }
@@ -1039,3 +1039,15 @@ void SourceWindow::onGithubPullRequestsReceived(const QString &sourceId, const Q
 }
 
 #include "sourcewindow.moc"
+
+void SourceWindow::markVisibleSourceErrorsSeen() {
+  if (!m_errorsModel || !m_queuedBlockedTab || !m_subTabWidget || !m_errorTab) return;
+  if (m_tabWidget->currentWidget() == m_queuedBlockedTab && m_subTabWidget->currentWidget() == m_errorTab) {
+    for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+      QModelIndex idx = m_errorsModel->index(i, 0);
+      if (m_errorsModel->data(idx, ErrorsModel::SourceIdRole).toString() == m_sourceId) {
+        m_errorsModel->markSeen(i);
+      }
+    }
+  }
+}

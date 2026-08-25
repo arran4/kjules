@@ -1100,13 +1100,10 @@ void APIManager::cancelGithubIssueContextFetch(const QString &sourceId, int issu
   if (m_githubIssueContextReplies.contains(requestKey)) {
     QNetworkReply *reply = m_githubIssueContextReplies.take(requestKey);
     if (reply && reply->isRunning()) {
-      reply->abort();
+      reply->abort(); // The abort will trigger the normal finished() pipeline which detects Canceled
+    } else {
+      reply->deleteLater();
     }
-    reply->deleteLater();
-    ApiError canceledError;
-    canceledError.setType(ApiError::Type::Network);
-    canceledError.setMessage(QStringLiteral("Operation canceled."));
-    Q_EMIT githubIssueContextFailed(sourceId, issueNumber, canceledError);
   }
 }
 
