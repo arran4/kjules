@@ -601,9 +601,6 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_errorTab = new QWidget(this);
   QVBoxLayout *errorLayout = new QVBoxLayout(m_errorTab);
   QListView *errorView = new QListView(m_errorTab);
-  // Need a delegate for errorView? Let's just use standard or DraftDelegate if available.
-  // Actually the prompt says "filter by SessionIdRole for the current session; contextual unseen count; clickable
-  // contextual error control/view; viewing those errors marks the shared ErrorsModel entries seen"
   SessionErrorFilterProxyModel *errorProxy =
       new SessionErrorFilterProxyModel(m_sessionData.value(QStringLiteral("id")).toString(), m_errorTab);
   errorProxy->setSourceModel(m_errorsModel);
