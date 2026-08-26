@@ -57,6 +57,7 @@ private:
   QJsonObject m_sessionData;
   APIManager *m_apiManager;
   bool m_isManaged;
+  QString m_statusErrorDetails;
   QTabWidget *m_tabWidget;
   ErrorsModel *m_errorsModel;
   ClickableLabel *m_statusLabel;

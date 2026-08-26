@@ -201,11 +201,22 @@ void SessionWindow::setupActions() {
   }
 
   m_statusLabel = new ClickableLabel(i18n("Ready"), this);
+  m_statusLabel->setObjectName(QStringLiteral("sessionStatusLabel"));
   connect(m_statusLabel, &ClickableLabel::clicked, this, []() {
     ActivityLogWindow::instance()->show();
     ActivityLogWindow::instance()->raise();
     ActivityLogWindow::instance()->activateWindow();
   });
+
+  connect(m_statusLabel, &QLabel::linkActivated, this, [this](const QString &link) {
+    if (link == QStringLiteral("#error-details")) {
+      if (m_textBrowser) {
+        m_textBrowser->setPlainText(m_statusErrorDetails);
+        m_tabWidget->setCurrentWidget(m_textBrowser);
+      }
+    }
+  });
+
   statusBar()->addWidget(m_statusLabel);
 
   if (m_apiManager) {
@@ -287,18 +298,15 @@ void SessionWindow::onMessageSendFailed(const QString &sessionId, const QString 
   if (m_statusLabel) {
     QString errorText = message;
     if (!httpDetails.isEmpty()) {
-      errorText += QStringLiteral(" <a href=\"#show_error_details\">[Details]</a>");
+      m_statusErrorDetails = httpDetails;
+      m_statusLabel->setText(i18n("Failed to send message: %1 <a href=\"#error-details\">[Details]</a>", errorText));
+      m_statusLabel->setTextFormat(Qt::RichText);
+      m_statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    } else {
+      m_statusErrorDetails.clear();
+      m_statusLabel->setText(i18n("Failed to send message: %1", errorText));
+      m_statusLabel->setTextFormat(Qt::PlainText);
     }
-    m_statusLabel->setText(i18n("Failed to send message: %1", errorText));
-    m_statusLabel->setTextFormat(Qt::RichText);
-    m_statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-
-    // Disconnect any previous connections to avoid accumulating handlers
-
-    connect(m_statusLabel, &QLabel::linkActivated, this, [this, httpDetails]() {
-      m_textBrowser->setPlainText(httpDetails);
-      m_tabWidget->setCurrentWidget(m_textBrowser);
-    });
   }
 }
 

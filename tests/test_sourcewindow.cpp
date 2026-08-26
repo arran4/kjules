@@ -13,6 +13,7 @@
 #include <QComboBox>
 #include <QPushButton>
 
+#include "../src/clickablelabel.h"
 #include <KActionCollection>
 #include <KConfigGroup>
 #include <KSharedConfig>
@@ -22,11 +23,13 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QListWidget>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QTextBrowser>
 #include <QTextEdit>
 #include <QTreeView>
 #include <QtTest>
@@ -50,6 +53,7 @@ private Q_SLOTS:
   void testSourceWindowNavigationAndUnseen();
   void testStaleIssueCallbackGuards();
   void testSessionWindowContextualErrors();
+  void testSessionWindowMessageSendFailureLinks();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -656,6 +660,45 @@ void TestSourceWindow::testSessionWindowContextualErrors() {
   QAbstractItemModel *proxyModel = errorsView->model();
   QVERIFY(proxyModel != nullptr);
   QCOMPARE(proxyModel->rowCount(), 1);
+}
+
+void TestSourceWindow::testSessionWindowMessageSendFailureLinks() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  ErrorsModel errorsModel;
+  APIManager apiManager;
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  QJsonObject sess1;
+  sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+  sessionModel.addSessions(QJsonArray{sess1});
+
+  auto window = std::make_unique<SessionWindow>(sess1, &apiManager, &errorsModel, true, nullptr);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  QLabel *statusLabel = window->findChild<ClickableLabel *>(QStringLiteral("sessionStatusLabel"));
+  QVERIFY(statusLabel != nullptr);
+
+  QTextBrowser *textBrowser = nullptr;
+  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
+  QVERIFY(tabWidget != nullptr);
+  for (int i = 0; i < tabWidget->count(); ++i) {
+    if (tabWidget->tabText(i).contains(QStringLiteral("Raw JSON"))) {
+      textBrowser = qobject_cast<QTextBrowser *>(tabWidget->widget(i));
+      break;
+    }
+  }
+  QVERIFY(textBrowser != nullptr);
+
+  // Send failure A
+  Q_EMIT apiManager.messageSendFailed(QStringLiteral("sess1"), QStringLiteral("Error A"), QStringLiteral("Details A"));
+
+  // Send failure B
+  Q_EMIT apiManager.messageSendFailed(QStringLiteral("sess1"), QStringLiteral("Error B"), QStringLiteral("Details B"));
+
+  Q_EMIT statusLabel->linkActivated(QStringLiteral("#error-details"));
+  QCoreApplication::processEvents();
+
+  QCOMPARE(textBrowser->toPlainText(), QStringLiteral("Details B"));
 }
 
 int main(int argc, char *argv[]) {
