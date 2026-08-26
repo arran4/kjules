@@ -46,6 +46,7 @@ private Q_SLOTS:
   void testRefreshSessionsActionWired();
   void testGithubIssuesTabs();
   void testSourceWindowNavigationAndUnseen();
+  void testStaleIssueCallbackGuards();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -472,6 +473,33 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
     QMetaObject::invokeMethod(window.get(), "markVisibleSourceErrorsSeen", Qt::DirectConnection);
   }
   QCOMPARE(errorsModel.unseenCount(), 1);
+}
+
+void TestSourceWindow::testStaleIssueCallbackGuards() {
+  SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
+  SessionModel sessionModel(QStringLiteral("sessions.json"));
+  SessionModel archiveModel(QStringLiteral("archive.json"));
+  QueueModel queueModel(nullptr, QStringLiteral("queue.json"));
+  ErrorsModel errorsModel;
+  BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
+  APIManager apiManager;
+
+  QString sourceId = QStringLiteral("sources/github/kde/kjules");
+  sourceModel.addSources(QJsonArray{QJsonObject{{QStringLiteral("name"), sourceId}}});
+  auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
+                                               &errorsModel, &blockedTreeModel, &apiManager);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  // We can't access m_fetchingIssueNumber easily, but we can verify it doesn't emit newSessionFromIssueRequested
+  QSignalSpy spy(window.get(), &SourceWindow::newSessionFromIssueRequested);
+
+  // Fake a stale failure and a stale success for issue 999. Since nothing is fetching (m_fetchingIssueNumber = -1)
+  // or fetching something else, these should be ignored.
+  Q_EMIT apiManager.githubIssueContextFailed(sourceId, 999,
+                                             ApiError(ApiError::Type::NotFound, QStringLiteral("Not found")));
+  Q_EMIT apiManager.githubIssueContextReceived(sourceId, 999, QJsonObject(), QJsonArray());
+
+  QCOMPARE(spy.count(), 0);
 }
 
 int main(int argc, char *argv[]) {
