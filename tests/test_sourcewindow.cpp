@@ -6,8 +6,10 @@
 #include "../src/sessionmodel.h"
 #include "../src/sessionswidget.h"
 #include "../src/sessionswindow.h"
+#include "../src/sessionwindow.h"
 #include "../src/sourcemodel.h"
 #include "../src/sourcewindow.h"
+
 #include <QComboBox>
 #include <QPushButton>
 
@@ -47,6 +49,7 @@ private Q_SLOTS:
   void testGithubIssuesTabs();
   void testSourceWindowNavigationAndUnseen();
   void testStaleIssueCallbackGuards();
+  void testSessionWindowContextualErrors();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -69,7 +72,7 @@ void TestSourceWindow::testNoNestedSessionsWindowAndSingleChrome() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -94,7 +97,7 @@ void TestSourceWindow::testIntegratedTabLayoutAndInitialSelection() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -127,7 +130,7 @@ void TestSourceWindow::testNewSessionSignal() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -154,7 +157,7 @@ void TestSourceWindow::testQueueProcessingRequestedSignal() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -205,7 +208,7 @@ void TestSourceWindow::testAutoFollowWiring() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -308,7 +311,7 @@ void TestSourceWindow::testManualFollowAddsAndPersistsSession() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -338,7 +341,7 @@ void TestSourceWindow::testRefreshSessionsActionWired() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -366,10 +369,9 @@ void TestSourceWindow::testGithubIssuesTabs() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
   APIManager apiManager;
-  apiManager.setGithubToken(QStringLiteral("dummy_token"));
 
   QJsonObject srcObj;
   srcObj[QStringLiteral("name")] = QStringLiteral("sources/github/kde/kjules");
@@ -391,34 +393,55 @@ void TestSourceWindow::testGithubIssuesTabs() {
   issue2[QStringLiteral("state")] = QStringLiteral("closed");
   issue2[QStringLiteral("user")] = QStringLiteral("testuser2");
 
-  QJsonObject issue3;
-  issue3[QStringLiteral("number")] = 103;
-  issue3[QStringLiteral("title")] = QStringLiteral("Pull Request");
-  issue3[QStringLiteral("state")] = QStringLiteral("open");
-  issue3[QStringLiteral("pull_request")] = QJsonObject();
+  QJsonObject pr3;
+  pr3[QStringLiteral("number")] = 103;
+  pr3[QStringLiteral("title")] = QStringLiteral("A PR");
+  pr3[QStringLiteral("state")] = QStringLiteral("open");
+  pr3[QStringLiteral("user")] = QStringLiteral("pruser");
+  pr3[QStringLiteral("pull_request")] = QJsonObject();
 
   localIssues.append(issue1);
   localIssues.append(issue2);
-  localIssues.append(issue3);
+  localIssues.append(pr3);
   srcObj[QStringLiteral("local_githubIssues")] = localIssues;
 
   sourceModel.addSources(QJsonArray{srcObj});
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
-  apiManager.setGithubToken(QStringLiteral("dummy_token"));
   auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
-  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
-  QVERIFY(tabWidget != nullptr);
+  QTreeView *issuesView = window->findChild<QTreeView *>(QStringLiteral("githubIssuesView"));
+  QComboBox *stateCombo = window->findChild<QComboBox *>(QStringLiteral("githubIssuesStateCombo"));
 
-  bool foundIssuesTab = false;
-  for (int i = 0; i < tabWidget->count(); ++i) {
-    if (tabWidget->tabText(i) == tr("GitHub Issues"))
-      foundIssuesTab = true;
-  }
-  QVERIFY(foundIssuesTab);
+  QVERIFY(issuesView != nullptr);
+  QVERIFY(stateCombo != nullptr);
+
+  QAbstractItemModel *model = issuesView->model();
+  QVERIFY(model != nullptr);
+
+  // Assert Open
+  stateCombo->setCurrentIndex(stateCombo->findData(QStringLiteral("open")));
+  window->show();
+  QCoreApplication::processEvents();
+  QCOMPARE(model->rowCount(), 1);
+  QCOMPARE(model->index(0, 0).data().toInt(), 101);
+  QCOMPARE(model->index(0, 3).data().toString(), QStringLiteral("testuser"));
+
+  // Assert Closed
+  stateCombo->setCurrentIndex(stateCombo->findData(QStringLiteral("closed")));
+  window->show();
+  QCoreApplication::processEvents();
+  QCOMPARE(model->rowCount(), 1);
+  QCOMPARE(model->index(0, 0).data().toInt(), 102);
+  QCOMPARE(model->index(0, 3).data().toString(), QStringLiteral("testuser2"));
+
+  // Assert All
+  stateCombo->setCurrentIndex(stateCombo->findData(QStringLiteral("all")));
+  window->show();
+  QCoreApplication::processEvents();
+  QCOMPARE(model->rowCount(), 2);
 }
 
 void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
@@ -428,7 +451,7 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
   SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
   QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
-  ErrorsModel errorsModel;
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
   APIManager apiManager;
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
@@ -448,11 +471,9 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
 
   QCOMPARE(errorsModel.unseenCount(), 2);
 
-  // Find the subtab
   QTabWidget *tabWidget = window->findChild<QTabWidget *>();
   QVERIFY(tabWidget != nullptr);
 
-  // Set to Queued/Blocked
   for (int i = 0; i < tabWidget->count(); ++i) {
     if (tabWidget->tabText(i) == tr("Queued/Blocked") || tabWidget->tabText(i) == tr("Queue & Issues")) {
       tabWidget->setCurrentIndex(i);
@@ -468,38 +489,173 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
     }
   }
 
-  // It should have marked the matching error seen, leaving the unrelated one unseen
-  if (window->findChild<QTabWidget *>()) {
-    QMetaObject::invokeMethod(window.get(), "markVisibleSourceErrorsSeen", Qt::DirectConnection);
+  window->show();
+  QCoreApplication::processEvents();
+
+  bool err1Unseen = true;
+  bool err2Unseen = true;
+
+  for (int row = 0; row < errorsModel.rowCount(); ++row) {
+    QModelIndex idx = errorsModel.index(row, 0);
+    if (idx.data(ErrorsModel::SourceIdRole).toString() == sourceId) {
+      err1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+    } else if (idx.data(ErrorsModel::SourceIdRole).toString() == QStringLiteral("sources/github/other/repo")) {
+      err2Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+    }
   }
+
+  QCOMPARE(err1Unseen, false);
+  QCOMPARE(err2Unseen, true);
   QCOMPARE(errorsModel.unseenCount(), 1);
 }
 
 void TestSourceWindow::testStaleIssueCallbackGuards() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
   SourceModel sourceModel(nullptr, SourceModel::StorageMode::InMemory);
-  SessionModel sessionModel(QStringLiteral("sessions.json"));
-  SessionModel archiveModel(QStringLiteral("archive.json"));
-  QueueModel queueModel(nullptr, QStringLiteral("queue.json"));
-  ErrorsModel errorsModel;
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  SessionModel archiveModel(tempDir.filePath(QStringLiteral("archive.json")));
+  QueueModel queueModel(nullptr, tempDir.filePath(QStringLiteral("queue.json")));
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
   BlockedTreeModel blockedTreeModel(&sourceModel, &queueModel);
   APIManager apiManager;
 
   QString sourceId = QStringLiteral("sources/github/kde/kjules");
-  sourceModel.addSources(QJsonArray{QJsonObject{{QStringLiteral("name"), sourceId}}});
+
+  QJsonObject srcObj;
+  srcObj[QStringLiteral("name")] = sourceId;
+  QJsonObject repoObj;
+  repoObj[QStringLiteral("owner")] = QStringLiteral("kde");
+  repoObj[QStringLiteral("repo")] = QStringLiteral("kjules");
+  srcObj[QStringLiteral("githubRepo")] = repoObj;
+  QJsonArray localIssues;
+  QJsonObject issue1;
+  issue1[QStringLiteral("number")] = 101;
+  issue1[QStringLiteral("title")] = QStringLiteral("Issue A");
+  issue1[QStringLiteral("state")] = QStringLiteral("open");
+  localIssues.append(issue1);
+  srcObj[QStringLiteral("local_githubIssues")] = localIssues;
+  sourceModel.addSources(QJsonArray{srcObj});
+
   auto window = std::make_unique<SourceWindow>(sourceId, &sourceModel, &sessionModel, &archiveModel, &queueModel,
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
-  // We can't access m_fetchingIssueNumber easily, but we can verify it doesn't emit newSessionFromIssueRequested
   QSignalSpy spy(window.get(), &SourceWindow::newSessionFromIssueRequested);
 
-  // Fake a stale failure and a stale success for issue 999. Since nothing is fetching (m_fetchingIssueNumber = -1)
-  // or fetching something else, these should be ignored.
+  QTreeView *issuesView = window->findChild<QTreeView *>(QStringLiteral("githubIssuesView"));
+  QVERIFY(issuesView != nullptr);
+  QAbstractItemModel *model = issuesView->model();
+  QVERIFY(model != nullptr);
+
+  // Select row and trigger action
+  issuesView->selectionModel()->select(model->index(0, 0), QItemSelectionModel::Select | QItemSelectionModel::Rows);
+
+  QAction *createAction = window->findChild<QAction *>(QStringLiteral("createSessionFromIssueAction"));
+  QAction *cancelAction = window->findChild<QAction *>(QStringLiteral("cancelGithubIssueFetchAction"));
+
+  QVERIFY(createAction != nullptr);
+  QVERIFY(cancelAction != nullptr);
+
+  {
+    QSignalBlocker blocker(&apiManager);
+    createAction->trigger(); // Starts fetch for 101
+  }
+
+  QCOMPARE(createAction->isEnabled(), false);
+  QCOMPARE(cancelAction->isEnabled(), true);
+
+  // Emit stale callbacks for issue 999
   Q_EMIT apiManager.githubIssueContextFailed(sourceId, 999,
                                              ApiError(ApiError::Type::NotFound, QStringLiteral("Not found")));
+
+  // State should be unchanged
+  QCOMPARE(createAction->isEnabled(), false);
+  QCOMPARE(cancelAction->isEnabled(), true);
+  QCOMPARE(spy.count(), 0);
+
   Q_EMIT apiManager.githubIssueContextReceived(sourceId, 999, QJsonObject(), QJsonArray());
 
+  // State should be unchanged
+  QCOMPARE(createAction->isEnabled(), false);
+  QCOMPARE(cancelAction->isEnabled(), true);
   QCOMPARE(spy.count(), 0);
+
+  // Now emit the correct callback for issue 101
+  QJsonObject fetchedIssue = issue1;
+  fetchedIssue[QStringLiteral("body")] = QStringLiteral("Detailed body");
+  QJsonArray comments;
+  Q_EMIT apiManager.githubIssueContextReceived(sourceId, 101, fetchedIssue, comments);
+
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(createAction->isEnabled(), true);
+  QCOMPARE(cancelAction->isEnabled(), false);
+}
+
+void TestSourceWindow::testSessionWindowContextualErrors() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
+  APIManager apiManager;
+
+  QJsonObject err1;
+  err1[QStringLiteral("sessionId")] = QStringLiteral("sess1");
+  errorsModel.addErrorObj(err1);
+
+  QJsonObject err2;
+  err2[QStringLiteral("sessionId")] = QStringLiteral("sess2");
+  errorsModel.addErrorObj(err2);
+
+  QCOMPARE(errorsModel.unseenCount(), 2);
+
+  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
+  QJsonObject sess1;
+  sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+  sess1[QStringLiteral("state")] = QStringLiteral("ERROR");
+  sessionModel.addSessions(QJsonArray{sess1});
+
+  auto window = std::make_unique<SessionWindow>(sess1, &apiManager, &errorsModel, true, nullptr);
+  window->setAttribute(Qt::WA_DeleteOnClose, false);
+
+  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
+  QVERIFY(tabWidget != nullptr);
+
+  QAbstractItemView *errorsView = nullptr;
+  for (int i = 0; i < tabWidget->count(); ++i) {
+    if (tabWidget->tabText(i).contains(tr("Error"))) {
+      tabWidget->setCurrentIndex(i);
+      errorsView = tabWidget->widget(i)->findChild<QAbstractItemView *>();
+      break;
+    }
+  }
+
+  if (!errorsView) {
+    errorsView = window->findChild<QAbstractItemView *>();
+  }
+
+  window->show();
+  QCoreApplication::processEvents();
+
+  bool err1Unseen = true;
+  bool err2Unseen = true;
+
+  for (int row = 0; row < errorsModel.rowCount(); ++row) {
+    QModelIndex idx = errorsModel.index(row, 0);
+    if (idx.data(ErrorsModel::SessionIdRole).toString() == QStringLiteral("sess1")) {
+      err1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+    } else if (idx.data(ErrorsModel::SessionIdRole).toString() == QStringLiteral("sess2")) {
+      err2Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+    }
+  }
+
+  QCOMPARE(err1Unseen, false);
+  QCOMPARE(err2Unseen, true);
+  QCOMPARE(errorsModel.unseenCount(), 1);
+
+  QVERIFY(errorsView != nullptr);
+  QAbstractItemModel *proxyModel = errorsView->model();
+  QVERIFY(proxyModel != nullptr);
+  QCOMPARE(proxyModel->rowCount(), 1);
 }
 
 int main(int argc, char *argv[]) {

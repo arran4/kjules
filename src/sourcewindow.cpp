@@ -255,21 +255,7 @@ void SourceWindow::setupUi() {
     updateUnseenErrors();
   }
 
-  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
-    if (m_queuedBlockedTab && m_tabWidget->currentWidget() == m_queuedBlockedTab && m_subTabWidget &&
-        m_subTabWidget->currentWidget() == m_errorTab) {
-      if (m_errorsModel) {
-        for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
-          QModelIndex idx = m_errorsModel->index(i, 0);
-          if (m_errorsModel->data(idx, ErrorsModel::SourceIdRole).toString() == m_sourceId) {
-            m_errorsModel->markSeen(i);
-          }
-        }
-      }
-    }
-  });
-  // Add sub-tab tracking too but we can't do it here because m_subTabWidget is null. Wait, we can do it in
-  // setupQueuedBlockedTab.
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int) { markVisibleSourceErrorsSeen(); });
 
   connect(this, &SourceWindow::statusMessage, this, [this](const QString &msg) { m_statusLabel->setText(msg); });
 
@@ -575,6 +561,7 @@ void SourceWindow::setupGithubIssuesTab() {
   QVBoxLayout *layout = new QVBoxLayout(issuesTab);
 
   m_issuesView = new QTreeView(this);
+  m_issuesView->setObjectName(QStringLiteral("githubIssuesView"));
   m_issuesModel = new QStandardItemModel(this);
   m_issuesModel->setHorizontalHeaderLabels({tr("Number"), tr("Title"), tr("State"), tr("User")});
   m_issuesView->setModel(m_issuesModel);
@@ -586,10 +573,14 @@ void SourceWindow::setupGithubIssuesTab() {
 
   m_createSessionFromIssueAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-new")), tr("Create Session..."), this);
+  m_createSessionFromIssueAction->setObjectName(QStringLiteral("createSessionFromIssueAction"));
+
   m_createSessionFromIssueAction->setEnabled(false);
   m_issuesView->addAction(m_createSessionFromIssueAction);
 
   m_cancelFetchAction = new QAction(QIcon::fromTheme(QStringLiteral("process-stop")), tr("Cancel Fetch"), this);
+  m_cancelFetchAction->setObjectName(QStringLiteral("cancelGithubIssueFetchAction"));
+
   m_cancelFetchAction->setEnabled(false);
   m_issuesView->addAction(m_cancelFetchAction);
 
@@ -636,6 +627,7 @@ void SourceWindow::setupGithubIssuesTab() {
   connect(m_apiManager, &APIManager::githubIssueContextFailed, this, &SourceWindow::onGithubIssueContextFailed);
 
   m_issuesStateCombo = new QComboBox(this);
+  m_issuesStateCombo->setObjectName(QStringLiteral("githubIssuesStateCombo"));
   QComboBox *stateCombo = m_issuesStateCombo;
   stateCombo->addItem(tr("Open"), QStringLiteral("open"));
   stateCombo->addItem(tr("Closed"), QStringLiteral("closed"));
@@ -853,7 +845,6 @@ void SourceWindow::updateGithubIssuesDisplay(const QJsonArray &issues) {
 
   for (const QJsonValue &v : issues) {
     QJsonObject issue = v.toObject();
-
     if (issue.contains(QStringLiteral("pull_request")))
       continue;
 
