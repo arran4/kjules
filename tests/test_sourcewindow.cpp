@@ -54,6 +54,7 @@ private Q_SLOTS:
   void testStaleIssueCallbackGuards();
   void testSessionWindowContextualErrors();
   void testSessionWindowMessageSendFailureLinks();
+  void testClickableLabelLinkHandling();
 };
 
 void TestSourceWindow::initTestCase() {
@@ -695,10 +696,55 @@ void TestSourceWindow::testSessionWindowMessageSendFailureLinks() {
   // Send failure B
   Q_EMIT apiManager.messageSendFailed(QStringLiteral("sess1"), QStringLiteral("Error B"), QStringLiteral("Details B"));
 
-  Q_EMIT statusLabel->linkActivated(QStringLiteral("#error-details"));
+  window->show();
+  QVERIFY(QTest::qWaitForWindowExposed(window.get()));
+
+  QCoreApplication::processEvents();
+
+  QTest::mouseClick(statusLabel, Qt::LeftButton, Qt::NoModifier,
+                    QPoint(statusLabel->width() - 5, statusLabel->height() / 2));
+
   QCoreApplication::processEvents();
 
   QCOMPARE(textBrowser->toPlainText(), QStringLiteral("Details B"));
+}
+
+void TestSourceWindow::testClickableLabelLinkHandling() {
+  ClickableLabel label(QStringLiteral("Normal <a href=\"#test\">Link</a> Text"));
+  label.setTextFormat(Qt::RichText);
+  label.setTextInteractionFlags(Qt::TextBrowserInteraction);
+  label.show();
+
+  QSignalSpy clickedSpy(&label, &ClickableLabel::clicked);
+  QSignalSpy linkSpy(&label, &QLabel::linkActivated);
+
+  // Wait for it to be visible
+  QVERIFY(QTest::qWaitForWindowExposed(&label));
+
+  // Click on the link. QTest::mouseClick clicks the center by default.
+  // We need to click exactly on the link.
+  // Actually, we can't easily guess the geometry of the link in the test.
+  // But wait! If we set the whole text as a link, the center will be the link!
+  label.setText(QStringLiteral("<a href=\"#test\">Hyperlink Only</a>"));
+
+  QCoreApplication::processEvents();
+
+  QTest::mouseClick(&label, Qt::LeftButton);
+
+  QCOMPARE(linkSpy.count(), 1);
+  QCOMPARE(clickedSpy.count(), 0);
+
+  // Now test normal text
+  linkSpy.clear();
+  clickedSpy.clear();
+
+  label.setText(QStringLiteral("Normal Text Only"));
+  QCoreApplication::processEvents();
+
+  QTest::mouseClick(&label, Qt::LeftButton);
+
+  QCOMPARE(linkSpy.count(), 0);
+  QCOMPARE(clickedSpy.count(), 1);
 }
 
 int main(int argc, char *argv[]) {

@@ -263,6 +263,7 @@ void SessionWindow::onMessageSent(const QString &sessionId) {
     return;
 
   m_pendingMessage.clear();
+  m_statusErrorDetails.clear();
   if (m_chatInput) {
     m_chatInput->setEnabled(true);
     m_chatInput->setFocus();

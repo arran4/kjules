@@ -8,9 +8,13 @@ class ClickableLabel : public QLabel {
   Q_OBJECT
 
 public:
-  explicit ClickableLabel(QWidget *parent = nullptr) : QLabel(parent) { setCursor(Qt::PointingHandCursor); }
+  explicit ClickableLabel(QWidget *parent = nullptr) : QLabel(parent) {
+    setCursor(Qt::PointingHandCursor);
+    connect(this, &QLabel::linkActivated, this, [this]() { m_linkJustActivated = true; });
+  }
   explicit ClickableLabel(const QString &text, QWidget *parent = nullptr) : QLabel(text, parent) {
     setCursor(Qt::PointingHandCursor);
+    connect(this, &QLabel::linkActivated, this, [this]() { m_linkJustActivated = true; });
   }
 
 Q_SIGNALS:
@@ -19,7 +23,10 @@ Q_SIGNALS:
 protected:
   void mousePressEvent(QMouseEvent *event) override {
     if (event->button() == Qt::LeftButton) {
-      event->accept();
+      QLabel::mousePressEvent(event);
+      if (!event->isAccepted()) {
+        event->accept();
+      }
     } else {
       QLabel::mousePressEvent(event);
     }
@@ -27,12 +34,19 @@ protected:
 
   void mouseReleaseEvent(QMouseEvent *event) override {
     if (event->button() == Qt::LeftButton) {
-      Q_EMIT clicked();
+      m_linkJustActivated = false;
+      QLabel::mouseReleaseEvent(event);
+      if (!m_linkJustActivated) {
+        Q_EMIT clicked();
+      }
       event->accept();
     } else {
       QLabel::mouseReleaseEvent(event);
     }
   }
+
+private:
+  bool m_linkJustActivated = false;
 };
 
 #endif // CLICKABLELABEL_H
