@@ -17,6 +17,9 @@
 
 class APIManager : public QObject {
   Q_OBJECT
+  friend class TestBackgroundErrors;
+  friend class TestAPIManagerPagination;
+  friend class BenchAPIManager;
 
 public:
   explicit APIManager(QObject *parent = nullptr);
@@ -41,15 +44,15 @@ public:
   void testGithubConnection(const QString &token = QString());
   QString githubUsername() const;
   QString githubScopes() const;
-  void listSources(const QString &pageToken = QString());
+  void listSources(const QString &pageToken = QString(), bool isBackground = false);
   void cancelListSources();
   void createSessionAsync(const QJsonObject &requestData);
-  void listSessions(const QString &pageToken = QString());
+  void listSessions(const QString &pageToken = QString(), bool isBackground = false);
   void cancelListSessions();
-  void getSession(const QString &sessionId);
-  void reloadSession(const QString &sessionId);
+  void getSession(const QString &sessionId, bool isBackground = false);
+  void reloadSession(const QString &sessionId, bool isBackground = false);
   static QString cleanSessionId(const QString &sessionId);
-  void getSource(const QString &sourceId);
+  void getSource(const QString &sourceId, bool isBackground = false);
   void listActivities(const QString &sessionId);
   void sendMessage(const QString &sessionId, const QString &message);
   void fetchGithubInfo(const QString &sourceName, const QString &owner, const QString &repository);
@@ -85,15 +88,15 @@ Q_SIGNALS:
   void sessionCreated(const QJsonObject &session);
   void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
-  void sessionDetailsFailed(const QString &sessionId, const QString &message);
-  void sessionReloaded(const QJsonObject &session);
-  void sessionReloadFailed(const QString &sessionId, const QString &message);
+  void sessionDetailsFailed(const QString &sessionId, const QString &message, bool isBackground);
+  void sessionReloaded(const QJsonObject &session, bool isBackground);
+  void sessionReloadFailed(const QString &sessionId, const QString &message, bool isBackground);
   void sourceDetailsReceived(const QJsonObject &source);
   void activitiesReceived(const QString &sessionId, const QJsonArray &activities);
   void connectionTested(bool success, const QString &message);
   void githubConnectionTested(bool success, const QString &message);
-  void errorOccurred(const QString &message);
-  void errorOccurredWithResponse(const QString &message, const QString &response);
+  void errorOccurred(const QString &message, bool isBackground);
+  void errorOccurredWithResponse(const QString &message, const QString &response, bool isBackground);
   void sessionCreationFailed(const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
   void messageSent(const QString &sessionId);
   void messageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails);

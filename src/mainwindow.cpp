@@ -136,29 +136,38 @@ MainWindow::MainWindow(QWidget *parent)
             onGithubRepoCreatedResult(false, requestData, QJsonObject(), apiError);
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &MainWindow::showSessionWindow);
-  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session) {
+  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
+    Q_UNUSED(isBackground);
     checkPendingRefreshBeforeQueue(session.value(QStringLiteral("id")).toString());
   });
-  connect(m_apiManager, &APIManager::sessionReloadFailed, this, [this](const QString &sessionId, const QString &) {
-    m_inFlightSessionReloads.remove(sessionId);
-    m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
-    checkPendingRefreshBeforeQueue(sessionId);
+  connect(m_apiManager, &APIManager::sessionReloadFailed, this,
+          [this](const QString &sessionId, const QString &, bool) {
+            m_inFlightSessionReloads.remove(sessionId);
+            m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
+            checkPendingRefreshBeforeQueue(sessionId);
+          });
+  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
+    Q_UNUSED(isBackground);
+    onSessionReloaded(session, isBackground);
   });
-  connect(m_apiManager, &APIManager::sessionReloaded, this, &MainWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this, &MainWindow::onSourceDetailsReceived);
-  connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg) {
-    if (m_suppressNextErrorDialog) {
-      m_suppressNextErrorDialog = false;
-      updateStatus(i18n("Error: %1", msg));
-      return;
+  connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg, bool isBackground) {
+    if (m_isProcessingQueue) {
+      return; // Handled by errorOccurredWithResponse
     }
-    if (!m_isProcessingQueue) {
+    if (isBackground) {
+      // Background errors log silently to the error model and status
+      onError(msg);
+    } else {
+      // Foreground errors log to the error model and status
+      // (Currently no modal dialog is used here, but this explicitly preserves the foreground vs background routing
+      //  for future modal additions or logging distinctions.)
       onError(msg);
     }
-    // For queue errors we rely on errorOccurredWithResponse
   });
   connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
-          [this](const QString &msg, const QString &response) {
+          [this](const QString &msg, const QString &response, bool isBackground) {
+            Q_UNUSED(isBackground);
             if (m_isProcessingQueue) {
               ApiError apiError(ApiError::Type::Unknown, msg);
               // We'll leave raw response empty or we can parse it
@@ -212,7 +221,7 @@ MainWindow::MainWindow(QWidget *parent)
   updateSourceStats();
 
   // Initial refresh
-  QTimer::singleShot(0, this, [this]() { refreshSources(); });
+  QTimer::singleShot(0, this, [this]() { refreshSourcesImpl(true); });
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 }
 
@@ -1039,7 +1048,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
         bool hasApiKey = !m_apiManager->apiKey().isEmpty();
         auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
         window->setInitialData(initData);
-        connect(window, &NewSessionDialog::refreshSourcesRequested, this, &MainWindow::refreshSources);
+        connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(); });
         connect(this, &MainWindow::statusMessage, window, &NewSessionDialog::updateStatus);
         connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
         connect(window, &NewSessionDialog::refreshSourceRequested, this,
@@ -3310,7 +3319,9 @@ void MainWindow::createActions() {
   connectSignals();
 }
 
-void MainWindow::refreshSources() {
+void MainWindow::refreshSources() { refreshSourcesImpl(false); }
+
+void MainWindow::refreshSourcesImpl(bool isBackground) {
   if (m_isRefreshingSources) {
     cancelSourcesRefresh();
     return;
@@ -3333,7 +3344,7 @@ void MainWindow::refreshSources() {
   m_sourcesRefreshProgressWindow->reset();
 
   updateStatus(i18n("Refreshing sources..."));
-  m_apiManager->listSources();
+  m_apiManager->listSources(QString(), isBackground);
 }
 
 void MainWindow::showCreateRepoDialog() {
@@ -3655,7 +3666,7 @@ void MainWindow::refreshBeforeQueue() {
                      "Refreshing %1 following sessions before processing queue...", m_pendingRefreshIds.size()));
 
   for (const QString &id : sessionsToReload) {
-    m_apiManager->reloadSession(id);
+    m_apiManager->reloadSession(id, true);
   }
 }
 
@@ -4462,7 +4473,6 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
                                          const QString &httpDetails) {
   QString errorString = apiError.message();
   QJsonObject response = apiError.rawResponse();
-  m_suppressNextErrorDialog = true;
   QJsonObject requestCopy = request;
   if (requestCopy.value(QStringLiteral("_kjules_failed_action")).toString() == QStringLiteral("send_now")) {
     int originalRow = requestCopy.value(QStringLiteral("_kjules_requeue_origin_row")).toInt();
@@ -4777,7 +4787,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this, &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(); });
   connect(this, &MainWindow::statusMessage, window, &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
@@ -5427,7 +5437,7 @@ void MainWindow::autoRefreshFollowing() {
 
         if (FollowingRefreshEvaluator::shouldRefresh(now, lastRefreshed, intervalSecs, false, lastFailedAt)) {
           m_inFlightSessionReloads.insert(id);
-          m_apiManager->reloadSession(id);
+          m_apiManager->reloadSession(id, true);
         }
         break;
       }
@@ -6092,7 +6102,8 @@ void MainWindow::switchToFollowingTab() {
   }
 }
 
-void MainWindow::onSessionReloaded(const QJsonObject &session) {
+void MainWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
+  Q_UNUSED(isBackground);
   m_lastSessionRefreshTime = QDateTime::currentDateTime();
   const QString id = session.value(QStringLiteral("id")).toString();
   m_inFlightSessionReloads.remove(id);

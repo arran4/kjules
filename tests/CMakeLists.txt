@@ -54,3 +54,7 @@ set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTe
 add_executable(test_errorsmodel test_errorsmodel.cpp ../src/errorsmodel.cpp)
 target_link_libraries(test_errorsmodel Qt6::Test Qt6::Core Qt6::Widgets Qt6::Network)
 add_test(NAME ErrorsModelTest COMMAND test_errorsmodel)
+
+add_executable(test_background_errors test_background_errors.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp)
+target_link_libraries(test_background_errors Qt6::Test Qt6::Network Qt6::Core KF6::Wallet KF6::I18n KF6::ConfigCore Qt6::Concurrent Qt6::Widgets)
+add_test(NAME BackgroundErrorsTest COMMAND test_background_errors)

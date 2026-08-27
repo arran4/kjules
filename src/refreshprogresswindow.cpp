@@ -173,7 +173,9 @@ QString RefreshProgressWindow::getSessionLink(const QString &id) const {
   return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>").arg(escapedId, name.toHtmlEscaped(), escapedId);
 }
 
-void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
+void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
+  if (isBackground)
+    return;
   QString id = APIManager::cleanSessionId(session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
     QString link = getSessionLink(id);
@@ -220,7 +222,10 @@ void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl, cons
   }
 }
 
-void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId, const QString &message) {
+void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId, const QString &message, bool isBackground) {
+  if (isBackground) {
+    return; // Do not fail a foreground manual task due to an overlapping background refresh failure
+  }
   QString cleanId = APIManager::cleanSessionId(sessionId);
   if (m_activeTasks.contains(cleanId)) {
     m_textBrowser->append(i18n("<font color='red'>Failed to reload session %1: %2</font>", cleanId, message));

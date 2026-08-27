@@ -167,7 +167,7 @@ void FollowSessionDialog::onSessionFailed(const QString &sessionId, const QStrin
   }
 }
 
-void FollowSessionDialog::onErrorOccurred(const QString & /*error*/) {
+void FollowSessionDialog::onErrorOccurred(const QString & /*error*/, bool /*isBackground*/) {
   // Ignored to avoid unrelated application errors affecting the dialog's preview state.
   // The dialog now relies on onSessionFailed for accurate per-session error tracking.
 }

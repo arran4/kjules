@@ -100,7 +100,7 @@ void APIManager::onWalletOpened(bool success) {
     m_githubTokenFailed = false;
     Q_EMIT githubAvailabilityChanged(canConnectGithub());
   } else {
-    Q_EMIT errorOccurred(QStringLiteral("Failed to open KWallet"));
+    Q_EMIT errorOccurred(QStringLiteral("Failed to open KWallet"), false);
   }
 }
 
@@ -291,7 +291,7 @@ void APIManager::sendMessage(const QString &sessionId, const QString &message) {
       QString reason = reply->errorString();
       QString errorMsg = QStringLiteral("Failed to send message: ") + reason;
       Q_EMIT messageSendFailed(sessionId, reason, httpDetails);
-      Q_EMIT errorOccurred(errorMsg);
+      Q_EMIT errorOccurred(errorMsg, false);
     }
     reply->deleteLater();
   });
@@ -299,14 +299,14 @@ void APIManager::sendMessage(const QString &sessionId, const QString &message) {
 
 void APIManager::listActivities(const QString &sessionId) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot fetch activities: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot fetch activities: No token or previous failure."), false);
     return;
   }
 
   QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
-    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."), false);
     return;
   }
 
@@ -330,7 +330,7 @@ void APIManager::listActivities(const QString &sessionId) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to fetch activities: ") + reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to fetch activities: ") + reply->errorString(), false);
     }
     reply->deleteLater();
   });
@@ -357,19 +357,19 @@ QString APIManager::cleanSessionId(const QString &sessionId) {
   return cleanId;
 }
 
-void APIManager::reloadSession(const QString &sessionId) {
+void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot reload session details: No token or previous failure."));
-    Q_EMIT sessionReloadFailed(sessionId,
-                               QStringLiteral("Cannot reload session details: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot reload session details: No token or previous failure."), isBackground);
+    Q_EMIT sessionReloadFailed(
+        sessionId, QStringLiteral("Cannot reload session details: No token or previous failure."), isBackground);
     return;
   }
 
   QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
-    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."));
-    Q_EMIT sessionReloadFailed(sessionId, QStringLiteral("Invalid session ID."));
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."), isBackground);
+    Q_EMIT sessionReloadFailed(sessionId, QStringLiteral("Invalid session ID."), isBackground);
     return;
   }
 
@@ -377,32 +377,32 @@ void APIManager::reloadSession(const QString &sessionId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId, isBackground]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
-      Q_EMIT sessionReloaded(doc.object());
+      Q_EMIT sessionReloaded(doc.object(), isBackground);
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
       QString errorMsg = QStringLiteral("Failed to reload session details: ") + reply->errorString();
-      Q_EMIT errorOccurred(errorMsg);
-      Q_EMIT sessionReloadFailed(sessionId, errorMsg);
+      Q_EMIT errorOccurred(errorMsg, isBackground);
+      Q_EMIT sessionReloadFailed(sessionId, errorMsg, isBackground);
     }
     reply->deleteLater();
   });
 }
 
-void APIManager::getSource(const QString &sourceId) {
+void APIManager::getSource(const QString &sourceId, bool isBackground) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot get source details: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot get source details: No token or previous failure."), isBackground);
     return;
   }
 
   if (!sourceId.startsWith(QStringLiteral("sources/")) || sourceId.contains(QStringLiteral(".."))) {
-    Q_EMIT errorOccurred(QStringLiteral("Invalid source ID."));
+    Q_EMIT errorOccurred(QStringLiteral("Invalid source ID."), isBackground);
     return;
   }
 
@@ -410,7 +410,7 @@ void APIManager::getSource(const QString &sourceId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, isBackground]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -420,13 +420,13 @@ void APIManager::getSource(const QString &sourceId) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") + reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") + reply->errorString(), isBackground);
     }
     reply->deleteLater();
   });
 }
 
-void APIManager::listSources(const QString &pageToken) {
+void APIManager::listSources(const QString &pageToken, bool isBackground) {
   if (!canConnect()) {
     Q_EMIT logMessage(QStringLiteral("Skipping listSources: No token or previous failure."));
     Q_EMIT sourcesRefreshFinished(false);
@@ -447,7 +447,7 @@ void APIManager::listSources(const QString &pageToken) {
   QNetworkRequest request = createRequest(endpoint);
   m_listSourcesReply = m_nam->get(request);
 
-  connect(m_listSourcesReply, &QNetworkReply::finished, this, [this]() {
+  connect(m_listSourcesReply, &QNetworkReply::finished, this, [this, isBackground]() {
     QNetworkReply *reply = m_listSourcesReply;
     m_listSourcesReply = nullptr;
 
@@ -464,7 +464,7 @@ void APIManager::listSources(const QString &pageToken) {
       QString nextPageToken = obj.value(QStringLiteral("nextPageToken")).toString();
       if (!nextPageToken.isEmpty()) {
         // Fetch next page automatically
-        listSources(nextPageToken);
+        listSources(nextPageToken, isBackground);
       } else {
         Q_EMIT sourcesRefreshFinished(true);
         Q_EMIT logMessage(QStringLiteral("Sources refreshed successfully."));
@@ -476,7 +476,7 @@ void APIManager::listSources(const QString &pageToken) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString(), isBackground);
       Q_EMIT sourcesRefreshFinished(false);
     }
     reply->deleteLater();
@@ -611,7 +611,8 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
         Q_EMIT githubAvailabilityChanged(false);
         Q_EMIT errorOccurred(QStringLiteral("GitHub API authentication failed (HTTP %1). Future "
                                             "requests will be blocked until the token is verified.")
-                                 .arg(statusCode));
+                                 .arg(statusCode),
+                             false);
       }
       QByteArray responseData = reply->readAll();
       ApiError apiError = ApiErrorDetector::detect(reply, responseData);
@@ -685,7 +686,7 @@ void APIManager::fetchGithubInfo(const QString &sourceName, const QString &owner
 
 void APIManager::createSessionAsync(const QJsonObject &requestData) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot create session: No token or previous failure."));
+    Q_EMIT errorOccurred(QStringLiteral("Cannot create session: No token or previous failure."), false);
     return;
   }
 
@@ -768,14 +769,13 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
       ApiError apiError = ApiErrorDetector::detect(reply, responseData);
       Q_EMIT sessionCreationFailed(requestData, apiError, httpDetails);
       QString errorMsg = QStringLiteral("Failed to create session: ") + reply->errorString();
-      Q_EMIT errorOccurred(errorMsg);
-      Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData));
+      Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData), false);
     }
     reply->deleteLater();
   });
 }
 
-void APIManager::listSessions(const QString &pageToken) {
+void APIManager::listSessions(const QString &pageToken, bool isBackground) {
   if (!canConnect()) {
     Q_EMIT logMessage(QStringLiteral("Skipping listSessions: No token or previous failure."));
     Q_EMIT sessionsRefreshFinished();
@@ -796,7 +796,7 @@ void APIManager::listSessions(const QString &pageToken) {
   m_listSessionsReply = m_nam->get(request);
 
   QNetworkReply *reply = m_listSessionsReply;
-  connect(m_listSessionsReply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(m_listSessionsReply, &QNetworkReply::finished, this, [this, reply, isBackground]() {
     if (m_listSessionsReply == reply) {
       m_listSessionsReply = nullptr;
     }
@@ -822,7 +822,7 @@ void APIManager::listSessions(const QString &pageToken) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString());
+      Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString(), isBackground);
       Q_EMIT sessionsRefreshFinished();
     }
     reply->deleteLater();
@@ -835,11 +835,11 @@ void APIManager::cancelListSessions() {
   }
 }
 
-void APIManager::getSession(const QString &sessionId) {
+void APIManager::getSession(const QString &sessionId, bool isBackground) {
   if (!canConnect()) {
     QString msg = QStringLiteral("Cannot get session details: No token or previous failure.");
-    Q_EMIT errorOccurred(msg);
-    Q_EMIT sessionDetailsFailed(sessionId, msg);
+    Q_EMIT errorOccurred(msg, isBackground);
+    Q_EMIT sessionDetailsFailed(sessionId, msg, isBackground);
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
@@ -854,8 +854,8 @@ void APIManager::getSession(const QString &sessionId) {
 
   if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
     QString msg = QStringLiteral("Invalid session ID.");
-    Q_EMIT errorOccurred(msg);
-    Q_EMIT sessionDetailsFailed(sessionId, msg);
+    Q_EMIT errorOccurred(msg, isBackground);
+    Q_EMIT sessionDetailsFailed(sessionId, msg, isBackground);
     return;
   }
 
@@ -863,7 +863,7 @@ void APIManager::getSession(const QString &sessionId) {
 
   QNetworkRequest request = createRequest(endpoint);
   QNetworkReply *reply = m_nam->get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, cleanId]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, cleanId, isBackground]() {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -874,8 +874,8 @@ void APIManager::getSession(const QString &sessionId) {
         m_tokenFailed = true;
       }
       QString msg = QStringLiteral("Failed to get session details: ") + reply->errorString();
-      Q_EMIT errorOccurred(msg);
-      Q_EMIT sessionDetailsFailed(cleanId, msg);
+      Q_EMIT errorOccurred(msg, isBackground);
+      Q_EMIT sessionDetailsFailed(cleanId, msg, isBackground);
     }
     reply->deleteLater();
   });

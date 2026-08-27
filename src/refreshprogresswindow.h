@@ -34,9 +34,9 @@ Q_SIGNALS:
 private Q_SLOTS:
   void processNext();
   void onAnchorClicked(const QUrl &url);
-  void onSessionReloaded(const QJsonObject &session);
+  void onSessionReloaded(const QJsonObject &session, bool isBackground);
 
-  void onSessionReloadFailed(const QString &sessionId, const QString &message);
+  void onSessionReloadFailed(const QString &sessionId, const QString &message, bool isBackground);
   void onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
   void onGithubPullRequestFailed(const QString &prUrl, const QString &message);
 
