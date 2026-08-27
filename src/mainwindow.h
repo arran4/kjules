@@ -114,6 +114,7 @@ private Q_SLOTS:
   void toggleWindowVisibility();
   void onSourcesReceived(const QJsonArray &sources);
   void onSourcesRefreshFinished(bool complete);
+  void onUnseenErrorsCountChanged(int count);
   void onGithubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void onGithubBranchesReceived(const QString &sourceId, const QJsonArray &branches);
   void onGithubPullRequestInfoReceived(const QString &prUrl, const QJsonObject &info);
@@ -251,6 +252,7 @@ private:
   QSystemTrayIcon *m_trayIcon;
   QMenu *m_trayMenu;
   ClickableLabel *m_statusLabel;
+  ClickableLabel *m_unseenErrorLabel;
   QLabel *m_sessionStatsLabel;
   QLabel *m_queueCountdownLabel;
   ClickableProgressBar *m_sourceProgressBar;

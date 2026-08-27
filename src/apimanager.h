@@ -36,6 +36,7 @@ public:
   void saveGithubTokenToWallet(const QString &token);
 
   bool canConnect() const;
+  bool canConnectGithub() const;
   void testConnection(const QString &apiKey = QString());
   void testGithubConnection(const QString &token = QString());
   QString githubUsername() const;
@@ -53,12 +54,17 @@ public:
   void sendMessage(const QString &sessionId, const QString &message);
   void fetchGithubInfo(const QString &sourceName, const QString &owner, const QString &repository);
   void fetchGithubBranches(const QString &sourceName, const QString &owner, const QString &repository);
+  void fetchGithubIssueContext(const QString &sourceId, const QString &owner, const QString &repository,
+                               int issueNumber);
+  void cancelGithubIssueContextFetch(const QString &sourceId, int issueNumber);
   void fetchGithubPullRequest(const QString &prUrl);
-  void fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository);
+  void fetchGithubIssues(const QString &sourceId, const QString &owner, const QString &repository,
+                         const QString &state = QStringLiteral("open"));
   void fetchGithubPullRequests(const QString &sourceId, const QString &owner, const QString &repository);
   void createGithubRepoAsync(const QJsonObject &requestData);
 
 Q_SIGNALS:
+  void githubAvailabilityChanged(bool available);
   void githubUsernameFetched(const QString &username);
   void githubRepoCreated(const QJsonObject &requestData, const QJsonObject &response);
   void githubRepoCreationFailed(const QJsonObject &requestData, const ApiError &apiError);
@@ -70,6 +76,9 @@ Q_SIGNALS:
   void githubPullRequestFailed(const QString &prUrl, const QString &message);
   void githubIssuesReceived(const QString &sourceId, const QJsonArray &issues);
   void githubPullRequestsReceived(const QString &sourceId, const QJsonArray &prs);
+  void githubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
+                                  const QJsonArray &comments);
+  void githubIssueContextFailed(const QString &sourceId, int issueNumber, const ApiError &error);
   void sourcesReceived(const QJsonArray &sources);
   void sourcesRefreshFinished(bool complete);
   void sessionsRefreshFinished();
@@ -108,6 +117,7 @@ private:
   int m_githubRateLimitRemaining;
   QNetworkReply *m_listSourcesReply;
   QNetworkReply *m_listSessionsReply;
+  QMap<QString, QNetworkReply *> m_githubIssueContextReplies;
 
   bool checkGithubRateLimit();
   void updateGithubRateLimit(QNetworkReply *reply);

@@ -338,6 +338,12 @@ void MainWindow::setupUi() {
 
   mainLayout->addWidget(m_tabWidget);
 
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
+    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("errorsTab")) {
+      m_errorsModel->markAllSeen();
+    }
+  });
+
   setupStatusBar();
 
   // Toolbar is handled by KXmlGuiWindow via kjulesui.rc
@@ -761,7 +767,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
             if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
                 firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
-              SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
+              SessionWindow *window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
               connectSessionWindow(window);
               window->show();
               found = true;
@@ -1230,7 +1236,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
             if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
                 firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
-              SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
+              SessionWindow *window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
               connectSessionWindow(window);
               window->show();
               found = true;
@@ -1261,7 +1267,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QJsonObject sessionData = m_archiveModel->getSession(mappedIdx.row());
           if (!sessionData.isEmpty()) {
-            SessionWindow *window = new SessionWindow(sessionData, m_apiManager, true, this);
+            SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
             connectSessionWindow(window);
             window->show();
           } else {
@@ -1310,7 +1316,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
     if (!sessionData.isEmpty()) {
-      SessionWindow *window = new SessionWindow(sessionData, m_apiManager, true, this);
+      SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
       connectSessionWindow(window);
       window->show();
     } else {
@@ -1752,9 +1758,24 @@ void MainWindow::setupStatusBar() {
   });
   statusBar()->addWidget(m_statusLabel);
 
+  m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->hide(); // Initially hidden if no errors
+  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("errorsTab")) {
+        m_tabWidget->setCurrentIndex(i);
+        break;
+      }
+    }
+  });
+  statusBar()->addWidget(m_unseenErrorLabel);
+
   m_sessionStatsLabel = new QLabel(this);
   statusBar()->addPermanentWidget(m_sessionStatsLabel);
   updateSessionStats();
+
+  connect(m_errorsModel, &ErrorsModel::unseenCountChanged, this, &MainWindow::onUnseenErrorsCountChanged);
+  onUnseenErrorsCountChanged(m_errorsModel->unseenCount());
 
   m_queueCountdownLabel = new QLabel(this);
   m_queueCountdownLabel->hide();
@@ -3340,6 +3361,15 @@ void MainWindow::openSourceWindow(const QString &sourceId) {
     initialData[QStringLiteral("sources")] = sourcesArr;
     showNewSessionDialog(initialData, true);
   });
+  connect(window, &SourceWindow::newSessionFromIssueRequested, this,
+          [this](const QString &source, QJsonObject initialData) {
+            if (!initialData.contains(QStringLiteral("sources"))) {
+              QJsonArray sourcesArr;
+              sourcesArr.append(source);
+              initialData[QStringLiteral("sources")] = sourcesArr;
+            }
+            showNewSessionDialog(initialData, true);
+          });
   connect(window, &SourceWindow::queueProcessingRequested, this,
           [this]() { QTimer::singleShot(0, this, &MainWindow::processQueue); });
   window->show();
@@ -4811,7 +4841,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
     for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
       if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() == previousAttemptId) {
         QJsonObject session = m_archiveModel->getSession(i);
-        SessionWindow *window = new SessionWindow(session, m_apiManager, false, this);
+        SessionWindow *window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
         connectSessionWindow(window);
         window->show();
         found = true;
@@ -4848,7 +4878,8 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
   m_sessionModel->markAsRead(sessionId);
-  SessionWindow *window = new SessionWindow(session, m_apiManager, m_sessionModel->contains(sessionId), this);
+  SessionWindow *window =
+      new SessionWindow(session, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
   connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
     m_sessionModel->addSession(s);
     m_sessionModel->saveSessions();
@@ -4873,7 +4904,8 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
     m_sessionModel->markAsRead(sessionId);
-    SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_sessionModel->contains(sessionId), this);
+    SessionWindow *window =
+        new SessionWindow(sessionData, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
     connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
       m_sessionModel->addSession(s);
       m_sessionModel->saveSessions();
@@ -4927,7 +4959,14 @@ void MainWindow::refreshGithubDataForSources(const QStringList &sourceIds) {
 
 void MainWindow::onError(const QString &message) {
   updateStatus(i18n("Error: %1", message));
-  QMessageBox::critical(this, i18n("Error"), message);
+  // Duplicate logging removed
+
+  if (m_errorsModel) {
+    QJsonObject errObj;
+    errObj[QStringLiteral("message")] = message;
+    errObj[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    m_errorsModel->addErrorObj(errObj);
+  }
 }
 
 QList<SourceRemapEntry> MainWindow::pendingSourceEntries(const QString &onlySource) const {
@@ -6030,7 +6069,7 @@ void MainWindow::processSessionModel(SessionModel *model, int &sessionCount) {
           }
         }
         if (!sessionData.isEmpty()) {
-          SessionWindow *window = new SessionWindow(sessionData, m_apiManager, isManaged, this);
+          SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, isManaged, this);
           connectSessionWindow(window);
           window->show();
         } else {
@@ -6164,4 +6203,13 @@ void MainWindow::onMasterMinuteTimer() {
   }
 
   m_isProcessingMinuteTimer = false;
+}
+
+void MainWindow::onUnseenErrorsCountChanged(int count) {
+  if (count > 0) {
+    m_unseenErrorLabel->setText(i18np("[Error: %1]", "[Errors: %1]", count));
+    m_unseenErrorLabel->show();
+  } else {
+    m_unseenErrorLabel->hide();
+  }
 }

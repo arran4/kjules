@@ -1,7 +1,11 @@
 #include "sessionwindow.h"
 
 #include "activitybrowser.h"
+#include "activitylogwindow.h"
 #include "apimanager.h"
+#include "clickablelabel.h"
+#include "errorsmodel.h"
+#include "sourcestatuswidget.h"
 #include "utils.h"
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -18,8 +22,10 @@
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QMenuBar>
+#include <QProcess>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -28,11 +34,12 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged, QWidget *parent)
+SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel,
+                             bool isManaged, QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged),
-      m_tabWidget(nullptr), m_statusLabel(nullptr), m_autoRefreshTimer(nullptr), m_autoRefreshCombo(nullptr),
-      m_detailsBrowser(nullptr), m_promptBrowser(nullptr), m_diffBrowser(nullptr), m_activityBrowser(nullptr),
-      m_rawActivitiesBrowser(nullptr) {
+      m_tabWidget(nullptr), m_errorsModel(errorsModel), m_statusLabel(nullptr), m_autoRefreshTimer(nullptr),
+      m_autoRefreshCombo(nullptr), m_detailsBrowser(nullptr), m_promptBrowser(nullptr), m_diffBrowser(nullptr),
+      m_activityBrowser(nullptr), m_rawActivitiesBrowser(nullptr) {
   setObjectName(QStringLiteral("SessionWindow_%1").arg(sessionData.value(QStringLiteral("id")).toString()));
   setAttribute(Qt::WA_DeleteOnClose);
 
@@ -193,7 +200,23 @@ void SessionWindow::setupActions() {
     }
   }
 
-  m_statusLabel = new QLabel(i18n("Ready"), this);
+  m_statusLabel = new ClickableLabel(i18n("Ready"), this);
+  m_statusLabel->setObjectName(QStringLiteral("sessionStatusLabel"));
+  connect(m_statusLabel, &ClickableLabel::clicked, this, []() {
+    ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow();
+  });
+
+  connect(m_statusLabel, &QLabel::linkActivated, this, [this](const QString &link) {
+    if (link == QStringLiteral("#error-details")) {
+      if (m_textBrowser) {
+        m_textBrowser->setPlainText(m_statusErrorDetails);
+        m_tabWidget->setCurrentWidget(m_textBrowser);
+      }
+    }
+  });
+
   statusBar()->addWidget(m_statusLabel);
 
   if (m_apiManager) {
@@ -240,6 +263,7 @@ void SessionWindow::onMessageSent(const QString &sessionId) {
     return;
 
   m_pendingMessage.clear();
+  m_statusErrorDetails.clear();
   if (m_chatInput) {
     m_chatInput->setEnabled(true);
     m_chatInput->setFocus();
@@ -275,19 +299,15 @@ void SessionWindow::onMessageSendFailed(const QString &sessionId, const QString 
   if (m_statusLabel) {
     QString errorText = message;
     if (!httpDetails.isEmpty()) {
-      errorText += QStringLiteral(" <a href=\"#show_error_details\">[Details]</a>");
+      m_statusErrorDetails = httpDetails;
+      m_statusLabel->setText(i18n("Failed to send message: %1 <a href=\"#error-details\">[Details]</a>", errorText));
+      m_statusLabel->setTextFormat(Qt::RichText);
+      m_statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    } else {
+      m_statusErrorDetails.clear();
+      m_statusLabel->setText(i18n("Failed to send message: %1", errorText));
+      m_statusLabel->setTextFormat(Qt::PlainText);
     }
-    m_statusLabel->setText(i18n("Failed to send message: %1", errorText));
-    m_statusLabel->setTextFormat(Qt::RichText);
-    m_statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-
-    // Disconnect any previous connections to avoid accumulating handlers
-    m_statusLabel->disconnect(this);
-
-    connect(m_statusLabel, &QLabel::linkActivated, this, [this, httpDetails]() {
-      m_textBrowser->setPlainText(httpDetails);
-      m_tabWidget->setCurrentWidget(m_textBrowser);
-    });
   }
 }
 
@@ -586,6 +606,59 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_tabWidget->addTab(m_activityTabWidget, i18n("Activity Feed"));
   m_tabWidget->addTab(m_rawActivitiesBrowser, i18n("Raw Activities"));
   m_tabWidget->addTab(m_textBrowser, i18n("Raw JSON"));
+
+  m_errorTab = new QWidget(this);
+  QVBoxLayout *errorLayout = new QVBoxLayout(m_errorTab);
+  QListView *errorView = new QListView(m_errorTab);
+  SessionErrorFilterProxyModel *errorProxy =
+      new SessionErrorFilterProxyModel(m_sessionData.value(QStringLiteral("id")).toString(), m_errorTab);
+  errorProxy->setSourceModel(m_errorsModel);
+  errorView->setModel(errorProxy);
+  errorLayout->addWidget(errorView);
+  m_tabWidget->addTab(m_errorTab, i18n("Errors"));
+
+  m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->hide();
+
+  auto updateUnseenErrors = [this, errorProxy]() {
+    if (!m_errorsModel || !m_unseenErrorLabel)
+      return;
+    int unseenCount = 0;
+    for (int i = 0; i < errorProxy->rowCount(); ++i) {
+      if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
+        unseenCount++;
+      }
+    }
+    if (unseenCount > 0) {
+      m_unseenErrorLabel->setText(i18np("1 Unseen Error", "%1 Unseen Errors", unseenCount));
+      m_unseenErrorLabel->show();
+    } else {
+      m_unseenErrorLabel->hide();
+    }
+  };
+
+  if (m_errorsModel) {
+    connect(m_errorsModel, &ErrorsModel::dataChanged, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::rowsInserted, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::rowsRemoved, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::modelReset, this, updateUnseenErrors);
+    updateUnseenErrors();
+  }
+
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this, errorProxy](int index) {
+    if (m_tabWidget->widget(index) == m_errorTab && m_errorsModel) {
+      for (int i = 0; i < errorProxy->rowCount(); ++i) {
+        if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
+          QModelIndex sourceIndex = errorProxy->mapToSource(errorProxy->index(i, 0));
+          m_errorsModel->markSeen(sourceIndex.row());
+        }
+      }
+    }
+  });
+
+  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() { m_tabWidget->setCurrentWidget(m_errorTab); });
+
+  statusBar()->addWidget(m_unseenErrorLabel); // Need a statusBar? SessionWindow is a KXmlGuiWindow, it has statusBar()
 
   QString title = sessionData.value(QStringLiteral("title")).toString();
   QString sessionId = sessionData.value(QStringLiteral("id")).toString();

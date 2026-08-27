@@ -28,7 +28,7 @@ SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManag
     setWindowTitle(i18n("All Sessions"));
   }
 
-  m_sessionsWidget = new SessionsWidget(filterSource, apiManager, managedModel, this);
+  m_sessionsWidget = new SessionsWidget(filterSource, apiManager, managedModel, nullptr, this);
   setCentralWidget(m_sessionsWidget);
 
   connect(m_sessionsWidget, &SessionsWidget::watchRequested, this, &SessionsWindow::watchRequested);

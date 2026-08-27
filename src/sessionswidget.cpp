@@ -132,9 +132,10 @@ bool SessionsProxyModel::lessThan(const QModelIndex &source_left, const QModelIn
 }
 
 SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
-                               QWidget *parent)
-    : QWidget(parent), m_apiManager(apiManager), m_managedModel(managedModel), m_filterSource(filterSource),
-      m_sessionsLoaded(0), m_isRefreshing(false), m_pagesLoaded(0), m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
+                               ErrorsModel *errorsModel, QWidget *parent)
+    : QWidget(parent), m_apiManager(apiManager), m_errorsModel(errorsModel), m_managedModel(managedModel),
+      m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false), m_pagesLoaded(0),
+      m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
 
   m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), this);
   m_proxyModel = new SessionsProxyModel(this);
@@ -309,7 +310,7 @@ void SessionsWidget::onListViewDoubleClicked(const QModelIndex &index) {
   QJsonObject session = m_model->getSession(sourceIndex.row());
   QString id = session.value(QStringLiteral("id")).toString();
   bool isManaged = m_managedModel && m_managedModel->contains(id);
-  SessionWindow *sessionWindow = new SessionWindow(session, m_apiManager, isManaged, this);
+  SessionWindow *sessionWindow = new SessionWindow(session, m_apiManager, m_errorsModel, isManaged, this);
   sessionWindow->show();
 }
 

@@ -3,6 +3,7 @@
 
 #include <KXmlGuiWindow>
 #include <QJsonObject>
+#include <QSortFilterProxyModel>
 
 class QTextBrowser;
 class QTabWidget;
@@ -11,6 +12,24 @@ class QTimer;
 class QComboBox;
 class APIManager;
 class ActivityBrowser;
+class ErrorsModel;
+class ClickableLabel;
+
+#include "errorsmodel.h"
+class SessionErrorFilterProxyModel : public QSortFilterProxyModel {
+  Q_OBJECT
+public:
+  explicit SessionErrorFilterProxyModel(const QString &sessionId, QObject *parent = nullptr)
+      : QSortFilterProxyModel(parent), m_sessionId(sessionId) {}
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
+    QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+    return sourceModel()->data(index, ErrorsModel::SessionIdRole).toString() ==
+           m_sessionId; // SessionIdRole is usually +4 in ErrorsModel
+  }
+
+private:
+  QString m_sessionId;
+};
 
 class SessionWindow : public KXmlGuiWindow {
   Q_OBJECT
@@ -19,8 +38,8 @@ Q_SIGNALS:
   void openPreviousAttemptRequested(const QString &previousAttemptId);
 
 public:
-  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, bool isManaged = true,
-                         QWidget *parent = nullptr);
+  explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel = nullptr,
+                         bool isManaged = true, QWidget *parent = nullptr);
   ~SessionWindow();
 
 private:
@@ -38,8 +57,11 @@ private:
   QJsonObject m_sessionData;
   APIManager *m_apiManager;
   bool m_isManaged;
+  QString m_statusErrorDetails;
   QTabWidget *m_tabWidget;
-  QLabel *m_statusLabel;
+  ErrorsModel *m_errorsModel;
+  ClickableLabel *m_statusLabel;
+  ClickableLabel *m_unseenErrorLabel;
   QTimer *m_autoRefreshTimer;
   QComboBox *m_autoRefreshCombo;
   QTextBrowser *m_detailsBrowser;
@@ -51,6 +73,7 @@ private:
   QTextBrowser *m_textBrowser;
 
   QWidget *m_activityTabWidget;
+  QWidget *m_errorTab;
   class QLineEdit *m_chatInput;
   class QPushButton *m_sendButton;
   QString m_pendingMessage;

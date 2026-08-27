@@ -17,7 +17,8 @@ public:
     PreconditionFailed,
     Validation,
     ServerError,
-    Canceled
+    Canceled,
+    PermissionDenied
   };
 
   ApiError();

@@ -1,6 +1,8 @@
 #include "sourcewindow.h"
+#include "activitylogwindow.h"
 #include "apimanager.h"
 #include "blockedtreemodel.h"
+#include "clickablelabel.h"
 #include "draftdelegate.h"
 #include "errorsmodel.h"
 #include "queuedelegate.h"
@@ -11,11 +13,14 @@
 #include "sourcemodel.h"
 #include "sourcestatuswidget.h"
 #include <KActionCollection>
+#include <QLabel>
+#include <QStatusBar>
 
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDesktopServices>
 #include <QFormLayout>
 #include <QHeaderView>
@@ -98,6 +103,101 @@ SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, Se
 
 SourceWindow::~SourceWindow() = default;
 
+QString SourceWindow::generateGithubIssuePrompt(const QString &sourceName, const QString &owner,
+                                                const QString &repository, const QJsonObject &issue,
+                                                const QJsonArray &comments) {
+  QString prompt;
+  int issueNumber = issue.value(QStringLiteral("number")).toInt();
+  QString title = issue.value(QStringLiteral("title")).toString();
+  QString canonicalUrl = QStringLiteral("https://github.com/%1/%2/issues/%3").arg(owner, repository).arg(issueNumber);
+
+  prompt += QStringLiteral("Implement GitHub issue #%1: %2\n\n").arg(issueNumber).arg(title);
+  prompt += QStringLiteral("Repository/source: %1\n").arg(sourceName);
+  prompt += QStringLiteral("Issue: #%1\n").arg(issueNumber);
+  prompt += QStringLiteral("Reference URL: %1\n").arg(canonicalUrl);
+
+  if (issue.contains(QStringLiteral("user"))) {
+    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
+    prompt += QStringLiteral("Author: @%1\n").arg(user.value(QStringLiteral("login")).toString());
+  }
+
+  prompt += QStringLiteral("State: %1\n").arg(issue.value(QStringLiteral("state")).toString());
+
+  if (issue.contains(QStringLiteral("labels"))) {
+    QJsonArray labelsArr = issue.value(QStringLiteral("labels")).toArray();
+    QStringList labels;
+    for (const QJsonValue &lv : labelsArr) {
+      if (lv.isObject()) {
+        labels.append(lv.toObject().value(QStringLiteral("name")).toString());
+      } else {
+        labels.append(lv.toString());
+      }
+    }
+    if (!labels.isEmpty()) {
+      prompt += QStringLiteral("Labels: %1\n").arg(labels.join(QStringLiteral(", ")));
+    }
+  }
+
+  if (issue.contains(QStringLiteral("assignees"))) {
+    QJsonArray assigneesArr = issue.value(QStringLiteral("assignees")).toArray();
+    QStringList assignees;
+    for (const QJsonValue &av : assigneesArr) {
+      assignees.append(av.toObject().value(QStringLiteral("login")).toString());
+    }
+    if (!assignees.isEmpty()) {
+      prompt += QStringLiteral("Assignees: %1\n").arg(assignees.join(QStringLiteral(", ")));
+    }
+  }
+
+  if (issue.contains(QStringLiteral("milestone")) && !issue.value(QStringLiteral("milestone")).isNull()) {
+    QJsonObject milestone = issue.value(QStringLiteral("milestone")).toObject();
+    prompt += QStringLiteral("Milestone: %1\n").arg(milestone.value(QStringLiteral("title")).toString());
+  }
+
+  if (issue.contains(QStringLiteral("created_at"))) {
+    prompt += QStringLiteral("Created: %1\n").arg(issue.value(QStringLiteral("created_at")).toString());
+  }
+
+  if (issue.contains(QStringLiteral("updated_at"))) {
+    prompt += QStringLiteral("Updated: %1\n").arg(issue.value(QStringLiteral("updated_at")).toString());
+  }
+
+  prompt += QStringLiteral("\nIMPORTANT: This GitHub repository and/or issue may be private. Your execution\n"
+                           "environment may not be able to access the GitHub URL. Do not rely on being\n"
+                           "able to open the issue. The issue content and discussion available to kjules\n"
+                           "have been copied below and should be treated as the issue context.\n\n");
+
+  prompt += QStringLiteral("## Issue description\n\n");
+  QString body = issue.value(QStringLiteral("body")).toString();
+  if (body.isEmpty()) {
+    body = QStringLiteral("*No description provided.*");
+  }
+  prompt += body + QStringLiteral("\n\n");
+
+  if (!comments.isEmpty()) {
+    prompt += QStringLiteral("## Discussion\n\n");
+    for (const QJsonValue &cv : comments) {
+      QJsonObject comment = cv.toObject();
+      QString author = QStringLiteral("unknown");
+      if (comment.contains(QStringLiteral("user"))) {
+        author = comment.value(QStringLiteral("user")).toObject().value(QStringLiteral("login")).toString();
+      }
+      QString timestamp = comment.value(QStringLiteral("created_at")).toString();
+      prompt += QStringLiteral("### @%1 — %2\n\n").arg(author, timestamp);
+      prompt += comment.value(QStringLiteral("body")).toString() + QStringLiteral("\n\n");
+    }
+  }
+
+  prompt += QStringLiteral("## Task\n\n"
+                           "Implement the issue described above in the selected source repository.\n\n"
+                           "Use the checked-out source as the authority for the current implementation.\n"
+                           "Reconcile the requested change with the current code rather than assuming\n"
+                           "the issue was written against exactly the current revision.\n\n"
+                           "Run the relevant tests and add/update tests for the changed behaviour.\n");
+
+  return prompt;
+}
+
 void SourceWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
   setCentralWidget(centralWidget);
@@ -105,6 +205,60 @@ void SourceWindow::setupUi() {
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
 
   m_tabWidget = new QTabWidget(this);
+
+  m_statusLabel = new ClickableLabel(this);
+  connect(m_statusLabel, &ClickableLabel::clicked, this, [this]() {
+    ActivityLogWindow::instance()->show();
+    ActivityLogWindow::instance()->raise();
+    ActivityLogWindow::instance()->activateWindow();
+  });
+  m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->hide();
+
+  statusBar()->addWidget(m_statusLabel);
+  statusBar()->addWidget(m_unseenErrorLabel);
+
+  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
+    if (m_queuedBlockedTab && m_errorTab) {
+      m_tabWidget->setCurrentWidget(m_queuedBlockedTab);
+      m_subTabWidget->setCurrentWidget(m_errorTab);
+    }
+  });
+
+  auto updateUnseenErrors = [this]() {
+    if (!m_errorsModel)
+      return;
+    int count = 0;
+    for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+      QModelIndex idx = m_errorsModel->index(i, 0);
+      if (m_errorsModel->data(idx, ErrorsModel::SourceIdRole).toString() == m_sourceId &&
+          m_errorsModel->data(idx, ErrorsModel::UnseenRole).toBool()) {
+        count++;
+      }
+    }
+    if (count > 0) {
+      m_unseenErrorLabel->setText(i18np("[Error: %1]", "[Errors: %1]", count));
+      m_unseenErrorLabel->show();
+    } else {
+      m_unseenErrorLabel->hide();
+    }
+  };
+
+  if (m_errorsModel) {
+    connect(m_errorsModel, &ErrorsModel::unseenCountChanged, this, updateUnseenErrors);
+    connect(m_errorsModel, &ErrorsModel::dataChanged, this,
+            [updateUnseenErrors](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+              if (roles.contains(ErrorsModel::SeenRole) || roles.contains(ErrorsModel::UnseenRole) || roles.isEmpty()) {
+                updateUnseenErrors();
+              }
+            });
+    updateUnseenErrors();
+  }
+
+  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int) { markVisibleSourceErrorsSeen(); });
+
+  connect(this, &SourceWindow::statusMessage, this, [this](const QString &msg) { m_statusLabel->setText(msg); });
+
   layout->addWidget(m_tabWidget);
 
   setupFollowingTab();
@@ -140,7 +294,7 @@ void SourceWindow::setupFollowingTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_sessionModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, true, this);
+    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, true, this);
     win->show();
   });
 
@@ -169,7 +323,7 @@ void SourceWindow::setupArchivedTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_archiveModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, false, this);
+    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
     win->show();
   });
 
@@ -178,13 +332,14 @@ void SourceWindow::setupArchivedTab() {
 }
 
 void SourceWindow::setupQueuedBlockedTab() {
-  QWidget *queuedBlockedTab = new QWidget(this);
-  QVBoxLayout *layout = new QVBoxLayout(queuedBlockedTab);
+  m_queuedBlockedTab = new QWidget(this);
+  QVBoxLayout *layout = new QVBoxLayout(m_queuedBlockedTab);
 
-  QTabWidget *subTabWidget = new QTabWidget(queuedBlockedTab);
+  m_subTabWidget = new QTabWidget(m_queuedBlockedTab);
+  connect(m_subTabWidget, &QTabWidget::currentChanged, this, [this](int) { markVisibleSourceErrorsSeen(); });
 
   // In Queue
-  QWidget *queueTab = new QWidget(subTabWidget);
+  QWidget *queueTab = new QWidget(m_subTabWidget);
   QVBoxLayout *queueLayout = new QVBoxLayout(queueTab);
   QListView *queueView = new QListView(queueTab);
   queueView->setItemDelegate(new QueueDelegate(queueView));
@@ -192,35 +347,35 @@ void SourceWindow::setupQueuedBlockedTab() {
   queueProxy->setSourceModel(m_queueModel);
   queueView->setModel(queueProxy);
   queueLayout->addWidget(queueView);
-  subTabWidget->addTab(queueTab, tr("In Queue"));
+  m_subTabWidget->addTab(queueTab, tr("In Queue"));
 
   // Blocked / Error
-  QWidget *blockedTab = new QWidget(subTabWidget);
-  QVBoxLayout *blockedLayout = new QVBoxLayout(blockedTab);
-  blockedLayout->addWidget(new QLabel(tr("Errors:"), blockedTab));
-  QListView *errorView = new QListView(blockedTab);
+  m_errorTab = new QWidget(m_subTabWidget);
+  QVBoxLayout *blockedLayout = new QVBoxLayout(m_errorTab);
+  blockedLayout->addWidget(new QLabel(tr("Errors:"), m_errorTab));
+  QListView *errorView = new QListView(m_errorTab);
   errorView->setItemDelegate(new DraftDelegate(errorView));
-  ErrorFilterProxyModel *errorProxy = new ErrorFilterProxyModel(m_sourceId, blockedTab);
+  ErrorFilterProxyModel *errorProxy = new ErrorFilterProxyModel(m_sourceId, m_errorTab);
   errorProxy->setSourceModel(m_errorsModel);
   errorView->setModel(errorProxy);
   blockedLayout->addWidget(errorView);
 
-  blockedLayout->addWidget(new QLabel(tr("Blocked Items:"), blockedTab));
-  QTreeView *blockedView = new QTreeView(blockedTab);
+  blockedLayout->addWidget(new QLabel(tr("Blocked Items:"), m_errorTab));
+  QTreeView *blockedView = new QTreeView(m_errorTab);
   blockedView->setHeaderHidden(true);
-  BlockedErrorProxyModel *blockedProxy = new BlockedErrorProxyModel(m_sourceId, blockedTab);
+  BlockedErrorProxyModel *blockedProxy = new BlockedErrorProxyModel(m_sourceId, m_errorTab);
   blockedProxy->setSourceModel(m_blockedTreeModel);
   blockedView->setModel(blockedProxy);
   blockedLayout->addWidget(blockedView);
 
-  subTabWidget->addTab(blockedTab, tr("Blocked / Error"));
+  m_subTabWidget->addTab(m_errorTab, tr("Blocked / Error"));
 
-  layout->addWidget(subTabWidget);
-  m_tabWidget->addTab(queuedBlockedTab, tr("Queued/Blocked"));
+  layout->addWidget(m_subTabWidget);
+  m_tabWidget->addTab(m_queuedBlockedTab, tr("Queued/Blocked"));
 }
 
 void SourceWindow::setupSessionsTab() {
-  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, this);
+  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, m_errorsModel, this);
   connect(m_sessionsWidget, &SessionsWidget::watchRequested, this, [this](const QJsonObject &session) {
     if (m_sessionModel) {
       m_sessionModel->addSession(session);
@@ -390,10 +545,23 @@ void SourceWindow::populateDefaultBranches() {
 }
 
 void SourceWindow::setupGithubIssuesTab() {
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty()) {
+    return;
+  }
+
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+  QString owner = SourceModel::githubOwner(rawData);
+  QString repo = SourceModel::githubRepository(rawData);
+  if (owner.isEmpty() || repo.isEmpty()) {
+    return;
+  }
   QWidget *issuesTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(issuesTab);
 
   m_issuesView = new QTreeView(this);
+  m_issuesView->setObjectName(QStringLiteral("githubIssuesView"));
   m_issuesModel = new QStandardItemModel(this);
   m_issuesModel->setHorizontalHeaderLabels({tr("Number"), tr("Title"), tr("State"), tr("User")});
   m_issuesView->setModel(m_issuesModel);
@@ -401,41 +569,138 @@ void SourceWindow::setupGithubIssuesTab() {
   m_issuesView->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_issuesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_issuesView->setSortingEnabled(true);
-  layout->addWidget(m_issuesView);
+  m_issuesView->setContextMenuPolicy(Qt::ActionsContextMenu);
 
-  QModelIndexList matches =
-      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-  if (!matches.isEmpty()) {
-    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    if (rawData.contains(QStringLiteral("local_githubIssues"))) {
-      onGithubIssuesReceived(m_sourceId, rawData.value(QStringLiteral("local_githubIssues")).toArray());
-    }
-  }
+  m_createSessionFromIssueAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("document-new")), tr("Create Session..."), this);
+  m_createSessionFromIssueAction->setObjectName(QStringLiteral("createSessionFromIssueAction"));
 
-  QPushButton *refreshBtn =
-      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
-  connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
-    if (!matches.isEmpty()) {
-      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-      QString owner = SourceModel::githubOwner(rawData);
-      QString repo = SourceModel::githubRepository(rawData);
-      if (!owner.isEmpty() && !repo.isEmpty()) {
-        m_apiManager->fetchGithubIssues(m_sourceId, owner, repo);
-      }
+  m_createSessionFromIssueAction->setEnabled(false);
+  m_issuesView->addAction(m_createSessionFromIssueAction);
+
+  m_cancelFetchAction = new QAction(QIcon::fromTheme(QStringLiteral("process-stop")), tr("Cancel Fetch"), this);
+  m_cancelFetchAction->setObjectName(QStringLiteral("cancelGithubIssueFetchAction"));
+
+  m_cancelFetchAction->setEnabled(false);
+  m_issuesView->addAction(m_cancelFetchAction);
+
+  connect(m_cancelFetchAction, &QAction::triggered, this, [this, owner, repo]() {
+    if (m_fetchingIssueNumber != -1) {
+      m_apiManager->cancelGithubIssueContextFetch(m_sourceId, m_fetchingIssueNumber);
+      // Do not reset UI state immediately. Let the cancellation callback handle it.
+      // Wait, APIManager::cancelGithubIssueContextFetch currently just aborts the reply.
+      // If it doesn't emit a failure, we might hang in fetching state forever.
+      // Let's emit a canceled failure in APIManager.
     }
   });
 
+  connect(m_issuesView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+    m_createSessionFromIssueAction->setEnabled(m_fetchingIssueNumber == -1 &&
+                                               m_issuesView->selectionModel()->hasSelection());
+  });
+
+  connect(m_createSessionFromIssueAction, &QAction::triggered, this, [this, owner, repo]() {
+    QModelIndexList selected = m_issuesView->selectionModel()->selectedRows();
+    if (selected.isEmpty())
+      return;
+    int issueNumber = m_issuesModel->itemFromIndex(selected.first())->data(Qt::UserRole).toInt();
+
+    m_createSessionFromIssueAction->setEnabled(false);
+    m_createSessionFromIssueAction->setText(tr("Fetching..."));
+    m_fetchingIssueNumber = issueNumber;
+    if (m_cancelFetchAction) {
+      m_cancelFetchAction->setEnabled(true);
+    }
+    m_apiManager->fetchGithubIssueContext(m_sourceId, owner, repo, issueNumber);
+  });
+
+  connect(m_issuesView, &QTreeView::doubleClicked, this, [this](const QModelIndex &index) {
+    if (index.isValid() && m_createSessionFromIssueAction->isEnabled()) {
+      m_createSessionFromIssueAction->trigger();
+    }
+  });
+
+  layout->addWidget(m_issuesView);
+
   connect(m_apiManager, &APIManager::githubIssuesReceived, this, &SourceWindow::onGithubIssuesReceived);
+  connect(m_apiManager, &APIManager::githubIssueContextReceived, this, &SourceWindow::onGithubIssueContextReceived);
+  connect(m_apiManager, &APIManager::githubIssueContextFailed, this, &SourceWindow::onGithubIssueContextFailed);
+
+  m_issuesStateCombo = new QComboBox(this);
+  m_issuesStateCombo->setObjectName(QStringLiteral("githubIssuesStateCombo"));
+  QComboBox *stateCombo = m_issuesStateCombo;
+  stateCombo->addItem(tr("Open"), QStringLiteral("open"));
+  stateCombo->addItem(tr("Closed"), QStringLiteral("closed"));
+  stateCombo->addItem(tr("All"), QStringLiteral("all"));
+
+  QPushButton *refreshBtn =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Issues"), this);
+
+  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this,
+          [refreshBtn](bool available) { refreshBtn->setEnabled(available); });
+  refreshBtn->setEnabled(m_apiManager->canConnectGithub());
+
+  connect(refreshBtn, &QPushButton::clicked, this, [this, owner, repo, stateCombo]() {
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, stateCombo->currentData().toString());
+  });
+
+  connect(stateCombo, &QComboBox::currentIndexChanged, this, [this, owner, repo, stateCombo]() {
+    QString currentState = stateCombo->currentData().toString();
+    QString cacheKey = QStringLiteral("local_githubIssues");
+
+    QModelIndexList matches =
+        m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+    if (!matches.isEmpty()) {
+      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+      if (rawData.contains(cacheKey)) {
+        updateGithubIssuesDisplay(rawData.value(cacheKey).toArray());
+      } else if (currentState == QStringLiteral("open") && rawData.contains(QStringLiteral("local_githubIssues"))) {
+        updateGithubIssuesDisplay(rawData.value(QStringLiteral("local_githubIssues")).toArray());
+      } else {
+        m_issuesModel->removeRows(0, m_issuesModel->rowCount()); // clear until loaded
+      }
+    }
+
+    // Always refresh network too if available
+    if (m_apiManager->canConnectGithub()) {
+      m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
+    }
+  });
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
+  btnLayout->addWidget(new QLabel(tr("State:")));
+  btnLayout->addWidget(stateCombo);
   btnLayout->addStretch();
   btnLayout->addWidget(refreshBtn);
+
   layout->addLayout(btnLayout);
+
+  QString currentState = stateCombo->currentData().toString();
+  QString cacheKey = QStringLiteral("local_githubIssues");
+  if (rawData.contains(cacheKey)) {
+    updateGithubIssuesDisplay(rawData.value(cacheKey).toArray());
+  } else if (rawData.contains(QStringLiteral("local_githubIssues"))) {
+    updateGithubIssuesDisplay(rawData.value(QStringLiteral("local_githubIssues")).toArray());
+  } else {
+    m_apiManager->fetchGithubIssues(m_sourceId, owner, repo, currentState);
+  }
 
   m_tabWidget->addTab(issuesTab, tr("GitHub Issues"));
 }
 
 void SourceWindow::setupGithubPRsTab() {
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty()) {
+    return;
+  }
+
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+  QString owner = SourceModel::githubOwner(rawData);
+  QString repo = SourceModel::githubRepository(rawData);
+  if (owner.isEmpty() || repo.isEmpty()) {
+    return;
+  }
   QWidget *prsTab = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(prsTab);
 
@@ -449,29 +714,18 @@ void SourceWindow::setupGithubPRsTab() {
   m_prsView->setSortingEnabled(true);
   layout->addWidget(m_prsView);
 
-  QModelIndexList matches =
-      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
-  if (!matches.isEmpty()) {
-    QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-    if (rawData.contains(QStringLiteral("local_githubPRs"))) {
-      onGithubPullRequestsReceived(m_sourceId, rawData.value(QStringLiteral("local_githubPRs")).toArray());
-    }
+  if (rawData.contains(QStringLiteral("local_githubPRs"))) {
+    onGithubPullRequestsReceived(m_sourceId, rawData.value(QStringLiteral("local_githubPRs")).toArray());
   }
 
   QPushButton *refreshBtn =
       new QPushButton(QIcon::fromTheme(QStringLiteral("view-refresh")), tr("Refresh Pull Requests"), this);
-  connect(refreshBtn, &QPushButton::clicked, this, [this, matches]() {
-    if (!matches.isEmpty()) {
-      QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
-      QString owner = SourceModel::githubOwner(rawData);
-      QString repo = SourceModel::githubRepository(rawData);
-      if (!owner.isEmpty() && !repo.isEmpty()) {
-        m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo);
-      }
-    }
-  });
+  connect(refreshBtn, &QPushButton::clicked, this,
+          [this, owner, repo]() { m_apiManager->fetchGithubPullRequests(m_sourceId, owner, repo); });
 
   connect(m_apiManager, &APIManager::githubPullRequestsReceived, this, &SourceWindow::onGithubPullRequestsReceived);
+  connect(m_apiManager, &APIManager::githubAvailabilityChanged, this,
+          [refreshBtn](bool available) { refreshBtn->setEnabled(available); });
 
   QHBoxLayout *btnLayout = new QHBoxLayout();
   btnLayout->addStretch();
@@ -537,7 +791,18 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
     return;
   }
 
-  m_issuesModel->removeRows(0, m_issuesModel->rowCount());
+  QModelIndexList matches =
+      m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  if (matches.isEmpty())
+    return;
+  QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+
+  QJsonArray compactIssues = rawData.value(QStringLiteral("local_githubIssues")).toArray();
+  QHash<int, QJsonObject> merged;
+  for (const QJsonValue &v : compactIssues) {
+    QJsonObject issue = v.toObject();
+    merged.insert(issue.value(QStringLiteral("number")).toInt(), issue);
+  }
 
   for (const QJsonValue &v : issues) {
     QJsonObject issue = v.toObject();
@@ -545,62 +810,170 @@ void SourceWindow::onGithubIssuesReceived(const QString &sourceId, const QJsonAr
       continue;
     }
 
-    QList<QStandardItem *> row;
+    QJsonObject compactIssue;
+    compactIssue[QStringLiteral("number")] = issue.value(QStringLiteral("number")).toInt();
+    compactIssue[QStringLiteral("title")] = issue.value(QStringLiteral("title")).toString();
+    compactIssue[QStringLiteral("state")] = issue.value(QStringLiteral("state")).toString();
+    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
+    compactIssue[QStringLiteral("user")] = user.value(QStringLiteral("login")).toString();
 
+    merged.insert(compactIssue.value(QStringLiteral("number")).toInt(), compactIssue);
+  }
+
+  QJsonArray updatedIssues;
+  QList<int> keys = merged.keys();
+  std::sort(keys.begin(), keys.end(), std::greater<int>());
+  for (int key : keys) {
+    updatedIssues.append(merged.value(key));
+  }
+
+  if (rawData.value(QStringLiteral("local_githubIssues")).toArray() != updatedIssues) {
+    rawData[QStringLiteral("local_githubIssues")] = updatedIssues;
+    m_sourceModel->updateSource(rawData);
+  }
+
+  updateGithubIssuesDisplay(updatedIssues);
+}
+
+void SourceWindow::updateGithubIssuesDisplay(const QJsonArray &issues) {
+  m_issuesModel->removeRows(0, m_issuesModel->rowCount());
+
+  QString selectedState = QStringLiteral("open");
+  if (m_issuesStateCombo) {
+    selectedState = m_issuesStateCombo->currentData().toString();
+  }
+
+  for (const QJsonValue &v : issues) {
+    QJsonObject issue = v.toObject();
+    if (issue.contains(QStringLiteral("pull_request")))
+      continue;
+
+    QString issueState = issue.value(QStringLiteral("state")).toString();
+    if (selectedState != QStringLiteral("all") && issueState != selectedState) {
+      continue;
+    }
+
+    QList<QStandardItem *> row;
     QStandardItem *numItem = new QStandardItem();
     numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::DisplayRole);
+    numItem->setData(issue.value(QStringLiteral("number")).toInt(), Qt::UserRole);
     row.append(numItem);
-
-    QStandardItem *titleItem = new QStandardItem(issue.value(QStringLiteral("title")).toString());
-    row.append(titleItem);
-
-    QStandardItem *stateItem = new QStandardItem(issue.value(QStringLiteral("state")).toString());
-    row.append(stateItem);
-
-    QJsonObject user = issue.value(QStringLiteral("user")).toObject();
-    QStandardItem *userItem = new QStandardItem(user.value(QStringLiteral("login")).toString());
-    row.append(userItem);
+    row.append(new QStandardItem(issue.value(QStringLiteral("title")).toString()));
+    row.append(new QStandardItem(issueState));
+    row.append(new QStandardItem(issue.value(QStringLiteral("user")).toString()));
 
     m_issuesModel->appendRow(row);
   }
+}
 
-  m_issuesView->resizeColumnToContents(0);
-  m_issuesView->resizeColumnToContents(2);
-  m_issuesView->resizeColumnToContents(3);
+void SourceWindow::onGithubIssueContextReceived(const QString &sourceId, int issueNumber, const QJsonObject &issue,
+                                                const QJsonArray &comments) {
+  if (sourceId != m_sourceId)
+    return;
+
+  if (issueNumber != m_fetchingIssueNumber) {
+    return;
+  }
+
+  if (m_createSessionFromIssueAction) {
+    m_createSessionFromIssueAction->setText(tr("Create Session..."));
+    m_createSessionFromIssueAction->setEnabled(m_issuesView && m_issuesView->selectionModel()->hasSelection());
+  }
+  if (m_cancelFetchAction) {
+    m_cancelFetchAction->setEnabled(false);
+  }
+  m_fetchingIssueNumber = -1;
 
   QModelIndexList matches =
       m_sourceModel->match(m_sourceModel->index(0, 0), SourceModel::IdRole, m_sourceId, 1, Qt::MatchExactly);
+  QString sourceName = m_sourceId;
+  QString owner = QStringLiteral("");
+  QString repo = QStringLiteral("");
   if (!matches.isEmpty()) {
+    sourceName = matches.first().data(SourceModel::NameRole).toString();
     QJsonObject rawData = matches.first().data(SourceModel::RawDataRole).toJsonObject();
+    owner = SourceModel::githubOwner(rawData);
+    repo = SourceModel::githubRepository(rawData);
+  }
 
-    QJsonArray compactIssues;
-    for (const QJsonValue &v : issues) {
-      QJsonObject issue = v.toObject();
-      if (issue.contains(QStringLiteral("pull_request"))) {
-        continue;
-      }
-      QJsonObject compactIssue;
-      compactIssue[QStringLiteral("number")] = issue.value(QStringLiteral("number"));
-      compactIssue[QStringLiteral("title")] = issue.value(QStringLiteral("title"));
-      compactIssue[QStringLiteral("state")] = issue.value(QStringLiteral("state"));
-      compactIssue[QStringLiteral("html_url")] = issue.value(QStringLiteral("html_url"));
+  QString prompt = generateGithubIssuePrompt(sourceName, owner, repo, issue, comments);
 
-      QJsonObject userObj;
-      userObj[QStringLiteral("login")] = issue.value(QStringLiteral("user")).toObject().value(QStringLiteral("login"));
-      compactIssue[QStringLiteral("user")] = userObj;
+  QJsonObject initialData;
+  initialData[QStringLiteral("prompt")] = prompt;
+  Q_EMIT newSessionFromIssueRequested(m_sourceId, initialData);
+}
 
-      compactIssues.append(compactIssue);
+void SourceWindow::onGithubIssueContextFailed(const QString &sourceId, int issueNumber, const ApiError &error) {
+  if (sourceId != m_sourceId)
+    return;
+
+  if (issueNumber != m_fetchingIssueNumber) {
+    return;
+  }
+
+  if (m_createSessionFromIssueAction) {
+    m_createSessionFromIssueAction->setText(tr("Create Session..."));
+    m_createSessionFromIssueAction->setEnabled(m_issuesView && m_issuesView->selectionModel()->hasSelection());
+  }
+  if (m_cancelFetchAction) {
+    m_cancelFetchAction->setEnabled(false);
+  }
+  m_fetchingIssueNumber = -1;
+
+  if (error.type() == ApiError::Type::Canceled) {
+    Q_EMIT statusMessage(tr("GitHub issue fetch cancelled"));
+    return;
+  }
+
+  // Determine concise status message
+  QString statusMsg;
+  switch (error.type()) {
+  case ApiError::Type::Authentication:
+    statusMsg = tr("Authentication failed — check credentials");
+    break;
+  case ApiError::Type::PermissionDenied:
+    statusMsg = tr("GitHub access denied — check repository/token permissions");
+    break;
+  case ApiError::Type::RateLimit:
+    if (QJsonDocument::fromJson(error.details().toUtf8()).object().contains(QStringLiteral("x-ratelimit-reset"))) {
+      long long resetTime = QJsonDocument::fromJson(error.details().toUtf8())
+                                .object()
+                                .value(QStringLiteral("x-ratelimit-reset"))
+                                .toVariant()
+                                .toLongLong();
+      QString timeStr =
+          QDateTime::fromSecsSinceEpoch(resetTime).toString(QLocale::system().dateTimeFormat(QLocale::ShortFormat));
+      statusMsg = tr("GitHub rate limit reached — retry after %1").arg(timeStr);
+    } else {
+      statusMsg = tr("GitHub rate limit reached — retry later");
     }
+    break;
+  case ApiError::Type::NotFound:
+    statusMsg = tr("GitHub issue #%1 could not be loaded").arg(issueNumber);
+    break;
+  case ApiError::Type::ServerError:
+    statusMsg = tr("Service unavailable — try again later");
+    break;
+  default:
+    statusMsg = tr("Failed to fetch issue context for #%1").arg(issueNumber);
+    break;
+  }
 
-    if (rawData.value(QStringLiteral("local_githubIssues")).toArray() != compactIssues) {
-      rawData[QStringLiteral("local_githubIssues")] = compactIssues;
-      m_sourceModel->updateSourceRaw(m_sourceId, rawData);
+  Q_EMIT statusMessage(statusMsg);
 
-      if (m_rawDataEdit) {
-        QJsonDocument doc(rawData);
-        m_rawDataEdit->setPlainText(QString::fromUtf8(doc.toJson(QJsonDocument::Indented)));
-      }
+  if (m_errorsModel) {
+    QJsonObject errorObj = error.toJson();
+    errorObj[QStringLiteral("sourceId")] = sourceId;
+    errorObj[QStringLiteral("issueNumber")] = issueNumber;
+    errorObj[QStringLiteral("operation")] = QStringLiteral("fetch GitHub issue context");
+    errorObj[QStringLiteral("provider")] = QStringLiteral("GitHub");
+    errorObj[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    // Remove the message overwrite if ApiError already has one, or use a rich one
+    if (errorObj.value(QStringLiteral("message")).toString().isEmpty()) {
+      errorObj[QStringLiteral("message")] =
+          tr("Failed to fetch issue context for #%1: %2").arg(issueNumber).arg(error.message());
     }
+    m_errorsModel->addErrorObj(errorObj);
   }
 }
 
@@ -670,3 +1043,16 @@ void SourceWindow::onGithubPullRequestsReceived(const QString &sourceId, const Q
 }
 
 #include "sourcewindow.moc"
+
+void SourceWindow::markVisibleSourceErrorsSeen() {
+  if (!m_errorsModel || !m_queuedBlockedTab || !m_subTabWidget || !m_errorTab)
+    return;
+  if (m_tabWidget->currentWidget() == m_queuedBlockedTab && m_subTabWidget->currentWidget() == m_errorTab) {
+    for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+      QModelIndex idx = m_errorsModel->index(i, 0);
+      if (m_errorsModel->data(idx, ErrorsModel::SourceIdRole).toString() == m_sourceId) {
+        m_errorsModel->markSeen(i);
+      }
+    }
+  }
+}
