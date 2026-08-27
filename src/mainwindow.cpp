@@ -139,26 +139,23 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session) {
     checkPendingRefreshBeforeQueue(session.value(QStringLiteral("id")).toString());
   });
-  connect(m_apiManager, &APIManager::sessionReloadFailed, this, [this](const QString &sessionId, const QString &) {
-    m_inFlightSessionReloads.remove(sessionId);
-    m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
-    checkPendingRefreshBeforeQueue(sessionId);
-  });
+  connect(m_apiManager, &APIManager::sessionReloadFailed, this,
+          [this](const QString &sessionId, const QString &, bool) {
+            m_inFlightSessionReloads.remove(sessionId);
+            m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
+            checkPendingRefreshBeforeQueue(sessionId);
+          });
   connect(m_apiManager, &APIManager::sessionReloaded, this, &MainWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this, &MainWindow::onSourceDetailsReceived);
-  connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg) {
-    if (m_suppressNextErrorDialog) {
-      m_suppressNextErrorDialog = false;
-      updateStatus(i18n("Error: %1", msg));
-      return;
-    }
+  connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg, bool isBackground) {
+    Q_UNUSED(isBackground);
     if (!m_isProcessingQueue) {
       onError(msg);
     }
     // For queue errors we rely on errorOccurredWithResponse
   });
   connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
-          [this](const QString &msg, const QString &response) {
+          [this](const QString &msg, const QString &response, bool isBackground) {
             if (m_isProcessingQueue) {
               ApiError apiError(ApiError::Type::Unknown, msg);
               // We'll leave raw response empty or we can parse it
@@ -3655,7 +3652,7 @@ void MainWindow::refreshBeforeQueue() {
                      "Refreshing %1 following sessions before processing queue...", m_pendingRefreshIds.size()));
 
   for (const QString &id : sessionsToReload) {
-    m_apiManager->reloadSession(id);
+    m_apiManager->reloadSession(id, true);
   }
 }
 
@@ -4462,7 +4459,6 @@ void MainWindow::onSessionCreationFailed(const QJsonObject &request, const ApiEr
                                          const QString &httpDetails) {
   QString errorString = apiError.message();
   QJsonObject response = apiError.rawResponse();
-  m_suppressNextErrorDialog = true;
   QJsonObject requestCopy = request;
   if (requestCopy.value(QStringLiteral("_kjules_failed_action")).toString() == QStringLiteral("send_now")) {
     int originalRow = requestCopy.value(QStringLiteral("_kjules_requeue_origin_row")).toInt();
@@ -5427,7 +5423,7 @@ void MainWindow::autoRefreshFollowing() {
 
         if (FollowingRefreshEvaluator::shouldRefresh(now, lastRefreshed, intervalSecs, false, lastFailedAt)) {
           m_inFlightSessionReloads.insert(id);
-          m_apiManager->reloadSession(id);
+          m_apiManager->reloadSession(id, true);
         }
         break;
       }

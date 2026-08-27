@@ -339,7 +339,6 @@ private:
   QHash<QString, QDateTime> m_sessionReloadFailedAt;
   bool m_isWaitingForRefreshBeforeQueue;
   bool m_isWaitingForCreatedRepoSource = false;
-  bool m_suppressNextErrorDialog = false;
 
   RefreshProgressWindow *m_refreshProgressWindow;
 };
