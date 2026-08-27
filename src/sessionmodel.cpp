@@ -77,6 +77,19 @@ SessionData parseSessionData(const QJsonObject &obj) {
     }
   }
 
+  // Also check top-level pullRequest which may be used in newer API responses or updates
+  if (obj.contains(QStringLiteral("pullRequest"))) {
+    QJsonObject prObj = obj.value(QStringLiteral("pullRequest")).toObject();
+    QString url = prObj.value(QStringLiteral("url")).toString();
+    if (!url.isEmpty() && url != QLatin1StringView("undefined")) {
+      data.prUrl = url;
+      int lastSlash = data.prUrl.lastIndexOf(QLatin1Char('/'));
+      if (lastSlash != -1) {
+        data.prNumber = QStringLiteral("#") + data.prUrl.mid(lastSlash + 1);
+      }
+    }
+  }
+
   if (obj.contains(QStringLiteral("githubPrInfo"))) {
     QJsonObject prInfo = obj.value(QStringLiteral("githubPrInfo")).toObject();
     data.prStatus = prInfo.value(QStringLiteral("state")).toString();
