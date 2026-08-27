@@ -1043,7 +1043,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
         bool hasApiKey = !m_apiManager->apiKey().isEmpty();
         auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
         window->setInitialData(initData);
-        connect(window, &NewSessionDialog::refreshSourcesRequested, this, &MainWindow::refreshSources);
+        connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(false); });
         connect(this, &MainWindow::statusMessage, window, &NewSessionDialog::updateStatus);
         connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
         connect(window, &NewSessionDialog::refreshSourceRequested, this,
@@ -4780,7 +4780,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this, &MainWindow::refreshSources);
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(false); });
   connect(this, &MainWindow::statusMessage, window, &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
