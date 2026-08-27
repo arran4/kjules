@@ -47,7 +47,8 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiMana
   connect(m_autoRefreshTimer, &QTimer::timeout, this, [this]() { refreshSession(true); });
 
   if (m_apiManager) {
-    connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) { onSessionReloaded(session, isBackground); });
+    connect(m_apiManager, &APIManager::sessionReloaded, this,
+            [this](const QJsonObject &session, bool isBackground) { onSessionReloaded(session, isBackground); });
     connect(m_apiManager, &APIManager::activitiesReceived, this, &SessionWindow::onActivitiesReceived);
     connect(m_apiManager, &APIManager::messageSent, this, &SessionWindow::onMessageSent);
     connect(m_apiManager, &APIManager::messageSendFailed, this, &SessionWindow::onMessageSendFailed);

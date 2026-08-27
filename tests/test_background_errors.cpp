@@ -10,12 +10,11 @@
 // - a simulated failure from reloadSession(id, true) emits the background context as true;
 // - the equivalent foreground call emits false;"
 
-
+#include <QBuffer>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QTimer>
-#include <QBuffer>
 
 class Mock503NetworkReply : public QNetworkReply {
   Q_OBJECT
@@ -23,12 +22,14 @@ public:
   Mock503NetworkReply(QObject *parent = nullptr) : QNetworkReply(parent) {
     setAttribute(QNetworkRequest::HttpStatusCodeAttribute, 503);
     setError(QNetworkReply::ServiceUnavailableError, QStringLiteral("Service Unavailable"));
-    QTimer::singleShot(0, this, [this]() {
-      Q_EMIT finished();
-    });
+    QTimer::singleShot(0, this, [this]() { Q_EMIT finished(); });
   }
   void abort() override {}
-  qint64 readData(char *data, qint64 maxlen) override { Q_UNUSED(data); Q_UNUSED(maxlen); return -1; }
+  qint64 readData(char *data, qint64 maxlen) override {
+    Q_UNUSED(data);
+    Q_UNUSED(maxlen);
+    return -1;
+  }
 };
 
 class Mock503NetworkAccessManager : public QNetworkAccessManager {

@@ -174,7 +174,8 @@ QString RefreshProgressWindow::getSessionLink(const QString &id) const {
 }
 
 void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
-  if (isBackground) return;
+  if (isBackground)
+    return;
   QString id = APIManager::cleanSessionId(session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
     QString link = getSessionLink(id);
