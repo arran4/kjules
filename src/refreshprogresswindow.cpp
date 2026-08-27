@@ -221,6 +221,9 @@ void RefreshProgressWindow::onGithubPullRequestFailed(const QString &prUrl, cons
 }
 
 void RefreshProgressWindow::onSessionReloadFailed(const QString &sessionId, const QString &message, bool isBackground) {
+  if (isBackground) {
+    return; // Do not fail a foreground manual task due to an overlapping background refresh failure
+  }
   QString cleanId = APIManager::cleanSessionId(sessionId);
   if (m_activeTasks.contains(cleanId)) {
     m_textBrowser->append(i18n("<font color='red'>Failed to reload session %1: %2</font>", cleanId, message));

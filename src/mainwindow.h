@@ -79,7 +79,7 @@ private Q_SLOTS:
   void addGithubLink(QMenu *githubMenu, const QString &urlStr, const QString &title, const QString &path);
 
   void updateCompletions();
-  void refreshSources();
+  void refreshSources(bool isBackground = false);
   void refreshGithubDataForSources(const QStringList &sourceIds);
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(), bool ignoreSelection = false);
   void showCreateRepoDialog();

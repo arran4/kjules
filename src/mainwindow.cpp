@@ -216,7 +216,7 @@ MainWindow::MainWindow(QWidget *parent)
   updateSourceStats();
 
   // Initial refresh
-  QTimer::singleShot(0, this, [this]() { refreshSources(); });
+  QTimer::singleShot(0, this, [this]() { refreshSources(true); });
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 }
 
@@ -3314,7 +3314,7 @@ void MainWindow::createActions() {
   connectSignals();
 }
 
-void MainWindow::refreshSources() {
+void MainWindow::refreshSources(bool isBackground) {
   if (m_isRefreshingSources) {
     cancelSourcesRefresh();
     return;
@@ -3337,7 +3337,7 @@ void MainWindow::refreshSources() {
   m_sourcesRefreshProgressWindow->reset();
 
   updateStatus(i18n("Refreshing sources..."));
-  m_apiManager->listSources();
+  m_apiManager->listSources(QString(), isBackground);
 }
 
 void MainWindow::showCreateRepoDialog() {

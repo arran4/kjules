@@ -368,7 +368,7 @@ void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
   QString cleanId = cleanSessionId(sessionId);
 
   if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
-    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."), false);
+    Q_EMIT errorOccurred(QStringLiteral("Invalid session ID."), isBackground);
     Q_EMIT sessionReloadFailed(sessionId, QStringLiteral("Invalid session ID."), isBackground);
     return;
   }
@@ -388,7 +388,7 @@ void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
         m_tokenFailed = true;
       }
       QString errorMsg = QStringLiteral("Failed to reload session details: ") + reply->errorString();
-      Q_EMIT errorOccurred(errorMsg, false);
+      Q_EMIT errorOccurred(errorMsg, isBackground);
       Q_EMIT sessionReloadFailed(sessionId, errorMsg, isBackground);
     }
     reply->deleteLater();
@@ -464,7 +464,7 @@ void APIManager::listSources(const QString &pageToken, bool isBackground) {
       QString nextPageToken = obj.value(QStringLiteral("nextPageToken")).toString();
       if (!nextPageToken.isEmpty()) {
         // Fetch next page automatically
-        listSources(nextPageToken);
+        listSources(nextPageToken, isBackground);
       } else {
         Q_EMIT sourcesRefreshFinished(true);
         Q_EMIT logMessage(QStringLiteral("Sources refreshed successfully."));

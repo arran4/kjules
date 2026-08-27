@@ -1,9 +1,9 @@
-#include <QTest>
-#include <QSignalSpy>
-#include <QJsonObject>
-#include <QDateTime>
 #include "../src/apimanager.h"
 #include "../src/errorsmodel.h"
+#include <QDateTime>
+#include <QJsonObject>
+#include <QSignalSpy>
+#include <QTest>
 
 // We can test APIManager directly without launching MainWindow.
 // "At minimum, add APIManager-level tests showing:
