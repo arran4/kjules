@@ -45,7 +45,7 @@ public:
 private:
   void setupUi(const QJsonObject &sessionData);
   void setupActions();
-  void refreshSession();
+  void refreshSession(bool isBackground = false);
   void onSessionReloaded(const QJsonObject &session);
   void onActivitiesReceived(const QString &sessionId, const QJsonArray &activities);
   void onMessageSent(const QString &sessionId);

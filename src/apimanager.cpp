@@ -359,7 +359,7 @@ QString APIManager::cleanSessionId(const QString &sessionId) {
 
 void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot reload session details: No token or previous failure."), false);
+    Q_EMIT errorOccurred(QStringLiteral("Cannot reload session details: No token or previous failure."), isBackground);
     Q_EMIT sessionReloadFailed(
         sessionId, QStringLiteral("Cannot reload session details: No token or previous failure."), isBackground);
     return;
@@ -397,12 +397,12 @@ void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
 
 void APIManager::getSource(const QString &sourceId, bool isBackground) {
   if (!canConnect()) {
-    Q_EMIT errorOccurred(QStringLiteral("Cannot get source details: No token or previous failure."), false);
+    Q_EMIT errorOccurred(QStringLiteral("Cannot get source details: No token or previous failure."), isBackground);
     return;
   }
 
   if (!sourceId.startsWith(QStringLiteral("sources/")) || sourceId.contains(QStringLiteral(".."))) {
-    Q_EMIT errorOccurred(QStringLiteral("Invalid source ID."), false);
+    Q_EMIT errorOccurred(QStringLiteral("Invalid source ID."), isBackground);
     return;
   }
 
@@ -420,7 +420,7 @@ void APIManager::getSource(const QString &sourceId, bool isBackground) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") + reply->errorString(), false);
+      Q_EMIT errorOccurred(QStringLiteral("Failed to get source details: ") + reply->errorString(), isBackground);
     }
     reply->deleteLater();
   });
@@ -476,7 +476,7 @@ void APIManager::listSources(const QString &pageToken, bool isBackground) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString(), false);
+      Q_EMIT errorOccurred(QStringLiteral("Failed to list sources: ") + reply->errorString(), isBackground);
       Q_EMIT sourcesRefreshFinished(false);
     }
     reply->deleteLater();
@@ -822,7 +822,7 @@ void APIManager::listSessions(const QString &pageToken, bool isBackground) {
       if (statusCode == 401) {
         m_tokenFailed = true;
       }
-      Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString(), false);
+      Q_EMIT errorOccurred(QStringLiteral("Failed to list sessions: ") + reply->errorString(), isBackground);
       Q_EMIT sessionsRefreshFinished();
     }
     reply->deleteLater();
@@ -838,8 +838,8 @@ void APIManager::cancelListSessions() {
 void APIManager::getSession(const QString &sessionId, bool isBackground) {
   if (!canConnect()) {
     QString msg = QStringLiteral("Cannot get session details: No token or previous failure.");
-    Q_EMIT errorOccurred(msg, false);
-    Q_EMIT sessionDetailsFailed(sessionId, msg);
+    Q_EMIT errorOccurred(msg, isBackground);
+    Q_EMIT sessionDetailsFailed(sessionId, msg, isBackground);
     return;
   }
   // sessionId should be the full resource name e.g. "sessions/123..."
@@ -854,8 +854,8 @@ void APIManager::getSession(const QString &sessionId, bool isBackground) {
 
   if (cleanId.contains(QStringLiteral("..")) || cleanId.contains(QStringLiteral("/"))) {
     QString msg = QStringLiteral("Invalid session ID.");
-    Q_EMIT errorOccurred(msg, false);
-    Q_EMIT sessionDetailsFailed(sessionId, msg);
+    Q_EMIT errorOccurred(msg, isBackground);
+    Q_EMIT sessionDetailsFailed(sessionId, msg, isBackground);
     return;
   }
 
@@ -874,8 +874,8 @@ void APIManager::getSession(const QString &sessionId, bool isBackground) {
         m_tokenFailed = true;
       }
       QString msg = QStringLiteral("Failed to get session details: ") + reply->errorString();
-      Q_EMIT errorOccurred(msg, false);
-      Q_EMIT sessionDetailsFailed(cleanId, msg);
+      Q_EMIT errorOccurred(msg, isBackground);
+      Q_EMIT sessionDetailsFailed(cleanId, msg, isBackground);
     }
     reply->deleteLater();
   });

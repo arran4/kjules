@@ -44,7 +44,7 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiMana
   setAttribute(Qt::WA_DeleteOnClose);
 
   m_autoRefreshTimer = new QTimer(this);
-  connect(m_autoRefreshTimer, &QTimer::timeout, this, &SessionWindow::refreshSession);
+  connect(m_autoRefreshTimer, &QTimer::timeout, this, [this]() { refreshSession(true); });
 
   if (m_apiManager) {
     connect(m_apiManager, &APIManager::sessionReloaded, this, &SessionWindow::onSessionReloaded);
@@ -233,10 +233,10 @@ void SessionWindow::updateAutoRefresh() {
   }
 }
 
-void SessionWindow::refreshSession() {
+void SessionWindow::refreshSession(bool isBackground) {
   if (m_apiManager) {
     QString id = m_sessionData.value(QStringLiteral("id")).toString();
-    m_apiManager->reloadSession(id);
+    m_apiManager->reloadSession(id, isBackground);
     m_statusLabel->setText(i18n("Refreshing..."));
   }
 }

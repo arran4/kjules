@@ -6,16 +6,16 @@ add_executable(test_sessionrequestbuilder test_sessionrequestbuilder.cpp ../src/
 add_executable(test_sourcefixer test_sourcefixer.cpp ../src/sourcefixer.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp)
 add_executable(test_sourceremapdialog test_sourceremapdialog.cpp ../src/sourceremapdialog.cpp ../src/sourcefixer.cpp)
-add_executable(test_apierror test_apierror.cpp ../src/api/apierror.cpp)
+add_executable(test_apierror test_apierror.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp)
 add_executable(test_queuescheduling test_queuescheduling.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp)
 add_executable(test_followingrefresh test_followingrefresh.cpp ../src/sessionmodel.cpp)
 add_executable(test_sessionmodel test_sessionmodel.cpp ../src/sessionmodel.cpp)
 add_executable(test_configmigration test_configmigration.cpp)
-add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
+add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp ../src/draftdelegate.cpp ../src/queuedelegate.cpp ../src/sessiondelegate.cpp ../src/sourcestatuswidget.cpp ../src/kjules.qrc ../src/activitylogwindow.cpp)
-add_executable(test_sessionswidget test_sessionswidget.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionmodel.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
+add_executable(test_sessionswidget test_sessionswidget.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionmodel.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp ../src/sessiondelegate.cpp ../src/kjules.qrc ../src/errorsmodel.cpp ../src/activitylogwindow.cpp)
-add_executable(test_apimanager_pagination test_apimanager_pagination.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
+add_executable(test_apimanager_pagination test_apimanager_pagination.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp)
 
 target_link_libraries(test_dummy Qt6::Test)
@@ -24,14 +24,14 @@ target_link_libraries(test_advancedfilterproxymodel Qt6::Test Qt6::Widgets Qt6::
 target_link_libraries(test_sessionrequestbuilder Qt6::Test Qt6::Core Qt6::Widgets)
 target_link_libraries(test_sourcefixer Qt6::Test Qt6::Core Qt6::Widgets)
 target_link_libraries(test_sourceremapdialog Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n)
-target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core)
-target_link_libraries(test_queuescheduling Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network KF6::I18n KF6::ConfigCore)
+target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core Qt6::Widgets)
+target_link_libraries(test_queuescheduling Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network KF6::I18n KF6::ConfigCore Qt6::Concurrent Qt6::Widgets)
 target_link_libraries(test_followingrefresh Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
 target_link_libraries(test_sessionmodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
-target_link_libraries(test_configmigration Qt6::Test Qt6::Core KF6::ConfigCore)
-target_link_libraries(test_sourcewindow Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
-target_link_libraries(test_sessionswidget Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
-target_link_libraries(test_apimanager_pagination Qt6::Test Qt6::Network Qt6::Core Qt6::Concurrent KF6::Wallet KF6::I18n KF6::CoreAddons KF6::ConfigCore Qt6::Widgets)
+target_link_libraries(test_configmigration Qt6::Test Qt6::Core KF6::ConfigCore Qt6::Concurrent Qt6::Widgets)
+target_link_libraries(test_sourcewindow Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Widgets KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
+target_link_libraries(test_sessionswidget Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Widgets KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
+target_link_libraries(test_apimanager_pagination Qt6::Test Qt6::Network Qt6::Core Qt6::Concurrent Qt6::Widgets KF6::Wallet KF6::I18n KF6::CoreAddons KF6::ConfigCore Qt6::Widgets)
 
 add_test(NAME DummyTest COMMAND test_dummy)
 add_test(NAME FilterTest COMMAND test_filter)
@@ -54,3 +54,6 @@ set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTe
 add_executable(test_errorsmodel test_errorsmodel.cpp ../src/errorsmodel.cpp)
 target_link_libraries(test_errorsmodel Qt6::Test Qt6::Core Qt6::Widgets Qt6::Network)
 add_test(NAME ErrorsModelTest COMMAND test_errorsmodel)
+add_executable(test_background_errors test_background_errors.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp)
+target_link_libraries(test_background_errors Qt6::Test Qt6::Network Qt6::Core KF6::Wallet KF6::I18n KF6::ConfigCore Qt6::Concurrent Qt6::Widgets)
+add_test(NAME BackgroundErrorsTest COMMAND test_background_errors)

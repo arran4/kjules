@@ -148,11 +148,18 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::sessionReloaded, this, &MainWindow::onSessionReloaded);
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this, &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg, bool isBackground) {
-    Q_UNUSED(isBackground);
-    if (!m_isProcessingQueue) {
+    if (m_isProcessingQueue) {
+      return; // Handled by errorOccurredWithResponse
+    }
+    if (isBackground) {
+      // Background errors log silently to the error model and status
+      onError(msg);
+    } else {
+      // Foreground errors log to the error model and status
+      // (Currently no modal dialog is used here, but this explicitly preserves the foreground vs background routing
+      //  for future modal additions or logging distinctions.)
       onError(msg);
     }
-    // For queue errors we rely on errorOccurredWithResponse
   });
   connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
           [this](const QString &msg, const QString &response, bool isBackground) {
