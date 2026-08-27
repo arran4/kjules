@@ -75,11 +75,12 @@ private Q_SLOTS:
   void processSessionModel(SessionModel *model, int &sessionCount);
 
   void switchToFollowingTab();
-  void onSessionReloaded(const QJsonObject &session);
+  void onSessionReloaded(const QJsonObject &session, bool isBackground);
   void addGithubLink(QMenu *githubMenu, const QString &urlStr, const QString &title, const QString &path);
 
   void updateCompletions();
-  void refreshSources(bool isBackground = false);
+  void refreshSources();
+  void refreshSourcesImpl(bool isBackground);
   void refreshGithubDataForSources(const QStringList &sourceIds);
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(), bool ignoreSelection = false);
   void showCreateRepoDialog();

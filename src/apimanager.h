@@ -17,6 +17,9 @@
 
 class APIManager : public QObject {
   Q_OBJECT
+  friend class TestBackgroundErrors;
+  friend class TestAPIManagerPagination;
+  friend class BenchAPIManager;
 
 public:
   explicit APIManager(QObject *parent = nullptr);
@@ -86,7 +89,7 @@ Q_SIGNALS:
   void sessionsReceived(const QJsonArray &sessions, const QString &nextPageToken);
   void sessionDetailsReceived(const QJsonObject &session);
   void sessionDetailsFailed(const QString &sessionId, const QString &message, bool isBackground);
-  void sessionReloaded(const QJsonObject &session);
+  void sessionReloaded(const QJsonObject &session, bool isBackground);
   void sessionReloadFailed(const QString &sessionId, const QString &message, bool isBackground);
   void sourceDetailsReceived(const QJsonObject &source);
   void activitiesReceived(const QString &sessionId, const QJsonArray &activities);

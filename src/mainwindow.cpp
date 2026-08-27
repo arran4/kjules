@@ -136,7 +136,8 @@ MainWindow::MainWindow(QWidget *parent)
             onGithubRepoCreatedResult(false, requestData, QJsonObject(), apiError);
           });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &MainWindow::showSessionWindow);
-  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session) {
+  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
+    Q_UNUSED(isBackground);
     checkPendingRefreshBeforeQueue(session.value(QStringLiteral("id")).toString());
   });
   connect(m_apiManager, &APIManager::sessionReloadFailed, this,
@@ -145,7 +146,10 @@ MainWindow::MainWindow(QWidget *parent)
             m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
             checkPendingRefreshBeforeQueue(sessionId);
           });
-  connect(m_apiManager, &APIManager::sessionReloaded, this, &MainWindow::onSessionReloaded);
+  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
+    Q_UNUSED(isBackground);
+    onSessionReloaded(session, isBackground);
+  });
   connect(m_apiManager, &APIManager::sourceDetailsReceived, this, &MainWindow::onSourceDetailsReceived);
   connect(m_apiManager, &APIManager::errorOccurred, this, [this](const QString &msg, bool isBackground) {
     if (m_isProcessingQueue) {
@@ -163,6 +167,7 @@ MainWindow::MainWindow(QWidget *parent)
   });
   connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
           [this](const QString &msg, const QString &response, bool isBackground) {
+            Q_UNUSED(isBackground);
             if (m_isProcessingQueue) {
               ApiError apiError(ApiError::Type::Unknown, msg);
               // We'll leave raw response empty or we can parse it
@@ -216,7 +221,7 @@ MainWindow::MainWindow(QWidget *parent)
   updateSourceStats();
 
   // Initial refresh
-  QTimer::singleShot(0, this, [this]() { refreshSources(true); });
+  QTimer::singleShot(0, this, [this]() { refreshSourcesImpl(true); });
   QTimer::singleShot(0, this, [this]() { checkAutoArchiveSessions(); });
 }
 
@@ -1043,7 +1048,7 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
         bool hasApiKey = !m_apiManager->apiKey().isEmpty();
         auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
         window->setInitialData(initData);
-        connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(false); });
+        connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(); });
         connect(this, &MainWindow::statusMessage, window, &NewSessionDialog::updateStatus);
         connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
         connect(window, &NewSessionDialog::refreshSourceRequested, this,
@@ -3314,7 +3319,9 @@ void MainWindow::createActions() {
   connectSignals();
 }
 
-void MainWindow::refreshSources(bool isBackground) {
+void MainWindow::refreshSources() { refreshSourcesImpl(false); }
+
+void MainWindow::refreshSourcesImpl(bool isBackground) {
   if (m_isRefreshingSources) {
     cancelSourcesRefresh();
     return;
@@ -4780,7 +4787,7 @@ void MainWindow::onSourceActivated(const QModelIndex &index) {
 }
 
 void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
-  connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(false); });
+  connect(window, &NewSessionDialog::refreshSourcesRequested, this, [this]() { refreshSources(); });
   connect(this, &MainWindow::statusMessage, window, &NewSessionDialog::updateStatus);
   connect(window, &NewSessionDialog::refreshGithubRequested, this, &MainWindow::refreshGithubDataForSources);
   connect(window, &NewSessionDialog::refreshSourceRequested, this,
@@ -6095,7 +6102,8 @@ void MainWindow::switchToFollowingTab() {
   }
 }
 
-void MainWindow::onSessionReloaded(const QJsonObject &session) {
+void MainWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
+  Q_UNUSED(isBackground);
   m_lastSessionRefreshTime = QDateTime::currentDateTime();
   const QString id = session.value(QStringLiteral("id")).toString();
   m_inFlightSessionReloads.remove(id);

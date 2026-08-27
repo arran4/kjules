@@ -47,7 +47,7 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiMana
   connect(m_autoRefreshTimer, &QTimer::timeout, this, [this]() { refreshSession(true); });
 
   if (m_apiManager) {
-    connect(m_apiManager, &APIManager::sessionReloaded, this, &SessionWindow::onSessionReloaded);
+    connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) { onSessionReloaded(session, isBackground); });
     connect(m_apiManager, &APIManager::activitiesReceived, this, &SessionWindow::onActivitiesReceived);
     connect(m_apiManager, &APIManager::messageSent, this, &SessionWindow::onMessageSent);
     connect(m_apiManager, &APIManager::messageSendFailed, this, &SessionWindow::onMessageSendFailed);
@@ -241,7 +241,8 @@ void SessionWindow::refreshSession(bool isBackground) {
   }
 }
 
-void SessionWindow::onSessionReloaded(const QJsonObject &session) {
+void SessionWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
+  Q_UNUSED(isBackground);
   QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
   QString incomingId = session.value(QStringLiteral("id")).toString();
 

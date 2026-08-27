@@ -381,7 +381,7 @@ void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
-      Q_EMIT sessionReloaded(doc.object());
+      Q_EMIT sessionReloaded(doc.object(), isBackground);
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {

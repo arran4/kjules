@@ -173,7 +173,8 @@ QString RefreshProgressWindow::getSessionLink(const QString &id) const {
   return QStringLiteral("<a href=\"session:%1\" title=\"%2\">%3</a>").arg(escapedId, name.toHtmlEscaped(), escapedId);
 }
 
-void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session) {
+void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
+  if (isBackground) return;
   QString id = APIManager::cleanSessionId(session.value(QStringLiteral("id")).toString());
   if (m_activeTasks.contains(id)) {
     QString link = getSessionLink(id);
