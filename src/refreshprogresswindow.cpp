@@ -193,7 +193,7 @@ void RefreshProgressWindow::onSessionReloaded(const QJsonObject &session, bool i
     if (!prUrl.isEmpty()) {
       m_textBrowser->append(i18n("Fetching GitHub PR info for %1...", id));
       m_activeTasksPrUrls.insert(prUrl, id);
-      m_apiManager->fetchGithubPullRequest(prUrl);
+      // Let MainWindow initiate the actual API request to avoid duplicate requests
     } else {
       finishCurrentTask(id);
     }
