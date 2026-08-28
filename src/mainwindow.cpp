@@ -121,6 +121,9 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::githubInfoReceived, this, &MainWindow::onGithubInfoReceived);
   connect(m_apiManager, &APIManager::githubBranchesReceived, this, &MainWindow::onGithubBranchesReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this, &MainWindow::onGithubPullRequestInfoReceived);
+  connect(m_apiManager, &APIManager::githubPullRequestFailed, this, [](const QString &prUrl, const QString &message) {
+      qDebug() << "[AutoRefresh] GitHub lookup failed for PR:" << prUrl << "Error:" << message;
+  });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           [this](const QJsonObject &request, const ApiError &apiError, const QString &httpDetails) {
             onSessionCreationFailed(request, apiError, httpDetails);
@@ -5436,8 +5439,12 @@ void MainWindow::autoRefreshFollowing() {
         }
 
         if (FollowingRefreshEvaluator::shouldRefresh(now, lastRefreshed, intervalSecs, false, lastFailedAt)) {
+          qDebug() << "[AutoRefresh] Session considered due for refresh:" << id;
           m_inFlightSessionReloads.insert(id);
           m_apiManager->reloadSession(id, true);
+          qDebug() << "[AutoRefresh] Jules reload dispatched for:" << id;
+        } else {
+          qDebug() << "[AutoRefresh] Session not due for refresh:" << id << "| Interval(s):" << intervalSecs;
         }
         break;
       }
