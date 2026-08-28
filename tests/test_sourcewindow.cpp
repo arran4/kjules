@@ -1,3 +1,4 @@
+#include "../src/refreshprogresswindow.h"
 #include "../src/api/apierror.h"
 #include "../src/apimanager.h"
 #include "../src/blockedtreemodel.h"
@@ -974,6 +975,30 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
       manualFinalSess = followingModelManual->getSession(i);
       break;
     }
+  }
+
+  // Verify network request counts
+  int autoJulesReqs = 0, autoGithubReqs = 0;
+  for (const QString &url : mockNamAuto->requestedUrls) {
+      if (url.contains(QStringLiteral("sess-manual-1"))) autoJulesReqs++;
+      if (url.contains(QStringLiteral("owner/repo/pulls/999"))) autoGithubReqs++;
+  }
+  QCOMPARE(autoJulesReqs, 1);
+  QCOMPARE(autoGithubReqs, 1);
+
+  int manualJulesReqs = 0, manualGithubReqs = 0;
+  for (const QString &url : mockNamManual->requestedUrls) {
+      if (url.contains(QStringLiteral("sess-manual-1"))) manualJulesReqs++;
+      if (url.contains(QStringLiteral("owner/repo/pulls/999"))) manualGithubReqs++;
+  }
+  QCOMPARE(manualJulesReqs, 1);
+  QCOMPARE(manualGithubReqs, 1);
+
+  // Assert the RefreshProgressWindow completed successfully and was deleted (or is waiting to be deleted)
+  // Since it calls deleteLater() on close if finished, it might not exist.
+  RefreshProgressWindow *progressWindow = windowManual.findChild<RefreshProgressWindow *>();
+  if (progressWindow) {
+      QVERIFY(progressWindow->isFinishedProcess());
   }
 
   // Assert Data Semantics
