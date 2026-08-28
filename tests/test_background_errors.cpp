@@ -94,6 +94,51 @@ class TestBackgroundErrors : public QObject {
 
 private Q_SLOTS:
 
+  void testReloadSessionNormalizedIdSuccess() {
+    APIManager apiManager;
+    apiManager.setApiKey(QStringLiteral("fake-key"));
+    apiManager.setBaseUrl(QStringLiteral("http://localhost"));
+
+    QByteArray validResponse = "{\"id\": \"foo\", \"state\": \"COMPLETED\"}";
+    Mock200EmptyJsonNetworkAccessManager *mockNam1 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    delete apiManager.m_nam;
+    apiManager.m_nam = mockNam1;
+
+    QSignalSpy reloadedSpy1(&apiManager, &APIManager::sessionReloaded);
+    QSignalSpy failedSpy1(&apiManager, &APIManager::sessionReloadFailed);
+
+    // request foo, response foo
+    apiManager.reloadSession(QStringLiteral("foo"), false);
+    QVERIFY(reloadedSpy1.wait(1000));
+    QCOMPARE(reloadedSpy1.count(), 1);
+    QCOMPARE(failedSpy1.count(), 0);
+
+    // request sessions/foo, response foo
+    Mock200EmptyJsonNetworkAccessManager *mockNam2 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    apiManager.m_nam = mockNam2;
+    QSignalSpy reloadedSpy2(&apiManager, &APIManager::sessionReloaded);
+    apiManager.reloadSession(QStringLiteral("sessions/foo"), false);
+    QVERIFY(reloadedSpy2.wait(1000));
+    QCOMPARE(reloadedSpy2.count(), 1);
+
+    // request /sessions/foo, response foo
+    Mock200EmptyJsonNetworkAccessManager *mockNam3 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    apiManager.m_nam = mockNam3;
+    QSignalSpy reloadedSpy3(&apiManager, &APIManager::sessionReloaded);
+    apiManager.reloadSession(QStringLiteral("/sessions/foo"), false);
+    QVERIFY(reloadedSpy3.wait(1000));
+    QCOMPARE(reloadedSpy3.count(), 1);
+
+    // request session/foo, response foo (since cleanSessionId does session/foo)
+    Mock200EmptyJsonNetworkAccessManager *mockNam4 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    apiManager.m_nam = mockNam4;
+    QSignalSpy reloadedSpy4(&apiManager, &APIManager::sessionReloaded);
+    apiManager.reloadSession(QStringLiteral("session/foo"), false);
+    QVERIFY(reloadedSpy4.wait(1000));
+    QCOMPARE(reloadedSpy4.count(), 1);
+  }
+
+
   void testReloadSessionEmptyIdFailed() {
     APIManager apiManager;
     apiManager.setApiKey(QStringLiteral("fake-key"));
@@ -135,6 +180,8 @@ private Q_SLOTS:
     QVERIFY(failedSpy.wait(1000));
     QCOMPARE(reloadedSpy.count(), 0);
     QCOMPARE(failedSpy.count(), 1);
+    QVariantList args = failedSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("requested_id"));
   }
 
   void testReloadSessionWrongIdFailed() {
@@ -155,6 +202,8 @@ private Q_SLOTS:
     QVERIFY(failedSpy.wait(1000));
     QCOMPARE(reloadedSpy.count(), 0);
     QCOMPARE(failedSpy.count(), 1);
+    QVariantList args = failedSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("requested_id"));
   }
 
   void testReloadSessionMalformedJsonFailed() {
@@ -175,6 +224,8 @@ private Q_SLOTS:
     QVERIFY(failedSpy.wait(1000));
     QCOMPARE(reloadedSpy.count(), 0);
     QCOMPARE(failedSpy.count(), 1);
+    QVariantList args = failedSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("requested_id"));
   }
 
   void testReloadSessionNonObjectJsonFailed() {
@@ -195,6 +246,8 @@ private Q_SLOTS:
     QVERIFY(failedSpy.wait(1000));
     QCOMPARE(reloadedSpy.count(), 0);
     QCOMPARE(failedSpy.count(), 1);
+    QVariantList args = failedSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("requested_id"));
   }
 
   void testApiManagerBackgroundContextNetwork() {

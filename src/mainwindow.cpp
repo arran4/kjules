@@ -122,7 +122,7 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_apiManager, &APIManager::githubBranchesReceived, this, &MainWindow::onGithubBranchesReceived);
   connect(m_apiManager, &APIManager::githubPullRequestInfoReceived, this, &MainWindow::onGithubPullRequestInfoReceived);
   connect(m_apiManager, &APIManager::githubPullRequestFailed, this, [](const QString &prUrl, const QString &message) {
-      qDebug() << "[AutoRefresh] GitHub lookup failed for PR:" << prUrl << "Error:" << message;
+    qDebug() << "[AutoRefresh] GitHub lookup failed for PR:" << prUrl << "Error:" << message;
   });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
           [this](const QJsonObject &request, const ApiError &apiError, const QString &httpDetails) {

@@ -19,7 +19,7 @@ private Q_SLOTS:
   void testSuccessfulRefreshUpdatesAndPersistsLastRefreshed();
   void testTopLevelPullRequestParsed();
   void testOutputsPullRequestParsed();
-          };
+};
 
 void TestFollowingRefresh::testTopLevelPullRequestParsed() {
   QJsonObject session;
