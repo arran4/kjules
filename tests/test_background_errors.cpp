@@ -160,7 +160,6 @@ private Q_SLOTS:
     QVERIFY(failedSpy.wait(1000));
     QCOMPARE(reloadedSpy.count(), 0);
     QCOMPARE(failedSpy.count(), 1);
-
     QVariantList args = failedSpy.takeFirst();
     QCOMPARE(args.at(0).toString(), QStringLiteral("requested_id"));
   }
