@@ -2,7 +2,9 @@
 #include "../src/apimanager.h"
 #include "../src/blockedtreemodel.h"
 #include "../src/errorsmodel.h"
+#include "../src/mainwindow.h"
 #include "../src/queuemodel.h"
+#include "../src/refreshprogresswindow.h"
 #include "../src/sessionmodel.h"
 #include "../src/sessionswidget.h"
 #include "../src/sessionswindow.h"
@@ -34,10 +36,73 @@
 #include <QTreeView>
 #include <QtTest>
 
+class Mock200EmptyJsonNetworkReply : public QNetworkReply {
+  Q_OBJECT
+  QByteArray m_data;
+
+public:
+  Mock200EmptyJsonNetworkReply(const QByteArray &data, QObject *parent = nullptr)
+      : QNetworkReply(parent), m_data(data) {
+    setAttribute(QNetworkRequest::HttpStatusCodeAttribute, 200);
+    QTimer::singleShot(0, this, [this]() {
+      setOpenMode(QIODevice::ReadOnly);
+      Q_EMIT readyRead();
+      Q_EMIT finished();
+    });
+  }
+  void abort() override {}
+  qint64 readData(char *data, qint64 maxlen) override {
+    qint64 len = qMin(maxlen, (qint64)m_data.size());
+    if (len > 0) {
+      memcpy(data, m_data.constData(), len);
+      m_data.remove(0, len);
+      return len;
+    }
+    return 0;
+  }
+};
+
+class MockE2ENetworkAccessManager : public QNetworkAccessManager {
+  Q_OBJECT
+public:
+  QByteArray julesResponse;
+  QByteArray githubResponse;
+  QStringList requestedUrls;
+
+  MockE2ENetworkAccessManager(QObject *parent = nullptr) : QNetworkAccessManager(parent) {}
+
+protected:
+  QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData) override {
+    Q_UNUSED(op);
+    Q_UNUSED(outgoingData);
+
+    QString urlStr = request.url().toString();
+    requestedUrls.append(urlStr);
+
+    QByteArray dataToReturn;
+    if (urlStr.contains(QStringLiteral("sessions/sess-e2e-1")) ||
+        urlStr.contains(QStringLiteral("sessions/sess-manual-1")) ||
+        urlStr.contains(QStringLiteral("sessions/sess-inflight-1"))) {
+      dataToReturn = julesResponse;
+    } else if (urlStr.contains(QStringLiteral("owner/repo/pulls/123")) ||
+               urlStr.contains(QStringLiteral("owner/repo/pulls/999"))) {
+      dataToReturn = githubResponse;
+    } else {
+      dataToReturn = "{}";
+    }
+
+    auto *reply = new Mock200EmptyJsonNetworkReply(dataToReturn, this);
+    return reply;
+  }
+};
+
 class TestSourceWindow : public QObject {
   Q_OBJECT
 
 private Q_SLOTS:
+  void testFullSemanticChain();
+  void testManualVsAutomaticRefreshEquivalent();
+  void testInFlightRecovery();
   void initTestCase();
   void testKXmlGuiResourceExists();
   void testNoNestedSessionsWindowAndSingleChrome();
@@ -745,6 +810,299 @@ void TestSourceWindow::testClickableLabelLinkHandling() {
 
   QCOMPARE(linkSpy.count(), 0);
   QCOMPARE(clickedSpy.count(), 1);
+}
+
+void TestSourceWindow::testFullSemanticChain() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  SessionModel *followingModel = window.sessionModel();
+  SessionModel *archiveModel = window.archiveModel();
+  APIManager *apiManager = window.apiManager();
+
+  followingModel->clearSessions();
+  archiveModel->clearSessions();
+
+  QJsonObject sess;
+  sess[QStringLiteral("id")] = QStringLiteral("sess-e2e-1");
+  sess[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  sess[QStringLiteral("lastRefreshed")] = QStringLiteral("2020-01-01T00:00:00Z");
+  followingModel->addSession(sess);
+
+  // Configure the mock Jules response to return the same session with a new top-level PR URL
+  QJsonObject reloadedObj = sess;
+  QJsonObject prObj;
+  prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/123");
+  reloadedObj[QStringLiteral("pullRequest")] = prObj;
+
+  // Configure the mock GitHub response to report the PR merged
+  QJsonObject githubPr;
+  githubPr[QStringLiteral("state")] = QStringLiteral("merged");
+
+  // Setup the deterministic network mock
+  apiManager->setBaseUrl(QStringLiteral("https://jules.example.com"));
+  apiManager->setApiKey(QStringLiteral("fake-key"));
+  apiManager->setGithubToken(QStringLiteral("fake-github-token"));
+
+  auto *mockNam = new MockE2ENetworkAccessManager(apiManager);
+  mockNam->julesResponse = QJsonDocument(reloadedObj).toJson();
+  mockNam->githubResponse = QJsonDocument(githubPr).toJson();
+  delete apiManager->m_nam;
+  apiManager->m_nam = mockNam;
+
+  // Set AutoArchive config
+  KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("Behavior"));
+  cg.writeEntry("AutoArchiveCompletedWithClosedPRs", true);
+  cg.sync();
+
+  // 1. Trigger auto refresh evaluator
+  QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
+
+  // Process events repeatedly to let the network mock and nested signals fire
+  for (int i = 0; i < 10; ++i) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
+  }
+
+  // Verify network dispatches
+  bool julesRequested = false;
+  bool githubRequested = false;
+  for (const QString &url : mockNam->requestedUrls) {
+    if (url.contains(QStringLiteral("sess-e2e-1")))
+      julesRequested = true;
+    if (url.contains(QStringLiteral("owner/repo/pulls/123")))
+      githubRequested = true;
+  }
+  QVERIFY(julesRequested);
+  QVERIFY(githubRequested);
+
+  // Verify model updated with 'merged' state and it was archived
+  bool foundInArchive = false;
+  for (int i = 0; i < archiveModel->rowCount(); ++i) {
+    if (archiveModel->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-e2e-1")) {
+      foundInArchive = true;
+      break;
+    }
+  }
+
+  bool foundInFollowing = false;
+  for (int i = 0; i < followingModel->rowCount(); ++i) {
+    if (followingModel->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-e2e-1")) {
+      foundInFollowing = true;
+      break;
+    }
+  }
+
+  QVERIFY(foundInArchive);
+  QVERIFY(!foundInFollowing);
+}
+
+void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
+  MainWindow windowAuto;
+  windowAuto.setAttribute(Qt::WA_DeleteOnClose, false);
+  SessionModel *followingModelAuto = windowAuto.sessionModel();
+  APIManager *apiManagerAuto = windowAuto.apiManager();
+
+  followingModelAuto->clearSessions();
+
+  QJsonObject sess;
+  sess[QStringLiteral("id")] = QStringLiteral("sess-manual-1");
+  sess[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  sess[QStringLiteral("lastRefreshed")] = QStringLiteral("2020-01-01T00:00:00Z");
+
+  QJsonObject reloadedObj = sess;
+  QJsonObject prObj;
+  prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/999");
+  reloadedObj[QStringLiteral("pullRequest")] = prObj;
+
+  QJsonObject githubPr;
+  githubPr[QStringLiteral("state")] = QStringLiteral("open");
+
+  // Test Automatic Path
+  followingModelAuto->addSession(sess);
+  apiManagerAuto->setBaseUrl(QStringLiteral("https://jules.example.com"));
+  apiManagerAuto->setApiKey(QStringLiteral("fake-key"));
+  apiManagerAuto->setGithubToken(QStringLiteral("fake-github-token"));
+  auto *mockNamAuto = new MockE2ENetworkAccessManager(apiManagerAuto);
+  mockNamAuto->julesResponse = QJsonDocument(reloadedObj).toJson();
+  mockNamAuto->githubResponse = QJsonDocument(githubPr).toJson();
+  delete apiManagerAuto->m_nam;
+  apiManagerAuto->m_nam = mockNamAuto;
+
+  QMetaObject::invokeMethod(&windowAuto, "autoRefreshFollowing", Qt::DirectConnection);
+
+  for (int i = 0; i < 10; ++i) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
+  }
+
+  QJsonObject autoFinalSess;
+  for (int i = 0; i < followingModelAuto->rowCount(); ++i) {
+    if (followingModelAuto->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
+      autoFinalSess = followingModelAuto->getSession(i);
+      break;
+    }
+  }
+
+  // Test Manual Path
+  MainWindow windowManual;
+  windowManual.setAttribute(Qt::WA_DeleteOnClose, false);
+  SessionModel *followingModelManual = windowManual.sessionModel();
+  APIManager *apiManagerManual = windowManual.apiManager();
+  followingModelManual->clearSessions();
+  followingModelManual->addSession(sess);
+
+  apiManagerManual->setBaseUrl(QStringLiteral("https://jules.example.com"));
+  apiManagerManual->setApiKey(QStringLiteral("fake-key"));
+  apiManagerManual->setGithubToken(QStringLiteral("fake-github-token"));
+  auto *mockNamManual = new MockE2ENetworkAccessManager(apiManagerManual);
+  mockNamManual->julesResponse = QJsonDocument(reloadedObj).toJson();
+  mockNamManual->githubResponse = QJsonDocument(githubPr).toJson();
+  delete apiManagerManual->m_nam;
+  apiManagerManual->m_nam = mockNamManual;
+
+  // Setup spy to detect RefreshProgressWindow completion before it is deleted
+  // In MainWindow, m_refreshProgressWindow is created on heap and deleted via deleteLater() when done.
+  // The action creates it and calls show().
+
+  QAction *refreshActionManual = windowManual.actionCollection()->action(QStringLiteral("refresh_following"));
+  QVERIFY(refreshActionManual != nullptr);
+
+  refreshActionManual->trigger();
+
+  RefreshProgressWindow *progressWindow = windowManual.findChild<RefreshProgressWindow *>();
+  QVERIFY(progressWindow != nullptr);
+
+  QSignalSpy finishedSpy(progressWindow, &RefreshProgressWindow::progressFinished);
+
+  // Wait until the expected manual fetch succeeds
+  bool prFetched = false;
+  for (int i = 0; i < 50; ++i) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
+
+    if (finishedSpy.count() > 0) {
+      break;
+    }
+  }
+
+  QVERIFY(finishedSpy.count() > 0);
+
+  // Extra semantic check
+  for (int j = 0; j < followingModelManual->rowCount(); ++j) {
+    if (followingModelManual->index(j, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
+      QJsonObject sessToCheck = followingModelManual->getSession(j);
+      if (sessToCheck.contains(QStringLiteral("githubPrInfo")) &&
+          sessToCheck.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString() ==
+              QStringLiteral("open")) {
+        prFetched = true;
+        break;
+      }
+    }
+  }
+  QVERIFY(prFetched);
+
+  QJsonObject manualFinalSess;
+  for (int i = 0; i < followingModelManual->rowCount(); ++i) {
+    if (followingModelManual->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
+      manualFinalSess = followingModelManual->getSession(i);
+      break;
+    }
+  }
+
+  // Verify network request counts
+  int autoJulesReqs = 0, autoGithubReqs = 0;
+  for (const QString &url : mockNamAuto->requestedUrls) {
+    if (url.contains(QStringLiteral("sess-manual-1")))
+      autoJulesReqs++;
+    if (url.contains(QStringLiteral("owner/repo/pulls/999")))
+      autoGithubReqs++;
+  }
+  QCOMPARE(autoJulesReqs, 1);
+  QCOMPARE(autoGithubReqs, 1);
+
+  int manualJulesReqs = 0, manualGithubReqs = 0;
+  for (const QString &url : mockNamManual->requestedUrls) {
+    if (url.contains(QStringLiteral("sess-manual-1")))
+      manualJulesReqs++;
+    if (url.contains(QStringLiteral("owner/repo/pulls/999")))
+      manualGithubReqs++;
+  }
+  QCOMPARE(manualJulesReqs, 1);
+  QCOMPARE(manualGithubReqs, 1);
+
+  // Assert the RefreshProgressWindow completed successfully and was deleted (verified by destroyedSpy above)
+
+  // Assert Data Semantics
+  QVERIFY(!autoFinalSess.isEmpty());
+  QVERIFY(!manualFinalSess.isEmpty());
+
+  QCOMPARE(autoFinalSess.value(QStringLiteral("state")).toString(),
+           manualFinalSess.value(QStringLiteral("state")).toString());
+  QCOMPARE(autoFinalSess.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString(),
+           manualFinalSess.value(QStringLiteral("pullRequest")).toObject().value(QStringLiteral("url")).toString());
+  QCOMPARE(autoFinalSess.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString(),
+           manualFinalSess.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString());
+}
+
+void TestSourceWindow::testInFlightRecovery() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  SessionModel *followingModel = window.sessionModel();
+  APIManager *apiManager = window.apiManager();
+
+  followingModel->clearSessions();
+
+  QJsonObject sess;
+  sess[QStringLiteral("id")] = QStringLiteral("sess-inflight-1");
+  sess[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  sess[QStringLiteral("lastRefreshed")] = QStringLiteral("2020-01-01T00:00:00Z");
+  followingModel->addSession(sess);
+
+  apiManager->setBaseUrl(QStringLiteral("https://jules.example.com"));
+  apiManager->setApiKey(QStringLiteral("fake-key"));
+
+  auto *mockNam = new MockE2ENetworkAccessManager(apiManager);
+  mockNam->julesResponse = QByteArray("malformed json");
+  delete apiManager->m_nam;
+  apiManager->m_nam = mockNam;
+
+  // Trigger first automatic refresh
+  QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
+
+  for (int i = 0; i < 10; ++i) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
+  }
+
+  // Verify it requested it once
+  int requestCount = 0;
+  for (const QString &url : mockNam->requestedUrls) {
+    if (url.contains(QStringLiteral("sess-inflight-1")))
+      requestCount++;
+  }
+  QCOMPARE(requestCount, 1);
+
+  // Simulate the passage of the 5-minute cooldown by clearing the failure timestamp.
+  // This proves that once the cooldown passes, the session is not stuck in `m_inFlightSessionReloads`.
+  window.m_sessionReloadFailedAt.remove(QStringLiteral("sess-inflight-1"));
+
+  mockNam->requestedUrls.clear();
+  QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
+
+  for (int i = 0; i < 10; ++i) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
+  }
+
+  // If it was wedged in m_inFlightSessionReloads, the automatic refresh would skip it!
+  requestCount = 0;
+  for (const QString &url : mockNam->requestedUrls) {
+    if (url.contains(QStringLiteral("sess-inflight-1")))
+      requestCount++;
+  }
+  QCOMPARE(requestCount, 1);
 }
 
 int main(int argc, char *argv[]) {

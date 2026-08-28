@@ -381,7 +381,17 @@ void APIManager::reloadSession(const QString &sessionId, bool isBackground) {
     if (reply->error() == QNetworkReply::NoError) {
       QByteArray data = reply->readAll();
       QJsonDocument doc = QJsonDocument::fromJson(data);
-      Q_EMIT sessionReloaded(doc.object(), isBackground);
+      QString returnedId = doc.object().value(QStringLiteral("id")).toString();
+      QString cleanId = cleanSessionId(sessionId);
+      QString cleanReturnedId = cleanSessionId(returnedId);
+
+      if (doc.isNull() || !doc.isObject() || returnedId.isEmpty() || cleanReturnedId != cleanId) {
+        QString errorMsg = QStringLiteral("Failed to reload session details: Invalid or missing JSON data.");
+        Q_EMIT errorOccurred(errorMsg, isBackground);
+        Q_EMIT sessionReloadFailed(sessionId, errorMsg, isBackground);
+      } else {
+        Q_EMIT sessionReloaded(doc.object(), isBackground);
+      }
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {

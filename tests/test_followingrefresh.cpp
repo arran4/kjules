@@ -17,7 +17,59 @@ private Q_SLOTS:
   void testFailureCooldownSuppressesSpam();
   void testFailureDoesNotModifyLastRefreshed();
   void testSuccessfulRefreshUpdatesAndPersistsLastRefreshed();
+  void testTopLevelPullRequestParsed();
+  void testOutputsPullRequestParsed();
 };
+
+void TestFollowingRefresh::testTopLevelPullRequestParsed() {
+  QJsonObject session;
+  session[QStringLiteral("id")] = QStringLiteral("sess-pr-1");
+  session[QStringLiteral("title")] = QStringLiteral("Top Level PR");
+
+  QJsonObject prObj;
+  prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/123");
+  session[QStringLiteral("pullRequest")] = prObj;
+
+  // Directly parse session using SessionModel's parseSessionData logic (indirectly tested here)
+  SessionModel model(QStringLiteral("test_following_pr_1.json"));
+  model.clearSessions();
+  model.addSession(session);
+
+  QModelIndex idx = model.index(0, 0);
+  QCOMPARE(model.data(idx, SessionModel::PrUrlRole).toString(),
+           QStringLiteral("https://github.com/owner/repo/pull/123"));
+
+  // PR number is displayed in ColPR, Qt::DisplayRole
+  QModelIndex colPrIdx = model.index(0, SessionModel::ColPR);
+  QCOMPARE(model.data(colPrIdx, Qt::DisplayRole).toString(), QStringLiteral("#123"));
+}
+
+void TestFollowingRefresh::testOutputsPullRequestParsed() {
+  QJsonObject session;
+  session[QStringLiteral("id")] = QStringLiteral("sess-pr-2");
+  session[QStringLiteral("title")] = QStringLiteral("Outputs PR");
+
+  QJsonObject prObj;
+  prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/456");
+
+  QJsonObject outputObj;
+  outputObj[QStringLiteral("pullRequest")] = prObj;
+
+  QJsonArray outputsArr;
+  outputsArr.append(outputObj);
+  session[QStringLiteral("outputs")] = outputsArr;
+
+  SessionModel model(QStringLiteral("test_following_pr_2.json"));
+  model.clearSessions();
+  model.addSession(session);
+
+  QModelIndex idx = model.index(0, 0);
+  QCOMPARE(model.data(idx, SessionModel::PrUrlRole).toString(),
+           QStringLiteral("https://github.com/owner/repo/pull/456"));
+
+  QModelIndex colPrIdx = model.index(0, SessionModel::ColPR);
+  QCOMPARE(model.data(colPrIdx, Qt::DisplayRole).toString(), QStringLiteral("#456"));
+}
 
 void TestFollowingRefresh::testSessionEligibility() {
   QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("RUNNING"), QString()));
