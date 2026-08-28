@@ -1,8 +1,8 @@
-#include <QObject>
-#include <QTest>
-#include <QCommandLineParser>
 #include <QCommandLineOption>
+#include <QCommandLineParser>
+#include <QObject>
 #include <QStringList>
+#include <QTest>
 
 class ActivationTest : public QObject {
   Q_OBJECT
