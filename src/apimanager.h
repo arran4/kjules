@@ -18,6 +18,7 @@
 class APIManager : public QObject {
   Q_OBJECT
   friend class TestBackgroundErrors;
+  friend class TestSourceWindow;
   friend class TestAPIManagerPagination;
   friend class BenchAPIManager;
 

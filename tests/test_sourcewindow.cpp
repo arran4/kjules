@@ -35,12 +35,72 @@
 #include <QTreeView>
 #include <QtTest>
 
+
+class Mock200EmptyJsonNetworkReply : public QNetworkReply {
+  Q_OBJECT
+  QByteArray m_data;
+
+public:
+  Mock200EmptyJsonNetworkReply(const QByteArray &data, QObject *parent = nullptr)
+      : QNetworkReply(parent), m_data(data) {
+    setAttribute(QNetworkRequest::HttpStatusCodeAttribute, 200);
+    QTimer::singleShot(0, this, [this]() {
+      setOpenMode(QIODevice::ReadOnly);
+      Q_EMIT readyRead();
+      Q_EMIT finished();
+    });
+  }
+  void abort() override {}
+  qint64 readData(char *data, qint64 maxlen) override {
+    qint64 len = qMin(maxlen, (qint64)m_data.size());
+    if (len > 0) {
+      memcpy(data, m_data.constData(), len);
+      m_data.remove(0, len);
+      return len;
+    }
+    return 0;
+  }
+};
+
+class MockE2ENetworkAccessManager : public QNetworkAccessManager {
+  Q_OBJECT
+public:
+  QByteArray julesResponse;
+  QByteArray githubResponse;
+  QStringList requestedUrls;
+
+  MockE2ENetworkAccessManager(QObject *parent = nullptr) : QNetworkAccessManager(parent) {}
+
+protected:
+  QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData) override {
+    Q_UNUSED(op);
+    Q_UNUSED(outgoingData);
+
+    QString urlStr = request.url().toString();
+    requestedUrls.append(urlStr);
+
+    QByteArray dataToReturn;
+    if (urlStr.contains(QStringLiteral("sessions/sess-e2e-1")) || urlStr.contains(QStringLiteral("sessions/sess-manual-1")) ||
+        urlStr.contains(QStringLiteral("sessions/sess-inflight-1"))) {
+      dataToReturn = julesResponse;
+    } else if (urlStr.contains(QStringLiteral("owner/repo/pulls/123")) || urlStr.contains(QStringLiteral("owner/repo/pulls/999"))) {
+      dataToReturn = githubResponse;
+    } else {
+      dataToReturn = "{}";
+    }
+
+    auto *reply = new Mock200EmptyJsonNetworkReply(dataToReturn, this);
+    return reply;
+  }
+};
+
 class TestSourceWindow : public QObject {
   Q_OBJECT
 
 private Q_SLOTS:
   void testFullSemanticChain();
   void testManualVsAutomaticRefreshEquivalent();
+  void testInFlightRecovery();
   void initTestCase();
   void testKXmlGuiResourceExists();
   void testNoNestedSessionsWindowAndSingleChrome();
@@ -862,6 +922,76 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   }
   QVERIFY(hasPrUrl);
 }
+
+void TestSourceWindow::testInFlightRecovery() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  SessionModel *followingModel = window.sessionModel();
+  APIManager *apiManager = window.apiManager();
+
+  followingModel->clearSessions();
+
+  QJsonObject sess;
+  sess[QStringLiteral("id")] = QStringLiteral("sess-inflight-1");
+  sess[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  sess[QStringLiteral("lastRefreshed")] = QStringLiteral("2020-01-01T00:00:00Z");
+  followingModel->addSession(sess);
+
+  apiManager->setBaseUrl(QStringLiteral("https://jules.example.com"));
+  apiManager->setApiKey(QStringLiteral("fake-key"));
+
+  auto *mockNam = new MockE2ENetworkAccessManager(apiManager);
+  mockNam->julesResponse = QByteArray("malformed json");
+  delete apiManager->m_nam;
+  apiManager->m_nam = mockNam;
+
+  // Trigger first automatic refresh
+  QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
+
+  for (int i = 0; i < 10; ++i) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
+  }
+
+  // Verify it requested it once
+  int requestCount = 0;
+  for (const QString &url : mockNam->requestedUrls) {
+    if (url.contains(QStringLiteral("sess-inflight-1")))
+      requestCount++;
+  }
+  QCOMPARE(requestCount, 1);
+
+  // To prove it is NOT wedged in `m_inFlightSessionReloads`, we can trigger another refresh.
+  // Because of the 5-minute cooldown in `autoRefreshFollowing`, it normally wouldn't dispatch.
+  // We can bypass the cooldown by modifying `FollowingRefreshEvaluator`? No.
+  // But we CAN trigger a manual refresh, which also checks `m_inFlightSessionReloads` before dispatching!
+  // Wait, does manual refresh check `m_inFlightSessionReloads`? Let's assume it does, or we can just call
+  // `apiManager->reloadSession` directly? No, we need to prove MainWindow cleared its tracking. If we invoke the manual
+  // refresh action, it dispatches.
+
+  // To prove it is NOT wedged in `m_inFlightSessionReloads`, we can trigger another auto refresh.
+  // Because of the 5-minute cooldown in `autoRefreshFollowing`, it normally wouldn't dispatch.
+  // We simulate the passage of the 5-minute cooldown by clearing the failure timestamp.
+  window.m_sessionReloadFailedAt.remove(QStringLiteral("sess-inflight-1"));
+
+  mockNam->requestedUrls.clear();
+  QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
+
+  for (int i = 0; i < 10; ++i) {
+      QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+      QThread::msleep(10);
+  }
+
+  // If it was wedged in m_inFlightSessionReloads, the automatic refresh would skip it!
+  requestCount = 0;
+  for (const QString &url : mockNam->requestedUrls) {
+      if (url.contains(QStringLiteral("sess-inflight-1"))) requestCount++;
+  }
+  QCOMPARE(requestCount, 1);
+}
+
+
 
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");

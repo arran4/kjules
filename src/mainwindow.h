@@ -47,6 +47,7 @@ struct SourceRemapEntry;
 
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
+  friend class TestSourceWindow;
 
 public:
   explicit MainWindow(QWidget *parent = nullptr);
