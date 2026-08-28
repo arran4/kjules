@@ -1,12 +1,12 @@
 #include <KAboutData>
 #include <KConfigGroup>
+#include <KDBusService>
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QTemporaryDir>
-#include <KDBusService>
 
 #include "mainwindow.h"
 
@@ -38,7 +38,8 @@ int main(int argc, char *argv[]) {
   QCommandLineOption autostartedOption(QStringList() << QStringLiteral("autostarted"), i18n("Launched via autostart"));
   parser.addOption(autostartedOption);
 
-  QCommandLineOption newSessionOption(QStringList() << QStringLiteral("new-session"), i18n("Open the New Session dialog"));
+  QCommandLineOption newSessionOption(QStringList() << QStringLiteral("new-session"),
+                                      i18n("Open the New Session dialog"));
   parser.addOption(newSessionOption);
 
   QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"), i18n("Use mock API at localhost:8080"));
@@ -70,19 +71,18 @@ int main(int argc, char *argv[]) {
 
   MainWindow *window = new MainWindow();
 
-  QObject::connect(&service, &KDBusService::activateRequested, window, [window](const QStringList &arguments, const QString &/*workingDirectory*/) {
-    QCommandLineParser p;
-    QCommandLineOption autostartedO(QStringList() << QStringLiteral("autostarted"), i18n("Launched via autostart"));
-    p.addOption(autostartedO);
-    QCommandLineOption newSessionO(QStringList() << QStringLiteral("new-session"), i18n("Open the New Session dialog"));
-    p.addOption(newSessionO);
-    QCommandLineOption mockApiO(QStringList() << QStringLiteral("mock-api"), i18n("Use mock API at localhost:8080"));
-    p.addOption(mockApiO);
-    p.parse(arguments);
-    if (p.isSet(newSessionO)) {
-      window->showNewSessionDialogSlot();
-    }
-  });
+  QObject::connect(&service, &KDBusService::activateRequested, window,
+                   [window, autostartedOption, newSessionOption, mockApiOption](const QStringList &arguments,
+                                                                                const QString & /*workingDirectory*/) {
+                     QCommandLineParser p;
+                     p.addOption(autostartedOption);
+                     p.addOption(newSessionOption);
+                     p.addOption(mockApiOption);
+                     p.parse(arguments);
+                     if (p.isSet(newSessionOption)) {
+                       window->showNewSessionDialogSlot();
+                     }
+                   });
 
   bool isAutostarted = parser.isSet(autostartedOption);
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
