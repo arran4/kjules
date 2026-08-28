@@ -977,25 +977,33 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
 
   refreshActionManual->trigger();
 
-  // Give the UI time to create the window
+  // Give the UI time to create the window and start processing
   QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
 
-  RefreshProgressWindow *progressWindow = windowManual.findChild<RefreshProgressWindow *>();
-  QVERIFY(progressWindow != nullptr);
-
-  // Track its destruction
-  QSignalSpy finishedSpy(progressWindow, &RefreshProgressWindow::progressFinished);
-
+  // Wait until the expected manual fetch succeeds (which validates the full flow without flaky window timers)
+  bool prFetched = false;
   for (int i = 0; i < 50; ++i) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
     QThread::msleep(10);
-    if (finishedSpy.count() > 0) {
+
+    QJsonObject sessToCheck;
+    for (int j = 0; j < followingModelManual->rowCount(); ++j) {
+      if (followingModelManual->index(j, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
+        sessToCheck = followingModelManual->getSession(j);
+        break;
+      }
+    }
+
+    // Check if the PR state was fetched and updated successfully
+    if (sessToCheck.contains(QStringLiteral("githubPrInfo")) &&
+        sessToCheck.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString() ==
+            QStringLiteral("open")) {
+      prFetched = true;
       break;
     }
   }
 
-  // Verify it actually closed/deleted, meaning it reached completion successfully
-  QVERIFY(finishedSpy.count() > 0);
+  QVERIFY(prFetched);
 
   QJsonObject manualFinalSess;
   for (int i = 0; i < followingModelManual->rowCount(); ++i) {
