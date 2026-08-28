@@ -3,6 +3,7 @@
 #include <KDBusService>
 #include <KLocalizedString>
 #include <KSharedConfig>
+#include <KWindowSystem>
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -21,6 +22,9 @@ int main(int argc, char *argv[]) {
 #endif
 
   QApplication app(argc, argv);
+  app.setOrganizationName(QStringLiteral("KDE"));
+  app.setOrganizationDomain(QStringLiteral("kde.org"));
+  app.setDesktopFileName(QStringLiteral("org.kde.kjules"));
   KLocalizedString::setApplicationDomain("kjules");
 
   KAboutData aboutData(QStringLiteral("org.kde.kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
@@ -67,6 +71,9 @@ int main(int argc, char *argv[]) {
 #endif
   }
 
+  if (useMockApi) {
+    app.setApplicationName(QStringLiteral("kjules-mock"));
+  }
   KDBusService service(KDBusService::Unique);
 
   MainWindow *window = new MainWindow();
@@ -79,8 +86,16 @@ int main(int argc, char *argv[]) {
                      p.addOption(newSessionOption);
                      p.addOption(mockApiOption);
                      p.parse(arguments);
+                     if (p.isSet(mockApiOption)) {
+                       window->setMockApi(true);
+                     }
                      if (p.isSet(newSessionOption)) {
                        window->showNewSessionDialogSlot();
+                     } else {
+                       window->show();
+                       window->raise();
+                       window->activateWindow();
+                       KWindowSystem::activateWindow(window->windowHandle());
                      }
                    });
 

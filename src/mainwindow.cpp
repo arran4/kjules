@@ -3435,6 +3435,17 @@ void MainWindow::showManageCustomSourcesDialog() {
   dialog.exec();
 }
 
+#include <KWindowSystem>
+
+void MainWindow::showNewSessionDialogSlot() {
+  auto dlg = showNewSessionDialog();
+  if (dlg) {
+    dlg->raise();
+    dlg->activateWindow();
+    KWindowSystem::activateWindow(dlg->windowHandle());
+  }
+}
+
 void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoName, bool isPrivate,
                                         const QString &prompt, const QString &automationMode, bool requirePlanApproval,
                                         bool ignoreConcurrency) {
@@ -3465,7 +3476,7 @@ void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoN
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
-void MainWindow::showNewSessionDialog(const QJsonObject &initialData, bool ignoreSelection) {
+NewSessionDialog *MainWindow::showNewSessionDialog(const QJsonObject &initialData, bool ignoreSelection) {
   bool hasApiKey = !m_apiManager->apiKey().isEmpty();
   auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
   connectNewSessionDialog(window);
@@ -3493,6 +3504,7 @@ void MainWindow::showNewSessionDialog(const QJsonObject &initialData, bool ignor
     window->setInitialData(finalData);
   }
   window->show();
+  return window;
 }
 
 void MainWindow::showSettingsDialog() {

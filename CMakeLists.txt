@@ -38,7 +38,7 @@ find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
 find_package(Qt6 6.6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Concurrent)
-find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive DBusAddons)
+find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive DBusAddons WindowSystem)
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
@@ -129,6 +129,7 @@ target_link_libraries(kjules
     KF6::GlobalAccel
     KF6::Archive
     KF6::DBusAddons
+    KF6::WindowSystem
 )
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
