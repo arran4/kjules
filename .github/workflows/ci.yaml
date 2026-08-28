@@ -194,9 +194,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: zypper --gpg-auto-import-keys rr repo-openh264 || true
-      - run: zypper --gpg-auto-import-keys refresh || true
       - run: |
-          zypper --gpg-auto-import-keys -n dup --allow-downgrade --allow-vendor-change
+          for i in {1..3}; do
+            zypper --gpg-auto-import-keys refresh && break || sleep 15
+          done
+      - run: |
+          for i in {1..3}; do
+            zypper --gpg-auto-import-keys -n dup --allow-downgrade --allow-vendor-change && break || sleep 15
+          done
           zypper --gpg-auto-import-keys -n install --auto-agree-with-licenses cmake ninja gcc-c++ clang cppcheck \
           kf6-extra-cmake-modules qt6-base-devel qt6-tools-devel qt6-declarative-devel \
           kf6-kcoreaddons-devel kf6-ki18n-devel kf6-kwallet-devel kf6-knotifications-devel \
@@ -219,9 +224,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: zypper --gpg-auto-import-keys rr repo-openh264 || true
-      - run: zypper --gpg-auto-import-keys refresh || true
       - run: |
-          zypper --gpg-auto-import-keys -n dup --allow-downgrade --allow-vendor-change
+          for i in {1..3}; do
+            zypper --gpg-auto-import-keys refresh && break || sleep 15
+          done
+      - run: |
+          for i in {1..3}; do
+            zypper --gpg-auto-import-keys -n dup --allow-downgrade --allow-vendor-change && break || sleep 15
+          done
           zypper --gpg-auto-import-keys -n install --auto-agree-with-licenses cmake ninja gcc-c++ AppStream \
           kf6-extra-cmake-modules qt6-base-devel qt6-tools-devel qt6-declarative-devel \
           kf6-kcoreaddons-devel kf6-ki18n-devel kf6-kwallet-devel kf6-knotifications-devel \

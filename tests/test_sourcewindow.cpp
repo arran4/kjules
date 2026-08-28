@@ -965,44 +965,40 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   // In MainWindow, m_refreshProgressWindow is created on heap and deleted via deleteLater() when done.
   // The action creates it and calls show().
 
-  QAction *refreshActionManual = nullptr;
-  const auto actionsListManual = windowManual.findChildren<QAction *>();
-  for (QAction *a : actionsListManual) {
-    if (a->text().contains(QStringLiteral("Refresh Following"))) {
-      refreshActionManual = a;
-      break;
-    }
-  }
+  QAction *refreshActionManual = windowManual.actionCollection()->action(QStringLiteral("refresh_following"));
   QVERIFY(refreshActionManual != nullptr);
 
   refreshActionManual->trigger();
 
-  // Give the UI time to create the window and start processing
-  QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+  RefreshProgressWindow *progressWindow = windowManual.findChild<RefreshProgressWindow *>();
+  QVERIFY(progressWindow != nullptr);
 
-  // Wait until the expected manual fetch succeeds (which validates the full flow without flaky window timers)
+  QSignalSpy finishedSpy(progressWindow, &RefreshProgressWindow::progressFinished);
+
+  // Wait until the expected manual fetch succeeds
   bool prFetched = false;
   for (int i = 0; i < 50; ++i) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
     QThread::msleep(10);
 
-    QJsonObject sessToCheck;
-    for (int j = 0; j < followingModelManual->rowCount(); ++j) {
-      if (followingModelManual->index(j, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
-        sessToCheck = followingModelManual->getSession(j);
-        break;
-      }
-    }
-
-    // Check if the PR state was fetched and updated successfully
-    if (sessToCheck.contains(QStringLiteral("githubPrInfo")) &&
-        sessToCheck.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString() ==
-            QStringLiteral("open")) {
-      prFetched = true;
+    if (finishedSpy.count() > 0) {
       break;
     }
   }
 
+  QVERIFY(finishedSpy.count() > 0);
+
+  // Extra semantic check
+  for (int j = 0; j < followingModelManual->rowCount(); ++j) {
+    if (followingModelManual->index(j, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
+      QJsonObject sessToCheck = followingModelManual->getSession(j);
+      if (sessToCheck.contains(QStringLiteral("githubPrInfo")) &&
+          sessToCheck.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString() == QStringLiteral("open")) {
+          prFetched = true;
+          break;
+      }
+    }
+  }
   QVERIFY(prFetched);
 
   QJsonObject manualFinalSess;
