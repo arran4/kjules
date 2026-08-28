@@ -83,6 +83,9 @@ private Q_SLOTS:
   void refreshSources();
   void refreshSourcesImpl(bool isBackground);
   void refreshGithubDataForSources(const QStringList &sourceIds);
+public Q_SLOTS:
+  void showNewSessionDialogSlot() { showNewSessionDialog(); }
+private Q_SLOTS:
   void showNewSessionDialog(const QJsonObject &initialData = QJsonObject(), bool ignoreSelection = false);
   void showCreateRepoDialog();
   void showSourceStatusDialog(const QString &sourceName);
