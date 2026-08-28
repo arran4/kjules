@@ -6118,7 +6118,7 @@ void MainWindow::onSessionReloaded(const QJsonObject &session, bool isBackground
   m_lastSessionRefreshTime = QDateTime::currentDateTime();
   const QString id = session.value(QStringLiteral("id")).toString();
   if (isBackground) {
-      qDebug() << "[AutoRefresh] Jules reload succeeded for:" << id;
+    qDebug() << "[AutoRefresh] Jules reload succeeded for:" << id;
   }
   m_inFlightSessionReloads.remove(id);
   m_sessionReloadFailedAt.remove(id);
@@ -6167,10 +6167,10 @@ void MainWindow::onSessionReloaded(const QJsonObject &session, bool isBackground
   // Check previous PR URL to detect if it's newly discovered
   QString prevPrUrl;
   for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
-          prevPrUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
-          break;
-      }
+    if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
+      prevPrUrl = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::PrUrlRole).toString();
+      break;
+    }
   }
 
   m_sessionModel->updateSession(session, /*isSuccessfulRefresh=*/true);
@@ -6182,18 +6182,18 @@ void MainWindow::onSessionReloaded(const QJsonObject &session, bool isBackground
       if (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined")) {
         if (isBackground) {
           if (prevPrUrl.isEmpty()) {
-              qDebug() << "[AutoRefresh] PR URL newly discovered for session:" << id << "->" << prUrl;
+            qDebug() << "[AutoRefresh] PR URL newly discovered for session:" << id << "->" << prUrl;
           } else if (prevPrUrl != prUrl) {
-              qDebug() << "[AutoRefresh] PR URL changed for session:" << id << "->" << prUrl;
+            qDebug() << "[AutoRefresh] PR URL changed for session:" << id << "->" << prUrl;
           } else {
-              qDebug() << "[AutoRefresh] PR URL already present for session:" << id << "->" << prUrl;
+            qDebug() << "[AutoRefresh] PR URL already present for session:" << id << "->" << prUrl;
           }
           qDebug() << "[AutoRefresh] GitHub lookup dispatched for:" << prUrl;
         }
         m_apiManager->fetchGithubPullRequest(prUrl);
       } else {
         if (isBackground) {
-            qDebug() << "[AutoRefresh] PR URL absent for session:" << id;
+          qDebug() << "[AutoRefresh] PR URL absent for session:" << id;
         }
       }
       break;
