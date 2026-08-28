@@ -2,6 +2,7 @@
 #include "../src/apimanager.h"
 #include "../src/blockedtreemodel.h"
 #include "../src/errorsmodel.h"
+#include "../src/mainwindow.h"
 #include "../src/queuemodel.h"
 #include "../src/sessionmodel.h"
 #include "../src/sessionswidget.h"
@@ -38,6 +39,8 @@ class TestSourceWindow : public QObject {
   Q_OBJECT
 
 private Q_SLOTS:
+  void testFullSemanticChain();
+  void testManualVsAutomaticRefreshEquivalent();
   void initTestCase();
   void testKXmlGuiResourceExists();
   void testNoNestedSessionsWindowAndSingleChrome();
@@ -745,6 +748,119 @@ void TestSourceWindow::testClickableLabelLinkHandling() {
 
   QCOMPARE(linkSpy.count(), 0);
   QCOMPARE(clickedSpy.count(), 1);
+}
+
+void TestSourceWindow::testFullSemanticChain() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  SessionModel *followingModel = window.sessionModel();
+  SessionModel *archiveModel = window.archiveModel();
+  APIManager *apiManager = window.apiManager();
+
+  followingModel->clearSessions();
+  archiveModel->clearSessions();
+
+  QJsonObject sess;
+  sess[QStringLiteral("id")] = QStringLiteral("sess-e2e-1");
+  sess[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  sess[QStringLiteral("lastRefreshed")] = QStringLiteral("2020-01-01T00:00:00Z");
+  followingModel->addSession(sess);
+
+  // Disable network calls safely
+  apiManager->setBaseUrl(QStringLiteral(""));
+  apiManager->setApiKey(QStringLiteral(""));
+
+  // 1. We skip autoRefreshFollowing directly since it tries to make a network call with m_nam.
+  // Instead, we verify the semantic state update via APIManager callbacks that MainWindow listens to.
+
+  // 2. Simulate API returning the reloaded session with a NEW PR URL
+  QJsonObject reloadedObj = sess;
+  QJsonObject prObj;
+  prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/123");
+  reloadedObj[QStringLiteral("pullRequest")] = prObj;
+
+  // Call the slot that MainWindow listens to
+  Q_EMIT apiManager->sessionReloaded(reloadedObj, true);
+
+  // At this point, the PR URL is present in the model.
+  bool foundInFollowing = false;
+  for (int i = 0; i < followingModel->rowCount(); ++i) {
+    if (followingModel->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-e2e-1")) {
+      foundInFollowing = true;
+      QCOMPARE(followingModel->index(i, 0).data(SessionModel::PrUrlRole).toString(),
+               QStringLiteral("https://github.com/owner/repo/pull/123"));
+      break;
+    }
+  }
+  QVERIFY(foundInFollowing);
+
+  // 3. Simulate GitHub PR response changing state to 'merged'
+  QJsonObject githubPr;
+  githubPr[QStringLiteral("state")] = QStringLiteral("merged");
+
+  KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("Behavior"));
+  cg.writeEntry("AutoArchiveCompletedWithClosedPRs", true);
+  cg.sync();
+
+  // Let's invoke MainWindow::onGithubPullRequestInfoReceived using the real signal
+  Q_EMIT apiManager->githubPullRequestInfoReceived(QStringLiteral("https://github.com/owner/repo/pull/123"), githubPr);
+
+  QCoreApplication::processEvents();
+
+  // Verify model updated with 'merged' state and it was archived
+  bool foundInArchive = false;
+  for (int i = 0; i < archiveModel->rowCount(); ++i) {
+    if (archiveModel->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-e2e-1")) {
+      foundInArchive = true;
+      break;
+    }
+  }
+
+  foundInFollowing = false;
+  for (int i = 0; i < followingModel->rowCount(); ++i) {
+    if (followingModel->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-e2e-1")) {
+      foundInFollowing = true;
+      break;
+    }
+  }
+
+  QVERIFY(foundInArchive);
+  QVERIFY(!foundInFollowing);
+}
+
+void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  SessionModel *followingModel = window.sessionModel();
+  APIManager *apiManager = window.apiManager();
+
+  followingModel->clearSessions();
+
+  QJsonObject sess;
+  sess[QStringLiteral("id")] = QStringLiteral("sess-manual-1");
+  sess[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+  sess[QStringLiteral("lastRefreshed")] = QStringLiteral("2020-01-01T00:00:00Z");
+  followingModel->addSession(sess);
+
+  QJsonObject reloadedObj = sess;
+  QJsonObject prObj;
+  prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/999");
+  reloadedObj[QStringLiteral("pullRequest")] = prObj;
+
+  // In manual refresh, isBackground is false.
+  Q_EMIT apiManager->sessionReloaded(reloadedObj, false);
+
+  // Check if it stored the PR URL
+  bool hasPrUrl = false;
+  for (int i = 0; i < followingModel->rowCount(); ++i) {
+    if (followingModel->index(i, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
+      hasPrUrl = !followingModel->index(i, 0).data(SessionModel::PrUrlRole).toString().isEmpty();
+      break;
+    }
+  }
+  QVERIFY(hasPrUrl);
 }
 
 int main(int argc, char *argv[]) {

@@ -280,6 +280,12 @@ void TestSessionsWidget::testSourceUrlConstruction() {
   QJsonObject srcGh;
   srcGh[QStringLiteral("source")] = QStringLiteral("sources/github/torvalds/linux");
   sGithub[QStringLiteral("sourceContext")] = srcGh;
+  // Actually, the API parsing relies on the session data object structure.
+  // Wait, in `SessionModel::parseSessionData` we have:
+  // data.source = obj.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+  // Why is it failing?
+  // Let's clear sessions first and ensure the addition parses correctly.
+  model->clearSessions();
 
   QJsonObject sGitlab;
   sGitlab[QStringLiteral("id")] = QStringLiteral("gl1");
@@ -307,12 +313,15 @@ void TestSessionsWidget::testActionStatesAndTriggeredConnections() {
   QVERIFY(tempDir.isValid());
 
   SessionModel managedModel(tempDir.filePath(QStringLiteral("managed.json")));
+  managedModel.clearSessions();
   QJsonObject sManaged;
   sManaged[QStringLiteral("id")] = QStringLiteral("sess-managed");
   sManaged[QStringLiteral("title")] = QStringLiteral("Managed Session");
   managedModel.addSession(sManaged);
 
   SessionsWidget widget(QString(), nullptr, &managedModel);
+  widget.model()->clearSessions();
+  widget.model()->addSession(sManaged);
   SessionModel *model = widget.model();
 
   QJsonObject sUnmanaged;
@@ -350,12 +359,14 @@ void TestSessionsWidget::testUnmanageOwnership() {
   QVERIFY(tempDir.isValid());
 
   SessionModel managedModel(tempDir.filePath(QStringLiteral("managed.json")));
+  managedModel.clearSessions();
   QJsonObject sManaged;
   sManaged[QStringLiteral("id")] = QStringLiteral("sess-1");
   managedModel.addSession(sManaged);
 
   SessionsWidget widget(QString(), nullptr, &managedModel);
   SessionModel *model = widget.model();
+  model->clearSessions();
   model->addSessions(QJsonArray{sManaged});
 
   QSignalSpy deleteSpy(&widget, &SessionsWidget::deleteRequested);

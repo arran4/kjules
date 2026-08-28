@@ -173,6 +173,11 @@ private Q_SLOTS:
   void autoRefreshFollowing();
   void updateFavouritesMenu();
 
+public:
+  SessionModel *sessionModel() const { return m_sessionModel; }
+  SessionModel *archiveModel() const { return m_archiveModel; }
+  APIManager *apiManager() const { return m_apiManager; }
+
 private:
   QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
   void applyFavouriteAction(
