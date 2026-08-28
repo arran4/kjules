@@ -1,10 +1,10 @@
-#include "../src/refreshprogresswindow.h"
 #include "../src/api/apierror.h"
 #include "../src/apimanager.h"
 #include "../src/blockedtreemodel.h"
 #include "../src/errorsmodel.h"
 #include "../src/mainwindow.h"
 #include "../src/queuemodel.h"
+#include "../src/refreshprogresswindow.h"
 #include "../src/sessionmodel.h"
 #include "../src/sessionswidget.h"
 #include "../src/sessionswindow.h"
@@ -961,13 +961,41 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   delete apiManagerManual->m_nam;
   apiManagerManual->m_nam = mockNamManual;
 
-  // Manual path via APIManager foreground call (like what Refresh Action triggers)
-  apiManagerManual->reloadSession(QStringLiteral("sess-manual-1"), false);
+  // Setup spy to detect RefreshProgressWindow completion before it is deleted
+  // In MainWindow, m_refreshProgressWindow is created on heap and deleted via deleteLater() when done.
+  // The action creates it and calls show().
 
-  for (int i = 0; i < 10; ++i) {
+  QAction *refreshActionManual = nullptr;
+  const auto actionsListManual = windowManual.findChildren<QAction *>();
+  for (QAction *a : actionsListManual) {
+    if (a->text().contains(QStringLiteral("Refresh Following"))) {
+      refreshActionManual = a;
+      break;
+    }
+  }
+  QVERIFY(refreshActionManual != nullptr);
+
+  refreshActionManual->trigger();
+
+  // Give the UI time to create the window
+  QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+
+  RefreshProgressWindow *progressWindow = windowManual.findChild<RefreshProgressWindow *>();
+  QVERIFY(progressWindow != nullptr);
+
+  // Track its destruction
+  QSignalSpy finishedSpy(progressWindow, &RefreshProgressWindow::progressFinished);
+
+  for (int i = 0; i < 50; ++i) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
     QThread::msleep(10);
+    if (finishedSpy.count() > 0) {
+      break;
+    }
   }
+
+  // Verify it actually closed/deleted, meaning it reached completion successfully
+  QVERIFY(finishedSpy.count() > 0);
 
   QJsonObject manualFinalSess;
   for (int i = 0; i < followingModelManual->rowCount(); ++i) {
@@ -980,26 +1008,25 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   // Verify network request counts
   int autoJulesReqs = 0, autoGithubReqs = 0;
   for (const QString &url : mockNamAuto->requestedUrls) {
-      if (url.contains(QStringLiteral("sess-manual-1"))) autoJulesReqs++;
-      if (url.contains(QStringLiteral("owner/repo/pulls/999"))) autoGithubReqs++;
+    if (url.contains(QStringLiteral("sess-manual-1")))
+      autoJulesReqs++;
+    if (url.contains(QStringLiteral("owner/repo/pulls/999")))
+      autoGithubReqs++;
   }
   QCOMPARE(autoJulesReqs, 1);
   QCOMPARE(autoGithubReqs, 1);
 
   int manualJulesReqs = 0, manualGithubReqs = 0;
   for (const QString &url : mockNamManual->requestedUrls) {
-      if (url.contains(QStringLiteral("sess-manual-1"))) manualJulesReqs++;
-      if (url.contains(QStringLiteral("owner/repo/pulls/999"))) manualGithubReqs++;
+    if (url.contains(QStringLiteral("sess-manual-1")))
+      manualJulesReqs++;
+    if (url.contains(QStringLiteral("owner/repo/pulls/999")))
+      manualGithubReqs++;
   }
   QCOMPARE(manualJulesReqs, 1);
   QCOMPARE(manualGithubReqs, 1);
 
-  // Assert the RefreshProgressWindow completed successfully and was deleted (or is waiting to be deleted)
-  // Since it calls deleteLater() on close if finished, it might not exist.
-  RefreshProgressWindow *progressWindow = windowManual.findChild<RefreshProgressWindow *>();
-  if (progressWindow) {
-      QVERIFY(progressWindow->isFinishedProcess());
-  }
+  // Assert the RefreshProgressWindow completed successfully and was deleted (verified by destroyedSpy above)
 
   // Assert Data Semantics
   QVERIFY(!autoFinalSess.isEmpty());
