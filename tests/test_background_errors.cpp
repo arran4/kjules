@@ -100,7 +100,8 @@ private Q_SLOTS:
     apiManager.setBaseUrl(QStringLiteral("http://localhost"));
 
     QByteArray validResponse = "{\"id\": \"foo\", \"state\": \"COMPLETED\"}";
-    Mock200EmptyJsonNetworkAccessManager *mockNam1 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    Mock200EmptyJsonNetworkAccessManager *mockNam1 =
+        new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
     delete apiManager.m_nam;
     apiManager.m_nam = mockNam1;
 
@@ -114,7 +115,8 @@ private Q_SLOTS:
     QCOMPARE(failedSpy1.count(), 0);
 
     // request sessions/foo, response foo
-    Mock200EmptyJsonNetworkAccessManager *mockNam2 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    Mock200EmptyJsonNetworkAccessManager *mockNam2 =
+        new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
     apiManager.m_nam = mockNam2;
     QSignalSpy reloadedSpy2(&apiManager, &APIManager::sessionReloaded);
     apiManager.reloadSession(QStringLiteral("sessions/foo"), false);
@@ -122,7 +124,8 @@ private Q_SLOTS:
     QCOMPARE(reloadedSpy2.count(), 1);
 
     // request /sessions/foo, response foo
-    Mock200EmptyJsonNetworkAccessManager *mockNam3 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    Mock200EmptyJsonNetworkAccessManager *mockNam3 =
+        new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
     apiManager.m_nam = mockNam3;
     QSignalSpy reloadedSpy3(&apiManager, &APIManager::sessionReloaded);
     apiManager.reloadSession(QStringLiteral("/sessions/foo"), false);
@@ -130,14 +133,14 @@ private Q_SLOTS:
     QCOMPARE(reloadedSpy3.count(), 1);
 
     // request session/foo, response foo (since cleanSessionId does session/foo)
-    Mock200EmptyJsonNetworkAccessManager *mockNam4 = new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
+    Mock200EmptyJsonNetworkAccessManager *mockNam4 =
+        new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
     apiManager.m_nam = mockNam4;
     QSignalSpy reloadedSpy4(&apiManager, &APIManager::sessionReloaded);
     apiManager.reloadSession(QStringLiteral("session/foo"), false);
     QVERIFY(reloadedSpy4.wait(1000));
     QCOMPARE(reloadedSpy4.count(), 1);
   }
-
 
   void testReloadSessionEmptyIdFailed() {
     APIManager apiManager;
