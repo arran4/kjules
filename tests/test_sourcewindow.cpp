@@ -993,9 +993,10 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
     if (followingModelManual->index(j, 0).data(SessionModel::IdRole).toString() == QStringLiteral("sess-manual-1")) {
       QJsonObject sessToCheck = followingModelManual->getSession(j);
       if (sessToCheck.contains(QStringLiteral("githubPrInfo")) &&
-          sessToCheck.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString() == QStringLiteral("open")) {
-          prFetched = true;
-          break;
+          sessToCheck.value(QStringLiteral("githubPrInfo")).toObject().value(QStringLiteral("state")).toString() ==
+              QStringLiteral("open")) {
+        prFetched = true;
+        break;
       }
     }
   }
