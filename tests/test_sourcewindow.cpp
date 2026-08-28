@@ -35,7 +35,6 @@
 #include <QTreeView>
 #include <QtTest>
 
-
 class Mock200EmptyJsonNetworkReply : public QNetworkReply {
   Q_OBJECT
   QByteArray m_data;
@@ -80,10 +79,12 @@ protected:
     requestedUrls.append(urlStr);
 
     QByteArray dataToReturn;
-    if (urlStr.contains(QStringLiteral("sessions/sess-e2e-1")) || urlStr.contains(QStringLiteral("sessions/sess-manual-1")) ||
+    if (urlStr.contains(QStringLiteral("sessions/sess-e2e-1")) ||
+        urlStr.contains(QStringLiteral("sessions/sess-manual-1")) ||
         urlStr.contains(QStringLiteral("sessions/sess-inflight-1"))) {
       dataToReturn = julesResponse;
-    } else if (urlStr.contains(QStringLiteral("owner/repo/pulls/123")) || urlStr.contains(QStringLiteral("owner/repo/pulls/999"))) {
+    } else if (urlStr.contains(QStringLiteral("owner/repo/pulls/123")) ||
+               urlStr.contains(QStringLiteral("owner/repo/pulls/999"))) {
       dataToReturn = githubResponse;
     } else {
       dataToReturn = "{}";
@@ -979,19 +980,18 @@ void TestSourceWindow::testInFlightRecovery() {
   QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
 
   for (int i = 0; i < 10; ++i) {
-      QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
-      QThread::msleep(10);
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+    QThread::msleep(10);
   }
 
   // If it was wedged in m_inFlightSessionReloads, the automatic refresh would skip it!
   requestCount = 0;
   for (const QString &url : mockNam->requestedUrls) {
-      if (url.contains(QStringLiteral("sess-inflight-1"))) requestCount++;
+    if (url.contains(QStringLiteral("sess-inflight-1")))
+      requestCount++;
   }
   QCOMPARE(requestCount, 1);
 }
-
-
 
 int main(int argc, char *argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
