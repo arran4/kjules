@@ -1,6 +1,7 @@
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QObject>
 #include <QStandardPaths>
 #include <QStringList>
@@ -48,6 +49,16 @@ private Q_SLOTS:
 
     qunsetenv("XDG_DATA_HOME");
     qunsetenv("XDG_CONFIG_HOME");
+  }
+
+  void testMockIdentity() {
+    QString origName = QCoreApplication::applicationName();
+    QCoreApplication::setApplicationName(QStringLiteral("kjules-mock"));
+    QString mockConfig =
+        QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/kjules-mockrc");
+    QVERIFY(mockConfig.endsWith("kjules-mockrc"));
+    QCOMPARE(QCoreApplication::applicationName(), QStringLiteral("kjules-mock"));
+    QCoreApplication::setApplicationName(origName);
   }
 };
 

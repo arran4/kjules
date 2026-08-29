@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
 
   aboutData.addAuthor(i18n("Arran Ubels"), i18n("Developer"), QStringLiteral("kde@arran4.com"));
   aboutData.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
-  KAboutData::setApplicationData(aboutData);
 
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
@@ -63,21 +62,24 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  // If mock API is used and DEV_MODE is not active, use a temporary dir for
-  // data
   if (useMockApi) {
+    app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
+    aboutData.setComponentName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
 #ifndef DEV_MODE
-    QTemporaryDir *tempDir = new QTemporaryDir();
+    // If mock API is used and DEV_MODE is not active, isolate data
+    // Intentionally leaked to survive the application lifetime
+    auto *tempDir = new QTemporaryDir();
     if (tempDir->isValid()) {
       qputenv("XDG_DATA_HOME", tempDir->path().toUtf8());
       qputenv("LOCALAPPDATA", tempDir->path().toUtf8());
+      qputenv("XDG_CONFIG_HOME", tempDir->path().toUtf8());
+      qputenv("APPDATA", tempDir->path().toUtf8());
+      qputenv("XDG_CACHE_HOME", tempDir->path().toUtf8());
     }
 #endif
   }
 
-  if (useMockApi) {
-    app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
-  }
+  KAboutData::setApplicationData(aboutData);
   KDBusService service(KDBusService::Unique);
 
   if (!useMockApi) {
