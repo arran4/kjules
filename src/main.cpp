@@ -7,6 +7,8 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 
 #include "mainwindow.h"
@@ -28,10 +30,11 @@ int main(int argc, char *argv[]) {
   app.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
   KLocalizedString::setApplicationDomain("kjules");
 
-  KAboutData aboutData(QStringLiteral(KJULES_APPLICATION_ID), i18n("kJules"), QStringLiteral(KJULES_VERSION),
+  KAboutData aboutData(QStringLiteral(KJULES_APPLICATION_NAME), i18n("kJules"), QStringLiteral(KJULES_VERSION),
                        i18n("A KDE native desktop client for tracking and managing GitHub tasks"), KAboutLicense::GPL,
                        i18n("(c) 2024"), QStringLiteral("https://github.com/arran4/kjules"),
                        QStringLiteral("https://github.com/arran4/kjules/issues"));
+  aboutData.setOrganizationDomain(QStringLiteral(KJULES_ORGANIZATION_DOMAIN).toUtf8());
 
   aboutData.addAuthor(i18n("Arran Ubels"), i18n("Developer"), QStringLiteral("kde@arran4.com"));
   aboutData.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
@@ -76,6 +79,23 @@ int main(int argc, char *argv[]) {
     app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
   }
   KDBusService service(KDBusService::Unique);
+
+  // Migrate old org.kde.kjules settings if they exist
+  QString oldDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                            .replace(QStringLiteral(KJULES_APPLICATION_ID), QStringLiteral("org.kde.kjules"));
+  QString newDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QDir oldDir(oldDataPath);
+  QDir newDir(newDataPath);
+  if (oldDir.exists() && !newDir.exists()) {
+    oldDir.rename(oldDataPath, newDataPath);
+  }
+
+  QString oldConfigPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/org.kde.kjulesrc");
+  QString newConfigPath =
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/") + QStringLiteral(KJULES_APPLICATION_ID) + QStringLiteral("rc");
+  if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
+    QFile::rename(oldConfigPath, newConfigPath);
+  }
 
   MainWindow *window = new MainWindow();
 
