@@ -90,9 +90,10 @@ int main(int argc, char *argv[]) {
     oldDir.rename(oldDataPath, newDataPath);
   }
 
-  QString oldConfigPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/org.kde.kjulesrc");
-  QString newConfigPath =
-      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/") + QStringLiteral(KJULES_APPLICATION_ID) + QStringLiteral("rc");
+  QString oldConfigPath =
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/org.kde.kjulesrc");
+  QString newConfigPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/") +
+                          QStringLiteral(KJULES_APPLICATION_ID) + QStringLiteral("rc");
   if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
     QFile::rename(oldConfigPath, newConfigPath);
   }
