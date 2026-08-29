@@ -8,7 +8,7 @@
 class ActivationTest : public QObject {
   Q_OBJECT
 
-    // cppcheck-suppress unknownMacro
+  // cppcheck-suppress unknownMacro
 private Q_SLOTS:
   void testArgumentParsing() {
     QCOMPARE(QStringLiteral(KJULES_APPLICATION_NAME), QStringLiteral("kjules"));
