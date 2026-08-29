@@ -56,7 +56,7 @@ private Q_SLOTS:
     QCoreApplication::setApplicationName(QStringLiteral("kjules-mock"));
     QString mockConfig =
         QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/kjules-mockrc");
-    QVERIFY(mockConfig.endsWith("kjules-mockrc"));
+    QVERIFY(mockConfig.endsWith(QStringLiteral("kjules-mockrc")));
     QCOMPARE(QCoreApplication::applicationName(), QStringLiteral("kjules-mock"));
     QCoreApplication::setApplicationName(origName);
   }
