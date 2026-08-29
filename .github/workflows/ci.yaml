@@ -472,13 +472,6 @@ jobs:
 
           gh release create "$TAG" --draft --generate-notes $NOTES_START_ARG $prerelease || true
 
-          manifest-path: io.github.arran4.kjules.yaml
-          cache-key: flatpak-builder-${{ github.sha }}
-      - name: Archive Flatpak build
-        uses: actions/upload-artifact@v4
-        with:
-          name: flatpak-archive
-          retention-days: 1
 
   publish-draft:
     name: Publish draft release assets
@@ -494,7 +487,7 @@ jobs:
       (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
       (needs.cpp-qt-build-test.result == 'success' || needs.cpp-qt-build-test.result == 'skipped') &&
       (needs.cpp-qt-lint.result == 'success' || needs.cpp-qt-lint.result == 'skipped') &&
-      (needs.cpp-qt-format.result == 'success' || needs.cpp-qt-format.result == 'skipped') &&
+      (needs.cpp-qt-format.result == 'success' || needs.cpp-qt-format.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - name: Collect artifacts
