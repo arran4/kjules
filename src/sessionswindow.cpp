@@ -37,7 +37,7 @@ SessionsWindow::SessionsWindow(const QString &filterSource, APIManager *apiManag
 
   setupActions();
 
-  setupGUI(ToolBar | Keys | StatusBar | Create, QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc"));
+  setupGUI(ToolBar | Keys | StatusBar | Create, QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "sessionswindowui.rc"));
 }
 
 SessionsWindow::~SessionsWindow() {}

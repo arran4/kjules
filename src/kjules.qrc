@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/kxmlgui6/org.kde.kjules">
+    <qresource prefix="/kxmlgui6/io.github.arran4.kjules">
         <file>sourcewindowui.rc</file>
         <file>kjulesui.rc</file>
         <file>sessionswindowui.rc</file>

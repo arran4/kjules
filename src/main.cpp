@@ -22,18 +22,19 @@ int main(int argc, char *argv[]) {
 #endif
 
   QApplication app(argc, argv);
-  app.setOrganizationName(QStringLiteral("KDE"));
-  app.setOrganizationDomain(QStringLiteral("kde.org"));
-  app.setDesktopFileName(QStringLiteral("org.kde.kjules"));
+  app.setOrganizationName(QStringLiteral(KJULES_APPLICATION_NAME));
+  app.setOrganizationDomain(QStringLiteral(KJULES_ORGANIZATION_DOMAIN));
+  app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME));
+  app.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
   KLocalizedString::setApplicationDomain("kjules");
 
-  KAboutData aboutData(QStringLiteral("org.kde.kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
+  KAboutData aboutData(QStringLiteral(KJULES_APPLICATION_ID), i18n("kJules"), QStringLiteral(KJULES_VERSION),
                        i18n("A KDE native desktop client for tracking and managing GitHub tasks"), KAboutLicense::GPL,
                        i18n("(c) 2024"), QStringLiteral("https://github.com/arran4/kjules"),
                        QStringLiteral("https://github.com/arran4/kjules/issues"));
 
   aboutData.addAuthor(i18n("Arran Ubels"), i18n("Developer"), QStringLiteral("kde@arran4.com"));
-  aboutData.setDesktopFileName(QStringLiteral("org.kde.kjules"));
+  aboutData.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
   KAboutData::setApplicationData(aboutData);
 
   QCommandLineParser parser;
@@ -72,7 +73,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (useMockApi) {
-    app.setApplicationName(QStringLiteral("kjules-mock"));
+    app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
   }
   KDBusService service(KDBusService::Unique);
 

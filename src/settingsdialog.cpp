@@ -237,7 +237,7 @@ void SettingsDialog::onSave() {
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
-  QString desktopFilePath = dir.filePath(QStringLiteral("org.kde.kjules.desktop"));
+  QString desktopFilePath = dir.filePath(QStringLiteral("" KJULES_APPLICATION_ID ".desktop"));
 
   if (m_autostartEdit->isChecked()) {
     QFile file(desktopFilePath);
@@ -245,7 +245,7 @@ void SettingsDialog::onSave() {
       file.write("[Desktop Entry]\n"
                  "Name=kJules\n"
                  "Exec=kjules --autostarted\n"
-                 "Icon=sc-apps-kjules\n"
+                 "Icon=" KJULES_APPLICATION_ID "\n"
                  "Type=Application\n");
       file.close();
     }

@@ -486,7 +486,7 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: kjules.flatpak
-          manifest-path: org.kde.kjules.yaml
+          manifest-path: io.github.arran4.kjules.yaml
           cache-key: flatpak-builder-${{ github.sha }}
       - name: Archive Flatpak build
         uses: actions/upload-artifact@v4

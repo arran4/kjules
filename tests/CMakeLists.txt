@@ -29,7 +29,7 @@ target_link_libraries(test_queuescheduling Qt6::Test Qt6::Widgets Qt6::Core Qt6:
 target_link_libraries(test_followingrefresh Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
 target_link_libraries(test_sessionmodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
 target_link_libraries(test_configmigration Qt6::Test Qt6::Core KF6::ConfigCore)
-target_link_libraries(test_sourcewindow Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive KF6::WindowSystem)
+target_link_libraries(test_sourcewindow Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive KF6::DBusAddons KF6::WindowSystem)
 target_link_libraries(test_sessionswidget Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
 target_link_libraries(test_apimanager_pagination Qt6::Test Qt6::Network Qt6::Core Qt6::Concurrent KF6::Wallet KF6::I18n KF6::CoreAddons KF6::ConfigCore Qt6::Widgets)
 
@@ -53,6 +53,10 @@ add_test(NAME APIManagerPaginationTest COMMAND test_apimanager_pagination)
 
 set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest QueueSchedulingTest FollowingRefreshTest SessionModelTest ConfigMigrationTest SourceWindowTest SessionsWidgetTest APIManagerPaginationTest
                      PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;KDE_HOME_READONLY=1;CANBERRA_DRIVER=null;KNOTIFICATIONS_DEFAULT_BACKEND=null")
+add_compile_definitions(KJULES_APPLICATION_NAME="${KJULES_APPLICATION_NAME}")
+add_compile_definitions(KJULES_ORGANIZATION_DOMAIN="${KJULES_ORGANIZATION_DOMAIN}")
+add_compile_definitions(KJULES_APPLICATION_ID="${KJULES_APPLICATION_ID}")
+add_compile_definitions(KJULES_KXMLGUI_RESOURCE_PREFIX=":/kxmlgui6/${KJULES_APPLICATION_ID}/")
 
 add_executable(test_errorsmodel test_errorsmodel.cpp ../src/errorsmodel.cpp)
 target_link_libraries(test_errorsmodel Qt6::Test Qt6::Core Qt6::Widgets Qt6::Network)

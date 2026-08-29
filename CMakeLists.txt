@@ -40,6 +40,10 @@ set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 find_package(Qt6 6.6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Network Test Concurrent)
 find_package(KF6 REQUIRED COMPONENTS CoreAddons I18n Wallet Notifications XmlGui Config WidgetsAddons GlobalAccel Archive DBusAddons WindowSystem)
 
+set(KJULES_APPLICATION_NAME "kjules")
+set(KJULES_ORGANIZATION_DOMAIN "arran4.github.io")
+set(KJULES_APPLICATION_ID "io.github.arran4.kjules")
+
 include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
@@ -111,7 +115,11 @@ set(kjules_SRCS
 
 add_executable(kjules ${kjules_SRCS})
 
-target_compile_definitions(kjules PRIVATE "KJULES_VERSION=\"${KJULES_VERSION_STRING}\"")
+target_compile_definitions(kjules PRIVATE "KJULES_VERSION=\"${KJULES_VERSION_STRING}\""
+    "KJULES_APPLICATION_NAME=\"${KJULES_APPLICATION_NAME}\""
+    "KJULES_ORGANIZATION_DOMAIN=\"${KJULES_ORGANIZATION_DOMAIN}\""
+    "KJULES_APPLICATION_ID=\"${KJULES_APPLICATION_ID}\""
+    "KJULES_KXMLGUI_RESOURCE_PREFIX=\":/kxmlgui6/${KJULES_APPLICATION_ID}/\"")
 
 target_link_libraries(kjules
     Qt6::Core
@@ -133,10 +141,10 @@ target_link_libraries(kjules
 )
 
 install(TARGETS kjules ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
-install(PROGRAMS org.kde.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
-install(FILES org.kde.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
-install(FILES icons/sc-apps-kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
-install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc src/sourcewindowui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/org.kde.kjules)
+install(PROGRAMS io.github.arran4.kjules.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES io.github.arran4.kjules.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+install(FILES icons/io.github.arran4.kjules.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
+install(FILES src/kjulesui.rc src/sessionswindowui.rc src/newsessiondialogui.rc src/sourcewindowui.rc DESTINATION ${KDE_INSTALL_KXMLGUI6DIR}/io.github.arran4.kjules)
 install(FILES src/kjules.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 
 enable_testing()

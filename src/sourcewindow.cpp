@@ -98,7 +98,7 @@ SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, Se
   connect(closeAction, &QAction::triggered, this, &SourceWindow::close);
   actionCollection()->setDefaultShortcut(closeAction, QKeySequence(Qt::CTRL | Qt::Key_W));
 
-  setupGUI(ToolBar | Keys | StatusBar | Create, QStringLiteral(":/kxmlgui6/org.kde.kjules/sourcewindowui.rc"));
+  setupGUI(ToolBar | Keys | StatusBar | Create, QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "sourcewindowui.rc"));
 }
 
 SourceWindow::~SourceWindow() = default;

@@ -1514,7 +1514,7 @@ NewSessionDialog::NewSessionDialog(SourceModel *sourceModel, TemplatesModel *tem
     Q_EMIT refreshSourcesRequested();
   });
 
-  setupGUI(Default, QStringLiteral(":/kxmlgui6/org.kde.kjules/newsessiondialogui.rc"));
+  setupGUI(Default, QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "newsessiondialogui.rc"));
 }
 
 void NewSessionDialog::onSubmitSession() { onSubmit(m_automationModeComboBox->currentData().toString(), QString()); }
