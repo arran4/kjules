@@ -80,22 +80,33 @@ int main(int argc, char *argv[]) {
   }
   KDBusService service(KDBusService::Unique);
 
-  // Migrate old org.kde.kjules settings if they exist
-  QString oldDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-                            .replace(QStringLiteral(KJULES_APPLICATION_ID), QStringLiteral("org.kde.kjules"));
-  QString newDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir oldDir(oldDataPath);
-  QDir newDir(newDataPath);
-  if (oldDir.exists() && !newDir.exists()) {
-    oldDir.rename(oldDataPath, newDataPath);
-  }
+  if (!useMockApi) {
+    // Migrate old org.kde.kjules settings if they exist
+    // AppDataLocation uses the application name (kjules), so we construct the old path directly
+    QString dataParent = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    QString oldDataPath = dataParent + QStringLiteral("/org.kde.kjules");
+    QString newDataPath = dataParent + QStringLiteral("/") + QStringLiteral(KJULES_APPLICATION_NAME);
+    QDir oldDir(oldDataPath);
+    QDir newDir(newDataPath);
+    if (oldDir.exists() && !newDir.exists()) {
+      oldDir.rename(oldDataPath, newDataPath);
+    }
 
-  QString oldConfigPath =
-      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/org.kde.kjulesrc");
-  QString newConfigPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/") +
-                          QStringLiteral(KJULES_APPLICATION_ID) + QStringLiteral("rc");
-  if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
-    QFile::rename(oldConfigPath, newConfigPath);
+    QString configParent = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    QString oldConfigPath = configParent + QStringLiteral("/org.kde.kjulesrc");
+    QString newConfigPath =
+        configParent + QStringLiteral("/") + QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("rc");
+    if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
+      QFile::rename(oldConfigPath, newConfigPath);
+    }
+
+    // Also migrate autostart file if it exists
+    QString oldAutostartPath = configParent + QStringLiteral("/autostart/org.kde.kjules.desktop");
+    QString newAutostartPath = configParent + QStringLiteral("/autostart/") + QStringLiteral(KJULES_APPLICATION_ID) +
+                               QStringLiteral(".desktop");
+    if (QFile::exists(oldAutostartPath) && !QFile::exists(newAutostartPath)) {
+      QFile::rename(oldAutostartPath, newAutostartPath);
+    }
   }
 
   MainWindow *window = new MainWindow();
@@ -115,6 +126,7 @@ int main(int argc, char *argv[]) {
                        window->showNewSessionDialogSlot();
                      } else {
                        window->show();
+                       KWindowSystem::updateStartupId(window->windowHandle());
                        window->raise();
                        window->activateWindow();
                        KWindowSystem::activateWindow(window->windowHandle());

@@ -3440,6 +3440,7 @@ void MainWindow::showManageCustomSourcesDialog() {
 void MainWindow::showNewSessionDialogSlot() {
   auto dlg = showNewSessionDialog();
   if (dlg) {
+    KWindowSystem::updateStartupId(dlg->windowHandle());
     dlg->raise();
     dlg->activateWindow();
     KWindowSystem::activateWindow(dlg->windowHandle());

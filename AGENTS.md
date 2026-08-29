@@ -20,3 +20,10 @@ Always run lint, format, and test before submitting.
 If the required changes fall outside the scope of the current task and involve pre-existing failures, the agent may choose not to incorporate them based on the magnitude or consequences of the necessary fixes.
 For CLion compatible builds, use: `/home/arran/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/arran/.local/share/JetBrains/Toolbox/apps/clion/bin/ninja/linux/x64/ninja -G Ninja -S /home/arran/Documents/Projects/kjules -B /home/arran/Documents/Projects/kjules/cmake-build-debug`
 
+
+## Canonical Identity
+
+kJules uses KDE Frameworks but is not an `org.kde` project. The canonical identity is:
+- Application name: kjules
+- Organization domain: arran4.github.io
+- Application ID: io.github.arran4.kjules
