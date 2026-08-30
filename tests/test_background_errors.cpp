@@ -1,3 +1,4 @@
+#include "../src/mainwindow.h"
 #include "../src/apimanager.h"
 #include "../src/errorsmodel.h"
 #include <QDateTime>
@@ -317,6 +318,30 @@ private Q_SLOTS:
 
     reloadArgs = reloadSpy.takeFirst();
     QCOMPARE(reloadArgs.at(2).toBool(), true);
+  }
+
+  void testDebounceSuppression() {
+    MainWindow window;
+    window.setMockApi(true);
+
+    APIManager *apiManager = window.apiManager();
+    QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+
+    // Initial background error should be recorded
+    Q_EMIT apiManager->errorOccurred("Debounce Test Error foo", true);
+    QCOMPARE(statusSpy.count(), 1);
+
+    // Immediate duplicate background error should be suppressed
+    Q_EMIT apiManager->errorOccurred("Debounce Test Error foo", true);
+    QCOMPARE(statusSpy.count(), 1); // Remains 1
+
+    // Different background error should be recorded
+    Q_EMIT apiManager->errorOccurred("Different Background Error bar", true);
+    QCOMPARE(statusSpy.count(), 2);
+
+    // Foreground duplicate error should not be suppressed
+    Q_EMIT apiManager->errorOccurred("Debounce Test Error foo", false);
+    QCOMPARE(statusSpy.count(), 3);
   }
 };
 
