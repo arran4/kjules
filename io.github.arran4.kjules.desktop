@@ -2,7 +2,7 @@
 Name=kJules
 Comment=A powerful KDE native desktop client for tracking and managing Jules tasks and sessions
 Exec=kjules
-Icon=sc-apps-kjules
+Icon=io.github.arran4.kjules
 Type=Application
 Categories=Development;
 Terminal=false

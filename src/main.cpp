@@ -1,10 +1,14 @@
 #include <KAboutData>
 #include <KConfigGroup>
+#include <KDBusService>
 #include <KLocalizedString>
 #include <KSharedConfig>
+#include <KWindowSystem>
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 
 #include "mainwindow.h"
@@ -20,22 +24,30 @@ int main(int argc, char *argv[]) {
 #endif
 
   QApplication app(argc, argv);
+  app.setOrganizationName(QStringLiteral(KJULES_APPLICATION_NAME));
+  app.setOrganizationDomain(QStringLiteral(KJULES_ORGANIZATION_DOMAIN));
+  app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME));
+  app.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
   KLocalizedString::setApplicationDomain("kjules");
 
-  KAboutData aboutData(QStringLiteral("org.kde.kjules"), i18n("kJules"), QStringLiteral(KJULES_VERSION),
+  KAboutData aboutData(QStringLiteral(KJULES_APPLICATION_NAME), i18n("kJules"), QStringLiteral(KJULES_VERSION),
                        i18n("A KDE native desktop client for tracking and managing GitHub tasks"), KAboutLicense::GPL,
                        i18n("(c) 2024"), QStringLiteral("https://github.com/arran4/kjules"),
                        QStringLiteral("https://github.com/arran4/kjules/issues"));
+  aboutData.setOrganizationDomain(QStringLiteral(KJULES_ORGANIZATION_DOMAIN).toUtf8());
 
   aboutData.addAuthor(i18n("Arran Ubels"), i18n("Developer"), QStringLiteral("kde@arran4.com"));
-  aboutData.setDesktopFileName(QStringLiteral("org.kde.kjules"));
-  KAboutData::setApplicationData(aboutData);
+  aboutData.setDesktopFileName(QStringLiteral(KJULES_APPLICATION_ID));
 
   QCommandLineParser parser;
   aboutData.setupCommandLine(&parser);
 
   QCommandLineOption autostartedOption(QStringList() << QStringLiteral("autostarted"), i18n("Launched via autostart"));
   parser.addOption(autostartedOption);
+
+  QCommandLineOption newSessionOption(QStringList() << QStringLiteral("new-session"),
+                                      i18n("Open the New Session dialog"));
+  parser.addOption(newSessionOption);
 
   QCommandLineOption mockApiOption(QStringList() << QStringLiteral("mock-api"), i18n("Use mock API at localhost:8080"));
   parser.addOption(mockApiOption);
@@ -50,19 +62,78 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  // If mock API is used and DEV_MODE is not active, use a temporary dir for
-  // data
   if (useMockApi) {
+    app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
+    aboutData.setComponentName(QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("-mock"));
 #ifndef DEV_MODE
-    QTemporaryDir *tempDir = new QTemporaryDir();
+    // If mock API is used and DEV_MODE is not active, isolate data
+    // Intentionally leaked to survive the application lifetime
+    auto *tempDir = new QTemporaryDir();
     if (tempDir->isValid()) {
       qputenv("XDG_DATA_HOME", tempDir->path().toUtf8());
       qputenv("LOCALAPPDATA", tempDir->path().toUtf8());
+      qputenv("XDG_CONFIG_HOME", tempDir->path().toUtf8());
+      qputenv("APPDATA", tempDir->path().toUtf8());
+      qputenv("XDG_CACHE_HOME", tempDir->path().toUtf8());
     }
 #endif
   }
 
+  KAboutData::setApplicationData(aboutData);
+  KDBusService service(KDBusService::Unique);
+
+  if (!useMockApi) {
+    // Migrate old org.kde.kjules settings if they exist
+    // AppDataLocation uses the application name (kjules), so we construct the old path directly
+    QString dataParent = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    QString oldDataPath = dataParent + QStringLiteral("/org.kde.kjules");
+    QString newDataPath = dataParent + QStringLiteral("/") + QStringLiteral(KJULES_APPLICATION_NAME);
+    QDir oldDir(oldDataPath);
+    QDir newDir(newDataPath);
+    if (oldDir.exists() && !newDir.exists()) {
+      oldDir.rename(oldDataPath, newDataPath);
+    }
+
+    QString configParent = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    QString oldConfigPath = configParent + QStringLiteral("/org.kde.kjulesrc");
+    QString newConfigPath =
+        configParent + QStringLiteral("/") + QStringLiteral(KJULES_APPLICATION_NAME) + QStringLiteral("rc");
+    if (QFile::exists(oldConfigPath) && !QFile::exists(newConfigPath)) {
+      QFile::rename(oldConfigPath, newConfigPath);
+    }
+
+    // Also migrate autostart file if it exists
+    QString oldAutostartPath = configParent + QStringLiteral("/autostart/org.kde.kjules.desktop");
+    QString newAutostartPath = configParent + QStringLiteral("/autostart/") + QStringLiteral(KJULES_APPLICATION_ID) +
+                               QStringLiteral(".desktop");
+    if (QFile::exists(oldAutostartPath) && !QFile::exists(newAutostartPath)) {
+      QFile::rename(oldAutostartPath, newAutostartPath);
+    }
+  }
+
   MainWindow *window = new MainWindow();
+
+  QObject::connect(&service, &KDBusService::activateRequested, window,
+                   [window, autostartedOption, newSessionOption, mockApiOption](const QStringList &arguments,
+                                                                                const QString & /*workingDirectory*/) {
+                     QCommandLineParser p;
+                     p.addOption(autostartedOption);
+                     p.addOption(newSessionOption);
+                     p.addOption(mockApiOption);
+                     p.parse(arguments);
+                     if (p.isSet(mockApiOption)) {
+                       window->setMockApi(true);
+                     }
+                     if (p.isSet(newSessionOption)) {
+                       window->showNewSessionDialogSlot();
+                     } else {
+                       window->show();
+                       KWindowSystem::updateStartupId(window->windowHandle());
+                       window->raise();
+                       window->activateWindow();
+                       KWindowSystem::activateWindow(window->windowHandle());
+                     }
+                   });
 
   bool isAutostarted = parser.isSet(autostartedOption);
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -71,6 +142,10 @@ int main(int argc, char *argv[]) {
 
   if (!(isAutostarted && autostartTray)) {
     window->show();
+  }
+
+  if (parser.isSet(newSessionOption)) {
+    window->showNewSessionDialogSlot();
   }
 
   return app.exec();

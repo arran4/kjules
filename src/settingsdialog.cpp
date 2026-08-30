@@ -237,15 +237,19 @@ void SettingsDialog::onSave() {
   if (!dir.exists()) {
     dir.mkpath(QStringLiteral("."));
   }
-  QString desktopFilePath = dir.filePath(QStringLiteral("org.kde.kjules.desktop"));
+  QString oldDesktopFilePath = dir.filePath(QStringLiteral("org.kde.kjules.desktop"));
+  QString desktopFilePath = dir.filePath(QStringLiteral(KJULES_APPLICATION_ID) + QStringLiteral(".desktop"));
+  if (QFile::exists(oldDesktopFilePath)) {
+    QFile::remove(oldDesktopFilePath);
+  }
 
   if (m_autostartEdit->isChecked()) {
     QFile file(desktopFilePath);
     if (file.open(QIODevice::WriteOnly)) {
       file.write("[Desktop Entry]\n"
                  "Name=kJules\n"
-                 "Exec=kjules --autostarted\n"
-                 "Icon=sc-apps-kjules\n"
+                 "Exec=" KJULES_APPLICATION_NAME " --autostarted\n"
+                 "Icon=" KJULES_APPLICATION_ID "\n"
                  "Type=Application\n");
       file.close();
     }

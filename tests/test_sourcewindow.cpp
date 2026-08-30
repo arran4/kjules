@@ -130,8 +130,8 @@ void TestSourceWindow::initTestCase() {
 }
 
 void TestSourceWindow::testKXmlGuiResourceExists() {
-  QVERIFY(QFile::exists(QStringLiteral(":/kxmlgui6/org.kde.kjules/sourcewindowui.rc")));
-  QVERIFY(QFile::exists(QStringLiteral(":/kxmlgui6/org.kde.kjules/sessionswindowui.rc")));
+  QVERIFY(QFile::exists(QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "sourcewindowui.rc")));
+  QVERIFY(QFile::exists(QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "sessionswindowui.rc")));
 }
 
 void TestSourceWindow::testNoNestedSessionsWindowAndSingleChrome() {

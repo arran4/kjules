@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.kde.kjules</id>
+  <id>io.github.arran4.kjules</id>
   <name>kJules</name>
   <summary>A powerful KDE native desktop client for tracking and managing Jules tasks and sessions</summary>
   <description>
     <p>A C++ application built with KDE Frameworks that provides a desktop interface for interacting with Jules tasks and sessions.</p>
   </description>
   <url type="homepage">https://github.com/arran4/kjules</url>
-  <developer id="org.kde">
-    <name>KDE Community</name>
+  <developer id="io.github.arran4">
+    <name>Arran Ubels</name>
   </developer>
   <content_rating type="oars-1.1"/>
-  <launchable type="desktop-id">org.kde.kjules.desktop</launchable>
+  <launchable type="desktop-id">io.github.arran4.kjules.desktop</launchable>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>BSD-3-Clause</project_license>
 </component>
