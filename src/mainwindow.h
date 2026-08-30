@@ -347,6 +347,7 @@ private:
   QSet<QString> m_pendingRefreshIds;
   QSet<QString> m_inFlightSessionReloads;
   QHash<QString, QDateTime> m_sessionReloadFailedAt;
+  QHash<QString, QDateTime> m_lastBackgroundErrors;
   bool m_isWaitingForRefreshBeforeQueue;
   bool m_isWaitingForCreatedRepoSource = false;
 

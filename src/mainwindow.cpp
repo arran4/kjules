@@ -160,6 +160,13 @@ MainWindow::MainWindow(QWidget *parent)
     }
     if (isBackground) {
       // Background errors log silently to the error model and status
+      QDateTime now = QDateTime::currentDateTimeUtc();
+      if (m_lastBackgroundErrors.contains(msg)) {
+        if (m_lastBackgroundErrors.value(msg).secsTo(now) < 60) {
+          return; // Debounce duplicate background errors
+        }
+      }
+      m_lastBackgroundErrors[msg] = now;
       onError(msg);
     } else {
       // Foreground errors log to the error model and status
