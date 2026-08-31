@@ -18,7 +18,11 @@ struct LegacyDataRepairResult {
   int queueToRecover = 0;
   int queueAlreadyPresent = 0;
 
+  int followingSkippedInvalid = 0;
+  int queueSkippedInvalid = 0;
+
   QString error;
+  QString fatalError;
 };
 
 class LegacyDataRepair {

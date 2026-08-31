@@ -5096,15 +5096,18 @@ void MainWindow::mergeLegacyData() {
                                   "Current: %1\n"
                                   "Legacy: %2\n"
                                   "To recover: %3\n"
-                                  "Already present: %4\n\n"
+                                  "Already present: %4\n"
+                                  "Skipped Invalid: %5\n\n"
                                   "Queue:\n"
-                                  "Current: %5\n"
-                                  "Legacy: %6\n"
-                                  "To recover: %7\n"
-                                  "Already present: %8",
+                                  "Current: %6\n"
+                                  "Legacy: %7\n"
+                                  "To recover: %8\n"
+                                  "Already present: %9\n"
+                                  "Skipped Invalid: %10",
                                   result.currentFollowingCount, result.legacyFollowingCount, result.followingToRecover,
-                                  result.followingAlreadyPresent, result.currentQueueCount, result.legacyQueueCount,
-                                  result.queueToRecover, result.queueAlreadyPresent));
+                                  result.followingAlreadyPresent, result.followingSkippedInvalid,
+                                  result.currentQueueCount, result.legacyQueueCount, result.queueToRecover,
+                                  result.queueAlreadyPresent, result.queueSkippedInvalid));
     return;
   }
 
@@ -5113,38 +5116,59 @@ void MainWindow::mergeLegacyData() {
     message += result.error + QStringLiteral("\n");
   }
 
-  message += i18n("Following\n"
-                  "Current: %1\n"
-                  "Legacy: %2\n"
-                  "To recover: %3\n"
-                  "Already present: %4\n\n"
-                  "Queue\n"
-                  "Current: %5\n"
-                  "Legacy: %6\n"
-                  "To recover: %7\n"
-                  "Already present: %8\n\n"
-                  "Only Queue and Following will be changed.\n"
-                  "Current files will be backed up before the merge.",
-                  result.currentFollowingCount, result.legacyFollowingCount, result.followingToRecover,
-                  result.followingAlreadyPresent, result.currentQueueCount, result.legacyQueueCount,
-                  result.queueToRecover, result.queueAlreadyPresent);
+  message +=
+      i18n("Following\n"
+           "Current: %1\n"
+           "Legacy: %2\n"
+           "To recover: %3\n"
+           "Already present: %4\n"
+           "Skipped Invalid: %5\n\n"
+           "Queue\n"
+           "Current: %6\n"
+           "Legacy: %7\n"
+           "To recover: %8\n"
+           "Already present: %9\n"
+           "Skipped Invalid: %10\n\n"
+           "Only Queue and Following will be changed.\n"
+           "Current files will be backed up before the merge.",
+           result.currentFollowingCount, result.legacyFollowingCount, result.followingToRecover,
+           result.followingAlreadyPresent, result.followingSkippedInvalid, result.currentQueueCount,
+           result.legacyQueueCount, result.queueToRecover, result.queueAlreadyPresent, result.queueSkippedInvalid);
 
-  QMessageBox::StandardButton reply =
-      QMessageBox::question(this, i18n("Merge Legacy Data"), message, QMessageBox::Merge | QMessageBox::Cancel);
-  if (reply != QMessageBox::Merge) {
+  QMessageBox box(this);
+  box.setIcon(QMessageBox::Question);
+  box.setWindowTitle(i18n("Merge Legacy Data"));
+  box.setText(message);
+
+  QPushButton *mergeButton = box.addButton(i18n("Merge"), QMessageBox::AcceptRole);
+  box.addButton(QMessageBox::Cancel);
+
+  box.exec();
+
+  if (box.clickedButton() != mergeButton) {
     return;
   }
 
   // Recompute right before applying to ensure state hasn't shifted while prompt was open
   LegacyDataRepairResult mergeResult = repair.performMerge(m_sessionModel, m_queueModel);
-  if (!mergeResult.error.isEmpty()) {
-    QMessageBox::critical(this, i18n("Merge Error"), mergeResult.error);
+  if (!mergeResult.fatalError.isEmpty()) {
+    QMessageBox::critical(this, i18n("Merge Error"), mergeResult.fatalError);
     return;
   }
 
   if (statusBar()) {
-    statusBar()->showMessage(i18n("Recovered %1 followed sessions and %2 queued tasks from legacy kJules data.",
-                                  mergeResult.followingToRecover, mergeResult.queueToRecover));
+    QString statusMessage = i18n("Recovered %1 followed sessions and %2 queued tasks from legacy kJules data.",
+                                 mergeResult.followingToRecover, mergeResult.queueToRecover);
+
+    if (mergeResult.followingSkippedInvalid > 0 || mergeResult.queueSkippedInvalid > 0) {
+      statusMessage += i18n(" Skipped %1 invalid legacy sessions and %2 invalid queued tasks.",
+                            mergeResult.followingSkippedInvalid, mergeResult.queueSkippedInvalid);
+    }
+
+    if (!mergeResult.error.isEmpty()) {
+      statusMessage += QStringLiteral(" ") + mergeResult.error.trimmed();
+    }
+    statusBar()->showMessage(statusMessage);
   }
 }
 

@@ -45,7 +45,12 @@ QJsonArray LegacyDataRepair::parseLegacySessions(const QString &path, bool &outI
   if (doc.isArray()) {
     return doc.array();
   } else if (doc.isObject()) {
-    return doc.object().value(QStringLiteral("sessions")).toArray();
+    QJsonValue sessionsValue = doc.object().value(QStringLiteral("sessions"));
+    if (!sessionsValue.isArray()) {
+      outIsMalformed = true;
+      return {};
+    }
+    return sessionsValue.toArray();
   }
 
   outIsMalformed = true;
@@ -77,7 +82,12 @@ QJsonArray LegacyDataRepair::parseLegacyQueue(const QString &path, bool &outIsMa
   if (doc.isArray()) {
     return doc.array();
   } else if (doc.isObject()) {
-    return doc.object().value(QStringLiteral("items")).toArray();
+    QJsonValue itemsValue = doc.object().value(QStringLiteral("items"));
+    if (!itemsValue.isArray()) {
+      outIsMalformed = true;
+      return {};
+    }
+    return itemsValue.toArray();
   }
 
   outIsMalformed = true;
@@ -156,12 +166,16 @@ LegacyDataRepairResult LegacyDataRepair::analyze(SessionModel *sessionModel, Que
     }
 
     for (const QJsonValue &val : legacySessions) {
-      if (!val.isObject())
+      if (!val.isObject()) {
+        result.followingSkippedInvalid++;
         continue;
+      }
       QJsonObject obj = val.toObject();
       QString id = obj.value(QStringLiteral("id")).toString();
-      if (id.isEmpty())
+      if (id.isEmpty()) {
+        result.followingSkippedInvalid++;
         continue;
+      }
 
       if (currentIds.contains(id)) {
         result.followingAlreadyPresent++;
@@ -178,17 +192,19 @@ LegacyDataRepairResult LegacyDataRepair::analyze(SessionModel *sessionModel, Que
     QVector<bool> matched(queueModel->size(), false);
 
     for (const QJsonValue &val : legacyQueue) {
-      if (!val.isObject())
+      if (!val.isObject()) {
+        result.queueSkippedInvalid++;
         continue;
+      }
       QJsonObject legacyObj = val.toObject();
+      if (!legacyObj.contains(QStringLiteral("requestData"))) {
+        result.queueSkippedInvalid++;
+        continue;
+      }
       QJsonObject legacyReqData = legacyObj.value(QStringLiteral("requestData")).toObject();
       if (legacyReqData.isEmpty()) {
-        if (!legacyObj.contains(QStringLiteral("requestData"))) {
-          legacyReqData = legacyObj;
-          QJsonObject reconstructed;
-          reconstructed.insert(QStringLiteral("requestData"), legacyReqData);
-          legacyObj = reconstructed;
-        }
+        result.queueSkippedInvalid++;
+        continue;
       }
 
       bool found = false;
@@ -225,12 +241,13 @@ LegacyDataRepairResult LegacyDataRepair::performMerge(SessionModel *sessionModel
 
   QString errorOut;
   if (!backupCurrentFiles(getCurrentDataPath(), errorOut)) {
-    result.error = errorOut;
+    result.fatalError = errorOut;
     return result;
   }
 
   if (sessionModel && result.followingToRecover > 0) {
     sessionModel->addSessions(m_cachedSessionsToRecover);
+    sessionModel->saveSessions();
   }
 
   if (queueModel && result.queueToRecover > 0) {

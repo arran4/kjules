@@ -217,12 +217,31 @@ private slots:
     qObj[QStringLiteral("m_runTimestamps")] = runTs;
     writeJsonFile(legacyDir + QStringLiteral("/queue.json"), QJsonDocument(qObj));
 
-    QueueModel queueModel(nullptr, QStringLiteral("test_current_queue.json"));
+    // Preset a known timestamp to verify it is NOT overwritten
+    QString queueFile = QStringLiteral("test_current_queue.json");
+    QJsonObject curObj;
+    QJsonArray curItems;
+    QJsonArray curTs;
+    curTs.append(QDateTime::currentDateTimeUtc().addDays(-1).toString(Qt::ISODate));
+    curObj[QStringLiteral("m_runTimestamps")] = curTs;
+    curObj[QStringLiteral("items")] = curItems;
+    writeJsonFile(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + queueFile,
+                  QJsonDocument(curObj));
 
+    QueueModel queueModel(nullptr, queueFile);
     LegacyDataRepair repair;
     repair.performMerge(nullptr, &queueModel);
 
     QCOMPARE(queueModel.size(), 1);
+
+    // Verify written back timestamps natively ignoring legacy array directly matching current bytes
+    QFile verifyFile(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") +
+                     queueFile);
+    QVERIFY(verifyFile.open(QIODevice::ReadOnly));
+    QJsonDocument doc = QJsonDocument::fromJson(verifyFile.readAll());
+    QJsonArray outTs = doc.object().value(QStringLiteral("m_runTimestamps")).toArray();
+    QCOMPARE(outTs.size(), 1);
+    QCOMPARE(outTs.first().toString(), curTs.first().toString());
   }
 
   void testQueueBareArrayFormat() {
@@ -230,7 +249,9 @@ private slots:
         QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
     QJsonArray items;
     QJsonObject req1;
-    req1[QStringLiteral("prompt")] = QStringLiteral("test1");
+    QJsonObject innerData;
+    innerData[QStringLiteral("prompt")] = QStringLiteral("test1");
+    req1[QStringLiteral("requestData")] = innerData;
     items.append(req1);
     writeJsonFile(legacyDir + QStringLiteral("/queue.json"), QJsonDocument(items));
 
@@ -265,6 +286,74 @@ private slots:
     QCOMPARE(result.queueToRecover, 0);
   }
 
+  void testMalformedShapeValidation() {
+    QString legacyDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
+    QDir().mkpath(legacyDir);
+
+    // Empty object but valid JSON
+    writeJsonFile(legacyDir + QStringLiteral("/cached_all_sessions.json"), QJsonDocument(QJsonObject()));
+
+    // Object without requested keys
+    QJsonObject wrongQueue;
+    wrongQueue[QStringLiteral("items")] = QStringLiteral("not-an-array");
+    writeJsonFile(legacyDir + QStringLiteral("/queue.json"), QJsonDocument(wrongQueue));
+
+    SessionModel sessionModel(QStringLiteral("test_current_sessions.json"));
+    QueueModel queueModel(nullptr, QStringLiteral("test_current_queue.json"));
+
+    LegacyDataRepair repair;
+    auto result = repair.analyze(&sessionModel, &queueModel);
+
+    QVERIFY(!result.error.isEmpty());
+    QVERIFY(result.error.contains(QStringLiteral("Following")));
+    QVERIFY(result.error.contains(QStringLiteral("Queue")));
+    QCOMPARE(result.followingToRecover, 0);
+    QCOMPARE(result.queueToRecover, 0);
+  }
+
+  void testMixedArraysWithInvalidEntries() {
+    QString legacyDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
+
+    // Invalid ID in following
+    QJsonArray legacySessions;
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("sess1"); // valid
+    QJsonObject sess2;                                     // missing id
+    QJsonObject sess3;
+    sess3[QStringLiteral("id")] = QStringLiteral(""); // empty id
+    legacySessions.append(sess1);
+    legacySessions.append(sess2);
+    legacySessions.append(sess3);
+    legacySessions.append(QJsonValue(42)); // not even an object
+    writeJsonFile(legacyDir + QStringLiteral("/cached_all_sessions.json"), QJsonDocument(legacySessions));
+
+    // Invalid queue entries
+    QJsonArray items;
+    QJsonObject req1;
+    req1[QStringLiteral("requestData")] = QJsonObject{{QStringLiteral("prompt"), QStringLiteral("valid")}}; // valid
+    QJsonObject req2; // missing requestData
+    QJsonObject req3;
+    req3[QStringLiteral("requestData")] = QJsonObject(); // empty requestData
+    items.append(req1);
+    items.append(req2);
+    items.append(req3);
+    items.append(QJsonValue(false)); // not an object
+    writeJsonFile(legacyDir + QStringLiteral("/queue.json"), QJsonDocument(items));
+
+    SessionModel sessionModel(QStringLiteral("test_current_sessions.json"));
+    QueueModel queueModel(nullptr, QStringLiteral("test_current_queue.json"));
+
+    LegacyDataRepair repair;
+    auto result = repair.analyze(&sessionModel, &queueModel);
+
+    QCOMPARE(result.followingToRecover, 1);
+    QCOMPARE(result.followingSkippedInvalid, 3);
+    QCOMPARE(result.queueToRecover, 1);
+    QCOMPARE(result.queueSkippedInvalid, 3);
+  }
+
   void testMissingLegacyFiles() {
     QueueModel queueModel(nullptr, QStringLiteral("test_current_queue.json"));
     LegacyDataRepair repair;
@@ -273,6 +362,32 @@ private slots:
     QCOMPARE(result.error, QString());
     QCOMPARE(result.legacyQueueCount, 0);
     QCOMPARE(result.queueToRecover, 0);
+  }
+
+  void testFollowingRecoveryPersistence() {
+    QString legacyDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
+    QJsonArray legacySessions;
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("persistedSess");
+    legacySessions.append(sess1);
+    writeJsonFile(legacyDir + QStringLiteral("/cached_all_sessions.json"), QJsonDocument(legacySessions));
+
+    QString cacheFile = QStringLiteral("test_persistence_sessions.json");
+    {
+      SessionModel sessionModel(cacheFile);
+      LegacyDataRepair repair;
+      repair.performMerge(&sessionModel, nullptr);
+      QCOMPARE(sessionModel.rowCount(), 1);
+    }
+
+    // Reload model from disk to test persistence explicitly mapped via sessionModel->saveSessions();
+    {
+      SessionModel sessionModel(cacheFile);
+      QCOMPARE(sessionModel.rowCount(), 1);
+      QCOMPARE(sessionModel.data(sessionModel.index(0, 0), SessionModel::IdRole).toString(),
+               QStringLiteral("persistedSess"));
+    }
   }
 
   void testIdempotence() {
@@ -292,8 +407,35 @@ private slots:
     repair.performMerge(nullptr, &queueModel);
     QCOMPARE(queueModel.size(), 1);
 
-    auto result2 = repair.analyze(nullptr, &queueModel);
-    QCOMPARE(result2.queueToRecover, 0); // No new items
+    auto result2 = repair.performMerge(nullptr, &queueModel);
+    QCOMPARE(result2.queueToRecover, 0); // No new items on second call
+    QCOMPARE(queueModel.size(), 1);      // Remains untouched
+  }
+
+  void testSourcePreservation() {
+    QString legacyDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
+    QJsonArray legacySessions;
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+    legacySessions.append(sess1);
+    writeJsonFile(legacyDir + QStringLiteral("/cached_all_sessions.json"), QJsonDocument(legacySessions));
+
+    QFile initialFile(legacyDir + QStringLiteral("/cached_all_sessions.json"));
+    QVERIFY(initialFile.open(QIODevice::ReadOnly));
+    QByteArray initialBytes = initialFile.readAll();
+    initialFile.close();
+
+    SessionModel sessionModel(QStringLiteral("test_current_sessions.json"));
+    LegacyDataRepair repair;
+    repair.performMerge(&sessionModel, nullptr);
+
+    QFile finalFile(legacyDir + QStringLiteral("/cached_all_sessions.json"));
+    QVERIFY(finalFile.open(QIODevice::ReadOnly));
+    QByteArray finalBytes = finalFile.readAll();
+    finalFile.close();
+
+    QCOMPARE(initialBytes, finalBytes);
   }
 
   void testBackupFailureMock() {
@@ -320,7 +462,7 @@ private slots:
     LegacyDataRepair repair;
     auto result = repair.performMerge(&sessionModel, nullptr);
 
-    QVERIFY(!result.error.isEmpty());
+    QVERIFY(!result.fatalError.isEmpty());
     QCOMPARE(sessionModel.rowCount(), 0);
 
     block.remove();
