@@ -96,6 +96,11 @@ protected:
   }
 };
 
+class TestSourceWindowFriend : public MainWindow {
+public:
+  void advanceElapsedTimer(qint64 ms) { m_throttleBaseTime += ms; }
+};
+
 class TestSourceWindow : public QObject {
   Q_OBJECT
 
@@ -103,6 +108,7 @@ private Q_SLOTS:
   void testFullSemanticChain();
   void testManualVsAutomaticRefreshEquivalent();
   void testInFlightRecovery();
+  void testBackgroundErrorThrottle();
   void initTestCase();
   void testKXmlGuiResourceExists();
   void testNoNestedSessionsWindowAndSingleChrome();
@@ -1103,6 +1109,31 @@ void TestSourceWindow::testInFlightRecovery() {
       requestCount++;
   }
   QCOMPARE(requestCount, 1);
+}
+
+void TestSourceWindow::testBackgroundErrorThrottle() {
+  TestSourceWindowFriend window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  APIManager *apiManager = window.apiManager();
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+
+  Q_EMIT apiManager->errorOccurred(QStringLiteral("Debounce Test Error foo"), true);
+  QCOMPARE(statusSpy.count(), 1);
+
+  Q_EMIT apiManager->errorOccurred(QStringLiteral("Debounce Test Error foo"), true);
+  QCOMPARE(statusSpy.count(), 1);
+
+  Q_EMIT apiManager->errorOccurred(QStringLiteral("Different Background Error bar"), true);
+  QCOMPARE(statusSpy.count(), 2);
+
+  Q_EMIT apiManager->errorOccurred(QStringLiteral("Debounce Test Error foo"), false);
+  QCOMPARE(statusSpy.count(), 3);
+
+  window.advanceElapsedTimer(61000);
+
+  Q_EMIT apiManager->errorOccurred(QStringLiteral("Debounce Test Error foo"), true);
+  QCOMPARE(statusSpy.count(), 4);
 }
 
 int main(int argc, char *argv[]) {
