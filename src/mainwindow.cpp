@@ -103,6 +103,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   ConfigMigration::migrate();
   setObjectName(QStringLiteral("MainWindow"));
+  m_throttleTimer.start();
   setWindowTitle(i18n("kJules"));
   setupUi();
   connect(m_masterSecondTimer, &QTimer::timeout, this, &MainWindow::onMasterSecondTimer);
@@ -160,10 +161,22 @@ MainWindow::MainWindow(QWidget *parent)
     }
     if (isBackground) {
       // Background errors log silently to the error model and status
-      QDateTime now = QDateTime::currentDateTimeUtc();
+      qint64 now = m_throttleTimer.elapsed() + m_throttleBaseTime;
+
+      // Prune stale entries
+      QList<QString> staleKeys;
+      for (auto it = m_lastBackgroundErrors.constBegin(); it != m_lastBackgroundErrors.constEnd(); ++it) {
+        if (now - it.value() >= 60000) {
+          staleKeys.append(it.key());
+        }
+      }
+      for (const QString &key : qAsConst(staleKeys)) {
+        m_lastBackgroundErrors.remove(key);
+      }
+
       if (m_lastBackgroundErrors.contains(msg)) {
-        if (m_lastBackgroundErrors.value(msg).secsTo(now) < 60) {
-          return; // Debounce duplicate background errors
+        if (now - m_lastBackgroundErrors.value(msg) < 60000) {
+          return; // Throttle duplicate background errors
         }
       }
       m_lastBackgroundErrors[msg] = now;

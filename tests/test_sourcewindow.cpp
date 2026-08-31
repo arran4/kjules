@@ -98,9 +98,7 @@ protected:
 
 class TestSourceWindowFriend : public MainWindow {
 public:
-  void advanceElapsedTimer(qint64 ms) {
-    // We can't advance time manually easily since we switched from QElapsedTimer to QDateTime
-  }
+  void advanceElapsedTimer(qint64 ms) { m_throttleBaseTime += ms; }
 };
 
 class TestSourceWindow : public QObject {
@@ -1129,13 +1127,13 @@ void TestSourceWindow::testBackgroundErrorThrottle() {
   Q_EMIT apiManager->errorOccurred(QStringLiteral("Different Background Error bar"), true);
   QCOMPARE(statusSpy.count(), 2);
 
-  // Since we use QDateTime, we need to wait or mock it.
-  // But we can test foreground errors.
   Q_EMIT apiManager->errorOccurred(QStringLiteral("Debounce Test Error foo"), false);
   QCOMPARE(statusSpy.count(), 3);
 
-  Q_EMIT apiManager->errorOccurred(QStringLiteral("Different Background Error bar"), true);
-  QCOMPARE(statusSpy.count(), 3);
+  window.advanceElapsedTimer(61000);
+
+  Q_EMIT apiManager->errorOccurred(QStringLiteral("Debounce Test Error foo"), true);
+  QCOMPARE(statusSpy.count(), 4);
 }
 
 int main(int argc, char *argv[]) {
