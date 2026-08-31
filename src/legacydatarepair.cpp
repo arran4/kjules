@@ -105,14 +105,16 @@ bool LegacyDataRepair::backupCurrentFiles(const QString &currentDataPath, QStrin
   QDir backupDir(dir.absoluteFilePath(backupDirName));
 
   if (hasQueue) {
-    if (!QFile::copy(dir.absoluteFilePath(QStringLiteral("queue.json")), backupDir.absoluteFilePath(QStringLiteral("queue.json")))) {
+    if (!QFile::copy(dir.absoluteFilePath(QStringLiteral("queue.json")),
+                     backupDir.absoluteFilePath(QStringLiteral("queue.json")))) {
       errorOut = QStringLiteral("Failed to backup current queue.json.");
       return false;
     }
   }
 
   if (hasSessions) {
-    if (!QFile::copy(dir.absoluteFilePath(QStringLiteral("cached_all_sessions.json")), backupDir.absoluteFilePath(QStringLiteral("cached_all_sessions.json")))) {
+    if (!QFile::copy(dir.absoluteFilePath(QStringLiteral("cached_all_sessions.json")),
+                     backupDir.absoluteFilePath(QStringLiteral("cached_all_sessions.json")))) {
       errorOut = QStringLiteral("Failed to backup current cached_all_sessions.json.");
       return false;
     }
@@ -127,16 +129,17 @@ LegacyDataRepairResult LegacyDataRepair::analyze(SessionModel *sessionModel, Que
   QString legacyPath = getLegacyDataPath();
 
   bool sessionsMalformed = false;
-  QJsonArray legacySessions = parseLegacySessions(legacyPath + QStringLiteral("/cached_all_sessions.json"), sessionsMalformed);
+  QJsonArray legacySessions =
+      parseLegacySessions(legacyPath + QStringLiteral("/cached_all_sessions.json"), sessionsMalformed);
 
   bool queueMalformed = false;
   QJsonArray legacyQueue = parseLegacyQueue(legacyPath + QStringLiteral("/queue.json"), queueMalformed);
 
   if (sessionsMalformed) {
-      result.error += QStringLiteral("Legacy Following file is malformed or unreadable.\n");
+    result.error += QStringLiteral("Legacy Following file is malformed or unreadable.\n");
   }
   if (queueMalformed) {
-      result.error += QStringLiteral("Legacy Queue file is malformed or unreadable.\n");
+    result.error += QStringLiteral("Legacy Queue file is malformed or unreadable.\n");
   }
 
   result.legacyFollowingCount = legacySessions.size();
@@ -153,10 +156,12 @@ LegacyDataRepairResult LegacyDataRepair::analyze(SessionModel *sessionModel, Que
     }
 
     for (const QJsonValue &val : legacySessions) {
-      if (!val.isObject()) continue;
+      if (!val.isObject())
+        continue;
       QJsonObject obj = val.toObject();
       QString id = obj.value(QStringLiteral("id")).toString();
-      if (id.isEmpty()) continue;
+      if (id.isEmpty())
+        continue;
 
       if (currentIds.contains(id)) {
         result.followingAlreadyPresent++;
@@ -173,21 +178,23 @@ LegacyDataRepairResult LegacyDataRepair::analyze(SessionModel *sessionModel, Que
     QVector<bool> matched(queueModel->size(), false);
 
     for (const QJsonValue &val : legacyQueue) {
-      if (!val.isObject()) continue;
+      if (!val.isObject())
+        continue;
       QJsonObject legacyObj = val.toObject();
       QJsonObject legacyReqData = legacyObj.value(QStringLiteral("requestData")).toObject();
       if (legacyReqData.isEmpty()) {
         if (!legacyObj.contains(QStringLiteral("requestData"))) {
-           legacyReqData = legacyObj;
-           QJsonObject reconstructed;
-           reconstructed.insert(QStringLiteral("requestData"), legacyReqData);
-           legacyObj = reconstructed;
+          legacyReqData = legacyObj;
+          QJsonObject reconstructed;
+          reconstructed.insert(QStringLiteral("requestData"), legacyReqData);
+          legacyObj = reconstructed;
         }
       }
 
       bool found = false;
       for (int i = 0; i < queueModel->size(); ++i) {
-        if (matched[i]) continue;
+        if (matched[i])
+          continue;
         QueueItem currentItem = queueModel->getItem(i);
         if (currentItem.requestData == legacyReqData) {
           matched[i] = true;

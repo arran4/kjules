@@ -1,5 +1,0 @@
-Implement legacy data recovery feature for Following and Queue
-
-- Added `LegacyDataRepair` utility to read `org.kde.kjules` directory securely and import to standard app location without altering current contexts or duplicating IDs.
-- Validates malformed components explicitly mapping recovery properties preserving multiplicity matching for queuing items without ignoring old data tracking metadata or duplicating runs priorities.
-- Added 14 edge case `QTest` blocks.

@@ -1,43 +1,29 @@
-1. **Restore all state and create legacy data repair helper header**
-   - Use `write_file` to create `src/legacydatarepair.h`.
-   - Define `struct LegacyDataRepairResult` with `legacyFollowingCount`, `currentFollowingCount`, `followingToRecover`, `followingAlreadyPresent`, `legacyQueueCount`, `currentQueueCount`, `queueToRecover`, `queueAlreadyPresent`, `error` string.
-   - Define `class LegacyDataRepair` with `analyze(SessionModel*, QueueModel*)`, `performMerge(SessionModel*, QueueModel*)`, and private helper methods for path resolution and parsing logic, including `outIsMalformed` boolean reference for parsing functions.
-   - Verify creation with `read_file`.
+1. **Apply Code Review Feedback - Header**
+   - Use `replace_with_git_merge_diff` on `src/legacydatarepair.h` to add `followingSkippedInvalid` and `queueSkippedInvalid` integer counters to `LegacyDataRepairResult`. Add `fatalError` string to separate fatal backup errors from non-fatal component warnings (which remain in `error`).
+   - Verify with `git diff`.
 
-2. **Implement legacy data repair helper source logic**
-   - Use `write_file` to create a basic skeleton for `src/legacydatarepair.cpp`.
-   - Use `replace_with_git_merge_diff` to add path location logic (using `QStandardPaths::GenericDataLocation` + "/org.kde.kjules" and `QStandardPaths::AppDataLocation`).
-   - Use `replace_with_git_merge_diff` to add parsing logic for `queue.json` and `cached_all_sessions.json` that handles both bare-array and object forms, setting `outIsMalformed` if a file is present but contains invalid JSON.
-   - Use `replace_with_git_merge_diff` to implement the multiplicity-aware matching logic for Queue items.
-   - Use `replace_with_git_merge_diff` to implement ID-based matching for Following sessions.
-   - Use `replace_with_git_merge_diff` to implement backup logic (creating timestamped directory and copying current files).
-   - Use `replace_with_git_merge_diff` to implement `performMerge()` making sure to invoke `SessionModel::addSessions()` with filtered items and using `QueueModel::beginBatchUpdate()`, `QueueModel::insertItem(queueModel->size(), ...)` (to strictly append items at the end, without priority insertion), and `QueueModel::endBatchUpdate()`.
-   - Verify contents using `read_file`.
+2. **Apply Code Review Feedback - Source Implementation**
+   - Use `replace_with_git_merge_diff` on `src/legacydatarepair.cpp` to update `parseLegacySessions` and `parseLegacyQueue`: if `doc.isObject()` but lacks the exact `"sessions"` or `"items"` key, set `outIsMalformed = true` instead of silently returning empty arrays.
+   - Use `replace_with_git_merge_diff` on `src/legacydatarepair.cpp` in `analyze()` to increment `followingSkippedInvalid` if `id.isEmpty()` instead of silently skipping, and similarly increment `queueSkippedInvalid` for missing/empty `requestData` rather than using fallback reconstruction logic.
+   - Use `replace_with_git_merge_diff` on `src/legacydatarepair.cpp` in `performMerge()` to assign backup failures to `result.fatalError` instead of `result.error`. Add `sessionModel->saveSessions();` after adding sessions.
+   - Verify with `git diff`.
 
-3. **Update CMakeLists.txt**
-   - Use `replace_with_git_merge_diff` to append `src/legacydatarepair.cpp` to the file list containing `src/mainwindow.cpp` in `CMakeLists.txt`.
-   - Use `replace_with_git_merge_diff` to add `add_executable(test_legacydatarepair ...)` to `tests/CMakeLists.txt` and link to `Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigCore KF6::ConfigWidgets KF6::CoreAddons`.
-   - Verify changes with `read_file`
+3. **Apply Code Review Feedback - UI Implementation**
+   - Use `replace_with_git_merge_diff` on `src/mainwindow.cpp` to correctly consume the new `LegacyDataRepairResult` properties: display the `skipped` counts in the prompt, and check `result.fatalError` instead of `result.error` for the critical abort dialog.
+   - Verify with `git diff`.
 
-4. **Update UI / `MainWindow`**
-   - Modify `src/kjulesui.rc` with `replace_with_git_merge_diff` to nest `<Action name="fix_sources" />` and `<Action name="merge_legacy_queue_following" />` inside a `<Menu name="one_time_fixes">` submenu under `<Menu name="help">`.
-   - Modify `src/mainwindow.h` using `replace_with_git_merge_diff` to add `QAction *m_mergeLegacyDataAction;` and `void mergeLegacyData();`.
-   - Modify `src/mainwindow.cpp` using `replace_with_git_merge_diff` to construct the new action, connect it to `mergeLegacyData()`, and add it to the menu.
-   - Implement `MainWindow::mergeLegacyData()` with `replace_with_git_merge_diff`. It will use `m_sessionModel` and `m_queueModel`, display a confirmation dialog showing the calculated counts, call `performMerge`, then show an error if one occurred, otherwise report the success result in the status bar.
-   - Verify changes using `read_file`.
+4. **Update Tests**
+   - Use `replace_with_git_merge_diff` on `tests/test_legacydatarepair.cpp` to modify the malformed JSON and mock failure tests to check the updated strict schema requirements and newly decoupled `fatalError`/`skipped` properties.
+   - Verify with `git diff`.
 
-5. **Write tests**
-   - Use `write_file` to create `tests/test_legacydatarepair.cpp`.
-   - Add tests for Legacy Following only and overlap logic (current duplicates win).
-   - Add tests for empty session IDs skipped safely and bare-array format.
-   - Add tests for Legacy Queue only and Queue overlap.
-   - Add tests for Multiplicity (current 1, legacy 2 -> recover 1).
-   - Add tests ensuring legacy `m_runTimestamps` are ignored, metadata fields are retained, and bare-array Queue formats parse properly.
-   - Add tests for Invalid JSON, Missing legacy files, Backup failure mock, and Idempotence (running merge twice adds nothing).
-   - Verify test file was written using `read_file`.
+5. **Format codebase**
+   - Run `find src tests bench -name "*.h" -o -name "*.cpp" | xargs -r clang-format -i` via `run_in_bash_session` to maintain formatting constraints.
 
-6. **Run Tests**
-   - Compile and execute tests with `.jules/run.sh cmake --build build --parallel && .jules/run.sh ctest --test-dir build --output-on-failure`.
+6. **Cleanup**
+   - Run `rm plan.md` via `run_in_bash_session` to remove execution artifacts from the commit.
 
-7. **Pre-commit Instructions**
+7. **Run Tests**
+   - Use `run_in_bash_session` to execute `.jules/run.sh cmake --build build --parallel` and `.jules/run.sh ctest --test-dir build --output-on-failure`.
+
+8. **Pre-commit Instructions**
    - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.

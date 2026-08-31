@@ -82,7 +82,11 @@
             <Action name="toggle_formula_builder"/>
         </Menu>
         <Menu name="help">
-            <Action name="fix_sources" />
+            <Menu name="one_time_fixes">
+                <text>One-time Fixes</text>
+                <Action name="fix_sources" />
+                <Action name="merge_legacy_queue_following" />
+            </Menu>
         </Menu>
     </MenuBar>
     <ToolBar name="mainToolBar">
