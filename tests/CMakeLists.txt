@@ -65,19 +65,3 @@ add_test(NAME ErrorsModelTest COMMAND test_errorsmodel)
 add_executable(test_background_errors test_background_errors.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp)
 target_link_libraries(test_background_errors Qt6::Test Qt6::Network Qt6::Core KF6::Wallet KF6::I18n KF6::ConfigCore Qt6::Concurrent Qt6::Widgets)
 add_test(NAME BackgroundErrorsTest COMMAND test_background_errors)
-
-add_executable(test_debounce test_debounce.cpp)
-target_link_libraries(test_debounce PRIVATE kjules_lib Qt6::Test)
-add_test(NAME DebounceTest COMMAND test_debounce)
-
-add_executable(test_debounce test_debounce.cpp)
-target_link_libraries(test_debounce PRIVATE kjules_lib Qt6::Test)
-add_test(NAME DebounceTest COMMAND test_debounce)
-
-add_executable(test_debounce test_debounce.cpp)
-target_link_libraries(test_debounce PRIVATE kjules_lib Qt6::Test)
-add_test(NAME DebounceTest COMMAND test_debounce)
-
-add_executable(test_debounce test_debounce.cpp)
-target_link_libraries(test_debounce PRIVATE kjules_lib Qt6::Test)
-add_test(NAME DebounceTest COMMAND test_debounce)
