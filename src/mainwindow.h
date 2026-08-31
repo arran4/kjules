@@ -350,7 +350,11 @@ private:
   QHash<QString, QDateTime> m_sessionReloadFailedAt;
   QHash<QString, qint64> m_lastBackgroundErrors;
   QElapsedTimer m_throttleTimer;
+
+protected:
   qint64 m_throttleBaseTime = 0;
+
+private:
   bool m_isWaitingForRefreshBeforeQueue;
   bool m_isWaitingForCreatedRepoSource = false;
 

@@ -170,7 +170,7 @@ MainWindow::MainWindow(QWidget *parent)
           staleKeys.append(it.key());
         }
       }
-      for (const QString &key : qAsConst(staleKeys)) {
+      for (const QString &key : std::as_const(staleKeys)) {
         m_lastBackgroundErrors.remove(key);
       }
 
