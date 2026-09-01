@@ -5147,9 +5147,17 @@ void MainWindow::mergeLegacyData() {
                  .arg(result.queueAlreadyPresent)
                  .arg(result.queueSkippedInvalid);
 
-  QMessageBox::StandardButton reply =
-      QMessageBox::question(this, i18n("Merge Legacy Data"), message, QMessageBox::Yes | QMessageBox::Cancel);
-  if (reply != QMessageBox::Yes) {
+  QMessageBox box(this);
+  box.setIcon(QMessageBox::Question);
+  box.setWindowTitle(i18n("Merge Legacy Data"));
+  box.setText(message);
+
+  QPushButton *mergeButton = box.addButton(i18n("Merge"), QMessageBox::AcceptRole);
+  box.addButton(QMessageBox::Cancel);
+
+  box.exec();
+
+  if (box.clickedButton() != mergeButton) {
     return;
   }
 

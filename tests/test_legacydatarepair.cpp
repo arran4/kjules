@@ -362,8 +362,9 @@ private Q_SLOTS:
     repair.performMerge(nullptr, &queueModel);
     QCOMPARE(queueModel.size(), 1);
 
-    auto result2 = repair.analyze(nullptr, &queueModel);
+    auto result2 = repair.performMerge(nullptr, &queueModel);
     QCOMPARE(result2.queueToRecover, 0); // No new items
+    QCOMPARE(queueModel.size(), 1);
   }
 
   void testBackupFailureMock() {
