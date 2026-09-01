@@ -151,7 +151,13 @@ private Q_SLOTS:
     QJsonArray items;
     QJsonObject req1;
     req1[QStringLiteral("requestData")] = QJsonObject{{QStringLiteral("prompt"), QStringLiteral("test1")}};
+    req1[QStringLiteral("errorCount")] = 3;
     req1[QStringLiteral("lastError")] = QStringLiteral("err");
+    req1[QStringLiteral("lastResponse")] = QStringLiteral("resp");
+    req1[QStringLiteral("lastTry")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    req1[QStringLiteral("pastErrors")] = QJsonArray{QStringLiteral("e1"), QStringLiteral("e2")};
+    req1[QStringLiteral("isBlocked")] = true;
+    req1[QStringLiteral("blockMetadata")] = QJsonObject{{QStringLiteral("reason"), QStringLiteral("block")}};
     items.append(req1);
     qObj[QStringLiteral("items")] = items;
     writeJsonFile(legacyDir + QStringLiteral("/queue.json"), QJsonDocument(qObj));
@@ -168,7 +174,12 @@ private Q_SLOTS:
     QCOMPARE(queueModel.size(), 1);
     QueueItem recovered = queueModel.getItem(0);
     QCOMPARE(recovered.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("test1"));
+    QCOMPARE(recovered.errorCount, 3);
     QCOMPARE(recovered.lastError, QStringLiteral("err"));
+    QCOMPARE(recovered.lastResponse, QStringLiteral("resp"));
+    QCOMPARE(recovered.pastErrors.size(), 2);
+    QCOMPARE(recovered.isBlocked, true);
+    QCOMPARE(recovered.blockMetadata.value(QStringLiteral("reason")).toString(), QStringLiteral("block"));
   }
 
   void testQueueOverlapAndMultiplicity() {
@@ -201,6 +212,11 @@ private Q_SLOTS:
 
     repair.performMerge(nullptr, &queueModel);
     QCOMPARE(queueModel.size(), 3); // 1 original + 2 recovered
+
+    // Verify correct order (A, A, B)
+    QCOMPARE(queueModel.getItem(0).requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("A"));
+    QCOMPARE(queueModel.getItem(1).requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("A"));
+    QCOMPARE(queueModel.getItem(2).requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("B"));
   }
 
   void testQueueTimestampsIgnored() {
@@ -217,12 +233,31 @@ private Q_SLOTS:
     qObj[QStringLiteral("m_runTimestamps")] = runTs;
     writeJsonFile(legacyDir + QStringLiteral("/queue.json"), QJsonDocument(qObj));
 
-    QueueModel queueModel(nullptr, QStringLiteral("test_current_queue.json"));
+    // Preset a known timestamp to verify it is NOT overwritten
+    QString queueFile = QStringLiteral("test_current_queue.json");
+    QJsonObject curObj;
+    QJsonArray curItems;
+    QJsonArray curTs;
+    curTs.append(QDateTime::currentDateTimeUtc().addDays(-1).toString(Qt::ISODate));
+    curObj[QStringLiteral("m_runTimestamps")] = curTs;
+    curObj[QStringLiteral("items")] = curItems;
+    writeJsonFile(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + queueFile,
+                  QJsonDocument(curObj));
 
+    QueueModel queueModel(nullptr, queueFile);
     LegacyDataRepair repair;
     repair.performMerge(nullptr, &queueModel);
 
     QCOMPARE(queueModel.size(), 1);
+
+    // Verify written back timestamps natively ignoring legacy array directly matching current bytes
+    QFile verifyFile(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") +
+                     queueFile);
+    QVERIFY(verifyFile.open(QIODevice::ReadOnly));
+    QJsonDocument doc = QJsonDocument::fromJson(verifyFile.readAll());
+    QJsonArray outTs = doc.object().value(QStringLiteral("m_runTimestamps")).toArray();
+    QCOMPARE(outTs.size(), 1);
+    QCOMPARE(outTs.first().toString(), curTs.first().toString());
   }
 
   void testQueueBareArrayFormat() {
@@ -345,6 +380,34 @@ private Q_SLOTS:
     QCOMPARE(result.queueToRecover, 0);
   }
 
+  void testFollowingRecoveryPersistence() {
+    QString legacyDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
+    QJsonArray legacySessions;
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("persistedSess");
+    legacySessions.append(sess1);
+    writeJsonFile(legacyDir + QStringLiteral("/cached_all_sessions.json"), QJsonDocument(legacySessions));
+
+    QString cacheFile = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+                        QStringLiteral("/test_persistence_sessions.json");
+    {
+      SessionModel sessionModel(cacheFile);
+      LegacyDataRepair repair;
+      repair.performMerge(&sessionModel, nullptr);
+      QCOMPARE(sessionModel.rowCount(), 1);
+    }
+
+    // Reload model from disk to test persistence explicitly mapped via sessionModel->saveSessions();
+    {
+      SessionModel sessionModel(cacheFile);
+      sessionModel.loadSessions();
+      QCOMPARE(sessionModel.rowCount(), 1);
+      QCOMPARE(sessionModel.data(sessionModel.index(0, 0), SessionModel::IdRole).toString(),
+               QStringLiteral("persistedSess"));
+    }
+  }
+
   void testIdempotence() {
     QString legacyDir =
         QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
@@ -365,6 +428,32 @@ private Q_SLOTS:
     auto result2 = repair.performMerge(nullptr, &queueModel);
     QCOMPARE(result2.queueToRecover, 0); // No new items
     QCOMPARE(queueModel.size(), 1);
+  }
+
+  void testSourcePreservation() {
+    QString legacyDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/org.kde.kjules");
+    QJsonArray legacySessions;
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+    legacySessions.append(sess1);
+    writeJsonFile(legacyDir + QStringLiteral("/cached_all_sessions.json"), QJsonDocument(legacySessions));
+
+    QFile initialFile(legacyDir + QStringLiteral("/cached_all_sessions.json"));
+    QVERIFY(initialFile.open(QIODevice::ReadOnly));
+    QByteArray initialBytes = initialFile.readAll();
+    initialFile.close();
+
+    SessionModel sessionModel(QStringLiteral("test_current_sessions.json"));
+    LegacyDataRepair repair;
+    repair.performMerge(&sessionModel, nullptr);
+
+    QFile finalFile(legacyDir + QStringLiteral("/cached_all_sessions.json"));
+    QVERIFY(finalFile.open(QIODevice::ReadOnly));
+    QByteArray finalBytes = finalFile.readAll();
+    finalFile.close();
+
+    QCOMPARE(initialBytes, finalBytes);
   }
 
   void testBackupFailureMock() {
