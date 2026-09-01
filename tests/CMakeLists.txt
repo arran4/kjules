@@ -12,11 +12,12 @@ add_executable(test_followingrefresh test_followingrefresh.cpp ../src/sessionmod
 add_executable(test_sessionmodel test_sessionmodel.cpp ../src/sessionmodel.cpp)
 add_executable(test_configmigration test_configmigration.cpp)
 add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
-  ../src/clickablelabel.cpp ../src/draftdelegate.cpp ../src/queuedelegate.cpp ../src/sessiondelegate.cpp ../src/sourcestatuswidget.cpp ../src/kjules.qrc ../src/activitylogwindow.cpp ../src/mainwindow.cpp ../src/followsessiondialog.cpp ../src/backupdialog.cpp ../src/restoredialog.cpp ../src/draftsmodel.cpp ../src/templatesmodel.cpp ../src/newsessiondialog.cpp ../src/sourcestatusdialog.cpp ../src/savedialog.cpp ../src/templateselectiondialog.cpp ../src/templateeditdialog.cpp ../src/settingsdialog.cpp ../src/createrepodialog.cpp ../src/clickableprogressbar.cpp ../src/errorwindow.cpp ../src/filterparser.cpp ../src/filtereditor.cpp ../src/advancedfilterproxymodel.cpp ../src/refreshprogresswindow.cpp ../src/sourcesrefreshprogresswindow.cpp     ../src/sourcefixer.cpp ../src/sourceremapdialog.cpp )
+  ../src/clickablelabel.cpp ../src/draftdelegate.cpp ../src/queuedelegate.cpp ../src/sessiondelegate.cpp ../src/sourcestatuswidget.cpp ../src/kjules.qrc ../src/activitylogwindow.cpp ../src/mainwindow.cpp ../src/followsessiondialog.cpp ../src/backupdialog.cpp ../src/restoredialog.cpp ../src/draftsmodel.cpp ../src/templatesmodel.cpp ../src/newsessiondialog.cpp ../src/sourcestatusdialog.cpp ../src/savedialog.cpp ../src/templateselectiondialog.cpp ../src/templateeditdialog.cpp ../src/settingsdialog.cpp ../src/createrepodialog.cpp ../src/clickableprogressbar.cpp ../src/errorwindow.cpp ../src/filterparser.cpp ../src/filtereditor.cpp ../src/advancedfilterproxymodel.cpp ../src/refreshprogresswindow.cpp ../src/sourcesrefreshprogresswindow.cpp     ../src/sourcefixer.cpp ../src/sourceremapdialog.cpp ../src/legacydatarepair.cpp )
 add_executable(test_sessionswidget test_sessionswidget.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionmodel.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp ../src/sessiondelegate.cpp ../src/kjules.qrc ../src/errorsmodel.cpp ../src/activitylogwindow.cpp)
 add_executable(test_apimanager_pagination test_apimanager_pagination.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp)
+add_executable(test_legacydatarepair test_legacydatarepair.cpp ../src/legacydatarepair.cpp ../src/queuemodel.cpp ../src/sessionmodel.cpp)
 
 target_link_libraries(test_dummy Qt6::Test)
 target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core)
@@ -32,6 +33,7 @@ target_link_libraries(test_configmigration Qt6::Test Qt6::Core KF6::ConfigCore)
 target_link_libraries(test_sourcewindow Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive KF6::DBusAddons KF6::WindowSystem)
 target_link_libraries(test_sessionswidget Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network Qt6::Concurrent KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive)
 target_link_libraries(test_apimanager_pagination Qt6::Test Qt6::Network Qt6::Core Qt6::Concurrent KF6::Wallet KF6::I18n KF6::CoreAddons KF6::ConfigCore Qt6::Widgets)
+target_link_libraries(test_legacydatarepair Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigCore KF6::ConfigWidgets KF6::CoreAddons)
 
 add_executable(test_activation test_activation.cpp)
 target_link_libraries(test_activation Qt6::Test Qt6::Core)
@@ -50,8 +52,9 @@ add_test(NAME ConfigMigrationTest COMMAND test_configmigration)
 add_test(NAME SourceWindowTest COMMAND test_sourcewindow)
 add_test(NAME SessionsWidgetTest COMMAND test_sessionswidget)
 add_test(NAME APIManagerPaginationTest COMMAND test_apimanager_pagination)
+add_test(NAME LegacyDataRepairTest COMMAND test_legacydatarepair)
 
-set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest QueueSchedulingTest FollowingRefreshTest SessionModelTest ConfigMigrationTest SourceWindowTest SessionsWidgetTest APIManagerPaginationTest
+set_tests_properties(FilterTest AdvancedFilterProxyModelTest SourceRemapDialogTest QueueSchedulingTest FollowingRefreshTest SessionModelTest ConfigMigrationTest SourceWindowTest SessionsWidgetTest APIManagerPaginationTest LegacyDataRepairTest
                      PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;KDE_HOME_READONLY=1;CANBERRA_DRIVER=null;KNOTIFICATIONS_DEFAULT_BACKEND=null")
 add_compile_definitions(KJULES_APPLICATION_NAME="${KJULES_APPLICATION_NAME}")
 add_compile_definitions(KJULES_ORGANIZATION_DOMAIN="${KJULES_ORGANIZATION_DOMAIN}")

@@ -201,6 +201,7 @@ private:
   void setupTemplatesTab(QWidget *tab);
   void setupQueueTab();
   void setupHoldingTab();
+  void mergeLegacyData();
   void setupBlockedTab();
   void setupErrorsTab(QWidget *tab);
   void setupStatusBar();
@@ -331,6 +332,7 @@ private:
   QAction *m_viewFilterPrivateAction;
   QAction *m_createRepoAndSessionAction;
   QAction *m_fixSourcesAction;
+  QAction *m_mergeLegacyDataAction;
 
   bool m_isRefreshingSources;
   int m_sourcesLoadedCount;

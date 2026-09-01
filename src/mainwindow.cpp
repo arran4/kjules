@@ -15,6 +15,7 @@
 #include "filterparser.h"
 #include "followingrefreshevaluator.h"
 #include "followsessiondialog.h"
+#include "legacydatarepair.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -2111,6 +2112,10 @@ void MainWindow::createGeneralActions() {
   m_fixSourcesAction = new QAction(QIcon::fromTheme(QStringLiteral("tools-wizard")), i18n("Fix Sources..."), this);
   actionCollection()->addAction(QStringLiteral("fix_sources"), m_fixSourcesAction);
   connect(m_fixSourcesAction, &QAction::triggered, this, qOverload<>(&MainWindow::showFixSourcesDialog));
+
+  m_mergeLegacyDataAction = new QAction(i18n("Merge Legacy Queue and Following..."), this);
+  actionCollection()->addAction(QStringLiteral("merge_legacy_queue_following"), m_mergeLegacyDataAction);
+  connect(m_mergeLegacyDataAction, &QAction::triggered, this, &MainWindow::mergeLegacyData);
 
   m_createRepoAndSessionAction =
       new QAction(QIcon::fromTheme(QStringLiteral("folder-new")), i18n("Create Repo and Session"), this);
@@ -5097,6 +5102,105 @@ void MainWindow::applySourceRemaps(const QList<SourceRemapEntry> &entries, const
       QJsonObject session = SourceFixer::remap(m_sessionModel->getSession(entry.index), newSource);
       m_sessionModel->updateSessionAt(entry.index, session);
     }
+  }
+}
+
+void MainWindow::mergeLegacyData() {
+  LegacyDataRepair repair;
+  LegacyDataRepairResult result = repair.analyze(m_sessionModel, m_queueModel);
+
+  if (result.followingToRecover == 0 && result.queueToRecover == 0 && result.error.isEmpty()) {
+    QMessageBox::information(this, i18n("Merge Legacy Data"),
+                             i18n("No legacy Queue or Following data was found to recover.\n\n"
+                                  "Following:\n"
+                                  "Current: %1\n"
+                                  "Legacy: %2\n"
+                                  "To recover: %3\n"
+                                  "Already present: %4\n"
+                                  "Skipped Invalid: %5\n\n"
+                                  "Queue:\n"
+                                  "Current: %6\n"
+                                  "Legacy: %7\n"
+                                  "To recover: %8\n"
+                                  "Already present: %9\n"
+                                  "Skipped Invalid: %10")
+                                 .arg(result.currentFollowingCount)
+                                 .arg(result.legacyFollowingCount)
+                                 .arg(result.followingToRecover)
+                                 .arg(result.followingAlreadyPresent)
+                                 .arg(result.followingSkippedInvalid)
+                                 .arg(result.currentQueueCount)
+                                 .arg(result.legacyQueueCount)
+                                 .arg(result.queueToRecover)
+                                 .arg(result.queueAlreadyPresent)
+                                 .arg(result.queueSkippedInvalid));
+    return;
+  }
+
+  QString message = i18n("Legacy kJules data found.\n\n");
+  if (!result.error.isEmpty()) {
+    message += result.error + QStringLiteral("\n");
+  }
+
+  message += i18n("Following\n"
+                  "Current: %1\n"
+                  "Legacy: %2\n"
+                  "To recover: %3\n"
+                  "Already present: %4\n"
+                  "Skipped Invalid: %5\n\n"
+                  "Queue\n"
+                  "Current: %6\n"
+                  "Legacy: %7\n"
+                  "To recover: %8\n"
+                  "Already present: %9\n"
+                  "Skipped Invalid: %10\n\n"
+                  "Only Queue and Following will be changed.\n"
+                  "Current files will be backed up before the merge.")
+                 .arg(result.currentFollowingCount)
+                 .arg(result.legacyFollowingCount)
+                 .arg(result.followingToRecover)
+                 .arg(result.followingAlreadyPresent)
+                 .arg(result.followingSkippedInvalid)
+                 .arg(result.currentQueueCount)
+                 .arg(result.legacyQueueCount)
+                 .arg(result.queueToRecover)
+                 .arg(result.queueAlreadyPresent)
+                 .arg(result.queueSkippedInvalid);
+
+  QMessageBox box(this);
+  box.setIcon(QMessageBox::Question);
+  box.setWindowTitle(i18n("Merge Legacy Data"));
+  box.setText(message);
+
+  QPushButton *mergeButton = box.addButton(i18n("Merge"), QMessageBox::AcceptRole);
+  box.addButton(QMessageBox::Cancel);
+
+  box.exec();
+
+  if (box.clickedButton() != mergeButton) {
+    return;
+  }
+
+  // Recompute right before applying to ensure state hasn't shifted while prompt was open
+  LegacyDataRepairResult mergeResult = repair.performMerge(m_sessionModel, m_queueModel);
+  if (!mergeResult.fatalError.isEmpty()) {
+    QMessageBox::critical(this, i18n("Merge Error"), mergeResult.fatalError);
+    return;
+  }
+
+  if (statusBar()) {
+    QString statusMessage = i18n("Recovered %1 followed sessions and %2 queued tasks from legacy kJules data.",
+                                 mergeResult.followingToRecover, mergeResult.queueToRecover);
+
+    if (mergeResult.followingSkippedInvalid > 0 || mergeResult.queueSkippedInvalid > 0) {
+      statusMessage += i18n(" Skipped %1 invalid legacy sessions and %2 invalid queued tasks.",
+                            mergeResult.followingSkippedInvalid, mergeResult.queueSkippedInvalid);
+    }
+
+    if (!mergeResult.error.isEmpty()) {
+      statusMessage += QStringLiteral(" ") + mergeResult.error.trimmed();
+    }
+    statusBar()->showMessage(statusMessage);
   }
 }
 

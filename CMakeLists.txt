@@ -99,6 +99,7 @@ set(kjules_SRCS
     src/activitylogwindow.cpp
     src/clickableprogressbar.cpp
     src/clickablelabel.cpp
+    src/legacydatarepair.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/sourcewindow.cpp
