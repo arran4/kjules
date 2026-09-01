@@ -5103,11 +5103,17 @@ void MainWindow::mergeLegacyData() {
                                   "Legacy: %7\n"
                                   "To recover: %8\n"
                                   "Already present: %9\n"
-                                  "Skipped Invalid: %10",
-                                  result.currentFollowingCount, result.legacyFollowingCount, result.followingToRecover,
-                                  result.followingAlreadyPresent, result.followingSkippedInvalid,
-                                  result.currentQueueCount, result.legacyQueueCount, result.queueToRecover,
-                                  result.queueAlreadyPresent, result.queueSkippedInvalid));
+                                  "Skipped Invalid: %10")
+                                 .arg(result.currentFollowingCount)
+                                 .arg(result.legacyFollowingCount)
+                                 .arg(result.followingToRecover)
+                                 .arg(result.followingAlreadyPresent)
+                                 .arg(result.followingSkippedInvalid)
+                                 .arg(result.currentQueueCount)
+                                 .arg(result.legacyQueueCount)
+                                 .arg(result.queueToRecover)
+                                 .arg(result.queueAlreadyPresent)
+                                 .arg(result.queueSkippedInvalid));
     return;
   }
 
@@ -5116,36 +5122,34 @@ void MainWindow::mergeLegacyData() {
     message += result.error + QStringLiteral("\n");
   }
 
-  message +=
-      i18n("Following\n"
-           "Current: %1\n"
-           "Legacy: %2\n"
-           "To recover: %3\n"
-           "Already present: %4\n"
-           "Skipped Invalid: %5\n\n"
-           "Queue\n"
-           "Current: %6\n"
-           "Legacy: %7\n"
-           "To recover: %8\n"
-           "Already present: %9\n"
-           "Skipped Invalid: %10\n\n"
-           "Only Queue and Following will be changed.\n"
-           "Current files will be backed up before the merge.",
-           result.currentFollowingCount, result.legacyFollowingCount, result.followingToRecover,
-           result.followingAlreadyPresent, result.followingSkippedInvalid, result.currentQueueCount,
-           result.legacyQueueCount, result.queueToRecover, result.queueAlreadyPresent, result.queueSkippedInvalid);
+  message += i18n("Following\n"
+                  "Current: %1\n"
+                  "Legacy: %2\n"
+                  "To recover: %3\n"
+                  "Already present: %4\n"
+                  "Skipped Invalid: %5\n\n"
+                  "Queue\n"
+                  "Current: %6\n"
+                  "Legacy: %7\n"
+                  "To recover: %8\n"
+                  "Already present: %9\n"
+                  "Skipped Invalid: %10\n\n"
+                  "Only Queue and Following will be changed.\n"
+                  "Current files will be backed up before the merge.")
+                 .arg(result.currentFollowingCount)
+                 .arg(result.legacyFollowingCount)
+                 .arg(result.followingToRecover)
+                 .arg(result.followingAlreadyPresent)
+                 .arg(result.followingSkippedInvalid)
+                 .arg(result.currentQueueCount)
+                 .arg(result.legacyQueueCount)
+                 .arg(result.queueToRecover)
+                 .arg(result.queueAlreadyPresent)
+                 .arg(result.queueSkippedInvalid);
 
-  QMessageBox box(this);
-  box.setIcon(QMessageBox::Question);
-  box.setWindowTitle(i18n("Merge Legacy Data"));
-  box.setText(message);
-
-  QPushButton *mergeButton = box.addButton(i18n("Merge"), QMessageBox::AcceptRole);
-  box.addButton(QMessageBox::Cancel);
-
-  box.exec();
-
-  if (box.clickedButton() != mergeButton) {
+  QMessageBox::StandardButton reply =
+      QMessageBox::question(this, i18n("Merge Legacy Data"), message, QMessageBox::Yes | QMessageBox::Cancel);
+  if (reply != QMessageBox::Yes) {
     return;
   }
 

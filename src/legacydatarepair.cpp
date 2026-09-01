@@ -45,12 +45,12 @@ QJsonArray LegacyDataRepair::parseLegacySessions(const QString &path, bool &outI
   if (doc.isArray()) {
     return doc.array();
   } else if (doc.isObject()) {
-    QJsonValue sessionsValue = doc.object().value(QStringLiteral("sessions"));
-    if (!sessionsValue.isArray()) {
+    if (!doc.object().contains(QStringLiteral("sessions")) ||
+        !doc.object().value(QStringLiteral("sessions")).isArray()) {
       outIsMalformed = true;
       return {};
     }
-    return sessionsValue.toArray();
+    return doc.object().value(QStringLiteral("sessions")).toArray();
   }
 
   outIsMalformed = true;
@@ -82,12 +82,11 @@ QJsonArray LegacyDataRepair::parseLegacyQueue(const QString &path, bool &outIsMa
   if (doc.isArray()) {
     return doc.array();
   } else if (doc.isObject()) {
-    QJsonValue itemsValue = doc.object().value(QStringLiteral("items"));
-    if (!itemsValue.isArray()) {
+    if (!doc.object().contains(QStringLiteral("items")) || !doc.object().value(QStringLiteral("items")).isArray()) {
       outIsMalformed = true;
       return {};
     }
-    return itemsValue.toArray();
+    return doc.object().value(QStringLiteral("items")).toArray();
   }
 
   outIsMalformed = true;
