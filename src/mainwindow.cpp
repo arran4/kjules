@@ -3758,8 +3758,9 @@ bool MainWindow::processQueue() {
 
   for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
     QModelIndex idx = m_sessionModel->index(j, 0);
+    QString state = m_sessionModel->data(idx, SessionModel::StateRole).toString();
     QString prStatus = m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
-    if (prStatus != QStringLiteral("merged") && prStatus != QStringLiteral("closed")) {
+    if (FollowingRefreshEvaluator::isSessionEligible(state, prStatus)) {
       QJsonObject rawObject = m_sessionModel->getSession(j);
       bool isNoAutomation =
           rawObject.value(QStringLiteral("automationMode")).toString() == QStringLiteral("AUTOMATION_MODE_UNSPECIFIED");

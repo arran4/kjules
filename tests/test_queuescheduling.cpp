@@ -1,5 +1,6 @@
 #include "../src/api/apierror.h"
 #include "../src/errorsmodel.h"
+#include "../src/followingrefreshevaluator.h"
 #include "../src/queuemodel.h"
 #include "../src/queuescheduler.h"
 #include "../src/utils.h"
@@ -24,6 +25,7 @@ private Q_SLOTS:
   void testSettingsIntervalUpdatePreservesActiveBackoff();
   void testCountdownDisplayDoesNotMutateSchedulingState();
   void testSuccessfulQueueContinuationContract();
+  void testTerminalSessionsDoNotBlockQueue();
 };
 
 void TestQueueScheduling::testOrdinaryTimerIntervalRespected() {
@@ -315,6 +317,14 @@ void TestQueueScheduling::testSuccessfulQueueContinuationContract() {
   scheduler.recordDispatch(t1, 15);
   QCOMPARE(scheduler.nextQueueProcessAt(), t1.addSecs(15 * 60));
   QVERIFY(!scheduler.isBackoffActive(t1));
+}
+
+void TestQueueScheduling::testTerminalSessionsDoNotBlockQueue() {
+  // If state == failed and prStatus == closed, the session is not eligible and shouldn't block the queue
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("ERROR"), QStringLiteral("closed")));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("CANCELED"), QStringLiteral("open")));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"), QStringLiteral("merged")));
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("IN_PROGRESS"), QStringLiteral("open")));
 }
 
 QTEST_MAIN(TestQueueScheduling)
