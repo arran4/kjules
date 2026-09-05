@@ -1,6 +1,6 @@
-#include "../src/followingrefreshevaluator.h"
 #include "../src/api/apierror.h"
 #include "../src/errorsmodel.h"
+#include "../src/followingrefreshevaluator.h"
 #include "../src/queuemodel.h"
 #include "../src/queuescheduler.h"
 #include "../src/utils.h"
