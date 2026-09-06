@@ -168,20 +168,3 @@ JobStore JobStore::fromMemory(const QVector<JobData> &jobs) {
   store.setJobs(jobs);
   return store;
 }
-
-bool JobStore::safeMigrationSeam(const QString &sourceLegacyPath, const QString &destinationStorePath) {
-  (void)sourceLegacyPath;
-
-  JobStore tempStore(destinationStorePath);
-  QVector<JobData> memJobs;
-  tempStore.setJobs(memJobs);
-
-  if (!tempStore.save())
-    return false;
-
-  JobStore validationStore(destinationStorePath);
-  if (!validationStore.load())
-    return false;
-
-  return true;
-}

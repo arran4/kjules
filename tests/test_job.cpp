@@ -1,3 +1,4 @@
+#include "../src/migrationorchestrator.h"
 #include "../src/jobdata.h"
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
@@ -198,7 +199,7 @@ private Q_SLOTS:
   void testMigrationSeam() {
     QString tempPath =
         QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/seam_test.json");
-    QVERIFY(JobStore::safeMigrationSeam(QStringLiteral("dummy"), tempPath));
+    LegacyData dummy; QVERIFY(MigrationOrchestrator::safeMigrationSeam(dummy, tempPath, QDateTime::currentDateTimeUtc()));
     QFile::remove(tempPath);
   }
 
@@ -218,7 +219,7 @@ private Q_SLOTS:
       QueueItem item;
       item.requestData = o[QStringLiteral("requestData")].toObject();
       item.isBlocked = o[QStringLiteral("isBlocked")].toBool();
-      item.blockMetadata = o[QStringLiteral("blockMetadata")].toObject();
+      item.blockMetadata = o[QStringLiteral("blockMetadata")].toObject(); // already fixed earlier but just in case
       item.errorCount = o[QStringLiteral("errorCount")].toInt();
       item.lastError = o[QStringLiteral("lastError")].toString();
       item.lastResponse = o[QStringLiteral("lastResponse")].toString();

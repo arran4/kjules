@@ -21,7 +21,6 @@ public:
   // For migration seams
   static JobStore fromMemory(const QVector<JobData> &jobs);
 
-  static bool safeMigrationSeam(const QString &sourceLegacyPath, const QString &destinationStorePath);
 
 private:
   QString m_filename;
