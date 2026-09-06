@@ -111,17 +111,17 @@ private Q_SLOTS:
     job.id = QStringLiteral("test-store-id");
     job.source = QStringLiteral("test-store-source");
 
-    JobStore store(QStringLiteral("test_jobs.json"));
+    JobStore store(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/test_jobs.json"));
     store.addJob(job);
     QVERIFY(store.save());
 
-    JobStore loadedStore(QStringLiteral("test_jobs.json"));
+    JobStore loadedStore(QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+                         QStringLiteral("/test_jobs.json"));
     QVERIFY(loadedStore.load());
     QCOMPARE(loadedStore.jobs().size(), 1);
     QCOMPARE(loadedStore.jobs()[0].id, job.id);
 
-    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
-                  QStringLiteral("/kjules/test_jobs.json"));
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/test_jobs.json"));
   }
 
   void testLegacyQueueConversion() {
@@ -212,6 +212,87 @@ private Q_SLOTS:
     QCOMPARE(job1.id, job2.id);
     QVERIFY(job1.attempts.size() == 1);
     QCOMPARE(job1.attempts[0].id, job2.attempts[0].id);
+  }
+
+  void testIdempotentReordering() {
+    QueueItem item1;
+    item1.requestData[QStringLiteral("id")] = QStringLiteral("req-1");
+    QueueItem item2;
+    item2.requestData[QStringLiteral("id")] = QStringLiteral("req-2");
+
+    LegacyData data1;
+    data1.queueItems = {item1, item2, item1};
+    LegacyData data2;
+    data2.queueItems = {item1, item1, item2}; // Reordered
+
+    QDateTime ts = QDateTime::currentDateTimeUtc();
+    auto res1 = LegacyConverter::convertAll(data1, ts);
+    auto res2 = LegacyConverter::convertAll(data2, ts);
+
+    QCOMPARE(res1.jobs.size(), 3);
+    QCOMPARE(res2.jobs.size(), 3);
+
+    // Check IDs
+    QSet<QString> ids1;
+    for (auto &j : res1.jobs)
+      ids1.insert(j.id);
+    QSet<QString> ids2;
+    for (auto &j : res2.jobs)
+      ids2.insert(j.id);
+
+    QCOMPARE(ids1, ids2);
+  }
+
+  void testPreviousAttemptIdNested() {
+    LegacyData data;
+
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+
+    QJsonObject sess2;
+    sess2[QStringLiteral("id")] = QStringLiteral("sess2");
+    QJsonObject req2;
+    req2[QStringLiteral("previousAttemptId")] = QStringLiteral("sess1");
+    sess2[QStringLiteral("request")] = req2;
+
+    data.activeSessions.append(sess1);
+    data.activeSessions.append(sess2);
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+    QCOMPARE(res.jobs.size(), 1);
+    QCOMPARE(res.jobs[0].attempts.size(), 2);
+  }
+
+  void testUnattachedErrors() {
+    LegacyData data;
+
+    QJsonObject opError;
+    opError[QStringLiteral("request")] = QJsonObject();
+    opError[QStringLiteral("message")] = QStringLiteral("op error");
+    QJsonObject workError;
+    QJsonObject req;
+    req[QStringLiteral("prompt")] = QStringLiteral("p");
+    workError[QStringLiteral("request")] = req;
+    workError[QStringLiteral("message")] = QStringLiteral("work error");
+
+    data.errors.append(opError);
+    data.errors.append(workError);
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+    QCOMPARE(res.jobs.size(), 1);             // Only the work error becomes a job
+    QCOMPARE(res.unattachedErrors.size(), 1); // The op error stays unattached
+  }
+
+  void testMalformedStoreValidation() {
+    JobStore store(QStringLiteral("bad.json"));
+
+    QFile f(QStringLiteral("bad.json"));
+    f.open(QIODevice::WriteOnly);
+    f.write("{\"schemaVersion\": 1, \"jobs\": [{\"id\": \"123\", \"priority\": \"not-a-number\"}]}");
+    f.close();
+
+    QVERIFY(!store.load()); // Should fail because priority isn't a number
+    QFile::remove(QStringLiteral("bad.json"));
   }
 };
 

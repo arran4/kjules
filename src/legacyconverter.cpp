@@ -9,9 +9,9 @@ QString canonicalizeJson(const QJsonObject &obj) {
   return QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
 }
 
-QString deterministicUuid(const QString &domain, const QJsonObject &legacyMetadata, int duplicateIndex = 0) {
+QString deterministicUuid(const QString &domain, const QJsonObject &legacyMetadata, int ordinal = 0) {
   QUuid nsUuid = QUuid::createUuidV5(QUuid(), domain);
-  QString canonical = canonicalizeJson(legacyMetadata) + QStringLiteral("_%1").arg(duplicateIndex);
+  QString canonical = canonicalizeJson(legacyMetadata) + QStringLiteral("_%1").arg(ordinal);
   return QUuid::createUuidV5(nsUuid, canonical).toString(QUuid::WithoutBraces);
 }
 } // namespace
@@ -93,8 +93,11 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
 QVector<JobData> LegacyConverter::convertQueue(const QVector<QueueItem> &items, bool isHolding,
                                                const QDateTime &fallbackTimestamp) {
   QVector<JobData> jobs;
+  QMap<QString, int> counts;
   for (int i = 0; i < items.size(); ++i) {
-    jobs.append(fromQueueItem(items[i], isHolding, fallbackTimestamp, i));
+    QString canonical = canonicalizeJson(items[i].requestData);
+    int ordinal = counts[canonical]++;
+    jobs.append(fromQueueItem(items[i], isHolding, fallbackTimestamp, ordinal));
   }
   return jobs;
 }
@@ -102,22 +105,28 @@ QVector<JobData> LegacyConverter::convertQueue(const QVector<QueueItem> &items, 
 QVector<JobData> LegacyConverter::convertSessions(const QJsonArray &sessions, bool isArchive,
                                                   const QDateTime &fallbackTimestamp) {
   QVector<JobData> jobs;
+  QMap<QString, int> counts;
   for (int i = 0; i < sessions.size(); ++i) {
-    jobs.append(fromSession(sessions[i].toObject(), isArchive, fallbackTimestamp, i));
+    QString canonical = canonicalizeJson(sessions[i].toObject());
+    int ordinal = counts[canonical]++;
+    jobs.append(fromSession(sessions[i].toObject(), isArchive, fallbackTimestamp, ordinal));
   }
   return jobs;
 }
 
 QVector<JobData> LegacyConverter::convertErrors(const QJsonArray &errors, const QDateTime &fallbackTimestamp) {
   QVector<JobData> jobs;
+  QMap<QString, int> counts;
   for (int i = 0; i < errors.size(); ++i) {
-    jobs.append(fromError(errors[i].toObject(), fallbackTimestamp, i));
+    QString canonical = canonicalizeJson(errors[i].toObject());
+    int ordinal = counts[canonical]++;
+    jobs.append(fromError(errors[i].toObject(), fallbackTimestamp, ordinal));
   }
   return jobs;
 }
 
 JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, const QDateTime &fallbackTimestamp,
-                                       int duplicateIndex) {
+                                       int ordinal) {
   JobData job;
   QJsonObject legacy;
   legacy[QStringLiteral("errorCount")] = item.errorCount;
@@ -131,7 +140,7 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
 
   QJsonObject contextObj = item.requestData;
   contextObj[QStringLiteral("_provenance")] = isHolding ? QStringLiteral("holding") : QStringLiteral("queue");
-  job.id = deterministicUuid(QStringLiteral("queue-job-v1"), contextObj, duplicateIndex);
+  job.id = deterministicUuid(QStringLiteral("queue-job-v1"), contextObj, ordinal);
   job.canonicalRequest = item.requestData;
 
   job.source = item.requestData[QStringLiteral("source")].toString();
@@ -156,10 +165,10 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
 }
 
 JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive, const QDateTime &fallbackTimestamp,
-                                     int duplicateIndex) {
+                                     int ordinal) {
   JobData job;
   job.legacyMetadata = session; // Store all original session data
-  job.id = deterministicUuid(QStringLiteral("session-job-v1"), session, duplicateIndex);
+  job.id = deterministicUuid(QStringLiteral("session-job-v1"), session, ordinal);
 
   job.source = session[QStringLiteral("source")].toString();
   if (job.source.isEmpty() && session.contains(QStringLiteral("sourceContext"))) {
@@ -185,7 +194,7 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   job.lifecycleMetadata = lifecycle;
 
   JobAttemptData attempt;
-  attempt.id = deterministicUuid(QStringLiteral("session-attempt-v1"), session, duplicateIndex);
+  attempt.id = deterministicUuid(QStringLiteral("session-attempt-v1"), session, ordinal);
   attempt.julesSessionId = session[QStringLiteral("id")].toString();
   attempt.julesState = session[QStringLiteral("state")].toString();
   attempt.createdAt = job.createdAt;
@@ -207,10 +216,10 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   return job;
 }
 
-JobData LegacyConverter::fromError(const QJsonObject &error, const QDateTime &fallbackTimestamp, int duplicateIndex) {
+JobData LegacyConverter::fromError(const QJsonObject &error, const QDateTime &fallbackTimestamp, int ordinal) {
   JobData job;
   job.legacyMetadata = error;
-  job.id = deterministicUuid(QStringLiteral("error-job-v1"), error, duplicateIndex);
+  job.id = deterministicUuid(QStringLiteral("error-job-v1"), error, ordinal);
 
   job.canonicalRequest = error[QStringLiteral("request")].toObject();
 
@@ -227,7 +236,7 @@ JobData LegacyConverter::fromError(const QJsonObject &error, const QDateTime &fa
   job.updatedAt = job.createdAt;
 
   JobAttemptData attempt;
-  attempt.id = deterministicUuid(QStringLiteral("error-attempt-v1"), error, duplicateIndex);
+  attempt.id = deterministicUuid(QStringLiteral("error-attempt-v1"), error, ordinal);
   attempt.requestSnapshot = job.canonicalRequest;
   attempt.dispatchState = QStringLiteral("FAILED");
   attempt.createdAt = job.createdAt;

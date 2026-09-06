@@ -7,8 +7,10 @@
 #include <QJsonObject>
 #include <QSaveFile>
 #include <QSet>
+#include <QStandardPaths>
 
-JobStore::JobStore(const QString &filename) : m_filename(filename) {}
+JobStore::JobStore(const QString &filename)
+    : m_filename(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + filename) {}
 
 bool JobStore::load() {
   QFile file(m_filename);
@@ -55,6 +57,19 @@ bool JobStore::load() {
       return false;
     jobIds.insert(jobId);
 
+    if (jobObj.contains(QStringLiteral("createdAt")) && !jobObj[QStringLiteral("createdAt")].isString())
+      return false;
+    if (jobObj.contains(QStringLiteral("updatedAt")) && !jobObj[QStringLiteral("updatedAt")].isString())
+      return false;
+    if (jobObj.contains(QStringLiteral("priority")) && !jobObj[QStringLiteral("priority")].isDouble())
+      return false;
+    if (jobObj.contains(QStringLiteral("planApproval")) && !jobObj[QStringLiteral("planApproval")].isBool())
+      return false;
+    if (jobObj.contains(QStringLiteral("ignoreConcurrency")) && !jobObj[QStringLiteral("ignoreConcurrency")].isBool())
+      return false;
+    if (jobObj.contains(QStringLiteral("canonicalRequest")) && !jobObj[QStringLiteral("canonicalRequest")].isObject())
+      return false;
+
     if (jobObj.contains(QStringLiteral("attempts"))) {
       if (!jobObj[QStringLiteral("attempts")].isArray())
         return false;
@@ -72,6 +87,17 @@ bool JobStore::load() {
         if (attemptIds.contains(attId))
           return false;
         attemptIds.insert(attId);
+
+        if (attObj.contains(QStringLiteral("createdAt")) && !attObj[QStringLiteral("createdAt")].isString())
+          return false;
+        if (attObj.contains(QStringLiteral("updatedAt")) && !attObj[QStringLiteral("updatedAt")].isString())
+          return false;
+        if (attObj.contains(QStringLiteral("requestSnapshot")) && !attObj[QStringLiteral("requestSnapshot")].isObject())
+          return false;
+        if (attObj.contains(QStringLiteral("launchErrors")) && !attObj[QStringLiteral("launchErrors")].isArray())
+          return false;
+        if (attObj.contains(QStringLiteral("julesSessionId")) && !attObj[QStringLiteral("julesSessionId")].isString())
+          return false;
       }
       if (jobObj.contains(QStringLiteral("acceptedAttemptId"))) {
         if (!jobObj[QStringLiteral("acceptedAttemptId")].isString())
@@ -82,7 +108,20 @@ bool JobStore::load() {
       }
     }
 
-    tempJobs.append(JobData::fromJson(jobObj));
+    JobData parsed = JobData::fromJson(jobObj);
+    if (!parsed.createdAt.isValid() && jobObj.contains(QStringLiteral("createdAt")))
+      return false;
+    if (!parsed.updatedAt.isValid() && jobObj.contains(QStringLiteral("updatedAt")))
+      return false;
+
+    for (const auto &a : parsed.attempts) {
+      if (!a.createdAt.isValid() && !a.createdAt.isNull())
+        return false;
+      if (!a.updatedAt.isValid() && !a.updatedAt.isNull())
+        return false;
+    }
+
+    tempJobs.append(parsed);
   }
 
   m_jobs = tempJobs;
