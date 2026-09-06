@@ -1,91 +1,119 @@
 #include "jobstore.h"
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
 #include <QSaveFile>
-#include <QDebug>
-#include <QStandardPaths>
-#include <QDir>
+#include <QSet>
 
-JobStore::JobStore(const QString& filename) : m_filename(filename) {}
+JobStore::JobStore(const QString &filename) : m_filename(filename) {}
 
 bool JobStore::load() {
-    QString path = m_filename;
-    if (!path.startsWith(QLatin1Char('/'))) {
-        path = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/kjules/") + m_filename;
-    }
+  QFile file(m_filename);
+  if (!file.exists())
+    return true; // Empty store is fine
+  if (!file.open(QIODevice::ReadOnly))
+    return false;
 
-    QFile file(path);
-    if (!file.exists()) {
-        return true; // No file is fine initially
-    }
+  QByteArray data = file.readAll();
+  QJsonParseError parseError;
+  QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+  if (parseError.error != QJsonParseError::NoError || !doc.isObject())
+    return false;
 
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "Could not open" << path << "for reading";
+  QJsonObject root = doc.object();
+
+  if (!root.contains(QStringLiteral("schemaVersion")))
+    return false;
+  QJsonValue versionVal = root.value(QStringLiteral("schemaVersion"));
+  if (!versionVal.isDouble() || versionVal.toInt() != 1)
+    return false;
+
+  if (!root.contains(QStringLiteral("jobs")))
+    return false;
+  QJsonValue jobsVal = root.value(QStringLiteral("jobs"));
+  if (!jobsVal.isArray())
+    return false;
+
+  QJsonArray jobsArray = jobsVal.toArray();
+  QVector<JobData> tempJobs;
+  QSet<QString> jobIds;
+
+  for (const QJsonValue &jobVal : jobsArray) {
+    if (!jobVal.isObject())
+      return false;
+    QJsonObject jobObj = jobVal.toObject();
+
+    if (!jobObj.contains(QStringLiteral("id")) || !jobObj[QStringLiteral("id")].isString())
+      return false;
+    QString jobId = jobObj[QStringLiteral("id")].toString();
+    if (jobId.isEmpty())
+      return false;
+    if (jobIds.contains(jobId))
+      return false;
+    jobIds.insert(jobId);
+
+    if (jobObj.contains(QStringLiteral("attempts"))) {
+      if (!jobObj[QStringLiteral("attempts")].isArray())
         return false;
+      QJsonArray attemptArray = jobObj[QStringLiteral("attempts")].toArray();
+      QSet<QString> attemptIds;
+      for (const QJsonValue &attVal : attemptArray) {
+        if (!attVal.isObject())
+          return false;
+        QJsonObject attObj = attVal.toObject();
+        if (!attObj.contains(QStringLiteral("id")) || !attObj[QStringLiteral("id")].isString())
+          return false;
+        QString attId = attObj[QStringLiteral("id")].toString();
+        if (attId.isEmpty())
+          return false;
+        if (attemptIds.contains(attId))
+          return false;
+        attemptIds.insert(attId);
+      }
+      if (jobObj.contains(QStringLiteral("acceptedAttemptId"))) {
+        if (!jobObj[QStringLiteral("acceptedAttemptId")].isString())
+          return false;
+        QString accId = jobObj[QStringLiteral("acceptedAttemptId")].toString();
+        if (!accId.isEmpty() && !attemptIds.contains(accId))
+          return false;
+      }
     }
 
-    QJsonParseError error;
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
-    if (error.error != QJsonParseError::NoError) {
-        qWarning() << "Failed to parse" << path << ":" << error.errorString();
-        return false;
-    }
+    tempJobs.append(JobData::fromJson(jobObj));
+  }
 
-    QJsonObject root = doc.object();
-    if (!root.contains(QStringLiteral("schemaVersion"))) {
-        qWarning() << "Missing schemaVersion in" << path;
-        return false;
-    }
-
-    int version = root[QStringLiteral("schemaVersion")].toInt();
-    if (version != m_schemaVersion) {
-        qWarning() << "Unsupported schemaVersion" << version << "in" << path;
-        return false;
-    }
-
-    m_jobs.clear();
-    QJsonArray jobsArray = root[QStringLiteral("jobs")].toArray();
-    for (const auto& jobVal : jobsArray) {
-        m_jobs.append(JobData::fromJson(jobVal.toObject()));
-    }
-
-    return true;
+  m_jobs = tempJobs;
+  return true;
 }
 
 bool JobStore::save() const {
-    QString path = m_filename;
-    if (!path.startsWith(QLatin1Char('/'))) {
-        QString dirPath = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/kjules");
-        QDir dir(dirPath);
-        if (!dir.exists()) dir.mkpath(QStringLiteral("."));
-        path = dirPath + QStringLiteral("/") + m_filename;
-    }
+  QFileInfo fi(m_filename);
+  QDir dir = fi.dir();
+  if (!dir.exists()) {
+    if (!dir.mkpath(QStringLiteral(".")))
+      return false;
+  }
 
-    QJsonObject root;
-    root[QStringLiteral("schemaVersion")] = m_schemaVersion;
+  QSaveFile saveFile(m_filename);
+  saveFile.setDirectWriteFallback(false);
+  if (!saveFile.open(QIODevice::WriteOnly))
+    return false;
 
-    QJsonArray jobsArray;
-    for (const auto& job : m_jobs) {
-        jobsArray.append(job.toJson());
-    }
-    root[QStringLiteral("jobs")] = jobsArray;
+  QJsonArray jobsArray;
+  for (const auto &job : m_jobs) {
+    jobsArray.append(job.toJson());
+  }
 
-    QJsonDocument doc(root);
+  QJsonObject root;
+  root[QStringLiteral("schemaVersion")] = 1;
+  root[QStringLiteral("jobs")] = jobsArray;
 
-    QSaveFile saveFile(path);
-    if (!saveFile.open(QIODevice::WriteOnly)) {
-        qWarning() << "Could not open" << path << "for writing";
-        return false;
-    }
+  QJsonDocument doc(root);
+  if (saveFile.write(doc.toJson(QJsonDocument::Compact)) == -1)
+    return false;
 
-    saveFile.write(doc.toJson());
-    return saveFile.commit();
-}
-
-JobStore JobStore::fromMemory(const QVector<JobData>& jobs) {
-    JobStore store;
-    store.m_jobs = jobs;
-    return store;
+  return saveFile.commit();
 }

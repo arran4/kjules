@@ -5,60 +5,75 @@
 
 class JobPolicy {
 public:
-    static bool consumesConcurrency(const JobAttemptData& attempt) {
-        if (attempt.julesState == QStringLiteral("ERROR") || attempt.julesState == QStringLiteral("CANCELED")) {
-            return false;
-        }
-        if (attempt.dispatchState == QStringLiteral("FAILED")) {
-            return false;
-        }
+  static bool isAttemptTerminal(const JobAttemptData &attempt) {
+    return attempt.julesState == QLatin1String("COMPLETED") || attempt.julesState == QLatin1String("ERROR") ||
+           attempt.julesState == QLatin1String("CANCELED") || attempt.dispatchState == QLatin1String("FAILED") ||
+           attempt.dispatchState == QLatin1String("CANCELED");
+  }
+
+  static bool isAttemptSuccessful(const JobAttemptData &attempt) {
+    return attempt.julesState == QLatin1String("COMPLETED");
+  }
+
+  static bool isAttemptFailed(const JobAttemptData &attempt) {
+    return attempt.julesState == QLatin1String("ERROR") || attempt.dispatchState == QLatin1String("FAILED");
+  }
+
+  static bool consumesConcurrency(const JobAttemptData &attempt) {
+    if (isAttemptTerminal(attempt)) {
+      return false;
+    }
+    if (attempt.julesState.isEmpty() && attempt.dispatchState.isEmpty()) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool isValidAttempt(const JobData &job, const QString &attemptId) {
+    for (const auto &a : job.attempts) {
+      if (a.id == attemptId)
         return true;
     }
+    return false;
+  }
 
-    static bool hasViableActiveAttempt(const JobData& job) {
-        for (const auto& attempt : job.attempts) {
-            if (consumesConcurrency(attempt)) {
-                return true;
-            }
-        }
-        return false;
+  static bool hasViableActiveAttempt(const JobData &job) {
+    for (const auto &attempt : job.attempts) {
+      if (!isAttemptTerminal(attempt))
+        return true;
     }
+    return false;
+  }
 
-    static bool needsAttention(const JobData& job) {
-        if (job.attempts.isEmpty()) return false;
-
-        bool allFailed = true;
-        for (const auto& attempt : job.attempts) {
-            if (consumesConcurrency(attempt) || attempt.julesState == QStringLiteral("COMPLETED")) {
-                allFailed = false;
-                break;
-            }
-        }
-        return allFailed;
+  static bool isSuccessfullyComplete(const JobData &job) {
+    if (!job.acceptedAttemptId.isEmpty() && isValidAttempt(job, job.acceptedAttemptId)) {
+      return true;
     }
-
-    static bool isSuccessfullyComplete(const JobData& job) {
-        if (!job.acceptedAttemptId.isEmpty()) return true;
-        for (const auto& attempt : job.attempts) {
-            if (attempt.julesState == QStringLiteral("COMPLETED")) {
-                return true;
-            }
-        }
-        return false;
+    for (const auto &attempt : job.attempts) {
+      if (isAttemptSuccessful(attempt))
+        return true;
     }
+    return false;
+  }
 
-    static bool shouldRemainInFollowing(const JobData& job) {
-        return hasViableActiveAttempt(job) || needsAttention(job);
-    }
+  static bool needsAttention(const JobData &job) {
+    if (job.attempts.isEmpty())
+      return false;
+    if (isSuccessfullyComplete(job))
+      return false;
+    if (hasViableActiveAttempt(job))
+      return false;
 
-    static bool hasOutstandingAttempts(const JobData& job) {
-        for (const auto& attempt : job.attempts) {
-            if (consumesConcurrency(attempt) && attempt.julesState != QStringLiteral("COMPLETED")) {
-                return true;
-            }
-        }
-        return false;
+    for (const auto &attempt : job.attempts) {
+      if (isAttemptFailed(attempt))
+        return true;
     }
+    return false;
+  }
+
+  static bool shouldRemainInFollowing(const JobData &job) { return hasViableActiveAttempt(job) || needsAttention(job); }
+
+  static bool hasOutstandingAttempts(const JobData &job) { return hasViableActiveAttempt(job); }
 };
 
-#endif // JOBPOLICY_H
+#endif
