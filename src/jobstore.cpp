@@ -162,3 +162,21 @@ bool JobStore::save() const {
 
   return saveFile.commit();
 }
+
+JobStore JobStore::fromMemory(const QVector<JobData> &jobs) {
+  JobStore store;
+  store.setJobs(jobs);
+  return store;
+}
+
+bool JobStore::safeMigrationSeam(const QString &sourceLegacyPath, const QString &destinationStorePath) {
+  // Phase 2 implementation orchestrator
+  // 1. identify/read legacy source files
+  // 2. build new representation in memory via LegacyConverter
+  // 3. validate it
+  // 4. write new Job persistence atomically
+  // 5. reopen/read it
+  // 6. validate the read-back
+  // 7. only then permit the migration
+  return false; // Not activated in Phase 1
+}

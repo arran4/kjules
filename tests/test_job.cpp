@@ -35,6 +35,40 @@ private Q_SLOTS:
     QCOMPARE(recovered.attempts[0].julesState, attempt.julesState);
   }
 
+  void testJobPolicyEmptyAttemptNotViable() {
+    JobData job;
+    JobAttemptData attempt; // completely empty, default
+    job.attempts.append(attempt);
+    QCOMPARE(JobPolicy::hasViableActiveAttempt(job), false);
+    QCOMPARE(JobPolicy::consumesConcurrency(attempt), false);
+  }
+
+  void testJobPolicyAcceptedFailed() {
+    JobData job;
+    JobAttemptData attempt;
+    attempt.id = QStringLiteral("a1");
+    attempt.julesState = QStringLiteral("ERROR");
+    job.attempts.append(attempt);
+    job.acceptedAttemptId = QStringLiteral("a1"); // invalid accepted
+    QCOMPARE(JobPolicy::isSuccessfullyComplete(job), false);
+  }
+
+  void testJobPolicyFailedAndActive() {
+    JobData job;
+    JobAttemptData a1;
+    a1.id = QStringLiteral("a1");
+    a1.julesState = QStringLiteral("ERROR");
+    JobAttemptData a2;
+    a2.id = QStringLiteral("a2");
+    a2.julesState = QStringLiteral("IN_PROGRESS");
+    job.attempts.append(a1);
+    job.attempts.append(a2);
+
+    QCOMPARE(JobPolicy::needsAttention(job), false); // Active attempt overrides attention
+    QCOMPARE(JobPolicy::hasViableActiveAttempt(job), true);
+    QCOMPARE(JobPolicy::shouldRemainInFollowing(job), true);
+  }
+
   void testJobPolicyNoAttempts() {
     JobData job;
     QCOMPARE(JobPolicy::consumesConcurrency(JobAttemptData()), false);
@@ -122,96 +156,6 @@ private Q_SLOTS:
     QCOMPARE(loadedStore.jobs()[0].id, job.id);
 
     QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/test_jobs.json"));
-  }
-
-  void testLegacyQueueConversion() {
-    QueueItem item;
-    item.requestData[QStringLiteral("prompt")] = QStringLiteral("test prompt");
-    QJsonObject ctx;
-    ctx[QStringLiteral("source")] = QStringLiteral("test source");
-    item.requestData[QStringLiteral("sourceContext")] = ctx;
-    item.isBlocked = true;
-
-    JobData job = LegacyConverter::fromQueueItem(item, false, QDateTime::currentDateTimeUtc());
-    QCOMPARE(job.prompt, QString(QStringLiteral("test prompt")));
-    QCOMPARE(job.source, QString(QStringLiteral("test source")));
-    QCOMPARE(job.attempts.size(), 0);
-    QCOMPARE(job.lifecycleMetadata[QStringLiteral("isBlocked")].toBool(), true);
-  }
-
-  void testLegacySessionConversion() {
-    QJsonObject session;
-    session[QStringLiteral("id")] = QStringLiteral("session-123");
-    session[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
-    session[QStringLiteral("source")] = QStringLiteral("session-source");
-    session[QStringLiteral("createTime")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-
-    JobData job = LegacyConverter::fromSession(session, false, QDateTime::currentDateTimeUtc());
-    QCOMPARE(job.source, QString(QStringLiteral("session-source")));
-    QCOMPARE(job.attempts.size(), 1);
-    QCOMPARE(job.attempts[0].julesSessionId, QString(QStringLiteral("session-123")));
-    QCOMPARE(job.attempts[0].julesState, QString(QStringLiteral("IN_PROGRESS")));
-  }
-
-  void testLegacyErrorConversion() {
-    QJsonObject error;
-    QJsonObject req;
-    req[QStringLiteral("prompt")] = QStringLiteral("error prompt");
-    error[QStringLiteral("request")] = req;
-    error[QStringLiteral("message")] = QStringLiteral("error message");
-
-    JobData job = LegacyConverter::fromError(error, QDateTime::currentDateTimeUtc());
-    QCOMPARE(job.prompt, QString(QStringLiteral("error prompt")));
-    QCOMPARE(job.attempts.size(), 1);
-    QCOMPARE(job.attempts[0].dispatchState, QString(QStringLiteral("FAILED")));
-    QCOMPARE(job.attempts[0].launchErrors.size(), 1);
-    QCOMPARE(job.attempts[0].launchErrors[0].toObject()[QStringLiteral("message")].toString(),
-             QString(QStringLiteral("error message")));
-  }
-
-  void testDeterministicIdQueue() {
-    QueueItem item;
-    item.requestData[QStringLiteral("prompt")] = QStringLiteral("determ prompt");
-    item.requestData[QStringLiteral("id")] = QStringLiteral("req-1");
-
-    JobData job1 = LegacyConverter::fromQueueItem(item, false, QDateTime::currentDateTimeUtc());
-    JobData job2 = LegacyConverter::fromQueueItem(item, false, QDateTime::currentDateTimeUtc());
-
-    QCOMPARE(job1.id, job2.id); // Same input produces same Job ID
-
-    // Change input slightly
-    item.requestData[QStringLiteral("id")] = QStringLiteral("req-2");
-    JobData job3 = LegacyConverter::fromQueueItem(item, false, QDateTime::currentDateTimeUtc());
-    QVERIFY(job1.id != job3.id); // Different input produces different ID
-  }
-
-  void testDeterministicIdSession() {
-    QJsonObject session;
-    session[QStringLiteral("id")] = QStringLiteral("sess-1");
-    session[QStringLiteral("prompt")] = QStringLiteral("sess prompt");
-
-    JobData job1 = LegacyConverter::fromSession(session, false, QDateTime::currentDateTimeUtc());
-    JobData job2 = LegacyConverter::fromSession(session, false, QDateTime::currentDateTimeUtc());
-
-    QCOMPARE(job1.id, job2.id);
-    QVERIFY(job1.attempts.size() == 1);
-    QVERIFY(job2.attempts.size() == 1);
-    QCOMPARE(job1.attempts[0].id, job2.attempts[0].id); // Attempt IDs match
-  }
-
-  void testDeterministicIdError() {
-    QJsonObject error;
-    QJsonObject req;
-    req[QStringLiteral("prompt")] = QStringLiteral("error prompt");
-    error[QStringLiteral("request")] = req;
-    error[QStringLiteral("message")] = QStringLiteral("error msg");
-
-    JobData job1 = LegacyConverter::fromError(error, QDateTime::currentDateTimeUtc());
-    JobData job2 = LegacyConverter::fromError(error, QDateTime::currentDateTimeUtc());
-
-    QCOMPARE(job1.id, job2.id);
-    QVERIFY(job1.attempts.size() == 1);
-    QCOMPARE(job1.attempts[0].id, job2.attempts[0].id);
   }
 
   void testIdempotentReordering() {

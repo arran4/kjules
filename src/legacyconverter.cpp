@@ -173,7 +173,6 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
         sessionId = errorObj[QStringLiteral("sessionId")].toString();
       }
 
-      JobData *targetJob = nullptr;
       JobAttemptData *targetAttempt = nullptr;
       if (!sessionId.isEmpty()) {
         // Recalculate unique map (since attempts appended)

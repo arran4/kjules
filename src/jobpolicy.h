@@ -39,7 +39,15 @@ public:
 
   static bool hasViableActiveAttempt(const JobData &job) {
     for (const auto &attempt : job.attempts) {
-      if (!isAttemptTerminal(attempt))
+      if (!isAttemptTerminal(attempt) && (!attempt.julesState.isEmpty() || !attempt.dispatchState.isEmpty()))
+        return true;
+    }
+    return false;
+  }
+
+  static bool hasError(const JobData &job) {
+    for (const auto &attempt : job.attempts) {
+      if (isAttemptFailed(attempt))
         return true;
     }
     return false;
@@ -47,7 +55,11 @@ public:
 
   static bool isSuccessfullyComplete(const JobData &job) {
     if (!job.acceptedAttemptId.isEmpty() && isValidAttempt(job, job.acceptedAttemptId)) {
-      return true;
+      for (const auto &attempt : job.attempts) {
+        if (attempt.id == job.acceptedAttemptId && isAttemptSuccessful(attempt)) {
+          return true;
+        }
+      }
     }
     for (const auto &attempt : job.attempts) {
       if (isAttemptSuccessful(attempt))
@@ -64,11 +76,7 @@ public:
     if (hasViableActiveAttempt(job))
       return false;
 
-    for (const auto &attempt : job.attempts) {
-      if (isAttemptFailed(attempt))
-        return true;
-    }
-    return false;
+    return hasError(job);
   }
 
   static bool shouldRemainInFollowing(const JobData &job) { return hasViableActiveAttempt(job) || needsAttention(job); }
