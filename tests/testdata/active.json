@@ -16,8 +16,7 @@
     },
     "pullRequest": {
       "state": "open",
-      "url": "https://github.com/test/pull/1",
-      "state": "open"
+      "url": "https://github.com/test/pull/1"
     }
   }
 ]
