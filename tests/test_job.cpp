@@ -370,8 +370,13 @@ private Q_SLOTS:
     f.open(QIODevice::WriteOnly);
     f.write("{\"schemaVersion\": 1, \"jobs\": [{\"id\": \"123\", \"priority\": \"not-a-number\"}]}");
     f.close();
-
     QVERIFY(!store.load()); // Should fail because priority isn't a number
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+
+    f.open(QIODevice::WriteOnly);
+    f.write("{\"schemaVersion\": 1, \"jobs\": [{\"id\": \"123\", \"acceptedAttemptId\": \"missing\"}]}");
+    f.close();
+    QVERIFY(!store.load()); // Should fail because acceptedAttemptId references nonexistent attempt
     QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
   }
 };

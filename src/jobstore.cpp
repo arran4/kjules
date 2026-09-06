@@ -112,6 +112,13 @@ bool JobStore::load() {
         if (!accId.isEmpty() && !attemptIds.contains(accId))
           return false;
       }
+    } else {
+      if (jobObj.contains(QStringLiteral("acceptedAttemptId"))) {
+        if (!jobObj[QStringLiteral("acceptedAttemptId")].isString())
+          return false;
+        if (!jobObj[QStringLiteral("acceptedAttemptId")].toString().isEmpty())
+          return false;
+      }
     }
 
     JobData parsed = JobData::fromJson(jobObj);
