@@ -165,10 +165,17 @@ private Q_SLOTS:
     QueueItem item2;
     item2.requestData[QStringLiteral("id")] = QStringLiteral("req-2");
 
+    QueueItem item3; // Same request as item1, different blocking state
+    item3.requestData[QStringLiteral("id")] = QStringLiteral("req-1");
+    item3.isBlocked = true;
+    QJsonObject bm;
+    bm[QStringLiteral("reason")] = QStringLiteral("ci");
+    item3.blockMetadata = bm;
+
     LegacyData data1;
-    data1.queueItems = {item1, item2, item1};
+    data1.queueItems = {item1, item2, item3};
     LegacyData data2;
-    data2.queueItems = {item1, item1, item2}; // Reordered
+    data2.queueItems = {item3, item1, item2}; // Reordered
 
     QDateTime ts = QDateTime::currentDateTimeUtc();
     auto res1 = LegacyConverter::convertAll(data1, ts);
@@ -199,9 +206,29 @@ private Q_SLOTS:
   void testMigrationSeam() {
     QString tempPath =
         QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/seam_test.json");
-    LegacyData dummy;
-    QVERIFY(MigrationOrchestrator::safeMigrationSeam(dummy, tempPath, QDateTime::currentDateTimeUtc()));
+
+    // Empty data trivially succeeds
+    LegacyData emptyData;
+    QVERIFY(MigrationOrchestrator::safeMigrationSeam(emptyData, tempPath, QDateTime::currentDateTimeUtc()));
+
+    // Data without unattached errors succeeds and validates full round trip
+    LegacyData data;
+    QueueItem item1;
+    item1.requestData[QStringLiteral("id")] = QStringLiteral("req-1");
+    data.queueItems.append(item1);
+    QVERIFY(MigrationOrchestrator::safeMigrationSeam(data, tempPath, QDateTime::currentDateTimeUtc()));
     QFile::remove(tempPath);
+
+    // Data with operational diagnostics fails migration seam currently because they aren't stored
+    LegacyData dataWithErrors;
+    QJsonObject opError;
+    opError[QStringLiteral("message")] = QStringLiteral("op error");
+    dataWithErrors.errors.append(opError);
+    QVERIFY(!MigrationOrchestrator::safeMigrationSeam(dataWithErrors, tempPath, QDateTime::currentDateTimeUtc()));
+
+    // Test write failure handling
+    QVERIFY(!MigrationOrchestrator::safeMigrationSeam(data, QStringLiteral("/dev/null/foo.json"),
+                                                      QDateTime::currentDateTimeUtc()));
   }
 
   void testFixtures() {
@@ -240,11 +267,12 @@ private Q_SLOTS:
     }
 
     data.activeSessions = loadArray(QStringLiteral("active.json"));
+    data.archivedSessions = loadArray(QStringLiteral("archive.json"));
     data.errors = loadArray(QStringLiteral("errors.json"));
 
     auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
 
-    QCOMPARE(res.jobs.size(), 4);             // 1 queue, 1 holding, 1 active, 1 logical work error
+    QCOMPARE(res.jobs.size(), 5);             // 1 queue, 1 holding, 1 active, 1 archive, 1 logical work error
     QCOMPARE(res.unattachedErrors.size(), 1); // 1 operational diagnostic
 
     int linkedErrors = 0;
@@ -258,6 +286,9 @@ private Q_SLOTS:
           linkedErrors += a.launchErrors.size();
           QVERIFY(!a.prMetadata.isEmpty());
           QCOMPARE(a.prMetadata[QStringLiteral("status")].toString(), QStringLiteral("open"));
+        } else if (a.julesSessionId == QStringLiteral("sess-archive")) {
+          QVERIFY(!a.prMetadata.isEmpty());
+          QCOMPARE(a.prMetadata[QStringLiteral("url")].toString(), QStringLiteral("https://github.com/test/pull/2"));
         }
       }
     }

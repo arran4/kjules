@@ -1,0 +1,37 @@
+[
+  {
+    "id": "sess-archive",
+    "prompt": "Active test",
+    "sourceContext": {
+      "source": "local"
+    },
+    "state": "COMPLETED",
+    "createTime": "2026-09-01T10:00:00Z",
+    "updateTime": "2026-09-01T10:05:00Z",
+    "local_favourite": 1,
+    "local_refreshInterval": 60,
+    "githubPrInfo": {
+      "url": "https://github.com/test/pull/1",
+      "number": "1",
+      "state": "open",
+      "labels": [
+        {
+          "name": "bug"
+        }
+      ]
+    },
+    "request": {
+      "prompt": "Active test",
+      "automationMode": "auto"
+    },
+    "outputs": [
+      {
+        "pullRequest": {
+          "url": "https://github.com/test/pull/2"
+        }
+      }
+    ],
+    "lastRefreshed": "2026-09-01T10:06:00Z",
+    "local_snooze_until": "2026-09-02T10:00:00Z"
+  }
+]

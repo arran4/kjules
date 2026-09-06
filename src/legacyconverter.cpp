@@ -70,6 +70,10 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
     QJsonObject full = data.queueItems[i].requestData;
     full[QStringLiteral("_legacy")] = legacy;
     full[QStringLiteral("_isHolding")] = false;
+    full[QStringLiteral("_isBlocked")] = data.queueItems[i].isBlocked;
+    if (!data.queueItems[i].blockMetadata.isEmpty()) {
+      full[QStringLiteral("_blockMetadata")] = data.queueItems[i].blockMetadata;
+    }
     QString canonical = canonicalizeJson(full);
     int ordinal = queueCounts[canonical]++;
     allJobs.append(fromQueueItem(data.queueItems[i], false, fallbackTimestamp, ordinal));
@@ -88,6 +92,10 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
     QJsonObject full = data.holdingItems[i].requestData;
     full[QStringLiteral("_legacy")] = legacy;
     full[QStringLiteral("_isHolding")] = true;
+    full[QStringLiteral("_isBlocked")] = data.holdingItems[i].isBlocked;
+    if (!data.holdingItems[i].blockMetadata.isEmpty()) {
+      full[QStringLiteral("_blockMetadata")] = data.holdingItems[i].blockMetadata;
+    }
     QString canonical = canonicalizeJson(full);
     int ordinal = holdingCounts[canonical]++;
     allJobs.append(fromQueueItem(data.holdingItems[i], true, fallbackTimestamp, ordinal));
@@ -277,6 +285,10 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
   QJsonObject contextObj = item.requestData;
   contextObj[QStringLiteral("_legacy")] = legacy;
   contextObj[QStringLiteral("_isHolding")] = isHolding;
+  contextObj[QStringLiteral("_isBlocked")] = item.isBlocked;
+  if (!item.blockMetadata.isEmpty()) {
+    contextObj[QStringLiteral("_blockMetadata")] = item.blockMetadata;
+  }
   job.id = deterministicUuid(QStringLiteral("queue-job-v1"), contextObj, ordinal);
   job.canonicalRequest = item.requestData;
 
@@ -395,6 +407,9 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   if (session.contains(QStringLiteral("pullRequest"))) {
     QJsonObject pr = session[QStringLiteral("pullRequest")].toObject();
     prMetadata[QStringLiteral("url")] = pr[QStringLiteral("url")];
+    if (pr.contains(QStringLiteral("state"))) {
+      prMetadata[QStringLiteral("status")] = pr[QStringLiteral("state")];
+    }
   } else if (session.contains(QStringLiteral("outputs"))) {
     QJsonArray outputs = session[QStringLiteral("outputs")].toArray();
     for (const auto &out : outputs) {
@@ -402,6 +417,9 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
       if (outObj.contains(QStringLiteral("pullRequest"))) {
         QJsonObject pr = outObj[QStringLiteral("pullRequest")].toObject();
         prMetadata[QStringLiteral("url")] = pr[QStringLiteral("url")];
+        if (pr.contains(QStringLiteral("state"))) {
+          prMetadata[QStringLiteral("status")] = pr[QStringLiteral("state")];
+        }
         break;
       }
     }

@@ -21,7 +21,6 @@ public:
   // For migration seams
   static JobStore fromMemory(const QVector<JobData> &jobs);
 
-
 private:
   QString m_filename;
   QVector<JobData> m_jobs;
