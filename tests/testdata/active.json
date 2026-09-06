@@ -1,0 +1,22 @@
+[
+  {
+    "id": "sess-active",
+    "prompt": "Active test",
+    "sourceContext": {"source": "local"},
+    "state": "IN_PROGRESS",
+    "createTime": "2026-09-01T10:00:00Z",
+    "updateTime": "2026-09-01T10:05:00Z",
+    "local_favourite": 1,
+    "local_refreshInterval": 60,
+    "githubPrInfo": {
+       "url": "https://github.com/test/pull/1",
+       "number": "1",
+       "state": "open",
+       "labels": [{"name": "bug"}]
+    },
+    "request": {
+        "prompt": "Active test",
+        "automationMode": "auto"
+    }
+  }
+]

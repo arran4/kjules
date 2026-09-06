@@ -1,0 +1,20 @@
+[
+  {
+    "message": "Operational Diagnostic",
+    "provider": "github"
+  },
+  {
+    "message": "Launch failed",
+    "request": {
+        "prompt": "Logical Work",
+        "sourceContext": {"source": "local"}
+    }
+  },
+  {
+    "message": "Linked session failure",
+    "sessionId": "sess-active",
+    "request": {
+        "prompt": "Linked Failure"
+    }
+  }
+]

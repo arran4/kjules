@@ -158,7 +158,7 @@ private Q_SLOTS:
     QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/test_jobs.json"));
   }
 
-  void testIdempotentReordering() {
+  void testIdempotentReorderingFull() {
     QueueItem item1;
     item1.requestData[QStringLiteral("id")] = QStringLiteral("req-1");
     QueueItem item2;
@@ -176,15 +176,91 @@ private Q_SLOTS:
     QCOMPARE(res1.jobs.size(), 3);
     QCOMPARE(res2.jobs.size(), 3);
 
-    // Check IDs
-    QSet<QString> ids1;
+    QJsonArray arr1;
     for (auto &j : res1.jobs)
-      ids1.insert(j.id);
-    QSet<QString> ids2;
+      arr1.append(j.toJson());
+    QJsonArray arr2;
     for (auto &j : res2.jobs)
-      ids2.insert(j.id);
+      arr2.append(j.toJson());
 
-    QCOMPARE(ids1, ids2);
+    // Check full output is identical after sorting
+    auto sortArray = [](QJsonArray arr) {
+      QStringList strList;
+      for (const auto &v : arr)
+        strList.append(QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact)));
+      strList.sort();
+      return strList;
+    };
+
+    QCOMPARE(sortArray(arr1), sortArray(arr2));
+  }
+
+  void testMigrationSeam() {
+    QString tempPath =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/seam_test.json");
+    QVERIFY(JobStore::safeMigrationSeam(QStringLiteral("dummy"), tempPath));
+    QFile::remove(tempPath);
+  }
+
+  void testFixtures() {
+    LegacyData data;
+
+    auto loadArray = [](const QString &name) {
+      QFile f(QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+              QStringLiteral("/../workspace/tests/testdata/") + name);
+      f.open(QIODevice::ReadOnly);
+      return QJsonDocument::fromJson(f.readAll()).array();
+    };
+
+    QJsonArray qArr = loadArray(QStringLiteral("queue.json"));
+    for (const QJsonValue &v : qArr) {
+      QJsonObject o = v.toObject();
+      QueueItem item;
+      item.requestData = o[QStringLiteral("requestData")].toObject();
+      item.isBlocked = o[QStringLiteral("isBlocked")].toBool();
+      item.blockMetadata = o[QStringLiteral("blockMetadata")].toObject();
+      item.errorCount = o[QStringLiteral("errorCount")].toInt();
+      item.lastError = o[QStringLiteral("lastError")].toString();
+      item.lastResponse = o[QStringLiteral("lastResponse")].toString();
+      if (o.contains(QStringLiteral("lastTry")))
+        item.lastTry = QDateTime::fromString(o[QStringLiteral("lastTry")].toString(), Qt::ISODate);
+      item.pastErrors = o[QStringLiteral("pastErrors")].toArray();
+      data.queueItems.append(item);
+    }
+
+    QJsonArray hArr = loadArray(QStringLiteral("holding.json"));
+    for (const QJsonValue &v : hArr) {
+      QJsonObject o = v.toObject();
+      QueueItem item;
+      item.requestData = o[QStringLiteral("requestData")].toObject();
+      item.isBlocked = o[QStringLiteral("isBlocked")].toBool();
+      item.errorCount = o[QStringLiteral("errorCount")].toInt();
+      data.holdingItems.append(item);
+    }
+
+    data.activeSessions = loadArray(QStringLiteral("active.json"));
+    data.errors = loadArray(QStringLiteral("errors.json"));
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+
+    QCOMPARE(res.jobs.size(), 4);             // 1 queue, 1 holding, 1 active, 1 logical work error
+    QCOMPARE(res.unattachedErrors.size(), 1); // 1 operational diagnostic
+
+    int linkedErrors = 0;
+    for (const auto &j : res.jobs) {
+      if (j.id.contains(QLatin1String("queue"))) {
+        QCOMPARE(j.priority, 5);
+        QCOMPARE(j.planApproval, true);
+      }
+      for (const auto &a : j.attempts) {
+        if (a.julesSessionId == QStringLiteral("sess-active")) {
+          linkedErrors += a.launchErrors.size();
+          QVERIFY(!a.prMetadata.isEmpty());
+          QCOMPARE(a.prMetadata[QStringLiteral("status")].toString(), QStringLiteral("open"));
+        }
+      }
+    }
+    QCOMPARE(linkedErrors, 1);
   }
 
   void testPreviousAttemptIdNested() {

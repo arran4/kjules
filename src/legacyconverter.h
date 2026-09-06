@@ -24,6 +24,7 @@ class LegacyConverter {
 public:
   static ConversionResult convertAll(const LegacyData &data, const QDateTime &fallbackTimestamp);
 
+private:
   static QVector<JobData> convertQueue(const QVector<QueueItem> &items, bool isHolding,
                                        const QDateTime &fallbackTimestamp);
   static QVector<JobData> convertSessions(const QJsonArray &sessions, bool isArchive,
