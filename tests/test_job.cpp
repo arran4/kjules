@@ -1,8 +1,8 @@
-#include "../src/migrationorchestrator.h"
 #include "../src/jobdata.h"
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
 #include "../src/legacyconverter.h"
+#include "../src/migrationorchestrator.h"
 #include <QObject>
 #include <QStandardPaths>
 #include <QTest>
@@ -199,7 +199,8 @@ private Q_SLOTS:
   void testMigrationSeam() {
     QString tempPath =
         QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/seam_test.json");
-    LegacyData dummy; QVERIFY(MigrationOrchestrator::safeMigrationSeam(dummy, tempPath, QDateTime::currentDateTimeUtc()));
+    LegacyData dummy;
+    QVERIFY(MigrationOrchestrator::safeMigrationSeam(dummy, tempPath, QDateTime::currentDateTimeUtc()));
     QFile::remove(tempPath);
   }
 
@@ -207,8 +208,7 @@ private Q_SLOTS:
     LegacyData data;
 
     auto loadArray = [](const QString &name) {
-      QFile f(QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-              QStringLiteral("/../workspace/tests/testdata/") + name);
+      QFile f(QStringLiteral(TEST_DATA_DIR "/") + name);
       f.open(QIODevice::ReadOnly);
       return QJsonDocument::fromJson(f.readAll()).array();
     };
