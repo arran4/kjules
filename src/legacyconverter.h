@@ -22,25 +22,19 @@ struct ConversionResult {
 
 class LegacyConverter {
 public:
-  static ConversionResult convertAll(const LegacyData &data,
-                                     const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc());
+  static ConversionResult convertAll(const LegacyData &data, const QDateTime &fallbackTimestamp);
 
   static QVector<JobData> convertQueue(const QVector<QueueItem> &items, bool isHolding,
-                                       const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc());
+                                       const QDateTime &fallbackTimestamp);
   static QVector<JobData> convertSessions(const QJsonArray &sessions, bool isArchive,
-                                          const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc());
-  static QVector<JobData> convertErrors(const QJsonArray &errors,
-                                        const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc());
+                                          const QDateTime &fallbackTimestamp);
+  static QVector<JobData> convertErrors(const QJsonArray &errors, const QDateTime &fallbackTimestamp);
 
-  static JobData fromQueueItem(const QueueItem &item, bool isHolding,
-                               const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc(),
+  static JobData fromQueueItem(const QueueItem &item, bool isHolding, const QDateTime &fallbackTimestamp,
                                int duplicateIndex = 0);
-  static JobData fromSession(const QJsonObject &session, bool isArchive,
-                             const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc(),
+  static JobData fromSession(const QJsonObject &session, bool isArchive, const QDateTime &fallbackTimestamp,
                              int duplicateIndex = 0);
-  static JobData fromError(const QJsonObject &error,
-                           const QDateTime &fallbackTimestamp = QDateTime::currentDateTimeUtc(),
-                           int duplicateIndex = 0);
+  static JobData fromError(const QJsonObject &error, const QDateTime &fallbackTimestamp, int duplicateIndex = 0);
 };
 
 #endif

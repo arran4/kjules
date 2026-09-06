@@ -269,18 +269,46 @@ private Q_SLOTS:
     QJsonObject opError;
     opError[QStringLiteral("request")] = QJsonObject();
     opError[QStringLiteral("message")] = QStringLiteral("op error");
+    opError[QStringLiteral("operation")] = QStringLiteral("clone");
+    opError[QStringLiteral("provider")] = QStringLiteral("github");
+
     QJsonObject workError;
     QJsonObject req;
     req[QStringLiteral("prompt")] = QStringLiteral("p");
     workError[QStringLiteral("request")] = req;
     workError[QStringLiteral("message")] = QStringLiteral("work error");
 
+    QJsonObject sessError;
+    QJsonObject sessReq;
+    sessReq[QStringLiteral("prompt")] =
+        QStringLiteral("sess_p"); // Needs prompt so it looks like work, otherwise unattached!
+    sessError[QStringLiteral("request")] = sessReq;
+    sessError[QStringLiteral("message")] = QStringLiteral("session error");
+    sessError[QStringLiteral("sessionId")] = QStringLiteral("sess1"); // Belongs to an attempt
+
+    QJsonObject sess1;
+    sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+    sess1[QStringLiteral("prompt")] = QStringLiteral("s");
+    data.activeSessions.append(sess1);
+
     data.errors.append(opError);
     data.errors.append(workError);
+    data.errors.append(sessError);
 
-    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
-    QCOMPARE(res.jobs.size(), 1);             // Only the work error becomes a job
+    QDateTime ts = QDateTime::currentDateTimeUtc();
+    auto res = LegacyConverter::convertAll(data, ts);
+
+    QCOMPARE(res.jobs.size(), 2);             // The work error becomes a job (1), plus the session job (2)
     QCOMPARE(res.unattachedErrors.size(), 1); // The op error stays unattached
+
+    bool foundAttError = false;
+    for (const auto &j : res.jobs) {
+      if (!j.attempts.isEmpty() && j.attempts.last().julesSessionId == QStringLiteral("sess1")) {
+        QCOMPARE(j.attempts.last().launchErrors.size(), 1);
+        foundAttError = true;
+      }
+    }
+    QVERIFY(foundAttError);
   }
 
   void testMalformedStoreValidation() {

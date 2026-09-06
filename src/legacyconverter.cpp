@@ -5,7 +5,30 @@
 
 namespace {
 QString canonicalizeJson(const QJsonObject &obj) {
-  QJsonDocument doc(obj);
+  // Sort keys deeply for deterministic canonical JSON representation
+  std::function<QJsonValue(const QJsonValue &)> sortValue = [&](const QJsonValue &val) -> QJsonValue {
+    if (val.isObject()) {
+      QJsonObject inObj = val.toObject();
+      QStringList keys = inObj.keys();
+      keys.sort();
+      QJsonObject outObj;
+      for (const QString &k : keys) {
+        outObj.insert(k, sortValue(inObj.value(k)));
+      }
+      return outObj;
+    } else if (val.isArray()) {
+      QJsonArray inArr = val.toArray();
+      QJsonArray outArr;
+      for (const QJsonValue &v : inArr) {
+        outArr.append(sortValue(v));
+      }
+      return outArr;
+    }
+    return val;
+  };
+
+  QJsonObject sortedObj = sortValue(obj).toObject();
+  QJsonDocument doc(sortedObj);
   return QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
 }
 
@@ -36,14 +59,36 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
 
   QMap<QString, int> queueCounts;
   for (int i = 0; i < data.queueItems.size(); ++i) {
-    QString canonical = canonicalizeJson(data.queueItems[i].requestData);
+    QJsonObject legacy;
+    legacy[QStringLiteral("errorCount")] = data.queueItems[i].errorCount;
+    legacy[QStringLiteral("lastError")] = data.queueItems[i].lastError;
+    legacy[QStringLiteral("lastResponse")] = data.queueItems[i].lastResponse;
+    if (data.queueItems[i].lastTry.isValid()) {
+      legacy[QStringLiteral("lastTry")] = data.queueItems[i].lastTry.toString(Qt::ISODate);
+    }
+    legacy[QStringLiteral("pastErrors")] = data.queueItems[i].pastErrors;
+    QJsonObject full = data.queueItems[i].requestData;
+    full[QStringLiteral("_legacy")] = legacy;
+    full[QStringLiteral("_isHolding")] = false;
+    QString canonical = canonicalizeJson(full);
     int ordinal = queueCounts[canonical]++;
     allJobs.append(fromQueueItem(data.queueItems[i], false, fallbackTimestamp, ordinal));
   }
 
   QMap<QString, int> holdingCounts;
   for (int i = 0; i < data.holdingItems.size(); ++i) {
-    QString canonical = canonicalizeJson(data.holdingItems[i].requestData);
+    QJsonObject legacy;
+    legacy[QStringLiteral("errorCount")] = data.holdingItems[i].errorCount;
+    legacy[QStringLiteral("lastError")] = data.holdingItems[i].lastError;
+    legacy[QStringLiteral("lastResponse")] = data.holdingItems[i].lastResponse;
+    if (data.holdingItems[i].lastTry.isValid()) {
+      legacy[QStringLiteral("lastTry")] = data.holdingItems[i].lastTry.toString(Qt::ISODate);
+    }
+    legacy[QStringLiteral("pastErrors")] = data.holdingItems[i].pastErrors;
+    QJsonObject full = data.holdingItems[i].requestData;
+    full[QStringLiteral("_legacy")] = legacy;
+    full[QStringLiteral("_isHolding")] = true;
+    QString canonical = canonicalizeJson(full);
     int ordinal = holdingCounts[canonical]++;
     allJobs.append(fromQueueItem(data.holdingItems[i], true, fallbackTimestamp, ordinal));
   }
@@ -73,54 +118,6 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
       groupedJobs[prevId].append(job);
     } else {
       allJobs.append(job);
-    }
-  }
-
-  QMap<QString, int> errorCounts;
-  for (int i = 0; i < data.errors.size(); ++i) {
-    QJsonObject errorObj = data.errors[i].toObject();
-    if (errorObj.contains(QStringLiteral("request")) && errorObj[QStringLiteral("request")].isObject()) {
-
-      QJsonObject req = errorObj[QStringLiteral("request")].toObject();
-      // Does it look like logical work? Need sourceContext or prompt
-      if (req.contains(QStringLiteral("sourceContext")) || req.contains(QStringLiteral("prompt"))) {
-        QString canonical = canonicalizeJson(errorObj);
-        int ordinal = errorCounts[canonical]++;
-
-        QString sessionId;
-        if (errorObj.contains(QStringLiteral("sessionId"))) {
-          sessionId = errorObj[QStringLiteral("sessionId")].toString();
-        }
-
-        if (!sessionId.isEmpty()) {
-          // Attach to session attempt
-          bool found = false;
-          for (JobData &job : allJobs) {
-            for (JobAttemptData &attempt : job.attempts) {
-              if (attempt.julesSessionId == sessionId) {
-                QJsonObject errResp;
-                errResp[QStringLiteral("message")] = errorObj[QStringLiteral("message")].toString();
-                errResp[QStringLiteral("httpDetails")] = errorObj[QStringLiteral("httpDetails")].toString();
-                errResp[QStringLiteral("response")] = errorObj[QStringLiteral("response")].toObject();
-                attempt.launchErrors.append(errResp);
-                found = true;
-                break;
-              }
-            }
-            if (found)
-              break;
-          }
-          if (!found) {
-            result.unattachedErrors.append(errorObj);
-          }
-        } else {
-          allJobs.append(fromError(errorObj, fallbackTimestamp, ordinal));
-        }
-      } else {
-        result.unattachedErrors.append(errorObj);
-      }
-    } else {
-      result.unattachedErrors.append(errorObj);
     }
   }
 
@@ -157,6 +154,64 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
     allJobs.append(it.value());
   }
 
+  // Now process errors, mapping to unique session IDs
+  QMap<QString, int> errorCounts;
+  for (int i = 0; i < data.errors.size(); ++i) {
+    QJsonObject errorObj = data.errors[i].toObject();
+    bool isLogicalWork = false;
+    if (errorObj.contains(QStringLiteral("request")) && errorObj[QStringLiteral("request")].isObject()) {
+      QJsonObject req = errorObj[QStringLiteral("request")].toObject();
+      isLogicalWork = req.contains(QStringLiteral("sourceContext")) || req.contains(QStringLiteral("prompt"));
+    }
+
+    if (isLogicalWork) {
+      QString canonical = canonicalizeJson(errorObj);
+      int ordinal = errorCounts[canonical]++;
+
+      QString sessionId;
+      if (errorObj.contains(QStringLiteral("sessionId"))) {
+        sessionId = errorObj[QStringLiteral("sessionId")].toString();
+      }
+
+      JobData *targetJob = nullptr;
+      JobAttemptData *targetAttempt = nullptr;
+      if (!sessionId.isEmpty()) {
+        // Recalculate unique map (since attempts appended)
+        QMap<QString, QPair<JobData *, JobAttemptData *>> safeSessionMap;
+        for (JobData &job : allJobs) {
+          for (JobAttemptData &att : job.attempts) {
+            if (!att.julesSessionId.isEmpty()) {
+              if (safeSessionMap.contains(att.julesSessionId)) {
+                safeSessionMap.insert(att.julesSessionId, {nullptr, nullptr}); // Ambiguous
+              } else {
+                safeSessionMap.insert(att.julesSessionId, {&job, &att});
+              }
+            }
+          }
+        }
+        if (safeSessionMap.contains(sessionId) && safeSessionMap[sessionId].first != nullptr) {
+          targetAttempt = safeSessionMap[sessionId].second;
+        }
+      }
+
+      if (targetAttempt) {
+        QJsonObject errResp;
+        errResp[QStringLiteral("message")] = errorObj[QStringLiteral("message")].toString();
+        errResp[QStringLiteral("httpDetails")] = errorObj[QStringLiteral("httpDetails")].toString();
+        errResp[QStringLiteral("response")] = errorObj[QStringLiteral("response")].toObject();
+        targetAttempt->launchErrors.append(errResp);
+      } else if (!sessionId.isEmpty()) {
+        // Associated with missing/ambiguous session -> unattached
+        result.unattachedErrors.append(errorObj);
+      } else {
+        // Genuine unlinked logical work
+        allJobs.append(fromError(errorObj, fallbackTimestamp, ordinal));
+      }
+    } else {
+      result.unattachedErrors.append(errorObj);
+    }
+  }
+
   result.jobs = allJobs;
   return result;
 }
@@ -166,7 +221,18 @@ QVector<JobData> LegacyConverter::convertQueue(const QVector<QueueItem> &items, 
   QVector<JobData> jobs;
   QMap<QString, int> counts;
   for (int i = 0; i < items.size(); ++i) {
-    QString canonical = canonicalizeJson(items[i].requestData);
+    QJsonObject legacy;
+    legacy[QStringLiteral("errorCount")] = items[i].errorCount;
+    legacy[QStringLiteral("lastError")] = items[i].lastError;
+    legacy[QStringLiteral("lastResponse")] = items[i].lastResponse;
+    if (items[i].lastTry.isValid()) {
+      legacy[QStringLiteral("lastTry")] = items[i].lastTry.toString(Qt::ISODate);
+    }
+    legacy[QStringLiteral("pastErrors")] = items[i].pastErrors;
+    QJsonObject full = items[i].requestData;
+    full[QStringLiteral("_legacy")] = legacy;
+    full[QStringLiteral("_isHolding")] = isHolding;
+    QString canonical = canonicalizeJson(full);
     int ordinal = counts[canonical]++;
     jobs.append(fromQueueItem(items[i], isHolding, fallbackTimestamp, ordinal));
   }
@@ -210,7 +276,8 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
   job.legacyMetadata = legacy;
 
   QJsonObject contextObj = item.requestData;
-  contextObj[QStringLiteral("_provenance")] = isHolding ? QStringLiteral("holding") : QStringLiteral("queue");
+  contextObj[QStringLiteral("_legacy")] = legacy;
+  contextObj[QStringLiteral("_isHolding")] = isHolding;
   job.id = deterministicUuid(QStringLiteral("queue-job-v1"), contextObj, ordinal);
   job.canonicalRequest = item.requestData;
 
@@ -325,18 +392,10 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
 
   // Extract PR metadata accurately
   QJsonObject prMetadata;
-  if (session.contains(QStringLiteral("githubPrInfo"))) {
-    QJsonObject gh = session[QStringLiteral("githubPrInfo")].toObject();
-    prMetadata[QStringLiteral("url")] = gh[QStringLiteral("url")];
-    prMetadata[QStringLiteral("number")] = gh[QStringLiteral("number")];
-    prMetadata[QStringLiteral("status")] = gh[QStringLiteral("status")];
-    prMetadata[QStringLiteral("labels")] = gh[QStringLiteral("labels")];
-  } else if (session.contains(QStringLiteral("pullRequest"))) {
+  // URL can come from top-level pullRequest or outputs[].pullRequest
+  if (session.contains(QStringLiteral("pullRequest"))) {
     QJsonObject pr = session[QStringLiteral("pullRequest")].toObject();
     prMetadata[QStringLiteral("url")] = pr[QStringLiteral("url")];
-    if (pr.contains(QStringLiteral("state"))) {
-      prMetadata[QStringLiteral("status")] = pr[QStringLiteral("state")];
-    }
   } else if (session.contains(QStringLiteral("outputs"))) {
     QJsonArray outputs = session[QStringLiteral("outputs")].toArray();
     for (const auto &out : outputs) {
@@ -344,27 +403,54 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
       if (outObj.contains(QStringLiteral("pullRequest"))) {
         QJsonObject pr = outObj[QStringLiteral("pullRequest")].toObject();
         prMetadata[QStringLiteral("url")] = pr[QStringLiteral("url")];
-        if (pr.contains(QStringLiteral("state"))) {
-          prMetadata[QStringLiteral("status")] = pr[QStringLiteral("state")];
-        }
         break;
       }
+    }
+  }
+
+  // Status and labels strictly from githubPrInfo
+  if (session.contains(QStringLiteral("githubPrInfo"))) {
+    QJsonObject gh = session[QStringLiteral("githubPrInfo")].toObject();
+    if (gh.contains(QStringLiteral("state"))) {
+      QString state = gh[QStringLiteral("state")].toString();
+      if (gh.contains(QStringLiteral("merged_at")) && !gh[QStringLiteral("merged_at")].isNull()) {
+        state = QStringLiteral("merged");
+      }
+      prMetadata[QStringLiteral("status")] = state;
+    }
+
+    if (gh.contains(QStringLiteral("labels"))) {
+      QJsonArray labels = gh[QStringLiteral("labels")].toArray();
+      QJsonArray labelNames;
+      for (const auto &l : labels) {
+        labelNames.append(l.toObject()[QStringLiteral("name")]);
+      }
+      prMetadata[QStringLiteral("labels")] = labelNames;
     }
   }
   if (!prMetadata.isEmpty()) {
     attempt.prMetadata = prMetadata;
   }
 
-  // Set canonicalRequest based on rawObject if available
-  if (session.contains(QStringLiteral("rawObject"))) {
-    attempt.rawResponse = session[QStringLiteral("rawObject")].toObject();
-    if (attempt.rawResponse.contains(QStringLiteral("request"))) {
-      attempt.requestSnapshot = attempt.rawResponse[QStringLiteral("request")].toObject();
-    }
+  // Preserve the whole session object as the attempt/raw remote response
+  attempt.rawResponse = session;
+
+  if (session.contains(QStringLiteral("lastRefreshed"))) {
+    job.lifecycleMetadata[QStringLiteral("lastRefreshed")] = session[QStringLiteral("lastRefreshed")];
   }
 
-  if (attempt.requestSnapshot.isEmpty() && session.contains(QStringLiteral("request"))) {
+  if (session.contains(QStringLiteral("request"))) {
     attempt.requestSnapshot = session[QStringLiteral("request")].toObject();
+  } else {
+    // Conservative snapshot for older models
+    QJsonObject fakeReq;
+    if (session.contains(QStringLiteral("sourceContext")))
+      fakeReq[QStringLiteral("sourceContext")] = session[QStringLiteral("sourceContext")];
+    if (session.contains(QStringLiteral("prompt")))
+      fakeReq[QStringLiteral("prompt")] = session[QStringLiteral("prompt")];
+    if (session.contains(QStringLiteral("automationMode")))
+      fakeReq[QStringLiteral("automationMode")] = session[QStringLiteral("automationMode")];
+    attempt.requestSnapshot = fakeReq;
   }
 
   job.canonicalRequest = attempt.requestSnapshot;
