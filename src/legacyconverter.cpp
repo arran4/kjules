@@ -19,71 +19,142 @@ QString deterministicUuid(const QString &domain, const QJsonObject &legacyMetada
 ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDateTime &fallbackTimestamp) {
   ConversionResult result;
   QVector<JobData> allJobs;
-
   QMap<QString, QVector<JobData>> groupedJobs;
 
-  // Convert Queue
+  auto extractPrevId = [](const QJsonObject &sessionObj) -> QString {
+    if (sessionObj.contains(QStringLiteral("previousAttemptId"))) {
+      return sessionObj[QStringLiteral("previousAttemptId")].toString();
+    }
+    if (sessionObj.contains(QStringLiteral("request"))) {
+      QJsonObject req = sessionObj[QStringLiteral("request")].toObject();
+      if (req.contains(QStringLiteral("previousAttemptId"))) {
+        return req[QStringLiteral("previousAttemptId")].toString();
+      }
+    }
+    return QString();
+  };
+
+  QMap<QString, int> queueCounts;
   for (int i = 0; i < data.queueItems.size(); ++i) {
-    allJobs.append(fromQueueItem(data.queueItems[i], false, fallbackTimestamp, i));
+    QString canonical = canonicalizeJson(data.queueItems[i].requestData);
+    int ordinal = queueCounts[canonical]++;
+    allJobs.append(fromQueueItem(data.queueItems[i], false, fallbackTimestamp, ordinal));
   }
 
-  // Convert Holding
+  QMap<QString, int> holdingCounts;
   for (int i = 0; i < data.holdingItems.size(); ++i) {
-    allJobs.append(fromQueueItem(data.holdingItems[i], true, fallbackTimestamp, i));
+    QString canonical = canonicalizeJson(data.holdingItems[i].requestData);
+    int ordinal = holdingCounts[canonical]++;
+    allJobs.append(fromQueueItem(data.holdingItems[i], true, fallbackTimestamp, ordinal));
   }
 
-  // Convert Active Sessions
+  QMap<QString, int> activeCounts;
   for (int i = 0; i < data.activeSessions.size(); ++i) {
-    JobData job = fromSession(data.activeSessions[i].toObject(), false, fallbackTimestamp, i);
-    if (job.legacyMetadata.contains(QStringLiteral("previousAttemptId"))) {
-      QString prevId = job.legacyMetadata[QStringLiteral("previousAttemptId")].toString();
+    QJsonObject sessionObj = data.activeSessions[i].toObject();
+    QString canonical = canonicalizeJson(sessionObj);
+    int ordinal = activeCounts[canonical]++;
+    JobData job = fromSession(sessionObj, false, fallbackTimestamp, ordinal);
+    QString prevId = extractPrevId(sessionObj);
+    if (!prevId.isEmpty()) {
       groupedJobs[prevId].append(job);
     } else {
       allJobs.append(job);
     }
   }
 
-  // Convert Archived Sessions
+  QMap<QString, int> archivedCounts;
   for (int i = 0; i < data.archivedSessions.size(); ++i) {
-    JobData job = fromSession(data.archivedSessions[i].toObject(), true, fallbackTimestamp, i);
-    if (job.legacyMetadata.contains(QStringLiteral("previousAttemptId"))) {
-      QString prevId = job.legacyMetadata[QStringLiteral("previousAttemptId")].toString();
+    QJsonObject sessionObj = data.archivedSessions[i].toObject();
+    QString canonical = canonicalizeJson(sessionObj);
+    int ordinal = archivedCounts[canonical]++;
+    JobData job = fromSession(sessionObj, true, fallbackTimestamp, ordinal);
+    QString prevId = extractPrevId(sessionObj);
+    if (!prevId.isEmpty()) {
       groupedJobs[prevId].append(job);
     } else {
       allJobs.append(job);
     }
   }
 
-  // Convert Errors
+  QMap<QString, int> errorCounts;
   for (int i = 0; i < data.errors.size(); ++i) {
     QJsonObject errorObj = data.errors[i].toObject();
     if (errorObj.contains(QStringLiteral("request")) && errorObj[QStringLiteral("request")].isObject()) {
-      allJobs.append(fromError(errorObj, fallbackTimestamp, i));
+
+      QJsonObject req = errorObj[QStringLiteral("request")].toObject();
+      // Does it look like logical work? Need sourceContext or prompt
+      if (req.contains(QStringLiteral("sourceContext")) || req.contains(QStringLiteral("prompt"))) {
+        QString canonical = canonicalizeJson(errorObj);
+        int ordinal = errorCounts[canonical]++;
+
+        QString sessionId;
+        if (errorObj.contains(QStringLiteral("sessionId"))) {
+          sessionId = errorObj[QStringLiteral("sessionId")].toString();
+        }
+
+        if (!sessionId.isEmpty()) {
+          // Attach to session attempt
+          bool found = false;
+          for (JobData &job : allJobs) {
+            for (JobAttemptData &attempt : job.attempts) {
+              if (attempt.julesSessionId == sessionId) {
+                QJsonObject errResp;
+                errResp[QStringLiteral("message")] = errorObj[QStringLiteral("message")].toString();
+                errResp[QStringLiteral("httpDetails")] = errorObj[QStringLiteral("httpDetails")].toString();
+                errResp[QStringLiteral("response")] = errorObj[QStringLiteral("response")].toObject();
+                attempt.launchErrors.append(errResp);
+                found = true;
+                break;
+              }
+            }
+            if (found)
+              break;
+          }
+          if (!found) {
+            result.unattachedErrors.append(errorObj);
+          }
+        } else {
+          allJobs.append(fromError(errorObj, fallbackTimestamp, ordinal));
+        }
+      } else {
+        result.unattachedErrors.append(errorObj);
+      }
     } else {
       result.unattachedErrors.append(errorObj);
     }
   }
 
-  // Process groupings
-  for (auto it = groupedJobs.begin(); it != groupedJobs.end(); ++it) {
-    QString prevId = it.key();
-    QVector<JobData> group = it.value();
+  // Resolve groupedJobs correctly for multi-hop
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (auto it = groupedJobs.begin(); it != groupedJobs.end();) {
+      QString prevId = it.key();
+      QVector<JobData> group = it.value();
 
-    bool foundParent = false;
-    for (JobData &mainJob : allJobs) {
-      if (!mainJob.attempts.isEmpty() && mainJob.attempts.last().julesSessionId == prevId) {
-        // Merge
-        for (const JobData &groupedJob : group) {
-          mainJob.attempts.append(groupedJob.attempts);
+      bool foundParent = false;
+      for (JobData &mainJob : allJobs) {
+        if (!mainJob.attempts.isEmpty() && mainJob.attempts.last().julesSessionId == prevId) {
+          for (const JobData &groupedJob : group) {
+            mainJob.attempts.append(groupedJob.attempts);
+          }
+          foundParent = true;
+          break;
         }
-        foundParent = true;
-        break;
+      }
+
+      if (foundParent) {
+        it = groupedJobs.erase(it);
+        changed = true;
+      } else {
+        ++it;
       }
     }
+  }
 
-    if (!foundParent) {
-      allJobs.append(group);
-    }
+  // Any remaining grouped jobs couldn't be resolved, add as separate jobs
+  for (auto it = groupedJobs.begin(); it != groupedJobs.end(); ++it) {
+    allJobs.append(it.value());
   }
 
   result.jobs = allJobs;
@@ -147,9 +218,40 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
   if (job.source.isEmpty() && item.requestData.contains(QStringLiteral("sourceContext"))) {
     QJsonObject sourceCtx = item.requestData[QStringLiteral("sourceContext")].toObject();
     job.source = sourceCtx[QStringLiteral("source")].toString();
+
+    if (sourceCtx.contains(QStringLiteral("githubRepoContext"))) {
+      QJsonObject ghCtx = sourceCtx[QStringLiteral("githubRepoContext")].toObject();
+      if (ghCtx.contains(QStringLiteral("startingBranch"))) {
+        job.startingBranch = ghCtx[QStringLiteral("startingBranch")].toString();
+      }
+    }
   }
 
   job.prompt = item.requestData[QStringLiteral("prompt")].toString();
+
+  if (item.requestData.contains(QStringLiteral("automationMode"))) {
+    job.automationMode = item.requestData[QStringLiteral("automationMode")].toString();
+  }
+  if (item.requestData.contains(QStringLiteral("preferences"))) {
+    QJsonObject prefs = item.requestData[QStringLiteral("preferences")].toObject();
+    if (prefs.contains(QStringLiteral("planApproval"))) {
+      job.planApproval = prefs[QStringLiteral("planApproval")].toBool();
+    }
+    if (prefs.contains(QStringLiteral("ignoreConcurrency"))) {
+      job.ignoreConcurrency = prefs[QStringLiteral("ignoreConcurrency")].toBool();
+    }
+    if (prefs.contains(QStringLiteral("priority"))) {
+      job.priority = prefs[QStringLiteral("priority")].toInt();
+    }
+  }
+
+  // Also support top-level queue properties used by older flows
+  if (item.requestData.contains(QStringLiteral("priority"))) {
+    job.priority = item.requestData[QStringLiteral("priority")].toInt();
+  }
+  if (item.requestData.contains(QStringLiteral("requirePlanApproval"))) {
+    job.planApproval = item.requestData[QStringLiteral("requirePlanApproval")].toBool();
+  }
 
   job.createdAt = fallbackTimestamp;
   job.updatedAt = fallbackTimestamp;
@@ -172,14 +274,35 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
 
   job.source = session[QStringLiteral("source")].toString();
   if (job.source.isEmpty() && session.contains(QStringLiteral("sourceContext"))) {
-    job.source = session[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
+    QJsonObject sourceCtx = session[QStringLiteral("sourceContext")].toObject();
+    job.source = sourceCtx[QStringLiteral("source")].toString();
+
+    if (sourceCtx.contains(QStringLiteral("githubRepoContext"))) {
+      QJsonObject ghCtx = sourceCtx[QStringLiteral("githubRepoContext")].toObject();
+      if (ghCtx.contains(QStringLiteral("startingBranch"))) {
+        job.startingBranch = ghCtx[QStringLiteral("startingBranch")].toString();
+      }
+    }
   }
 
   job.prompt = session[QStringLiteral("prompt")].toString();
-  job.createdAt = QDateTime::fromString(session[QStringLiteral("createTime")].toString(), Qt::ISODate);
+
+  if (session.contains(QStringLiteral("automationMode"))) {
+    job.automationMode = session[QStringLiteral("automationMode")].toString();
+  } else if (session.contains(QStringLiteral("request")) &&
+             session[QStringLiteral("request")].toObject().contains(QStringLiteral("automationMode"))) {
+    job.automationMode = session[QStringLiteral("request")].toObject()[QStringLiteral("automationMode")].toString();
+  }
+
+  if (session.contains(QStringLiteral("createTime"))) {
+    job.createdAt = QDateTime::fromString(session[QStringLiteral("createTime")].toString(), Qt::ISODate);
+  }
   if (!job.createdAt.isValid())
     job.createdAt = fallbackTimestamp;
-  job.updatedAt = QDateTime::fromString(session[QStringLiteral("updateTime")].toString(), Qt::ISODate);
+
+  if (session.contains(QStringLiteral("updateTime"))) {
+    job.updatedAt = QDateTime::fromString(session[QStringLiteral("updateTime")].toString(), Qt::ISODate);
+  }
   if (!job.updatedAt.isValid())
     job.updatedAt = fallbackTimestamp;
 
@@ -200,17 +323,51 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   attempt.createdAt = job.createdAt;
   attempt.updatedAt = job.updatedAt;
 
+  // Extract PR metadata accurately
+  QJsonObject prMetadata;
+  if (session.contains(QStringLiteral("githubPrInfo"))) {
+    QJsonObject gh = session[QStringLiteral("githubPrInfo")].toObject();
+    prMetadata[QStringLiteral("url")] = gh[QStringLiteral("url")];
+    prMetadata[QStringLiteral("number")] = gh[QStringLiteral("number")];
+    prMetadata[QStringLiteral("status")] = gh[QStringLiteral("status")];
+    prMetadata[QStringLiteral("labels")] = gh[QStringLiteral("labels")];
+  } else if (session.contains(QStringLiteral("pullRequest"))) {
+    QJsonObject pr = session[QStringLiteral("pullRequest")].toObject();
+    prMetadata[QStringLiteral("url")] = pr[QStringLiteral("url")];
+    if (pr.contains(QStringLiteral("state"))) {
+      prMetadata[QStringLiteral("status")] = pr[QStringLiteral("state")];
+    }
+  } else if (session.contains(QStringLiteral("outputs"))) {
+    QJsonArray outputs = session[QStringLiteral("outputs")].toArray();
+    for (const auto &out : outputs) {
+      QJsonObject outObj = out.toObject();
+      if (outObj.contains(QStringLiteral("pullRequest"))) {
+        QJsonObject pr = outObj[QStringLiteral("pullRequest")].toObject();
+        prMetadata[QStringLiteral("url")] = pr[QStringLiteral("url")];
+        if (pr.contains(QStringLiteral("state"))) {
+          prMetadata[QStringLiteral("status")] = pr[QStringLiteral("state")];
+        }
+        break;
+      }
+    }
+  }
+  if (!prMetadata.isEmpty()) {
+    attempt.prMetadata = prMetadata;
+  }
+
   // Set canonicalRequest based on rawObject if available
   if (session.contains(QStringLiteral("rawObject"))) {
     attempt.rawResponse = session[QStringLiteral("rawObject")].toObject();
-    attempt.requestSnapshot = attempt.rawResponse[QStringLiteral("request")].toObject();
-    if (job.canonicalRequest.isEmpty())
-      job.canonicalRequest = attempt.requestSnapshot;
+    if (attempt.rawResponse.contains(QStringLiteral("request"))) {
+      attempt.requestSnapshot = attempt.rawResponse[QStringLiteral("request")].toObject();
+    }
   }
-  if (job.canonicalRequest.isEmpty()) {
-    job.canonicalRequest = session[QStringLiteral("request")].toObject();
-    attempt.requestSnapshot = job.canonicalRequest;
+
+  if (attempt.requestSnapshot.isEmpty() && session.contains(QStringLiteral("request"))) {
+    attempt.requestSnapshot = session[QStringLiteral("request")].toObject();
   }
+
+  job.canonicalRequest = attempt.requestSnapshot;
 
   job.attempts.append(attempt);
   return job;

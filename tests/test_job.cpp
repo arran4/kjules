@@ -284,15 +284,15 @@ private Q_SLOTS:
   }
 
   void testMalformedStoreValidation() {
-    JobStore store(QStringLiteral("bad.json"));
+    JobStore store(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
 
-    QFile f(QStringLiteral("bad.json"));
+    QFile f(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
     f.open(QIODevice::WriteOnly);
     f.write("{\"schemaVersion\": 1, \"jobs\": [{\"id\": \"123\", \"priority\": \"not-a-number\"}]}");
     f.close();
 
     QVERIFY(!store.load()); // Should fail because priority isn't a number
-    QFile::remove(QStringLiteral("bad.json"));
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
   }
 };
 

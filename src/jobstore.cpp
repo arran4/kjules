@@ -9,8 +9,14 @@
 #include <QSet>
 #include <QStandardPaths>
 
-JobStore::JobStore(const QString &filename)
-    : m_filename(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + filename) {}
+JobStore::JobStore(const QString &filename) {
+  QFileInfo info(filename);
+  if (info.isAbsolute()) {
+    m_filename = filename;
+  } else {
+    m_filename = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/") + filename;
+  }
+}
 
 bool JobStore::load() {
   QFile file(m_filename);
