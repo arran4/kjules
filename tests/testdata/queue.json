@@ -1,0 +1,18 @@
+[
+  {
+    "requestData": {
+      "id": "q1",
+      "prompt": "Queue test",
+      "sourceContext": {"source": "local"},
+      "requirePlanApproval": true,
+      "priority": 5
+    },
+    "isBlocked": true,
+    "blockMetadata": {"reason": "Wait for CI"},
+    "errorCount": 2,
+    "lastError": "Network timeout",
+    "lastResponse": "503",
+    "lastTry": "2026-09-01T12:00:00Z",
+    "pastErrors": ["502", "503"]
+  }
+]

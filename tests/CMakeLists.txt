@@ -68,3 +68,8 @@ add_test(NAME ErrorsModelTest COMMAND test_errorsmodel)
 add_executable(test_background_errors test_background_errors.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp)
 target_link_libraries(test_background_errors Qt6::Test Qt6::Network Qt6::Core KF6::Wallet KF6::I18n KF6::ConfigCore Qt6::Concurrent Qt6::Widgets)
 add_test(NAME BackgroundErrorsTest COMMAND test_background_errors)
+
+add_executable(test_job test_job.cpp ../src/jobdata.cpp ../src/jobstore.cpp ../src/migrationorchestrator.h ../src/legacyconverter.cpp ../src/queuemodel.cpp ../src/sessionmodel.cpp ../src/errorsmodel.cpp ../src/sessionrequestbuilder.cpp ../src/api/apierror.cpp)
+target_link_libraries(test_job Qt6::Core Qt6::Gui Qt6::Network Qt6::Test KF6::CoreAddons KF6::I18n KF6::ConfigCore)
+target_compile_definitions(test_job PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata")
+add_test(NAME test_job COMMAND test_job)
