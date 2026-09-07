@@ -153,7 +153,8 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
 
       JobData *targetJob = sessionMap[prevId].first();
 
-      // Check for cycles
+      // Detect cycles via traversing the targetJob attempts back down (if we merge, we might create a cycle)
+      // Wait, cycle detection: we must ensure that merging `group` into `targetJob` doesn't merge a job into itself.
       bool isCyclic = false;
       for (const JobData &groupedJob : it.value()) {
         if (&groupedJob == targetJob) {
@@ -161,6 +162,7 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
           break;
         }
       }
+
       if (isCyclic) {
         ++it;
         continue; // Do not merge cyclic

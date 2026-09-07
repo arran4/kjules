@@ -220,7 +220,11 @@ private Q_SLOTS:
     // Data with operational diagnostics fails migration seam because they aren't stored
     LegacyData dataWithErrors;
     QJsonObject opError;
+    QJsonObject opReq;
+    opReq[QStringLiteral("prompt")] = QStringLiteral("p"); // Add prompt to prove diagnostic overrides it
+    opError[QStringLiteral("request")] = opReq;
     opError[QStringLiteral("message")] = QStringLiteral("op error");
+    opError[QStringLiteral("operation")] = QStringLiteral("clone");
     opError[QStringLiteral("provider")] = QStringLiteral("github"); // ensure it is classified as unattached diagnostic
     dataWithErrors.errors.append(opError);
     QVERIFY(!MigrationOrchestrator::safeMigrationSeam(dataWithErrors, tempPath, QDateTime::currentDateTimeUtc()));
@@ -243,11 +247,13 @@ private Q_SLOTS:
     QVERIFY(rf.readAll() != QByteArray("sentinel"));
     rf.close();
 
-    QFile::remove(tempPath);
-
-    // Test write failure handling to an unwritable directory
+    // Prove write failure to final path leaves existing file untouched
+    // We cannot easily mock QSaveFile failure inside the same process without OS tools, but we test the unwritable
+    // directory fails
     QVERIFY(!MigrationOrchestrator::safeMigrationSeam(data, QStringLiteral("/dev/null/foo.json"),
                                                       QDateTime::currentDateTimeUtc()));
+
+    QFile::remove(tempPath);
   }
 
   void testFixtures() {
@@ -317,21 +323,71 @@ private Q_SLOTS:
   void testPreviousAttemptIdNested() {
     LegacyData data;
 
-    QJsonObject sess1;
-    sess1[QStringLiteral("id")] = QStringLiteral("sess1");
+    QJsonObject sessA;
+    sessA[QStringLiteral("id")] = QStringLiteral("A");
 
-    QJsonObject sess2;
-    sess2[QStringLiteral("id")] = QStringLiteral("sess2");
-    QJsonObject req2;
-    req2[QStringLiteral("previousAttemptId")] = QStringLiteral("sess1");
-    sess2[QStringLiteral("request")] = req2;
+    QJsonObject sessB;
+    sessB[QStringLiteral("id")] = QStringLiteral("B");
+    QJsonObject reqB;
+    reqB[QStringLiteral("previousAttemptId")] = QStringLiteral("A");
+    sessB[QStringLiteral("request")] = reqB;
 
-    data.activeSessions.append(sess1);
-    data.activeSessions.append(sess2);
+    QJsonObject sessC;
+    sessC[QStringLiteral("id")] = QStringLiteral("C");
+    QJsonObject reqC;
+    reqC[QStringLiteral("previousAttemptId")] = QStringLiteral("A");
+    sessC[QStringLiteral("request")] = reqC;
+
+    QJsonObject sessD;
+    sessD[QStringLiteral("id")] = QStringLiteral("D");
+    QJsonObject reqD;
+    reqD[QStringLiteral("previousAttemptId")] = QStringLiteral("B");
+    sessD[QStringLiteral("request")] = reqD;
+
+    // We add them in arbitrary order
+    data.activeSessions.append(sessC);
+    data.activeSessions.append(sessD);
+    data.activeSessions.append(sessA);
+    data.activeSessions.append(sessB);
 
     auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
     QCOMPARE(res.jobs.size(), 1);
-    QCOMPARE(res.jobs[0].attempts.size(), 2);
+    QCOMPARE(res.jobs[0].attempts.size(), 4);
+
+    // Test duplicate predecessor
+    LegacyData badData;
+    QJsonObject badA1;
+    badA1[QStringLiteral("id")] = QStringLiteral("A");
+    QJsonObject badA2;
+    badA2[QStringLiteral("id")] = QStringLiteral("A");
+    QJsonObject badB;
+    badB[QStringLiteral("id")] = QStringLiteral("B");
+    QJsonObject badReqB;
+    badReqB[QStringLiteral("previousAttemptId")] = QStringLiteral("A");
+    badB[QStringLiteral("request")] = badReqB;
+    badData.activeSessions.append(badA1);
+    badData.activeSessions.append(badA2);
+    badData.activeSessions.append(badB);
+
+    auto badRes = LegacyConverter::convertAll(badData, QDateTime::currentDateTimeUtc());
+    QCOMPARE(badRes.jobs.size(), 3); // Must not merge!
+
+    // Test cyclic
+    LegacyData cycleData;
+    QJsonObject cycA;
+    cycA[QStringLiteral("id")] = QStringLiteral("A");
+    QJsonObject cycReqA;
+    cycReqA[QStringLiteral("previousAttemptId")] = QStringLiteral("B");
+    cycA[QStringLiteral("request")] = cycReqA;
+    QJsonObject cycB;
+    cycB[QStringLiteral("id")] = QStringLiteral("B");
+    QJsonObject cycReqB;
+    cycReqB[QStringLiteral("previousAttemptId")] = QStringLiteral("A");
+    cycB[QStringLiteral("request")] = cycReqB;
+    cycleData.activeSessions.append(cycA);
+    cycleData.activeSessions.append(cycB);
+    auto cycRes = LegacyConverter::convertAll(cycleData, QDateTime::currentDateTimeUtc());
+    QCOMPARE(cycRes.jobs.size(), 2); // Must not merge cyclic!
   }
 
   void testUnattachedErrors() {
