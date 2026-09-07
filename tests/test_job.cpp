@@ -340,6 +340,31 @@ private Q_SLOTS:
     QFile::remove(tempPath);
   }
 
+  void testLegacyFallbackSemantics() {
+    LegacyData data;
+    QJsonObject sess;
+
+    sess[QStringLiteral("prompt")] = QStringLiteral("outer-prompt");
+    sess[QStringLiteral("automationMode")] = QStringLiteral("outer-auto");
+
+    QJsonObject req;
+    req[QStringLiteral("prompt")] = QStringLiteral("inner-prompt");
+    req[QStringLiteral("automationMode")] = QStringLiteral("inner-auto");
+
+    QJsonObject sCtx;
+    sCtx[QStringLiteral("source")] = QStringLiteral("inner-source");
+    req[QStringLiteral("sourceContext")] = sCtx;
+
+    sess[QStringLiteral("request")] = req;
+    data.activeSessions.append(sess);
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+    QCOMPARE(res.jobs.size(), 1);
+    QCOMPARE(res.jobs[0].prompt, QStringLiteral("inner-prompt"));
+    QCOMPARE(res.jobs[0].automationMode, QStringLiteral("inner-auto"));
+    QCOMPARE(res.jobs[0].source, QStringLiteral("inner-source"));
+  }
+
   void testFixtures() {
     LegacyData data;
 
