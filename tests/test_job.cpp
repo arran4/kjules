@@ -36,6 +36,90 @@ private Q_SLOTS:
     QCOMPARE(recovered.attempts[0].julesState, attempt.julesState);
   }
 
+  void testJobDataZeroOneMultipleAttemptsRoundTrip() {
+    JobData zero;
+    zero.id = QStringLiteral("zero");
+    QJsonObject jZero = zero.toJson();
+    JobData rZero = JobData::fromJson(jZero);
+    QCOMPARE(rZero.id, QStringLiteral("zero"));
+    QCOMPARE(rZero.attempts.size(), 0);
+
+    JobData one;
+    one.id = QStringLiteral("one");
+    JobAttemptData a1;
+    a1.id = QStringLiteral("a1");
+    one.attempts.append(a1);
+    QJsonObject jOne = one.toJson();
+    JobData rOne = JobData::fromJson(jOne);
+    QCOMPARE(rOne.attempts.size(), 1);
+
+    JobData multi;
+    multi.id = QStringLiteral("multi");
+    JobAttemptData a2;
+    a2.id = QStringLiteral("a2");
+    QJsonObject req2;
+    req2[QStringLiteral("snap")] = 2;
+    a2.requestSnapshot = req2;
+    JobAttemptData a3;
+    a3.id = QStringLiteral("a3");
+    QJsonObject req3;
+    req3[QStringLiteral("snap")] = 3;
+    a3.requestSnapshot = req3;
+    multi.attempts.append(a2);
+    multi.attempts.append(a3);
+    QJsonObject jMulti = multi.toJson();
+    JobData rMulti = JobData::fromJson(jMulti);
+    QCOMPARE(rMulti.attempts.size(), 2);
+    QCOMPARE(rMulti.attempts[0].id, QStringLiteral("a2"));
+    QCOMPARE(rMulti.attempts[0].requestSnapshot[QStringLiteral("snap")].toInt(), 2);
+    QCOMPARE(rMulti.attempts[1].id, QStringLiteral("a3"));
+    QCOMPARE(rMulti.attempts[1].requestSnapshot[QStringLiteral("snap")].toInt(), 3);
+  }
+
+  void testFailedLaunchNoSessionId() {
+    LegacyData data;
+    QJsonObject error;
+    QJsonObject req;
+    req[QStringLiteral("prompt")] = QStringLiteral("p");
+    error[QStringLiteral("request")] = req;
+    error[QStringLiteral("message")] = QStringLiteral("work error");
+    data.errors.append(error);
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+    QCOMPARE(res.jobs.size(), 1);
+    QCOMPARE(res.jobs[0].attempts.size(), 1);
+    QCOMPARE(res.jobs[0].attempts[0].julesSessionId, QString()); // No remote session ID
+    QCOMPARE(res.jobs[0].attempts[0].dispatchState, QStringLiteral("FAILED"));
+  }
+
+  void testFutureSchemaRejection() {
+    JobStore store(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+    QFile f(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+    f.open(QIODevice::WriteOnly);
+    f.write("{\"schemaVersion\": 9999, \"jobs\": []}");
+    f.close();
+    QVERIFY(!store.load());
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+  }
+
+  void testFailedLoadPreservesState() {
+    JobStore store(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+    JobData init;
+    init.id = QStringLiteral("init");
+    store.addJob(init);
+
+    QFile f(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+    f.open(QIODevice::WriteOnly);
+    f.write("{\"schemaVersion\": 1, \"jobs\": [{\"id\": \"123\", \"priority\": \"not-a-number\"}]}");
+    f.close();
+
+    QVERIFY(!store.load()); // fails
+
+    QCOMPARE(store.jobs().size(), 1); // preserved!
+    QCOMPARE(store.jobs()[0].id, QStringLiteral("init"));
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
+  }
+
   void testJobPolicyEmptyAttemptNotViable() {
     JobData job;
     JobAttemptData attempt; // completely empty, default

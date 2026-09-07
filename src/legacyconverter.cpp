@@ -321,26 +321,11 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
   job.id = deterministicUuid(QStringLiteral("queue-job-v1"), contextObj, ordinal);
   job.canonicalRequest = item.requestData;
 
-  job.source = item.requestData[QStringLiteral("source")].toString();
-  if (job.source.isEmpty() && item.requestData.contains(QStringLiteral("sourceContext"))) {
-    QJsonObject sourceCtx = item.requestData[QStringLiteral("sourceContext")].toObject();
-    job.source = sourceCtx[QStringLiteral("source")].toString();
-
-    if (sourceCtx.contains(QStringLiteral("githubRepoContext"))) {
-      QJsonObject ghCtx = sourceCtx[QStringLiteral("githubRepoContext")].toObject();
-      if (ghCtx.contains(QStringLiteral("startingBranch"))) {
-        job.startingBranch = ghCtx[QStringLiteral("startingBranch")].toString();
-      }
-    }
-  }
-
-  job.prompt = item.requestData[QStringLiteral("prompt")].toString();
-
   // Typed request extraction matching SessionRequestBuilder
   QJsonObject effReq = item.requestData;
-  if (effReq.contains(QStringLiteral("request")) && effReq[QStringLiteral("request")].isObject() &&
-      !effReq[QStringLiteral("request")].toObject().isEmpty()) {
-    effReq = effReq[QStringLiteral("request")].toObject();
+  if (item.requestData.contains(QStringLiteral("request")) && item.requestData[QStringLiteral("request")].isObject() &&
+      !item.requestData[QStringLiteral("request")].toObject().isEmpty()) {
+    effReq = item.requestData[QStringLiteral("request")].toObject();
   }
 
   if (effReq.contains(QStringLiteral("automationMode"))) {
@@ -359,6 +344,44 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
     job.ignoreConcurrency = effReq[QStringLiteral("ignoreConcurrency")].toBool();
   } else if (item.requestData.contains(QStringLiteral("ignoreConcurrency"))) {
     job.ignoreConcurrency = item.requestData[QStringLiteral("ignoreConcurrency")].toBool();
+  }
+
+  if (effReq.contains(QStringLiteral("prompt"))) {
+    job.prompt = effReq[QStringLiteral("prompt")].toString();
+  } else if (item.requestData.contains(QStringLiteral("prompt"))) {
+    job.prompt = item.requestData[QStringLiteral("prompt")].toString();
+  }
+
+  if (effReq.contains(QStringLiteral("source"))) {
+    job.source = effReq[QStringLiteral("source")].toString();
+  }
+  if (job.source.isEmpty() && effReq.contains(QStringLiteral("sourceContext")) &&
+      effReq[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
+    job.source = effReq[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
+  }
+  if (job.source.isEmpty() && item.requestData.contains(QStringLiteral("sourceContext")) &&
+      item.requestData[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
+    job.source = item.requestData[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
+  }
+
+  if (effReq.contains(QStringLiteral("startingBranch"))) {
+    job.startingBranch = effReq[QStringLiteral("startingBranch")].toString();
+  }
+  if (job.startingBranch.isEmpty() && effReq.contains(QStringLiteral("sourceContext"))) {
+    QJsonObject sCtx = effReq[QStringLiteral("sourceContext")].toObject();
+    if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
+        sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
+      job.startingBranch =
+          sCtx[QStringLiteral("githubRepoContext")].toObject()[QStringLiteral("startingBranch")].toString();
+    }
+  }
+  if (job.startingBranch.isEmpty() && item.requestData.contains(QStringLiteral("sourceContext"))) {
+    QJsonObject sCtx = item.requestData[QStringLiteral("sourceContext")].toObject();
+    if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
+        sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
+      job.startingBranch =
+          sCtx[QStringLiteral("githubRepoContext")].toObject()[QStringLiteral("startingBranch")].toString();
+    }
   }
 
   if (item.requestData.contains(QStringLiteral("preferences"))) {
@@ -394,21 +417,6 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   job.legacyMetadata = session; // Store all original session data
   job.id = deterministicUuid(QStringLiteral("session-job-v1"), session, ordinal);
 
-  job.source = session[QStringLiteral("source")].toString();
-  if (job.source.isEmpty() && session.contains(QStringLiteral("sourceContext"))) {
-    QJsonObject sourceCtx = session[QStringLiteral("sourceContext")].toObject();
-    job.source = sourceCtx[QStringLiteral("source")].toString();
-
-    if (sourceCtx.contains(QStringLiteral("githubRepoContext"))) {
-      QJsonObject ghCtx = sourceCtx[QStringLiteral("githubRepoContext")].toObject();
-      if (ghCtx.contains(QStringLiteral("startingBranch"))) {
-        job.startingBranch = ghCtx[QStringLiteral("startingBranch")].toString();
-      }
-    }
-  }
-
-  job.prompt = session[QStringLiteral("prompt")].toString();
-
   QJsonObject effReq = session;
   if (session.contains(QStringLiteral("request")) && session[QStringLiteral("request")].isObject() &&
       !session[QStringLiteral("request")].toObject().isEmpty()) {
@@ -431,19 +439,35 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
 
   if (effReq.contains(QStringLiteral("prompt"))) {
     job.prompt = effReq[QStringLiteral("prompt")].toString();
+  } else if (session.contains(QStringLiteral("prompt"))) {
+    job.prompt = session[QStringLiteral("prompt")].toString();
   }
 
   if (effReq.contains(QStringLiteral("source"))) {
     job.source = effReq[QStringLiteral("source")].toString();
-  } else if (effReq.contains(QStringLiteral("sourceContext")) &&
-             effReq[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
+  }
+  if (job.source.isEmpty() && effReq.contains(QStringLiteral("sourceContext")) &&
+      effReq[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
     job.source = effReq[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
+  }
+  if (job.source.isEmpty() && session.contains(QStringLiteral("sourceContext")) &&
+      session[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
+    job.source = session[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
   }
 
   if (effReq.contains(QStringLiteral("startingBranch"))) {
     job.startingBranch = effReq[QStringLiteral("startingBranch")].toString();
-  } else if (effReq.contains(QStringLiteral("sourceContext"))) {
+  }
+  if (job.startingBranch.isEmpty() && effReq.contains(QStringLiteral("sourceContext"))) {
     QJsonObject sCtx = effReq[QStringLiteral("sourceContext")].toObject();
+    if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
+        sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
+      job.startingBranch =
+          sCtx[QStringLiteral("githubRepoContext")].toObject()[QStringLiteral("startingBranch")].toString();
+    }
+  }
+  if (job.startingBranch.isEmpty() && session.contains(QStringLiteral("sourceContext"))) {
+    QJsonObject sCtx = session[QStringLiteral("sourceContext")].toObject();
     if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
         sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
       job.startingBranch =
