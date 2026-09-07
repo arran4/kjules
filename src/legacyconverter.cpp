@@ -153,23 +153,13 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
 
       JobData *targetJob = sessionMap[prevId].first();
 
-      // Detect cycles via traversing the targetJob attempts back down (if we merge, we might create a cycle)
-      // Wait, cycle detection: we must ensure that merging `group` into `targetJob` doesn't merge a job into itself.
-      bool isCyclic = false;
-      for (const JobData &groupedJob : it.value()) {
-        if (&groupedJob == targetJob) {
-          isCyclic = true;
-          break;
-        }
-      }
+      QVector<JobData> group = it.value();
 
-      if (isCyclic) {
-        ++it;
-        continue; // Do not merge cyclic
-      }
+      // Sort siblings deterministically to ensure invariant serialization order
+      std::sort(group.begin(), group.end(), [](const JobData &a, const JobData &b) { return a.id < b.id; });
 
       // Merge
-      for (const JobData &groupedJob : it.value()) {
+      for (const JobData &groupedJob : group) {
         targetJob->attempts.append(groupedJob.attempts);
         // Update session map with newly adopted attempts
         for (const JobAttemptData &att : groupedJob.attempts) {
@@ -183,8 +173,14 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
     }
   }
 
+  // Any remaining grouped jobs (missing parents, cyclic references, or ambiguous parents)
+  // couldn't be safely resolved, so they become separate Jobs.
   for (auto it = groupedJobs.begin(); it != groupedJobs.end(); ++it) {
-    allJobs.append(it.value());
+    QVector<JobData> group = it.value();
+    std::sort(group.begin(), group.end(), [](const JobData &a, const JobData &b) { return a.id < b.id; });
+    for (const JobData &orphanedJob : group) {
+      allJobs.append(orphanedJob);
+    }
   }
 
   // Now process errors, mapping to unique session IDs
