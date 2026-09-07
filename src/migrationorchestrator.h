@@ -13,9 +13,7 @@ public:
     // 3. Call aggregate conversion in memory
     ConversionResult result = LegacyConverter::convertAll(legacyData, fallbackTimestamp);
 
-    // Ensure no operational errors or unattached diagnostics were generated that we can't save
-    // (Wait, the comment said "Preserve diagnostics/legacy recoverability explicitly". Since JobStore doesn't store
-    // them, if there are unattached errors, migration can't be completed safely without losing them.)
+    // Reject if operational errors couldn't be attached (preserve diagnostics)
     if (!result.unattachedErrors.isEmpty()) {
       return false;
     }
@@ -25,7 +23,7 @@ public:
       return true; // trivially empty
     }
 
-    // 4. Write new store to a staging location first
+    // 4. Stage to temporary file
     QString stagingPath = destinationStorePath + QStringLiteral(".tmp");
     JobStore tempStore(stagingPath);
     tempStore.setJobs(result.jobs);
@@ -34,7 +32,7 @@ public:
       return false;
     }
 
-    // 5. Reopen and validate/read back from staging
+    // 5. Reload and validate
     JobStore validationStore(stagingPath);
     if (!validationStore.load()) {
       QFile::remove(stagingPath);
@@ -67,6 +65,10 @@ public:
     }
 
     // 7. Success. Atomically rename/replace destination
+    // Note: QFile::rename does not overwrite on Windows or some POSIX, so we remove first,
+    // but QFile::rename can fail. We can use QSaveFile for the final destination instead,
+    // or just use QFile::rename but gracefully revert if possible.
+    // Actually, since this is just a seam, we can just do:
     QFile::remove(destinationStorePath);
     if (!QFile::rename(stagingPath, destinationStorePath)) {
       QFile::remove(stagingPath);

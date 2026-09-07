@@ -338,7 +338,9 @@ private Q_SLOTS:
     LegacyData data;
 
     QJsonObject opError;
-    opError[QStringLiteral("request")] = QJsonObject();
+    QJsonObject opReq;
+    opReq[QStringLiteral("prompt")] = QStringLiteral("p"); // Add prompt to prove diagnostic overrides it
+    opError[QStringLiteral("request")] = opReq;
     opError[QStringLiteral("message")] = QStringLiteral("op error");
     opError[QStringLiteral("operation")] = QStringLiteral("clone");
     opError[QStringLiteral("provider")] = QStringLiteral("github");

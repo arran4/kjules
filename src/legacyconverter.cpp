@@ -129,35 +129,58 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
     }
   }
 
-  // Resolve groupedJobs correctly for multi-hop
+  // Resolve groupedJobs securely via topology mapping
+  QMap<QString, QList<JobData *>> sessionMap;
+  for (JobData &job : allJobs) {
+    for (const JobAttemptData &att : job.attempts) {
+      if (!att.julesSessionId.isEmpty()) {
+        sessionMap[att.julesSessionId].append(&job);
+      }
+    }
+  }
+
   bool changed = true;
   while (changed) {
     changed = false;
     for (auto it = groupedJobs.begin(); it != groupedJobs.end();) {
       QString prevId = it.key();
-      QVector<JobData> group = it.value();
 
-      bool foundParent = false;
-      for (JobData &mainJob : allJobs) {
-        if (!mainJob.attempts.isEmpty() && mainJob.attempts.last().julesSessionId == prevId) {
-          for (const JobData &groupedJob : group) {
-            mainJob.attempts.append(groupedJob.attempts);
-          }
-          foundParent = true;
+      if (!sessionMap.contains(prevId) || sessionMap[prevId].size() != 1) {
+        // Missing or ambiguous predecessor -> no grouping
+        ++it;
+        continue;
+      }
+
+      JobData *targetJob = sessionMap[prevId].first();
+
+      // Check for cycles
+      bool isCyclic = false;
+      for (const JobData &groupedJob : it.value()) {
+        if (&groupedJob == targetJob) {
+          isCyclic = true;
           break;
         }
       }
-
-      if (foundParent) {
-        it = groupedJobs.erase(it);
-        changed = true;
-      } else {
+      if (isCyclic) {
         ++it;
+        continue; // Do not merge cyclic
       }
+
+      // Merge
+      for (const JobData &groupedJob : it.value()) {
+        targetJob->attempts.append(groupedJob.attempts);
+        // Update session map with newly adopted attempts
+        for (const JobAttemptData &att : groupedJob.attempts) {
+          if (!att.julesSessionId.isEmpty()) {
+            sessionMap[att.julesSessionId].append(targetJob);
+          }
+        }
+      }
+      it = groupedJobs.erase(it);
+      changed = true;
     }
   }
 
-  // Any remaining grouped jobs couldn't be resolved, add as separate jobs
   for (auto it = groupedJobs.begin(); it != groupedJobs.end(); ++it) {
     allJobs.append(it.value());
   }
@@ -169,7 +192,11 @@ ConversionResult LegacyConverter::convertAll(const LegacyData &data, const QDate
     bool isLogicalWork = false;
     if (errorObj.contains(QStringLiteral("request")) && errorObj[QStringLiteral("request")].isObject()) {
       QJsonObject req = errorObj[QStringLiteral("request")].toObject();
-      isLogicalWork = req.contains(QStringLiteral("sourceContext")) || req.contains(QStringLiteral("prompt"));
+      // A record is logical work ONLY IF it lacks operational diagnostic flags AND has work fields
+      if (!errorObj.contains(QStringLiteral("operation")) && !errorObj.contains(QStringLiteral("provider")) &&
+          !errorObj.contains(QStringLiteral("sourceId"))) {
+        isLogicalWork = req.contains(QStringLiteral("sourceContext")) || req.contains(QStringLiteral("prompt"));
+      }
     }
 
     if (isLogicalWork) {
@@ -309,7 +336,8 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
 
   // Typed request extraction matching SessionRequestBuilder
   QJsonObject effReq = item.requestData;
-  if (effReq.contains(QStringLiteral("request")) && effReq[QStringLiteral("request")].isObject()) {
+  if (effReq.contains(QStringLiteral("request")) && effReq[QStringLiteral("request")].isObject() &&
+      !effReq[QStringLiteral("request")].toObject().isEmpty()) {
     effReq = effReq[QStringLiteral("request")].toObject();
   }
 
@@ -380,7 +408,8 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   job.prompt = session[QStringLiteral("prompt")].toString();
 
   QJsonObject effReq = session;
-  if (session.contains(QStringLiteral("request")) && session[QStringLiteral("request")].isObject()) {
+  if (session.contains(QStringLiteral("request")) && session[QStringLiteral("request")].isObject() &&
+      !session[QStringLiteral("request")].toObject().isEmpty()) {
     effReq = session[QStringLiteral("request")].toObject();
   }
 
