@@ -411,7 +411,9 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
                                      int ordinal) {
   JobData job;
   job.legacyMetadata = session; // Store all original session data
-  job.id = deterministicUuid(QStringLiteral("session-job-v1"), session, ordinal);
+  QJsonObject fp = session;
+  fp[QStringLiteral("_isArchive")] = isArchive;
+  job.id = deterministicUuid(QStringLiteral("session-job-v1"), fp, ordinal);
 
   QJsonObject effReq = session;
   if (session.contains(QStringLiteral("request")) && session[QStringLiteral("request")].isObject() &&
@@ -419,53 +421,20 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
     effReq = session[QStringLiteral("request")].toObject();
   }
 
-  if (effReq.contains(QStringLiteral("automationMode"))) {
-    job.automationMode = effReq[QStringLiteral("automationMode")].toString();
-  } else if (session.contains(QStringLiteral("automationMode"))) {
-    job.automationMode = session[QStringLiteral("automationMode")].toString();
-  }
+  job.prompt = effReq[QStringLiteral("prompt")].toString();
+  job.automationMode = effReq[QStringLiteral("automationMode")].toString();
+  job.planApproval = effReq[QStringLiteral("requirePlanApproval")].toBool();
+  job.ignoreConcurrency = effReq[QStringLiteral("ignoreConcurrency")].toBool();
 
-  if (effReq.contains(QStringLiteral("requirePlanApproval"))) {
-    job.planApproval = effReq[QStringLiteral("requirePlanApproval")].toBool();
-  }
-
-  if (effReq.contains(QStringLiteral("ignoreConcurrency"))) {
-    job.ignoreConcurrency = effReq[QStringLiteral("ignoreConcurrency")].toBool();
-  }
-
-  if (effReq.contains(QStringLiteral("prompt"))) {
-    job.prompt = effReq[QStringLiteral("prompt")].toString();
-  } else if (session.contains(QStringLiteral("prompt"))) {
-    job.prompt = session[QStringLiteral("prompt")].toString();
-  }
-
-  if (effReq.contains(QStringLiteral("source"))) {
-    job.source = effReq[QStringLiteral("source")].toString();
-  }
-  if (job.source.isEmpty() && effReq.contains(QStringLiteral("sourceContext")) &&
-      effReq[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
+  job.source = effReq[QStringLiteral("source")].toString();
+  if (job.source.isEmpty() && effReq.contains(QStringLiteral("sourceContext"))) {
     job.source = effReq[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
   }
-  if (job.source.isEmpty() && session.contains(QStringLiteral("sourceContext")) &&
-      session[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
-    job.source = session[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
-  }
 
-  if (effReq.contains(QStringLiteral("startingBranch"))) {
-    job.startingBranch = effReq[QStringLiteral("startingBranch")].toString();
-  }
+  job.startingBranch = effReq[QStringLiteral("startingBranch")].toString();
   if (job.startingBranch.isEmpty() && effReq.contains(QStringLiteral("sourceContext"))) {
     QJsonObject sCtx = effReq[QStringLiteral("sourceContext")].toObject();
-    if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
-        sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
-      job.startingBranch =
-          sCtx[QStringLiteral("githubRepoContext")].toObject()[QStringLiteral("startingBranch")].toString();
-    }
-  }
-  if (job.startingBranch.isEmpty() && session.contains(QStringLiteral("sourceContext"))) {
-    QJsonObject sCtx = session[QStringLiteral("sourceContext")].toObject();
-    if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
-        sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
+    if (sCtx.contains(QStringLiteral("githubRepoContext"))) {
       job.startingBranch =
           sCtx[QStringLiteral("githubRepoContext")].toObject()[QStringLiteral("startingBranch")].toString();
     }
@@ -494,7 +463,7 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   job.lifecycleMetadata = lifecycle;
 
   JobAttemptData attempt;
-  attempt.id = deterministicUuid(QStringLiteral("session-attempt-v1"), session, ordinal);
+  attempt.id = deterministicUuid(QStringLiteral("session-attempt-v1"), fp, ordinal);
   attempt.julesSessionId = session[QStringLiteral("id")].toString();
   attempt.julesState = session[QStringLiteral("state")].toString();
   attempt.createdAt = job.createdAt;

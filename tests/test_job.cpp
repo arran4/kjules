@@ -346,13 +346,21 @@ private Q_SLOTS:
 
     sess[QStringLiteral("prompt")] = QStringLiteral("outer-prompt");
     sess[QStringLiteral("automationMode")] = QStringLiteral("outer-auto");
+    sess[QStringLiteral("source")] = QStringLiteral("outer-source");
+    sess[QStringLiteral("startingBranch")] = QStringLiteral("outer-branch");
 
     QJsonObject req;
-    req[QStringLiteral("prompt")] = QStringLiteral("inner-prompt");
+    // Omit prompt to prove it doesn't fall back to outer when request exists
     req[QStringLiteral("automationMode")] = QStringLiteral("inner-auto");
 
+    // Provide empty source, it should fall back to nested sourceContext, not outer
+    req[QStringLiteral("source")] = QStringLiteral("");
     QJsonObject sCtx;
     sCtx[QStringLiteral("source")] = QStringLiteral("inner-source");
+
+    QJsonObject ghCtx;
+    ghCtx[QStringLiteral("startingBranch")] = QStringLiteral("inner-branch");
+    sCtx[QStringLiteral("githubRepoContext")] = ghCtx;
     req[QStringLiteral("sourceContext")] = sCtx;
 
     sess[QStringLiteral("request")] = req;
@@ -360,9 +368,25 @@ private Q_SLOTS:
 
     auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
     QCOMPARE(res.jobs.size(), 1);
-    QCOMPARE(res.jobs[0].prompt, QStringLiteral("inner-prompt"));
+    QCOMPARE(res.jobs[0].prompt, QStringLiteral(""));
     QCOMPARE(res.jobs[0].automationMode, QStringLiteral("inner-auto"));
     QCOMPARE(res.jobs[0].source, QStringLiteral("inner-source"));
+    QCOMPARE(res.jobs[0].startingBranch, QStringLiteral("inner-branch"));
+  }
+
+  void testActiveArchiveProvenanceNoCollision() {
+    LegacyData data;
+    QJsonObject sess;
+    sess[QStringLiteral("id")] = QStringLiteral("sess1");
+
+    // Add identical session to BOTH active and archive
+    data.activeSessions.append(sess);
+    data.archivedSessions.append(sess);
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+    QCOMPARE(res.jobs.size(), 2);
+    QVERIFY(res.jobs[0].id != res.jobs[1].id);
+    QVERIFY(res.jobs[0].attempts[0].id != res.jobs[1].attempts[0].id);
   }
 
   void testFixtures() {
