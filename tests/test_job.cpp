@@ -48,10 +48,12 @@ private Q_SLOTS:
     one.id = QStringLiteral("one");
     JobAttemptData a1;
     a1.id = QStringLiteral("a1");
+    a1.julesSessionId = QStringLiteral("remote-sess-id"); // Test round trip with session ID
     one.attempts.append(a1);
     QJsonObject jOne = one.toJson();
     JobData rOne = JobData::fromJson(jOne);
     QCOMPARE(rOne.attempts.size(), 1);
+    QCOMPARE(rOne.attempts[0].julesSessionId, QStringLiteral("remote-sess-id"));
 
     JobData multi;
     multi.id = QStringLiteral("multi");
@@ -342,24 +344,39 @@ private Q_SLOTS:
 
   void testLegacyFallbackSemantics() {
     LegacyData data;
-    QJsonObject sess;
 
+    // Test Queue outer fallback rejection
+    QueueItem qItem;
+    qItem.requestData[QStringLiteral("prompt")] = QStringLiteral("outer-prompt");
+    qItem.requestData[QStringLiteral("automationMode")] = QStringLiteral("outer-auto");
+    qItem.requestData[QStringLiteral("source")] = QStringLiteral("outer-source");
+    qItem.requestData[QStringLiteral("startingBranch")] = QStringLiteral("outer-branch");
+
+    QJsonObject qReq;
+    qReq[QStringLiteral("automationMode")] = QStringLiteral("inner-auto"); // Omit prompt
+    qReq[QStringLiteral("source")] = QStringLiteral("");                   // Empty source
+    QJsonObject qCtx;
+    qCtx[QStringLiteral("source")] = QStringLiteral("inner-source");
+    QJsonObject ghCtx;
+    ghCtx[QStringLiteral("startingBranch")] = QStringLiteral("inner-branch");
+    qCtx[QStringLiteral("githubRepoContext")] = ghCtx;
+    qReq[QStringLiteral("sourceContext")] = qCtx;
+
+    qItem.requestData[QStringLiteral("request")] = qReq;
+    data.queueItems.append(qItem);
+
+    // Test Session outer fallback rejection
+    QJsonObject sess;
     sess[QStringLiteral("prompt")] = QStringLiteral("outer-prompt");
     sess[QStringLiteral("automationMode")] = QStringLiteral("outer-auto");
     sess[QStringLiteral("source")] = QStringLiteral("outer-source");
     sess[QStringLiteral("startingBranch")] = QStringLiteral("outer-branch");
 
     QJsonObject req;
-    // Omit prompt to prove it doesn't fall back to outer when request exists
-    req[QStringLiteral("automationMode")] = QStringLiteral("inner-auto");
-
-    // Provide empty source, it should fall back to nested sourceContext, not outer
-    req[QStringLiteral("source")] = QStringLiteral("");
+    req[QStringLiteral("automationMode")] = QStringLiteral("inner-auto"); // Omit prompt
+    req[QStringLiteral("source")] = QStringLiteral("");                   // Empty source
     QJsonObject sCtx;
     sCtx[QStringLiteral("source")] = QStringLiteral("inner-source");
-
-    QJsonObject ghCtx;
-    ghCtx[QStringLiteral("startingBranch")] = QStringLiteral("inner-branch");
     sCtx[QStringLiteral("githubRepoContext")] = ghCtx;
     req[QStringLiteral("sourceContext")] = sCtx;
 
@@ -367,11 +384,17 @@ private Q_SLOTS:
     data.activeSessions.append(sess);
 
     auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
-    QCOMPARE(res.jobs.size(), 1);
+    QCOMPARE(res.jobs.size(), 2);
+
     QCOMPARE(res.jobs[0].prompt, QStringLiteral(""));
     QCOMPARE(res.jobs[0].automationMode, QStringLiteral("inner-auto"));
     QCOMPARE(res.jobs[0].source, QStringLiteral("inner-source"));
     QCOMPARE(res.jobs[0].startingBranch, QStringLiteral("inner-branch"));
+
+    QCOMPARE(res.jobs[1].prompt, QStringLiteral(""));
+    QCOMPARE(res.jobs[1].automationMode, QStringLiteral("inner-auto"));
+    QCOMPARE(res.jobs[1].source, QStringLiteral("inner-source"));
+    QCOMPARE(res.jobs[1].startingBranch, QStringLiteral("inner-branch"));
   }
 
   void testActiveArchiveProvenanceNoCollision() {
