@@ -410,6 +410,18 @@ private Q_SLOTS:
     QCOMPARE(res.jobs.size(), 2);
     QVERIFY(res.jobs[0].id != res.jobs[1].id);
     QVERIFY(res.jobs[0].attempts[0].id != res.jobs[1].attempts[0].id);
+
+    // Prove they survive uniqueness validation in persistence
+    QString tempPath =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/prov_test.json");
+    JobStore store(tempPath);
+    store.setJobs(res.jobs);
+    QVERIFY(store.save());
+
+    JobStore loadStore(tempPath);
+    QVERIFY(loadStore.load());
+    QCOMPARE(loadStore.jobs().size(), 2);
+    QFile::remove(tempPath);
   }
 
   void testFixtures() {
@@ -474,6 +486,65 @@ private Q_SLOTS:
       }
     }
     QCOMPARE(linkedErrors, 1);
+  }
+
+  void testSessionPredecessorReorderingFull() {
+    LegacyData data1;
+    LegacyData data2;
+
+    QJsonObject root;
+    root[QStringLiteral("id")] = QStringLiteral("root");
+    QJsonObject child1;
+    child1[QStringLiteral("id")] = QStringLiteral("child1");
+    QJsonObject req1;
+    req1[QStringLiteral("previousAttemptId")] = QStringLiteral("root");
+    child1[QStringLiteral("request")] = req1;
+    QJsonObject child2;
+    child2[QStringLiteral("id")] = QStringLiteral("child2");
+    QJsonObject req2;
+    req2[QStringLiteral("previousAttemptId")] = QStringLiteral("root");
+    child2[QStringLiteral("request")] = req2;
+    QJsonObject grandchild;
+    grandchild[QStringLiteral("id")] = QStringLiteral("grandchild");
+    QJsonObject req3;
+    req3[QStringLiteral("previousAttemptId")] = QStringLiteral("child1");
+    grandchild[QStringLiteral("request")] = req3;
+
+    // Order 1
+    data1.activeSessions.append(root);
+    data1.activeSessions.append(child1);
+    data1.activeSessions.append(child2);
+    data1.activeSessions.append(grandchild);
+
+    // Order 2
+    data2.activeSessions.append(grandchild);
+    data2.activeSessions.append(child2);
+    data2.activeSessions.append(root);
+    data2.activeSessions.append(child1);
+
+    auto res1 = LegacyConverter::convertAll(data1, QDateTime::currentDateTimeUtc());
+    auto res2 = LegacyConverter::convertAll(data2, QDateTime::currentDateTimeUtc());
+
+    QCOMPARE(res1.jobs.size(), 1);
+    QCOMPARE(res2.jobs.size(), 1);
+
+    QCOMPARE(res1.jobs[0].toJson(), res2.jobs[0].toJson());
+  }
+
+  void testMissingPredecessorPreserved() {
+    LegacyData data;
+    QJsonObject child;
+    child[QStringLiteral("id")] = QStringLiteral("child");
+    QJsonObject req;
+    req[QStringLiteral("previousAttemptId")] = QStringLiteral("missing_root");
+    child[QStringLiteral("request")] = req;
+
+    data.activeSessions.append(child);
+
+    auto res = LegacyConverter::convertAll(data, QDateTime::currentDateTimeUtc());
+    QCOMPARE(res.jobs.size(), 1);
+    QCOMPARE(res.jobs[0].attempts.size(), 1);
+    QCOMPARE(res.jobs[0].attempts[0].julesSessionId, QStringLiteral("child"));
   }
 
   void testPreviousAttemptIdNested() {
