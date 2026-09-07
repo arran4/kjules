@@ -1,3 +1,4 @@
+#include <QFile>
 #ifndef MIGRATIONORCHESTRATOR_H
 #define MIGRATIONORCHESTRATOR_H
 
@@ -11,22 +12,32 @@ public:
                                 const QDateTime &fallbackTimestamp) {
     // 3. Call aggregate conversion in memory
     ConversionResult result = LegacyConverter::convertAll(legacyData, fallbackTimestamp);
-    if (result.jobs.isEmpty() && result.unattachedErrors.isEmpty() && legacyData.queueItems.isEmpty() &&
-        legacyData.activeSessions.isEmpty() && legacyData.archivedSessions.isEmpty() &&
-        legacyData.holdingItems.isEmpty() && legacyData.errors.isEmpty()) {
-      return true; // trivially empty
-    }
 
-    // 4. Write new store atomically
-    JobStore tempStore(destinationStorePath);
-    tempStore.setJobs(result.jobs);
-    if (!tempStore.save()) {
+    // Ensure no operational errors or unattached diagnostics were generated that we can't save
+    // (Wait, the comment said "Preserve diagnostics/legacy recoverability explicitly". Since JobStore doesn't store
+    // them, if there are unattached errors, migration can't be completed safely without losing them.)
+    if (!result.unattachedErrors.isEmpty()) {
       return false;
     }
 
-    // 5. Reopen and validate/read back
-    JobStore validationStore(destinationStorePath);
+    if (result.jobs.isEmpty() && legacyData.queueItems.isEmpty() && legacyData.activeSessions.isEmpty() &&
+        legacyData.archivedSessions.isEmpty() && legacyData.holdingItems.isEmpty() && legacyData.errors.isEmpty()) {
+      return true; // trivially empty
+    }
+
+    // 4. Write new store to a staging location first
+    QString stagingPath = destinationStorePath + QStringLiteral(".tmp");
+    JobStore tempStore(stagingPath);
+    tempStore.setJobs(result.jobs);
+    if (!tempStore.save()) {
+      QFile::remove(stagingPath);
+      return false;
+    }
+
+    // 5. Reopen and validate/read back from staging
+    JobStore validationStore(stagingPath);
     if (!validationStore.load()) {
+      QFile::remove(stagingPath);
       return false;
     }
 
@@ -51,25 +62,14 @@ public:
     };
 
     if (sortArray(arr1) != sortArray(arr2)) {
+      QFile::remove(stagingPath);
       return false;
     }
 
-    // Also check if we produced unattached errors but they weren't saved?
-    // Wait, unattachedErrors aren't serialized to JobStore in Phase 1 currently,
-    // because JobStore only stores jobs. The requirement is just "ConversionResult::unattachedErrors is not accounted
-    // for by the persistence/read-back success criterion." We shouldn't fail if there are unattached errors, we just
-    // need to ensure the caller knows it succeeded in writing what it *can* write. Or wait,
-    // "ConversionResult::unattachedErrors is not accounted for by the persistence/read-back success criterion. Add
-    // non-empty success coverage that compares the full serialized read-back Job representation, and
-    // failure/non-destructive coverage... Preserve diagnostics/legacy recoverability explicitly; do not let a future
-    // caller interpret a successful JobStore write as having safely migrated diagnostics that were never represented
-    // there." So we should return a bool indicating if anything was lost? Or change the signature to return an object.
-    // Actually, if we return true, the caller might think unattached errors were saved. Let's just return false if
-    // unattached errors > 0 for the test? No, we should probably output the unattached errors or return a status
-    // struct. Let's just return false if `!result.unattachedErrors.isEmpty()` for now since Phase 1 doesn't persist
-    // them.
-    if (!result.unattachedErrors.isEmpty()) {
-      // We haven't migrated diagnostics safely yet.
+    // 7. Success. Atomically rename/replace destination
+    QFile::remove(destinationStorePath);
+    if (!QFile::rename(stagingPath, destinationStorePath)) {
+      QFile::remove(stagingPath);
       return false;
     }
 

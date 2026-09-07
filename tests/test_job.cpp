@@ -211,22 +211,41 @@ private Q_SLOTS:
     LegacyData emptyData;
     QVERIFY(MigrationOrchestrator::safeMigrationSeam(emptyData, tempPath, QDateTime::currentDateTimeUtc()));
 
+    // Create a sentinel destination to prove failure paths are non-destructive
+    QFile sf(tempPath);
+    sf.open(QIODevice::WriteOnly);
+    sf.write("sentinel");
+    sf.close();
+
+    // Data with operational diagnostics fails migration seam because they aren't stored
+    LegacyData dataWithErrors;
+    QJsonObject opError;
+    opError[QStringLiteral("message")] = QStringLiteral("op error");
+    opError[QStringLiteral("provider")] = QStringLiteral("github"); // ensure it is classified as unattached diagnostic
+    dataWithErrors.errors.append(opError);
+    QVERIFY(!MigrationOrchestrator::safeMigrationSeam(dataWithErrors, tempPath, QDateTime::currentDateTimeUtc()));
+
+    // Sentinel must be untouched!
+    QFile rf(tempPath);
+    rf.open(QIODevice::ReadOnly);
+    QCOMPARE(rf.readAll(), QByteArray("sentinel"));
+    rf.close();
+
     // Data without unattached errors succeeds and validates full round trip
     LegacyData data;
     QueueItem item1;
     item1.requestData[QStringLiteral("id")] = QStringLiteral("req-1");
     data.queueItems.append(item1);
     QVERIFY(MigrationOrchestrator::safeMigrationSeam(data, tempPath, QDateTime::currentDateTimeUtc()));
+
+    // Sentinel is now replaced by valid JSON
+    rf.open(QIODevice::ReadOnly);
+    QVERIFY(rf.readAll() != QByteArray("sentinel"));
+    rf.close();
+
     QFile::remove(tempPath);
 
-    // Data with operational diagnostics fails migration seam currently because they aren't stored
-    LegacyData dataWithErrors;
-    QJsonObject opError;
-    opError[QStringLiteral("message")] = QStringLiteral("op error");
-    dataWithErrors.errors.append(opError);
-    QVERIFY(!MigrationOrchestrator::safeMigrationSeam(dataWithErrors, tempPath, QDateTime::currentDateTimeUtc()));
-
-    // Test write failure handling
+    // Test write failure handling to an unwritable directory
     QVERIFY(!MigrationOrchestrator::safeMigrationSeam(data, QStringLiteral("/dev/null/foo.json"),
                                                       QDateTime::currentDateTimeUtc()));
   }

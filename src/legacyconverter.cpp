@@ -307,28 +307,42 @@ JobData LegacyConverter::fromQueueItem(const QueueItem &item, bool isHolding, co
 
   job.prompt = item.requestData[QStringLiteral("prompt")].toString();
 
-  if (item.requestData.contains(QStringLiteral("automationMode"))) {
-    job.automationMode = item.requestData[QStringLiteral("automationMode")].toString();
-  }
-  if (item.requestData.contains(QStringLiteral("preferences"))) {
-    QJsonObject prefs = item.requestData[QStringLiteral("preferences")].toObject();
-    if (prefs.contains(QStringLiteral("planApproval"))) {
-      job.planApproval = prefs[QStringLiteral("planApproval")].toBool();
-    }
-    if (prefs.contains(QStringLiteral("ignoreConcurrency"))) {
-      job.ignoreConcurrency = prefs[QStringLiteral("ignoreConcurrency")].toBool();
-    }
-    if (prefs.contains(QStringLiteral("priority"))) {
-      job.priority = prefs[QStringLiteral("priority")].toInt();
-    }
+  // Typed request extraction matching SessionRequestBuilder
+  QJsonObject effReq = item.requestData;
+  if (effReq.contains(QStringLiteral("request")) && effReq[QStringLiteral("request")].isObject()) {
+    effReq = effReq[QStringLiteral("request")].toObject();
   }
 
-  // Also support top-level queue properties used by older flows
+  if (effReq.contains(QStringLiteral("automationMode"))) {
+    job.automationMode = effReq[QStringLiteral("automationMode")].toString();
+  } else if (item.requestData.contains(QStringLiteral("automationMode"))) {
+    job.automationMode = item.requestData[QStringLiteral("automationMode")].toString();
+  }
+
+  if (effReq.contains(QStringLiteral("requirePlanApproval"))) {
+    job.planApproval = effReq[QStringLiteral("requirePlanApproval")].toBool();
+  } else if (item.requestData.contains(QStringLiteral("requirePlanApproval"))) {
+    job.planApproval = item.requestData[QStringLiteral("requirePlanApproval")].toBool();
+  }
+
+  if (effReq.contains(QStringLiteral("ignoreConcurrency"))) {
+    job.ignoreConcurrency = effReq[QStringLiteral("ignoreConcurrency")].toBool();
+  } else if (item.requestData.contains(QStringLiteral("ignoreConcurrency"))) {
+    job.ignoreConcurrency = item.requestData[QStringLiteral("ignoreConcurrency")].toBool();
+  }
+
+  if (item.requestData.contains(QStringLiteral("preferences"))) {
+    QJsonObject prefs = item.requestData[QStringLiteral("preferences")].toObject();
+    if (prefs.contains(QStringLiteral("planApproval")))
+      job.planApproval = prefs[QStringLiteral("planApproval")].toBool();
+    if (prefs.contains(QStringLiteral("ignoreConcurrency")))
+      job.ignoreConcurrency = prefs[QStringLiteral("ignoreConcurrency")].toBool();
+    if (prefs.contains(QStringLiteral("priority")))
+      job.priority = prefs[QStringLiteral("priority")].toInt();
+  }
+
   if (item.requestData.contains(QStringLiteral("priority"))) {
     job.priority = item.requestData[QStringLiteral("priority")].toInt();
-  }
-  if (item.requestData.contains(QStringLiteral("requirePlanApproval"))) {
-    job.planApproval = item.requestData[QStringLiteral("requirePlanApproval")].toBool();
   }
 
   job.createdAt = fallbackTimestamp;
@@ -365,11 +379,45 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
 
   job.prompt = session[QStringLiteral("prompt")].toString();
 
-  if (session.contains(QStringLiteral("automationMode"))) {
+  QJsonObject effReq = session;
+  if (session.contains(QStringLiteral("request")) && session[QStringLiteral("request")].isObject()) {
+    effReq = session[QStringLiteral("request")].toObject();
+  }
+
+  if (effReq.contains(QStringLiteral("automationMode"))) {
+    job.automationMode = effReq[QStringLiteral("automationMode")].toString();
+  } else if (session.contains(QStringLiteral("automationMode"))) {
     job.automationMode = session[QStringLiteral("automationMode")].toString();
-  } else if (session.contains(QStringLiteral("request")) &&
-             session[QStringLiteral("request")].toObject().contains(QStringLiteral("automationMode"))) {
-    job.automationMode = session[QStringLiteral("request")].toObject()[QStringLiteral("automationMode")].toString();
+  }
+
+  if (effReq.contains(QStringLiteral("requirePlanApproval"))) {
+    job.planApproval = effReq[QStringLiteral("requirePlanApproval")].toBool();
+  }
+
+  if (effReq.contains(QStringLiteral("ignoreConcurrency"))) {
+    job.ignoreConcurrency = effReq[QStringLiteral("ignoreConcurrency")].toBool();
+  }
+
+  if (effReq.contains(QStringLiteral("prompt"))) {
+    job.prompt = effReq[QStringLiteral("prompt")].toString();
+  }
+
+  if (effReq.contains(QStringLiteral("source"))) {
+    job.source = effReq[QStringLiteral("source")].toString();
+  } else if (effReq.contains(QStringLiteral("sourceContext")) &&
+             effReq[QStringLiteral("sourceContext")].toObject().contains(QStringLiteral("source"))) {
+    job.source = effReq[QStringLiteral("sourceContext")].toObject()[QStringLiteral("source")].toString();
+  }
+
+  if (effReq.contains(QStringLiteral("startingBranch"))) {
+    job.startingBranch = effReq[QStringLiteral("startingBranch")].toString();
+  } else if (effReq.contains(QStringLiteral("sourceContext"))) {
+    QJsonObject sCtx = effReq[QStringLiteral("sourceContext")].toObject();
+    if (sCtx.contains(QStringLiteral("githubRepoContext")) &&
+        sCtx[QStringLiteral("githubRepoContext")].toObject().contains(QStringLiteral("startingBranch"))) {
+      job.startingBranch =
+          sCtx[QStringLiteral("githubRepoContext")].toObject()[QStringLiteral("startingBranch")].toString();
+    }
   }
 
   if (session.contains(QStringLiteral("createTime"))) {
