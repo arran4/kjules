@@ -1,25 +1,23 @@
-#include <QTest>
-#include <QSignalSpy>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
-#include <QTemporaryDir>
+#include <QSignalSpy>
 #include <QStandardPaths>
+#include <QTemporaryDir>
+#include <QTest>
 
-#include "../src/mainwindow.h"
-#include "../src/jobstore.h"
-#include "../src/queuemodel.h"
 #include "../src/errorsmodel.h"
+#include "../src/jobstore.h"
+#include "../src/mainwindow.h"
 #include "../src/migrationorchestrator.h"
+#include "../src/queuemodel.h"
 
 class TestMigrationDecoupling : public QObject {
   Q_OBJECT
 
 private Q_SLOTS:
-  void initTestCase() {
-    QStandardPaths::setTestModeEnabled(true);
-  }
+  void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
 
   void testLegacyFilesNotWrittenAfterMigration() {
     QTemporaryDir dir;

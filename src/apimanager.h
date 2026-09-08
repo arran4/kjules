@@ -70,8 +70,10 @@ public:
 Q_SIGNALS:
   void githubAvailabilityChanged(bool available);
   void githubUsernameFetched(const QString &username);
-  void githubRepoCreated(const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const QJsonObject &response);
-  void githubRepoCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const ApiError &apiError);
+  void githubRepoCreated(const QString &jobId, const QString &attemptId, const QJsonObject &requestData,
+                         const QJsonObject &response);
+  void githubRepoCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &requestData,
+                                const ApiError &apiError);
 
   void githubInfoReceived(const QString &sourceId, const QJsonObject &info);
   void githubInfoFailed(const QString &sourceId, const QString &message);
@@ -98,7 +100,8 @@ Q_SIGNALS:
   void githubConnectionTested(bool success, const QString &message);
   void errorOccurred(const QString &message, bool isBackground);
   void errorOccurredWithResponse(const QString &message, const QString &response, bool isBackground);
-  void sessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
+  void sessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request,
+                             const ApiError &apiError, const QString &httpDetails);
   void messageSent(const QString &sessionId);
   void messageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails);
   void logMessage(const QString &message);

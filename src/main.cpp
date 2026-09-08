@@ -11,8 +11,8 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
-#include "migrationorchestrator.h"
 #include "mainwindow.h"
+#include "migrationorchestrator.h"
 
 int main(int argc, char *argv[]) {
 #ifdef DEV_MODE
@@ -25,7 +25,6 @@ int main(int argc, char *argv[]) {
 #endif
 
   QApplication app(argc, argv);
-    MigrationOrchestrator::executeMigrationIfNecessary();
   app.setOrganizationName(QStringLiteral(KJULES_APPLICATION_NAME));
   app.setOrganizationDomain(QStringLiteral(KJULES_ORGANIZATION_DOMAIN));
   app.setApplicationName(QStringLiteral(KJULES_APPLICATION_NAME));
@@ -112,6 +111,9 @@ int main(int argc, char *argv[]) {
       QFile::rename(oldAutostartPath, newAutostartPath);
     }
   }
+
+  // Run migration after data paths have been correctly resolved (including org change and mock isolation).
+  MigrationOrchestrator::executeMigrationIfNecessary();
 
   MainWindow *window = new MainWindow();
 

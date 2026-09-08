@@ -1,5 +1,5 @@
-#include "migrationorchestrator.h"
 #include "queuemodel.h"
+#include "migrationorchestrator.h"
 #include "utils.h"
 #include <utility>
 
@@ -436,7 +436,8 @@ QString QueueModel::filePath() const {
 }
 
 void QueueModel::load() {
-  if (MigrationOrchestrator::isMigrated()) return;
+  if (MigrationOrchestrator::isMigrated())
+    return;
 
   QString path = filePath();
   QFile file(path);
@@ -479,7 +480,8 @@ void QueueModel::endBatchUpdate() {
 }
 
 void QueueModel::save() {
-  if (MigrationOrchestrator::isMigrated()) return;
+  if (MigrationOrchestrator::isMigrated())
+    return;
 
   if (m_batchUpdating)
     return;

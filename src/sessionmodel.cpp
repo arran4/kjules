@@ -1,5 +1,5 @@
-#include "migrationorchestrator.h"
 #include "sessionmodel.h"
+#include "migrationorchestrator.h"
 #include <KLocalizedString>
 #include <QColor>
 #include <QDebug>
@@ -624,7 +624,8 @@ QString SessionModel::cacheFilePath() const {
 }
 
 void SessionModel::loadSessions() {
-  if (MigrationOrchestrator::isMigrated()) return;
+  if (MigrationOrchestrator::isMigrated())
+    return;
 
   QString filePath = cacheFilePath();
   QFile file(filePath);
@@ -642,7 +643,8 @@ void SessionModel::loadSessions() {
 }
 
 void SessionModel::saveSessions() {
-  if (MigrationOrchestrator::isMigrated()) return;
+  if (MigrationOrchestrator::isMigrated())
+    return;
 
   QString filePath = cacheFilePath();
   QFileInfo fileInfo(filePath);

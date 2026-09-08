@@ -575,11 +575,15 @@ bool APIManager::checkGithubRateLimit() {
 
 void APIManager::createGithubRepoAsync(const QJsonObject &requestData, const QString &jobId, const QString &attemptId) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
-    Q_EMIT githubRepoCreationFailed(jobId, attemptId, requestData, ApiError(ApiError::Type::Authentication, QStringLiteral("GitHub token authentication failed previously or not provided.")));
+    Q_EMIT githubRepoCreationFailed(
+        jobId, attemptId, requestData,
+        ApiError(ApiError::Type::Authentication,
+                 QStringLiteral("GitHub token authentication failed previously or not provided.")));
     return;
   }
   if (!checkGithubRateLimit()) {
-    Q_EMIT githubRepoCreationFailed(jobId, attemptId, requestData, ApiError(ApiError::Type::RateLimit, QStringLiteral("Rate limit exhausted")));
+    Q_EMIT githubRepoCreationFailed(jobId, attemptId, requestData,
+                                    ApiError(ApiError::Type::RateLimit, QStringLiteral("Rate limit exhausted")));
     return;
   }
 

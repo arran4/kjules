@@ -109,7 +109,8 @@ private Q_SLOTS:
   void onHoldingContextMenu(const QPoint &pos);
   void onBlockedContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
-  void onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
+  void onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request,
+                               const ApiError &apiError, const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
@@ -143,9 +144,10 @@ private Q_SLOTS:
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
 
-  void onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &session, const ApiError &apiError = ApiError(),
-                              const QString &rawResponse = QString());
-  void onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const QJsonObject &response,
+  void onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &session,
+                              const ApiError &apiError = ApiError(), const QString &rawResponse = QString());
+  void onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId,
+                                 const QJsonObject &requestData, const QJsonObject &response,
                                  const ApiError &apiError = ApiError());
   void sendQueueItemNow(int row);
   void syncModelsFromJobStore();
@@ -232,7 +234,6 @@ private:
   void showFixSourcesDialog(const QString &onlySource);
   QList<SourceRemapEntry> pendingSourceEntries(const QString &onlySource = QString()) const;
   void applySourceRemaps(const QList<SourceRemapEntry> &entries, const QStringList &newSources);
-
 
   QHash<QString, QString> m_previousSessionStates;
   QHash<QString, QString> m_previousSessionPrStates;
@@ -366,6 +367,7 @@ protected:
 
 private:
   bool m_isWaitingForRefreshBeforeQueue;
+  QDateTime m_refreshBeforeQueueTime;
   bool m_isWaitingForCreatedRepoSource = false;
 
   RefreshProgressWindow *m_refreshProgressWindow;

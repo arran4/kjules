@@ -1,5 +1,3 @@
-#include "migrationorchestrator.h"
-#include "jobdata.h"
 #include "mainwindow.h"
 #include "activitylogwindow.h"
 #include "advancedfilterproxymodel.h"
@@ -17,7 +15,9 @@
 #include "filterparser.h"
 #include "followingrefreshevaluator.h"
 #include "followsessiondialog.h"
+#include "jobdata.h"
 #include "legacydatarepair.h"
+#include "migrationorchestrator.h"
 #include "newsessiondialog.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
@@ -94,18 +94,16 @@
 #include <functional>
 
 MainWindow::MainWindow(QWidget *parent)
-    : KXmlGuiWindow(parent),
-      m_sessionModel(new SessionModel(QStringLiteral("cached_all_sessions.json"), this)),
+    : KXmlGuiWindow(parent), m_sessionModel(new SessionModel(QStringLiteral("cached_all_sessions.json"), this)),
       m_archiveModel(new SessionModel(QStringLiteral("cached_archive_sessions.json"), this)),
       m_sourceModel(new SourceModel(this)), m_draftsModel(new DraftsModel(this)),
       m_templatesModel(new TemplatesModel(this)), m_queueModel(new QueueModel(this)),
       m_holdingModel(new QueueModel(this, QStringLiteral("holding.json"), true)), m_errorsModel(new ErrorsModel(this)),
-      m_apiManager(new APIManager(this)),
-      m_jobStore(new JobStore()),
-      m_tabWidget(nullptr), m_trayIcon(nullptr), m_trayMenu(nullptr), m_isRefreshingSources(false),
-      m_sourcesLoadedCount(0), m_sourcesAddedCount(0), m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)),
-      m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
-      m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
+      m_apiManager(new APIManager(this)), m_jobStore(new JobStore()), m_tabWidget(nullptr), m_trayIcon(nullptr),
+      m_trayMenu(nullptr), m_isRefreshingSources(false), m_sourcesLoadedCount(0), m_sourcesAddedCount(0),
+      m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)), m_masterSecondTimer(new QTimer(this)),
+      m_isProcessingQueue(false), m_isProcessingMinuteTimer(false), m_queuePaused(false),
+      m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   ConfigMigration::migrate();
   setObjectName(QStringLiteral("MainWindow"));
   m_throttleTimer.start();
@@ -131,19 +129,24 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[AutoRefresh] GitHub lookup failed for PR:" << prUrl << "Error:" << message;
   });
   connect(m_apiManager, &APIManager::sessionCreationFailed, this,
-          [this](const QString &jobId, const QString &attemptId, const QJsonObject &request, const ApiError &apiError, const QString &httpDetails) {
+          [this](const QString &jobId, const QString &attemptId, const QJsonObject &request, const ApiError &apiError,
+                 const QString &httpDetails) {
             onSessionCreationFailed(jobId, attemptId, request, apiError, httpDetails);
           });
   connect(m_apiManager, &APIManager::sessionCreated,
-          [this](const QString &jobId, const QString &attemptId, const QJsonObject &session) { onSessionCreatedResult(true, jobId, attemptId, session, ApiError()); });
+          [this](const QString &jobId, const QString &attemptId, const QJsonObject &session) {
+            onSessionCreatedResult(true, jobId, attemptId, session, ApiError());
+          });
   connect(m_apiManager, &APIManager::githubRepoCreated, this,
-          [this](const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const QJsonObject &response) {
+          [this](const QString &jobId, const QString &attemptId, const QJsonObject &requestData,
+                 const QJsonObject &response) {
             onGithubRepoCreatedResult(true, jobId, attemptId, requestData, response, ApiError());
           });
-  connect(m_apiManager, &APIManager::githubRepoCreationFailed, this,
-          [this](const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const ApiError &apiError) {
-            onGithubRepoCreatedResult(false, jobId, attemptId, requestData, QJsonObject(), apiError);
-          });
+  connect(
+      m_apiManager, &APIManager::githubRepoCreationFailed, this,
+      [this](const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const ApiError &apiError) {
+        onGithubRepoCreatedResult(false, jobId, attemptId, requestData, QJsonObject(), apiError);
+      });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &MainWindow::showSessionWindow);
   connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
     Q_UNUSED(isBackground);
@@ -237,7 +240,8 @@ MainWindow::MainWindow(QWidget *parent)
 
   m_jobStore->load();
   m_sessionModel->loadSessions();
-  if (MigrationOrchestrator::isMigrated()) syncModelsFromJobStore();
+  if (MigrationOrchestrator::isMigrated())
+    syncModelsFromJobStore();
   m_archiveModel->loadSessions();
 
   for (int i = 0; i < m_archiveModel->rowCount(); ++i) {
@@ -3734,11 +3738,12 @@ void MainWindow::scheduleNextQueueAttempt() {
 }
 
 bool MainWindow::processQueue() {
-  if (m_isProcessingQueue || m_queuePaused || m_isWaitingForRefreshBeforeQueue || m_isWaitingForCreatedRepoSource)
+  if (m_isProcessingQueue || m_queuePaused) {
     return false;
+  }
 
   QDateTime now = QDateTime::currentDateTimeUtc();
-  if (m_queueScheduler.isBackoffActive(now)) {
+  if (m_isWaitingForRefreshBeforeQueue || (m_refreshBeforeQueueTime.isValid() && now < m_refreshBeforeQueueTime)) {
     return false;
   }
 
@@ -3746,196 +3751,42 @@ bool MainWindow::processQueue() {
     return false;
   }
 
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  QueueItem item = m_queueModel->peek();
 
-  QString currentQueueMode = queueConfig.readEntry("QueueMode", QString());
-  if (currentQueueMode.isEmpty()) {
-    currentQueueMode =
-        queueConfig.readEntry("OneAtATimeMode", true) ? QStringLiteral("one_at_a_time") : QStringLiteral("asap");
-  }
-  bool oneAtATimeMode = currentQueueMode == QStringLiteral("one_at_a_time");
-  bool oneAtATimePerBranchMode = currentQueueMode == QStringLiteral("one_at_a_time_per_branch");
-
-  int globalOneAtATimeLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
-  KConfigGroup sourceConcurrencyConfig(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
-
-  int processIndex = -1;
-  QHash<QString, int> activeCountCache;
-
-  for (int j = 0; j < m_sessionModel->rowCount(); ++j) {
-    QModelIndex idx = m_sessionModel->index(j, 0);
-    QString state = m_sessionModel->data(idx, SessionModel::StateRole).toString();
-    QString prStatus = m_sessionModel->data(idx, SessionModel::PrStatusRole).toString();
-    if (FollowingRefreshEvaluator::isSessionEligible(state, prStatus)) {
-      QJsonObject rawObject = m_sessionModel->getSession(j);
-      bool isNoAutomation =
-          rawObject.value(QStringLiteral("automationMode")).toString() == QStringLiteral("AUTOMATION_MODE_UNSPECIFIED");
-      bool isIgnoreConcurrency = rawObject.value(QStringLiteral("ignoreConcurrency")).toBool();
-
-      if (isNoAutomation || isIgnoreConcurrency) {
-        continue;
-      }
-
-      QString source = m_sessionModel->data(idx, SessionModel::SourceRole).toString();
-      QString cacheKey = source;
-      if (oneAtATimePerBranchMode) {
-        QString branch = rawObject.value(QStringLiteral("sourceContext"))
-                             .toObject()
-                             .value(QStringLiteral("githubRepoContext"))
-                             .toObject()
-                             .value(QStringLiteral("startingBranch"))
-                             .toString();
-        if (!branch.isEmpty()) {
-          cacheKey += QStringLiteral(":") + branch;
-        }
-      }
-      activeCountCache[cacheKey]++;
-    }
-  }
-
-  m_queueModel->beginBatchUpdate();
-
-  for (int i = 0; i < m_queueModel->rowCount(); ++i) {
-    QueueItem item = m_queueModel->getItem(i);
-    bool needsUpdate = false;
-
-    QString source =
-        item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
-    if (source.isEmpty()) {
-      source = item.requestData.value(QStringLiteral("source")).toString();
-    }
-
-    int sourceLimit = sourceConcurrencyConfig.readEntry(source, -1);
-    bool checkLimit = (sourceLimit != 0) && (oneAtATimeMode || oneAtATimePerBranchMode || sourceLimit > 0);
-    int effectiveLimit = (sourceLimit > 0) ? sourceLimit : globalOneAtATimeLimit;
-
-    QString cacheKey = source;
-    if (oneAtATimePerBranchMode) {
-      QString branch = item.requestData.value(QStringLiteral("sourceContext"))
-                           .toObject()
-                           .value(QStringLiteral("githubRepoContext"))
-                           .toObject()
-                           .value(QStringLiteral("startingBranch"))
-                           .toString();
-      if (!branch.isEmpty()) {
-        cacheKey += QStringLiteral(":") + branch;
-      }
-    }
-
-    if (item.blockMetadata.value(QStringLiteral("forced")).toBool()) {
-      checkLimit = false;
-    }
-
-    bool isNoAutomation = item.requestData.value(QStringLiteral("automationMode")).toString() ==
-                          QStringLiteral("AUTOMATION_MODE_UNSPECIFIED");
-    bool isIgnoreConcurrency = item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
-
-    if (isNoAutomation || isIgnoreConcurrency) {
-      checkLimit = false;
-    }
-
-    if (!checkLimit) {
-      if (item.isBlocked) {
-        item.isBlocked = false;
-        item.blockMetadata = QJsonObject();
-        needsUpdate = true;
-      }
-      if (processIndex == -1) {
-        processIndex = i;
-      }
-      activeCountCache[cacheKey]++;
-      if (needsUpdate)
-        m_queueModel->updateItem(i, item);
-      continue;
-    }
-
-    if (activeCountCache[cacheKey] >= effectiveLimit) {
-      if (!item.isBlocked) {
-        item.isBlocked = true;
-        QJsonObject meta;
-        meta[QStringLiteral("reason")] = QStringLiteral("Concurrency limit reached");
-        meta[QStringLiteral("source")] = source;
-        item.blockMetadata = meta;
-        needsUpdate = true;
-      }
-    } else {
-      if (item.isBlocked) {
-        item.isBlocked = false;
-        item.blockMetadata = QJsonObject();
-        needsUpdate = true;
-      }
-      if (processIndex == -1) {
-        processIndex = i;
-      }
-      activeCountCache[source]++;
-    }
-
-    if (needsUpdate) {
-      m_queueModel->updateItem(i, item);
-    }
-  }
-
-  m_queueModel->endBatchUpdate();
-
-  if (processIndex == -1) {
+  JobData *job = m_jobStore->getJobById(item.jobId);
+  if (!job) {
+    qWarning() << "Queue dispatch failed: Job not found in JobStore.";
     return false;
   }
 
-  if (processIndex != 0) {
-    m_queueModel->moveItem(processIndex, 0);
-  }
+  JobAttemptData attempt;
+  attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  attempt.requestSnapshot = job->canonicalRequest;
+  attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+  attempt.createdAt = QDateTime::currentDateTimeUtc();
+  attempt.updatedAt = attempt.createdAt;
+  job->attempts.append(attempt);
+  m_jobStore->updateJob(*job);
 
-  QueueItem item = m_queueModel->peek();
-  if (item.requestData.contains(QStringLiteral("_kjules_github_owner"))) {
-    if (!resolvePendingGithubSource()) {
-      m_isWaitingForCreatedRepoSource = true;
-      if (!m_isRefreshingSources) {
-        refreshSources();
-      }
-      updateStatus(i18n("Waiting for the new repository to appear in Jules sources."));
-      return false;
-    }
-    item = m_queueModel->peek();
+  if (!m_jobStore->save()) {
+    qWarning() << "Queue dispatch failed: could not save new attempt to store.";
+    return false;
   }
-
-  KConfigGroup queueConfigGroup(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  int queueIntervalMins = queueConfigGroup.readEntry("TimerInterval", 1);
-  m_queueScheduler.recordDispatch(now, queueIntervalMins);
+  syncModelsFromJobStore();
 
   m_isProcessingQueue = true;
 
-  JobData* job = m_jobStore->getJobById(item.jobId);
-  if (job) {
-    JobAttemptData attempt;
-    attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    attempt.requestSnapshot = job->canonicalRequest;
-    attempt.dispatchState = QStringLiteral("IN_PROGRESS");
-    attempt.createdAt = QDateTime::currentDateTimeUtc();
-    attempt.updatedAt = attempt.createdAt;
-    job->attempts.append(attempt);
-    m_jobStore->updateJob(*job);
-    m_jobStore->save();
-    syncModelsFromJobStore();
-
-    if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
-        item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
-      m_apiManager->createGithubRepoAsync(item.requestData, job->id, attempt.id);
-    } else {
-      m_apiManager->createSessionAsync(item.requestData, job->id, attempt.id);
-    }
+  if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
+      item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
+    m_apiManager->createGithubRepoAsync(item.requestData, job->id, attempt.id);
   } else {
-    // Fallback if no matching job found.
-    if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
-        item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
-      m_apiManager->createGithubRepoAsync(item.requestData, QString(), QString());
-    } else {
-      m_apiManager->createSessionAsync(item.requestData, QString(), QString());
-    }
+    m_apiManager->createSessionAsync(item.requestData, job->id, attempt.id);
   }
+
   return true;
 }
-
-void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const QJsonObject &response,
+void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId,
+                                           const QJsonObject &requestData, const QJsonObject &response,
                                            const ApiError &apiError) {
   Q_UNUSED(requestData);
   QString errorMsg = apiError.message();
@@ -4015,36 +3866,37 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
   }
 }
 
-
-void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &session, const ApiError &apiError,
+void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId,
+                                        const QJsonObject &session, const ApiError &apiError,
                                         const QString &rawResponse) {
   QString errorMsg = apiError.message();
 
-  if (JobData* job = m_jobStore->getJobById(jobId)) {
-      for (JobAttemptData &attempt : job->attempts) {
-          if (attempt.id == attemptId) {
-              attempt.updatedAt = QDateTime::currentDateTimeUtc();
-              if (success) {
-                  attempt.dispatchState = QStringLiteral("COMPLETED");
-                  attempt.julesSessionId = session.value(QStringLiteral("id")).toString();
-                  attempt.rawResponse = session;
+  if (JobData *job = m_jobStore->getJobById(jobId)) {
+    for (JobAttemptData &attempt : job->attempts) {
+      if (attempt.id == attemptId) {
+        attempt.updatedAt = QDateTime::currentDateTimeUtc();
+        if (success) {
+          attempt.dispatchState = QStringLiteral("COMPLETED");
+          attempt.julesSessionId = session.value(QStringLiteral("id")).toString();
+          attempt.rawResponse = session;
 
-                  // Update lifecycle
-                  job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("COMPLETED");
-              } else {
-                  attempt.dispatchState = QStringLiteral("FAILED");
-                  QJsonObject errObj;
-                  errObj[QStringLiteral("message")] = errorMsg;
-                  errObj[QStringLiteral("rawResponse")] = rawResponse;
-                  attempt.launchErrors.append(errObj);
+          // Update lifecycle
+          job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("COMPLETED");
+        } else {
+          attempt.dispatchState = QStringLiteral("FAILED");
+          QJsonObject errObj;
+          errObj[QStringLiteral("message")] = errorMsg;
+          errObj[QStringLiteral("rawResponse")] = rawResponse;
+          attempt.launchErrors.append(errObj);
 
-                  job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("ERROR_STATE");
-              }
-              break;
-          }
+          job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("ERROR_STATE");
+        }
+        break;
       }
-      m_jobStore->updateJob(*job);
-      if (m_jobStore->save()) syncModelsFromJobStore();
+    }
+    m_jobStore->updateJob(*job);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
   }
 
   if (!m_isProcessingQueue) {
@@ -4469,14 +4321,32 @@ void MainWindow::sendItemNow(const QueueItem &item, int originRow, bool sourceIs
     req[QStringLiteral("_kjules_requeue_err_data")] = errData;
   }
 
+  JobData *job = m_jobStore->getJobById(item.jobId);
+  if (!job)
+    return;
+
+  JobAttemptData attempt;
+  attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  attempt.requestSnapshot = req;
+  attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+  attempt.createdAt = QDateTime::currentDateTimeUtc();
+  attempt.updatedAt = attempt.createdAt;
+  job->attempts.append(attempt);
+  m_jobStore->updateJob(*job);
+
+  if (!m_jobStore->save()) {
+    qWarning() << "Failed to persist direct dispatch attempt. Aborting.";
+    return;
+  }
+  syncModelsFromJobStore();
+
   if (req.contains(QStringLiteral("_kjules_action")) &&
       req.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
-    m_apiManager->createGithubRepoAsync(req, item.jobId, QString());
+    m_apiManager->createGithubRepoAsync(req, job->id, attempt.id);
   } else {
-    m_apiManager->createSessionAsync(req, item.jobId, QString());
+    m_apiManager->createSessionAsync(req, job->id, attempt.id);
   }
 }
-
 void MainWindow::requeueError(int sourceRow) {
   QJsonObject errData = m_errorsModel->getError(sourceRow);
   QJsonObject req = errData.value(QStringLiteral("request")).toObject();
@@ -4570,8 +4440,8 @@ void MainWindow::convertQueueItemToDraft(int row) {
   updateStatus(i18n("Task converted to draft."));
 }
 
-void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request, const ApiError &apiError,
-                                         const QString &httpDetails) {
+void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request,
+                                         const ApiError &apiError, const QString &httpDetails) {
   QString errorString = apiError.message();
   QJsonObject response = apiError.rawResponse();
   QJsonObject requestCopy = request;
@@ -6460,110 +6330,152 @@ void MainWindow::onUnseenErrorsCountChanged(int count) {
 }
 
 void MainWindow::syncModelsFromJobStore() {
-    QVector<QueueItem> queueItems;
-    QVector<QueueItem> holdingItems;
-    QJsonArray errorsArray;
+  QVector<QueueItem> queueItems;
+  QVector<QueueItem> holdingItems;
+  QJsonArray errorsArray;
+  QJsonArray followingArray;
+  QJsonArray archiveArray;
 
-    const QList<JobData> allJobs = m_jobStore->jobs();
-    for (int i = 0; i < allJobs.size(); ++i) {
-        const JobData &job = allJobs[i];
-        QueueItem item;
-        item.jobId = job.id;
-        item.requestData = job.canonicalRequest;
-        item.isBlocked = false;
+  const QList<JobData> allJobs = m_jobStore->jobs();
+  for (int i = 0; i < allJobs.size(); ++i) {
+    const JobData &job = allJobs[i];
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = job.canonicalRequest;
+    item.isBlocked = false;
 
-        bool hasActiveAttempt = false;
-        for (int j = 0; j < job.attempts.size(); ++j) {
-            const JobAttemptData &attempt = job.attempts[j];
-            if (attempt.dispatchState == QStringLiteral("FAILED")) {
-                item.errorCount++;
-                item.lastError = attempt.launchErrors.isEmpty() ? QString() : attempt.launchErrors.last().toObject().value(QStringLiteral("message")).toString();
-                item.lastTry = attempt.updatedAt;
+    bool hasActiveAttempt = false;
+    JobAttemptData latestAttempt;
+    bool hasAnyAttempt = false;
 
-                QJsonObject errorObj;
-                errorObj[QStringLiteral("message")] = item.lastError;
-                errorObj[QStringLiteral("request")] = attempt.requestSnapshot;
-                errorObj[QStringLiteral("jobId")] = job.id;
-                errorObj[QStringLiteral("attemptId")] = attempt.id;
-                errorsArray.append(errorObj);
-            } else if (attempt.dispatchState == QStringLiteral("IN_PROGRESS")) {
-                hasActiveAttempt = true;
-            }
-        }
+    for (int j = 0; j < job.attempts.size(); ++j) {
+      const JobAttemptData &attempt = job.attempts[j];
+      hasAnyAttempt = true;
+      latestAttempt = attempt;
 
-        QString status = job.lifecycleMetadata.value(QStringLiteral("status")).toString();
-        if (status == QStringLiteral("ERROR_STATE") || (status == QStringLiteral("QUEUED") && !hasActiveAttempt)) {
-            if (job.legacyMetadata.value(QStringLiteral("holding")).toBool(false)) {
-                holdingItems.append(item);
-            } else {
-                queueItems.append(item);
-            }
-        }
+      if (attempt.dispatchState == QStringLiteral("FAILED")) {
+        item.errorCount++;
+        item.lastError = attempt.launchErrors.isEmpty()
+                             ? QString()
+                             : attempt.launchErrors.last().toObject().value(QStringLiteral("message")).toString();
+        item.lastTry = attempt.updatedAt;
+
+        QJsonObject errorObj;
+        errorObj[QStringLiteral("message")] = item.lastError;
+        errorObj[QStringLiteral("request")] = attempt.requestSnapshot;
+        errorObj[QStringLiteral("jobId")] = job.id;
+        errorObj[QStringLiteral("attemptId")] = attempt.id;
+        errorsArray.append(errorObj);
+      } else if (attempt.dispatchState == QStringLiteral("IN_PROGRESS")) {
+        hasActiveAttempt = true;
+      }
     }
 
-    m_queueModel->setItems(queueItems);
-    m_holdingModel->setItems(holdingItems);
-    m_errorsModel->setErrors(errorsArray);
+    QString status = job.lifecycleMetadata.value(QStringLiteral("status")).toString();
+
+    if (status == QStringLiteral("ERROR_STATE") || (status == QStringLiteral("QUEUED") && !hasActiveAttempt)) {
+      if (job.legacyMetadata.value(QStringLiteral("holding")).toBool(false)) {
+        holdingItems.append(item);
+      } else {
+        queueItems.append(item);
+      }
+    } else {
+      QJsonObject sessionObj;
+      if (hasAnyAttempt) {
+        if (!latestAttempt.rawResponse.isEmpty()) {
+          sessionObj = latestAttempt.rawResponse;
+        } else {
+          sessionObj[QStringLiteral("id")] = job.id;
+          sessionObj[QStringLiteral("source")] = job.source;
+          sessionObj[QStringLiteral("prompt")] = job.prompt;
+          sessionObj[QStringLiteral("status")] = QStringLiteral("ERROR_STATE");
+          sessionObj[QStringLiteral("errorMsg")] = item.lastError;
+        }
+      } else {
+        sessionObj[QStringLiteral("id")] = job.id;
+        sessionObj[QStringLiteral("source")] = job.source;
+        sessionObj[QStringLiteral("prompt")] = job.prompt;
+        sessionObj[QStringLiteral("status")] = QStringLiteral("PENDING");
+      }
+
+      sessionObj[QStringLiteral("_kjules_job_id")] = job.id;
+
+      if (job.legacyMetadata.value(QStringLiteral("_isArchive")).toBool(false)) {
+        archiveArray.append(sessionObj);
+      } else if (status != QStringLiteral("ERROR_STATE") && status != QStringLiteral("QUEUED")) {
+        followingArray.append(sessionObj);
+      }
+    }
+  }
+
+  m_queueModel->setItems(queueItems);
+  m_holdingModel->setItems(holdingItems);
+  m_errorsModel->setErrors(errorsArray);
+  m_sessionModel->setSessions(followingArray);
+  m_archiveModel->setSessions(archiveArray);
 }
 
-
 void MainWindow::onMoveRequested(const QString &jobId, int toIndex) {
-    auto jobs = m_jobStore->jobs();
-    int fromIndex = -1;
-    for (int i = 0; i < jobs.size(); ++i) {
-        if (jobs[i].id == jobId) {
-            fromIndex = i;
-            break;
-        }
+  auto jobs = m_jobStore->jobs();
+  int fromIndex = -1;
+  for (int i = 0; i < jobs.size(); ++i) {
+    if (jobs[i].id == jobId) {
+      fromIndex = i;
+      break;
     }
-    if (fromIndex >= 0 && fromIndex != toIndex && toIndex >= 0 && toIndex <= jobs.size()) {
-        JobData jobToMove = jobs.takeAt(fromIndex);
-        if (toIndex > fromIndex) toIndex--;
-        jobs.insert(toIndex, jobToMove);
-        m_jobStore->setJobs(jobs);
-        if (m_jobStore->save()) syncModelsFromJobStore();
-    }
+  }
+  if (fromIndex >= 0 && fromIndex != toIndex && toIndex >= 0 && toIndex <= jobs.size()) {
+    JobData jobToMove = jobs.takeAt(fromIndex);
+    if (toIndex > fromIndex)
+      toIndex--;
+    jobs.insert(toIndex, jobToMove);
+    m_jobStore->setJobs(jobs);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
+  }
 }
 
 void MainWindow::onMoveToQueueRequested(const QString &jobId) {
-    if (JobData* job = m_jobStore->getJobById(jobId)) {
-        job->legacyMetadata[QStringLiteral("holding")] = false;
-        m_jobStore->updateJob(*job);
-        if (m_jobStore->save()) syncModelsFromJobStore();
-    }
+  if (JobData *job = m_jobStore->getJobById(jobId)) {
+    job->legacyMetadata[QStringLiteral("holding")] = false;
+    m_jobStore->updateJob(*job);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
+  }
 }
 
 void MainWindow::onMoveToHoldingRequested(const QString &jobId) {
-    if (JobData* job = m_jobStore->getJobById(jobId)) {
-        job->legacyMetadata[QStringLiteral("holding")] = true;
-        m_jobStore->updateJob(*job);
-        if (m_jobStore->save()) syncModelsFromJobStore();
-    }
+  if (JobData *job = m_jobStore->getJobById(jobId)) {
+    job->legacyMetadata[QStringLiteral("holding")] = true;
+    m_jobStore->updateJob(*job);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
+  }
 }
 
 void MainWindow::sendJobNow(const QString &jobId) {
-    if (JobData* job = m_jobStore->getJobById(jobId)) {
-        QueueItem item;
-        item.jobId = job->id;
-        item.requestData = job->canonicalRequest;
+  if (JobData *job = m_jobStore->getJobById(jobId)) {
+    QueueItem item;
+    item.jobId = job->id;
+    item.requestData = job->canonicalRequest;
 
-        // This is a direct dispatch bypassing queue interval checks
-        JobAttemptData attempt;
-        attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        attempt.requestSnapshot = job->canonicalRequest;
-        attempt.dispatchState = QStringLiteral("IN_PROGRESS");
-        attempt.createdAt = QDateTime::currentDateTimeUtc();
-        attempt.updatedAt = attempt.createdAt;
-        job->attempts.append(attempt);
-        m_jobStore->updateJob(*job);
-        m_jobStore->save();
-        syncModelsFromJobStore();
+    // This is a direct dispatch bypassing queue interval checks
+    JobAttemptData attempt;
+    attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    attempt.requestSnapshot = job->canonicalRequest;
+    attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+    attempt.createdAt = QDateTime::currentDateTimeUtc();
+    attempt.updatedAt = attempt.createdAt;
+    job->attempts.append(attempt);
+    m_jobStore->updateJob(*job);
+    m_jobStore->save();
+    syncModelsFromJobStore();
 
-        if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
-            item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
-            m_apiManager->createGithubRepoAsync(item.requestData, job->id, attempt.id);
-        } else {
-            m_apiManager->createSessionAsync(item.requestData, job->id, attempt.id);
-        }
+    if (item.requestData.contains(QStringLiteral("_kjules_action")) &&
+        item.requestData.value(QStringLiteral("_kjules_action")).toString() == QStringLiteral("create_github_repo")) {
+      m_apiManager->createGithubRepoAsync(item.requestData, job->id, attempt.id);
+    } else {
+      m_apiManager->createSessionAsync(item.requestData, job->id, attempt.id);
     }
+  }
 }
