@@ -19,13 +19,13 @@ add_executable(test_apimanager_pagination test_apimanager_pagination.cpp ../src/
   ../src/clickablelabel.cpp)
 add_executable(test_legacydatarepair test_legacydatarepair.cpp ../src/legacydatarepair.cpp ../src/queuemodel.cpp ../src/sessionmodel.cpp)
 
-target_link_libraries(test_dummy Qt6::Test)
-target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core)
+target_link_libraries(test_dummy Qt6::Test KF6::ConfigCore)
+target_link_libraries(test_filter Qt6::Test Qt6::Widgets Qt6::Core KF6::ConfigCore)
 target_link_libraries(test_advancedfilterproxymodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
-target_link_libraries(test_sessionrequestbuilder Qt6::Test Qt6::Core Qt6::Widgets)
-target_link_libraries(test_sourcefixer Qt6::Test Qt6::Core Qt6::Widgets)
-target_link_libraries(test_sourceremapdialog Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n)
-target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core)
+target_link_libraries(test_sessionrequestbuilder Qt6::Test Qt6::Core Qt6::Widgets KF6::ConfigCore)
+target_link_libraries(test_sourcefixer Qt6::Test Qt6::Core Qt6::Widgets KF6::ConfigCore)
+target_link_libraries(test_sourceremapdialog Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigCore)
+target_link_libraries(test_apierror Qt6::Test Qt6::Network Qt6::Core KF6::ConfigCore)
 target_link_libraries(test_queuescheduling Qt6::Test Qt6::Widgets Qt6::Core Qt6::Network KF6::I18n KF6::ConfigCore)
 target_link_libraries(test_followingrefresh Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
 target_link_libraries(test_sessionmodel Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigWidgets KF6::ConfigCore KF6::CoreAddons)
@@ -36,7 +36,7 @@ target_link_libraries(test_apimanager_pagination Qt6::Test Qt6::Network Qt6::Cor
 target_link_libraries(test_legacydatarepair Qt6::Test Qt6::Widgets Qt6::Core KF6::I18n KF6::ConfigCore KF6::ConfigWidgets KF6::CoreAddons)
 
 add_executable(test_activation test_activation.cpp)
-target_link_libraries(test_activation Qt6::Test Qt6::Core)
+target_link_libraries(test_activation Qt6::Test Qt6::Core KF6::ConfigCore)
 add_test(NAME ActivationTest COMMAND test_activation)
 add_test(NAME DummyTest COMMAND test_dummy)
 add_test(NAME FilterTest COMMAND test_filter)
@@ -62,7 +62,7 @@ add_compile_definitions(KJULES_APPLICATION_ID="${KJULES_APPLICATION_ID}")
 add_compile_definitions(KJULES_KXMLGUI_RESOURCE_PREFIX=":/kxmlgui6/${KJULES_APPLICATION_ID}/")
 
 add_executable(test_errorsmodel test_errorsmodel.cpp ../src/errorsmodel.cpp)
-target_link_libraries(test_errorsmodel Qt6::Test Qt6::Core Qt6::Widgets Qt6::Network)
+target_link_libraries(test_errorsmodel Qt6::Test Qt6::Core Qt6::Widgets Qt6::Network KF6::ConfigCore)
 add_test(NAME ErrorsModelTest COMMAND test_errorsmodel)
 
 add_executable(test_background_errors test_background_errors.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp)
@@ -70,7 +70,7 @@ target_link_libraries(test_background_errors Qt6::Test Qt6::Network Qt6::Core KF
 add_test(NAME BackgroundErrorsTest COMMAND test_background_errors)
 
 add_executable(test_job test_job.cpp ../src/jobdata.cpp ../src/jobstore.cpp ../src/migrationorchestrator.h ../src/legacyconverter.cpp ../src/queuemodel.cpp ../src/sessionmodel.cpp ../src/errorsmodel.cpp ../src/sessionrequestbuilder.cpp ../src/api/apierror.cpp)
-target_link_libraries(test_job Qt6::Core Qt6::Gui Qt6::Network Qt6::Test KF6::CoreAddons KF6::I18n KF6::ConfigCore)
+target_link_libraries(test_job Qt6::Core Qt6::Gui Qt6::Network Qt6::Test KF6::CoreAddons KF6::I18n KF6::ConfigCore KF6::ConfigWidgets)
 target_compile_definitions(test_job PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata")
 add_test(NAME test_job COMMAND test_job)
 

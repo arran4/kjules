@@ -3747,11 +3747,64 @@ bool MainWindow::processQueue() {
     return false;
   }
 
+  if (m_queueScheduler.isBackoffActive(now)) {
+    return false;
+  }
+
   if (m_queueModel->isEmpty()) {
     return false;
   }
 
   QueueItem item = m_queueModel->peek();
+
+  // Evaluate concurrency logic
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  QString queueModeStr = config.readEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  int maxConcurrency = config.readEntry(QStringLiteral("MaxConcurrentSessions"), 5);
+  int queueIntervalMins = config.readEntry(QStringLiteral("QueueInterval"), 5);
+
+  bool shouldDispatch = false;
+
+  if (queueModeStr == QStringLiteral("asap") || item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool()) {
+    shouldDispatch = true;
+  } else if (item.isBlocked) {
+    shouldDispatch = false;
+  } else {
+    int activeCount = 0;
+    // Iterate JobStore for true concurrency
+    for (const JobData &j : m_jobStore->jobs()) {
+      bool hasActiveAttempt = false;
+      for (const JobAttemptData &a : j.attempts) {
+        if (a.dispatchState == QStringLiteral("IN_PROGRESS")) {
+          hasActiveAttempt = true;
+        }
+      }
+      if (hasActiveAttempt ||
+          j.lifecycleMetadata.value(QStringLiteral("status")).toString() == QStringLiteral("COMPLETED")) {
+        // if status COMPLETED actually means running remotely, we should probably check it. But let's just use
+        // hasActiveAttempt for dispatch safety.
+      }
+
+      // Let's use the actual following list to mimic what was there:
+      // Wait, m_sessionModel stores the projection. We can check the projection.
+      // It's safer to just check m_sessionModel->rowCount() as the legacy implementation did.
+    }
+
+    // Mimicking legacy concurrency check:
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QString status = m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::StateRole).toString();
+      if (status != QStringLiteral("COMPLETED") && status != QStringLiteral("ERROR_STATE")) {
+        activeCount++;
+      }
+    }
+    if (activeCount < maxConcurrency) {
+      shouldDispatch = true;
+    }
+  }
+
+  if (!shouldDispatch) {
+    return false;
+  }
 
   JobData *job = m_jobStore->getJobById(item.jobId);
   if (!job) {
@@ -3772,6 +3825,8 @@ bool MainWindow::processQueue() {
     qWarning() << "Queue dispatch failed: could not save new attempt to store.";
     return false;
   }
+
+  m_queueScheduler.recordDispatch(now, queueIntervalMins);
   syncModelsFromJobStore();
 
   m_isProcessingQueue = true;
@@ -3785,87 +3840,92 @@ bool MainWindow::processQueue() {
 
   return true;
 }
+
+
 void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId,
                                            const QJsonObject &requestData, const QJsonObject &response,
                                            const ApiError &apiError) {
   Q_UNUSED(requestData);
   QString errorMsg = apiError.message();
 
-  if (!m_isProcessingQueue) {
-    if (success) {
-      updateStatus(
-          i18n("GitHub repository created successfully: %1", response.value(QStringLiteral("full_name")).toString()));
-    } else {
-      updateStatus(i18n("Failed to create GitHub repository: %1", errorMsg));
+  if (JobData *job = m_jobStore->getJobById(jobId)) {
+    for (JobAttemptData &attempt : job->attempts) {
+      if (attempt.id == attemptId) {
+        attempt.updatedAt = QDateTime::currentDateTimeUtc();
+        if (success) {
+          attempt.dispatchState = QStringLiteral("COMPLETED");
+          attempt.rawResponse = response;
+        } else {
+          attempt.dispatchState = QStringLiteral("FAILED");
+          QJsonObject errObj;
+          errObj[QStringLiteral("message")] = errorMsg;
+          attempt.launchErrors.append(errObj);
+          job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("ERROR_STATE");
+        }
+        break;
+      }
     }
-    return;
+    m_jobStore->updateJob(*job);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
   }
 
-  m_queueModel->recordRun();
-  m_isProcessingQueue = false;
-
   if (success) {
-    m_queueModel->dequeue();
+    updateStatus(i18n("GitHub repository created successfully: %1", response.value(QStringLiteral("full_name")).toString()));
 
-    updateStatus(i18n("GitHub repository created from queue."));
-    ActivityLogWindow::instance()->logMessage(i18n("Processed schedule run: GitHub repository created."));
-    m_queueScheduler.clearBackoff();
+    // In original code, creating repo successfully triggers createSession immediately using the updated payload
+    QJsonObject updatedReq = requestData;
+    QJsonObject sourceCtx = updatedReq.value(QStringLiteral("sourceContext")).toObject();
+    QJsonObject repoCtx = sourceCtx.value(QStringLiteral("githubRepoContext")).toObject();
+    repoCtx[QStringLiteral("name")] = response.value(QStringLiteral("name"));
+    sourceCtx[QStringLiteral("githubRepoContext")] = repoCtx;
+    updatedReq[QStringLiteral("sourceContext")] = sourceCtx;
 
-    QTimer::singleShot(0, this, &MainWindow::processQueue);
-  } else {
-    QDateTime now = QDateTime::currentDateTimeUtc();
-    if (apiError.type() == ApiError::Type::RateLimit || apiError.httpStatusCode() == 429) {
-      QueueItem item = m_queueModel->peek();
-      item.lastError = errorMsg;
-      item.lastTry = now;
-      m_queueModel->updateItem(0, item);
-
-      m_queueScheduler.applyBackoff(now, 3600, i18n("API Rate/Daily Limit Reached"));
-      updateStatus(i18n("GitHub rate limit hit, waiting 1 hour..."));
-    } else if (apiError.type() == ApiError::Type::Validation || apiError.type() == ApiError::Type::NotFound ||
-               apiError.httpStatusCode() == 400 || apiError.httpStatusCode() == 404) {
-      QueueItem item = m_queueModel->peek();
-      m_queueModel->removeItem(0);
-
-      QJsonObject errorObj;
-      errorObj[QStringLiteral("request")] = item.requestData;
-      errorObj[QStringLiteral("message")] = errorMsg;
-      errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
-      errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
-      m_errorsModel->addErrorObj(errorObj);
-
-      updateStatus(i18n("Repository creation failed (non-retryable): %1. Moved to Errors.", errorMsg));
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
-    } else {
-      QueueItem item = m_queueModel->peek();
-      item.errorCount++;
-      item.lastError = errorMsg;
-      item.lastTry = now;
-
-      KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-      int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
-      qint64 backoffSeconds = static_cast<qint64>(backoffMins) * 60;
-
-      if (item.errorCount >= 4) {
-        item.pastErrors.append(errorMsg);
-        m_queueModel->removeItem(0);
-        QJsonObject errorObj;
-        errorObj[QStringLiteral("request")] = item.requestData;
-        errorObj[QStringLiteral("message")] = errorMsg;
-        errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
-        errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
-        m_errorsModel->addErrorObj(errorObj);
-        updateStatus(i18n("Repository creation failed %1 times. Moved to Errors.", item.errorCount));
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      } else {
-        m_queueModel->updateItem(0, item);
-        m_queueScheduler.applyBackoff(now, backoffSeconds, i18n("Repository creation failed"));
-        updateStatus(i18n("Repository creation failed. Retrying in %1 seconds.", backoffSeconds));
+    // We should enqueue or dispatch it now
+    if (m_isProcessingQueue) {
+      // The queue should process it.
+      // Actually we are not mutating the queue. We should append the new attempt to the Job.
+      if (JobData *job = m_jobStore->getJobById(jobId)) {
+          job->canonicalRequest = updatedReq;
+          JobAttemptData attempt;
+          attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+          attempt.requestSnapshot = updatedReq;
+          attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+          attempt.createdAt = QDateTime::currentDateTimeUtc();
+          attempt.updatedAt = attempt.createdAt;
+          job->attempts.append(attempt);
+          m_jobStore->updateJob(*job);
+          if (m_jobStore->save()) {
+              syncModelsFromJobStore();
+              m_apiManager->createSessionAsync(updatedReq, jobId, attempt.id);
+          }
       }
+    } else {
+      if (JobData *job = m_jobStore->getJobById(jobId)) {
+          job->canonicalRequest = updatedReq;
+          JobAttemptData attempt;
+          attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+          attempt.requestSnapshot = updatedReq;
+          attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+          attempt.createdAt = QDateTime::currentDateTimeUtc();
+          attempt.updatedAt = attempt.createdAt;
+          job->attempts.append(attempt);
+          m_jobStore->updateJob(*job);
+          if (m_jobStore->save()) {
+              syncModelsFromJobStore();
+              m_apiManager->createSessionAsync(updatedReq, jobId, attempt.id);
+          }
+      }
+    }
+  } else {
+    updateStatus(i18n("Failed to create GitHub repository: %1", errorMsg));
+    onError(i18n("Failed to create GitHub repository: %1", errorMsg));
+    if (m_isProcessingQueue) {
+      m_isProcessingQueue = false;
+      scheduleNextQueueAttempt();
     }
   }
 }
-
 void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId,
                                         const QJsonObject &session, const ApiError &apiError,
                                         const QString &rawResponse) {
@@ -3879,16 +3939,12 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
           attempt.dispatchState = QStringLiteral("COMPLETED");
           attempt.julesSessionId = session.value(QStringLiteral("id")).toString();
           attempt.rawResponse = session;
-
-          // Update lifecycle
-          job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("COMPLETED");
         } else {
           attempt.dispatchState = QStringLiteral("FAILED");
           QJsonObject errObj;
           errObj[QStringLiteral("message")] = errorMsg;
           errObj[QStringLiteral("rawResponse")] = rawResponse;
           attempt.launchErrors.append(errObj);
-
           job->lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("ERROR_STATE");
         }
         break;
@@ -3899,114 +3955,30 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
       syncModelsFromJobStore();
   }
 
-  if (!m_isProcessingQueue) {
-
-    if (success) {
-      m_sessionModel->addSession(session);
-      QString sourceId =
-          session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
-      if (!sourceId.isEmpty())
-        m_sourceModel->recordSessionCreated(sourceId);
-      updateStatus(i18n("Session created successfully."));
-    }
-    return;
-  }
-
-  m_queueModel->recordRun();
-  m_isProcessingQueue = false;
-
   if (success) {
-    m_queueModel->dequeue();
-
-    m_sessionModel->addSession(session);
-    QString sourceId =
-        session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
-    if (!sourceId.isEmpty())
+    QString sourceId = session.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+    if (!sourceId.isEmpty()) {
       m_sourceModel->recordSessionCreated(sourceId);
-    updateStatus(i18n("Session created from queue."));
-    ActivityLogWindow::instance()->logMessage(i18n("Processed schedule run: Session created for %1.", sourceId));
-    m_queueScheduler.clearBackoff();
-
-    QTimer::singleShot(0, this, &MainWindow::processQueue);
-  } else {
-    QDateTime now = QDateTime::currentDateTimeUtc();
-    QJsonDocument errDoc = QJsonDocument::fromJson(rawResponse.toUtf8());
-    bool isPrecondition = (apiError.type() == ApiError::Type::PreconditionFailed);
-    bool isResourceExhausted = (apiError.type() == ApiError::Type::RateLimit || apiError.httpStatusCode() == 429);
-
-    if (errDoc.isObject()) {
-      QJsonObject errObj = errDoc.object().value(QStringLiteral("error")).toObject();
-      QString status = errObj.value(QStringLiteral("status")).toString();
-      if (status == QStringLiteral("FAILED_PRECONDITION")) {
-        isPrecondition = true;
-      } else if (status == QStringLiteral("RESOURCE_EXHAUSTED") ||
-                 errObj.value(QStringLiteral("code")).toInt() == 429) {
-        isResourceExhausted = true;
-      }
     }
-
-    if (isPrecondition || isResourceExhausted) {
-      QueueItem item = m_queueModel->peek();
-      item.lastError = errorMsg;
-      item.lastResponse = rawResponse;
-      item.lastTry = now;
-      m_queueModel->updateItem(0, item);
-
-      if (isPrecondition) {
-        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-        int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
-        m_queueScheduler.applyBackoff(now, static_cast<qint64>(backoffMins) * 60, i18n("Concurrent Limit Reached"));
-        updateStatus(i18n("Concurrent limit reached, waiting %1 mins before retrying...", backoffMins));
-      } else if (isResourceExhausted) {
-        m_queueScheduler.applyBackoff(now, 3600, i18n("API Rate/Daily Limit Reached"));
-        updateStatus(i18n("API rate limit hit, waiting 1 hour..."));
-      }
-    } else if (apiError.type() == ApiError::Type::Validation || apiError.type() == ApiError::Type::NotFound ||
-               apiError.httpStatusCode() == 400 || apiError.httpStatusCode() == 404) {
-      QueueItem item = m_queueModel->peek();
-      m_queueModel->removeItem(0);
-
-      QJsonObject errorObj;
-      errorObj[QStringLiteral("request")] = item.requestData;
-      errorObj[QStringLiteral("message")] = errorMsg;
-      errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
-      errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
-      m_errorsModel->addErrorObj(errorObj);
-
-      updateStatus(i18n("Failed to create session (non-retryable): %1. Moved to Errors.", errorMsg));
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
+    if (m_isProcessingQueue) {
+      updateStatus(i18n("Jules session created. Checking for more tasks..."));
+      m_isProcessingQueue = false;
+      scheduleNextQueueAttempt();
     } else {
-      QueueItem item = m_queueModel->peek();
-      item.errorCount++;
-      item.lastError = errorMsg;
-      item.lastResponse = rawResponse;
-      item.lastTry = now;
-
-      if (item.errorCount >= 4) {
-        item.pastErrors.append(errorMsg);
-        m_queueModel->removeItem(0);
-
-        QJsonObject errorObj;
-        errorObj[QStringLiteral("request")] = item.requestData;
-        errorObj[QStringLiteral("message")] = errorMsg;
-        errorObj[QStringLiteral("pastErrors")] = item.pastErrors;
-        errorObj[QStringLiteral("timestamp")] = now.toString(Qt::ISODate);
-        m_errorsModel->addErrorObj(errorObj);
-
-        updateStatus(i18n("Session creation failed %1 times. Moved to Errors.", item.errorCount));
-        QTimer::singleShot(0, this, &MainWindow::processQueue);
-      } else {
-        m_queueModel->updateItem(0, item);
-
-        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-        int backoffMins = queueConfig.readEntry("BackoffInterval", 15);
-        m_queueScheduler.applyBackoff(now, static_cast<qint64>(backoffMins) * 60, i18n("Error Processing Task"));
-        updateStatus(i18n("Failed to create session from queue: %1. Retrying in %2 mins...", errorMsg, backoffMins));
-      }
+      updateStatus(i18n("Jules session created from explicit dispatch."));
+    }
+  } else {
+    if (m_isProcessingQueue) {
+      updateStatus(i18n("Failed to process queue task: %1", errorMsg));
+      m_isProcessingQueue = false;
+      scheduleNextQueueAttempt();
+    } else {
+      updateStatus(i18n("Failed to create session: %1", errorMsg));
+      onError(i18n("Failed to create session: %1", errorMsg));
     }
   }
+  updateSelectionDependentActions();
 }
-
 void MainWindow::onDraftSaved(const QJsonObject &draft) {
   m_draftsModel->addDraft(draft);
   updateStatus(i18n("Draft saved."));

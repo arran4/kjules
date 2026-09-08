@@ -3,6 +3,8 @@
 
 #include "jobstore.h"
 #include "legacyconverter.h"
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <QDateTime>
 #include <QFile>
 #include <QJsonArray>
@@ -23,21 +25,30 @@ public:
     if (getMigratedFlag())
       return;
 
+    auto config = KSharedConfig::openConfig();
+    KConfigGroup migrationGroup(config, QStringLiteral("Migration"));
+    bool formallyMigrated = migrationGroup.readEntry(QStringLiteral("JobArchitecturePhase2Complete"), false);
+
     QString destinationPath =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/jobs.json");
 
-    if (QFile::exists(destinationPath)) {
+    if (formallyMigrated) {
       JobStore checkStore(destinationPath);
       if (checkStore.load()) {
         getMigratedFlag() = true;
         return;
       } else {
-        qWarning("Existing jobs.json is invalid/corrupt. Falling back to legacy UI sources.");
+        qWarning("jobs.json is invalid/corrupt despite migration marker. Refusing to proceed with JobStore as "
+                 "authoritative.");
+        // We strip the marker so recovery attempts are possible if the file is deleted.
+        migrationGroup.deleteEntry(QStringLiteral("JobArchitecturePhase2Complete"));
+        config->sync();
         return;
       }
     }
 
     // Gather legacy data
+
     LegacyData legacyData;
 
     // This is slightly tricky, we need to read from the JSON files explicitly
@@ -88,9 +99,14 @@ public:
 
     bool success = safeMigrationSeam(legacyData, destinationPath, QDateTime::currentDateTimeUtc());
     if (success) {
+      auto config = KSharedConfig::openConfig();
+      KConfigGroup migrationGroup(config, QStringLiteral("Migration"));
+      migrationGroup.writeEntry(QStringLiteral("JobArchitecturePhase2Complete"), true);
+      config->sync();
       getMigratedFlag() = true;
     }
   }
+
   static bool safeMigrationSeam(const LegacyData &legacyData, const QString &destinationStorePath,
                                 const QDateTime &fallbackTimestamp) {
     ConversionResult result = LegacyConverter::convertAll(legacyData, fallbackTimestamp);
