@@ -11,7 +11,7 @@ add_executable(test_queuescheduling test_queuescheduling.cpp ../src/queuemodel.c
 add_executable(test_followingrefresh test_followingrefresh.cpp ../src/sessionmodel.cpp)
 add_executable(test_sessionmodel test_sessionmodel.cpp ../src/sessionmodel.cpp)
 add_executable(test_configmigration test_configmigration.cpp)
-add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
+add_executable(test_sourcewindow test_sourcewindow.cpp ../src/sourcewindow.cpp ../src/jobstore.cpp ../src/jobdata.cpp ../src/sourcemodel.cpp ../src/sessionmodel.cpp ../src/queuemodel.cpp ../src/errorsmodel.cpp ../src/blockedtreemodel.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp ../src/draftdelegate.cpp ../src/queuedelegate.cpp ../src/sessiondelegate.cpp ../src/sourcestatuswidget.cpp ../src/kjules.qrc ../src/activitylogwindow.cpp ../src/mainwindow.cpp ../src/followsessiondialog.cpp ../src/backupdialog.cpp ../src/restoredialog.cpp ../src/draftsmodel.cpp ../src/templatesmodel.cpp ../src/newsessiondialog.cpp ../src/sourcestatusdialog.cpp ../src/savedialog.cpp ../src/templateselectiondialog.cpp ../src/templateeditdialog.cpp ../src/settingsdialog.cpp ../src/createrepodialog.cpp ../src/clickableprogressbar.cpp ../src/errorwindow.cpp ../src/filterparser.cpp ../src/filtereditor.cpp ../src/advancedfilterproxymodel.cpp ../src/refreshprogresswindow.cpp ../src/sourcesrefreshprogresswindow.cpp     ../src/sourcefixer.cpp ../src/sourceremapdialog.cpp ../src/legacydatarepair.cpp )
 add_executable(test_sessionswidget test_sessionswidget.cpp ../src/sessionswidget.cpp ../src/sessionswindow.cpp ../src/sessionmodel.cpp ../src/sessionwindow.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp ../src/sessiondelegate.cpp ../src/kjules.qrc ../src/errorsmodel.cpp ../src/activitylogwindow.cpp)
@@ -73,3 +73,16 @@ add_executable(test_job test_job.cpp ../src/jobdata.cpp ../src/jobstore.cpp ../s
 target_link_libraries(test_job Qt6::Core Qt6::Gui Qt6::Network Qt6::Test KF6::CoreAddons KF6::I18n KF6::ConfigCore)
 target_compile_definitions(test_job PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata")
 add_test(NAME test_job COMMAND test_job)
+
+add_executable(test_migration_decoupling test_migration_decoupling.cpp
+  ../src/queuemodel.cpp
+  ../src/errorsmodel.cpp
+  ../src/jobdata.cpp
+  ../src/jobstore.cpp
+  ../src/legacyconverter.cpp
+  ../src/api/apierror.cpp
+  ../src/sessionrequestbuilder.cpp
+  ../src/sessionmodel.cpp
+)
+target_link_libraries(test_migration_decoupling Qt6::Test Qt6::Widgets Qt6::Network KF6::I18n KF6::ConfigCore KF6::XmlGui)
+add_test(NAME test_migration_decoupling COMMAND test_migration_decoupling)

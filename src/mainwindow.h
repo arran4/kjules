@@ -1,3 +1,4 @@
+#include "jobstore.h"
 #include <functional>
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
@@ -108,7 +109,7 @@ private Q_SLOTS:
   void onHoldingContextMenu(const QPoint &pos);
   void onBlockedContextMenu(const QPoint &pos);
   void onErrorActivated(const QModelIndex &index);
-  void onSessionCreationFailed(const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
+  void onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request, const ApiError &apiError, const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
   void onSourceActivated(const QModelIndex &index);
   void showSessionWindow(const QJsonObject &session);
@@ -142,11 +143,16 @@ private Q_SLOTS:
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
 
-  void onSessionCreatedResult(bool success, const QJsonObject &session, const ApiError &apiError = ApiError(),
+  void onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &session, const ApiError &apiError = ApiError(),
                               const QString &rawResponse = QString());
-  void onGithubRepoCreatedResult(bool success, const QJsonObject &requestData, const QJsonObject &response,
+  void onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId, const QJsonObject &requestData, const QJsonObject &response,
                                  const ApiError &apiError = ApiError());
   void sendQueueItemNow(int row);
+  void syncModelsFromJobStore();
+  void sendJobNow(const QString &jobId);
+  void onMoveRequested(const QString &jobId, int toIndex);
+  void onMoveToQueueRequested(const QString &jobId);
+  void onMoveToHoldingRequested(const QString &jobId);
   void sendItemNow(const QueueItem &item, int originRow, bool sourceIsQueue,
                    const QJsonObject &errData = QJsonObject());
   void editQueueItem(int row);
@@ -227,7 +233,7 @@ private:
   QList<SourceRemapEntry> pendingSourceEntries(const QString &onlySource = QString()) const;
   void applySourceRemaps(const QList<SourceRemapEntry> &entries, const QStringList &newSources);
 
-  APIManager *m_apiManager;
+
   QHash<QString, QString> m_previousSessionStates;
   QHash<QString, QString> m_previousSessionPrStates;
   SessionModel *m_sessionModel;
@@ -237,7 +243,9 @@ private:
   TemplatesModel *m_templatesModel;
   QueueModel *m_queueModel;
   QueueModel *m_holdingModel;
+  JobStore *m_jobStore;
   ErrorsModel *m_errorsModel;
+  APIManager *m_apiManager;
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;

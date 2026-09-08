@@ -1,3 +1,4 @@
+#include "migrationorchestrator.h"
 #include "sessionmodel.h"
 #include <KLocalizedString>
 #include <QColor>
@@ -623,6 +624,8 @@ QString SessionModel::cacheFilePath() const {
 }
 
 void SessionModel::loadSessions() {
+  if (MigrationOrchestrator::isMigrated()) return;
+
   QString filePath = cacheFilePath();
   QFile file(filePath);
   if (file.open(QIODevice::ReadOnly)) {
@@ -639,6 +642,8 @@ void SessionModel::loadSessions() {
 }
 
 void SessionModel::saveSessions() {
+  if (MigrationOrchestrator::isMigrated()) return;
+
   QString filePath = cacheFilePath();
   QFileInfo fileInfo(filePath);
   QDir dir = fileInfo.dir();

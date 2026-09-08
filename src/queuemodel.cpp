@@ -1,3 +1,4 @@
+#include "migrationorchestrator.h"
 #include "queuemodel.h"
 #include "utils.h"
 #include <utility>
@@ -225,6 +226,8 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const {
   const QueueItem &item = m_items.at(index.row());
 
   switch (role) {
+  case JobIdRole:
+    return item.jobId;
   case RequestDataRole:
     return item.requestData;
   case ErrorCountRole:
@@ -433,6 +436,8 @@ QString QueueModel::filePath() const {
 }
 
 void QueueModel::load() {
+  if (MigrationOrchestrator::isMigrated()) return;
+
   QString path = filePath();
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
@@ -474,6 +479,8 @@ void QueueModel::endBatchUpdate() {
 }
 
 void QueueModel::save() {
+  if (MigrationOrchestrator::isMigrated()) return;
+
   if (m_batchUpdating)
     return;
 
@@ -508,4 +515,10 @@ void QueueModel::save() {
 
   QJsonDocument doc(topObj);
   file.write(doc.toJson());
+}
+
+void QueueModel::setItems(const QVector<QueueItem> &items) {
+  beginResetModel();
+  m_items = items;
+  endResetModel();
 }

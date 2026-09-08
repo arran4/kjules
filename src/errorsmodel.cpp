@@ -1,3 +1,4 @@
+#include "migrationorchestrator.h"
 #include "errorsmodel.h"
 #include <QDateTime>
 #include <QDir>
@@ -136,6 +137,8 @@ QString ErrorsModel::cacheFilePath() const {
 }
 
 void ErrorsModel::loadErrors() {
+  if (MigrationOrchestrator::isMigrated()) return;
+
   QString filePath = cacheFilePath();
   QFile file(filePath);
   if (file.open(QIODevice::ReadOnly)) {
@@ -162,6 +165,8 @@ void ErrorsModel::loadErrors() {
 }
 
 void ErrorsModel::saveErrors() {
+  if (MigrationOrchestrator::isMigrated()) return;
+
   QString filePath = cacheFilePath();
   QFileInfo fileInfo(filePath);
   QDir dir = fileInfo.dir();
@@ -211,4 +216,13 @@ void ErrorsModel::markAllSeen() {
     Q_EMIT dataChanged(index(0, 0), index(m_seenState.size() - 1, 0), {SeenRole, UnseenRole});
     updateUnseenCount();
   }
+}
+
+void ErrorsModel::setErrors(const QJsonArray &errors) {
+  beginResetModel();
+  m_errors = errors;
+  m_seenState.clear();
+  for (int i = 0; i < m_errors.size(); ++i) m_seenState.append(true);
+  endResetModel();
+  updateUnseenCount();
 }

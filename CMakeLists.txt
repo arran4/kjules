@@ -100,6 +100,9 @@ set(kjules_SRCS
     src/clickableprogressbar.cpp
     src/clickablelabel.cpp
     src/legacydatarepair.cpp
+    src/legacyconverter.cpp
+    src/jobdata.cpp
+    src/jobstore.cpp
     src/sessiondelegate.cpp
     src/sessionwindow.cpp
     src/sourcewindow.cpp

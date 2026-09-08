@@ -33,7 +33,7 @@ private Q_SLOTS:
       req[QStringLiteral("source")] = source;
       req[QStringLiteral("prompt")] = QStringLiteral("Test prompt");
       req[QStringLiteral("automationMode")] = QStringLiteral("auto");
-      manager.createSessionAsync(req);
+      manager.createSessionAsync(req, QString(), QString());
     }
     qint64 oldTime = timer.nsecsElapsed();
 
