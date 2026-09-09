@@ -573,15 +573,16 @@ bool APIManager::checkGithubRateLimit() {
   return true;
 }
 
-void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
+void APIManager::createGithubRepoAsync(const QJsonObject &requestData, const QString &jobId, const QString &attemptId) {
   if (m_githubToken.isEmpty() || m_githubTokenFailed) {
     Q_EMIT githubRepoCreationFailed(
-        requestData, ApiError(ApiError::Type::Authentication,
-                              QStringLiteral("GitHub token authentication failed previously or not provided.")));
+        jobId, attemptId, requestData,
+        ApiError(ApiError::Type::Authentication,
+                 QStringLiteral("GitHub token authentication failed previously or not provided.")));
     return;
   }
   if (!checkGithubRateLimit()) {
-    Q_EMIT githubRepoCreationFailed(requestData,
+    Q_EMIT githubRepoCreationFailed(jobId, attemptId, requestData,
                                     ApiError(ApiError::Type::RateLimit, QStringLiteral("Rate limit exhausted")));
     return;
   }
@@ -606,14 +607,14 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
   QJsonDocument payloadDoc(payload);
   QNetworkReply *reply = m_nam->post(request, payloadDoc.toJson());
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply, requestData]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, jobId, attemptId, requestData]() {
     updateGithubRateLimit(reply);
 
     QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
     QJsonObject response = doc.object();
 
     if (reply->error() == QNetworkReply::NoError) {
-      Q_EMIT githubRepoCreated(requestData, response);
+      Q_EMIT githubRepoCreated(jobId, attemptId, requestData, response);
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
@@ -626,7 +627,7 @@ void APIManager::createGithubRepoAsync(const QJsonObject &requestData) {
       }
       QByteArray responseData = reply->readAll();
       ApiError apiError = ApiErrorDetector::detect(reply, responseData);
-      Q_EMIT githubRepoCreationFailed(requestData, apiError);
+      Q_EMIT githubRepoCreationFailed(jobId, attemptId, requestData, apiError);
     }
     reply->deleteLater();
   });
@@ -694,9 +695,13 @@ void APIManager::fetchGithubInfo(const QString &sourceName, const QString &owner
   });
 }
 
-void APIManager::createSessionAsync(const QJsonObject &requestData) {
+void APIManager::createSessionAsync(const QJsonObject &requestData, const QString &jobId, const QString &attemptId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral("Cannot create session: No token or previous failure."), false);
+    Q_EMIT sessionCreationFailed(jobId, attemptId, requestData,
+                                 ApiError(ApiError::Type::Authentication,
+                                          QStringLiteral("Cannot create session: No token or previous failure.")),
+                                 QString());
     return;
   }
 
@@ -706,7 +711,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
   QByteArray data = QJsonDocument(json).toJson();
   QNetworkReply *reply = m_nam->post(request, data);
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply, request, json, data, requestData]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, request, json, data, requestData, jobId, attemptId]() {
     QByteArray responseData = reply->readAll();
     if (reply->error() == QNetworkReply::NoError) {
       QJsonDocument doc = QJsonDocument::fromJson(responseData);
@@ -716,7 +721,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
             requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
       }
 
-      Q_EMIT sessionCreated(sessionObj);
+      Q_EMIT sessionCreated(jobId, attemptId, sessionObj);
       Q_EMIT logMessage(QStringLiteral("Session created successfully."));
 
       // Cache session locally
@@ -777,7 +782,7 @@ void APIManager::createSessionAsync(const QJsonObject &requestData) {
           QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
 
       ApiError apiError = ApiErrorDetector::detect(reply, responseData);
-      Q_EMIT sessionCreationFailed(requestData, apiError, httpDetails);
+      Q_EMIT sessionCreationFailed(jobId, attemptId, requestData, apiError, httpDetails);
       QString errorMsg = QStringLiteral("Failed to create session: ") + reply->errorString();
       Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData), false);
     }

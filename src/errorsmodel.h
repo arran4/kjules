@@ -48,6 +48,7 @@ public:
   QJsonObject getError(int row) const;
   void loadErrors();
   void saveErrors();
+  void setErrors(const QJsonArray &errors);
   void clear();
 
   int unseenCount() const;

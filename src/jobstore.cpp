@@ -175,3 +175,52 @@ JobStore JobStore::fromMemory(const QVector<JobData> &jobs) {
   store.setJobs(jobs);
   return store;
 }
+
+JobData *JobStore::getJobById(const QString &id) {
+  for (int i = 0; i < m_jobs.size(); ++i) {
+    if (m_jobs[i].id == id) {
+      return &m_jobs[i];
+    }
+  }
+  return nullptr;
+}
+
+JobData *JobStore::getJobByAttemptId(const QString &attemptId) {
+  for (int i = 0; i < m_jobs.size(); ++i) {
+    for (const JobAttemptData &attempt : m_jobs[i].attempts) {
+      if (attempt.id == attemptId) {
+        return &m_jobs[i];
+      }
+    }
+  }
+  return nullptr;
+}
+
+JobData *JobStore::getJobBySessionId(const QString &sessionId) {
+  for (int i = 0; i < m_jobs.size(); ++i) {
+    for (const JobAttemptData &attempt : m_jobs[i].attempts) {
+      if (attempt.julesSessionId == sessionId) {
+        return &m_jobs[i];
+      }
+    }
+  }
+  return nullptr;
+}
+
+void JobStore::updateJob(const JobData &job) {
+  for (int i = 0; i < m_jobs.size(); ++i) {
+    if (m_jobs[i].id == job.id) {
+      m_jobs[i] = job;
+      return;
+    }
+  }
+}
+
+void JobStore::removeJob(const QString &id) {
+  for (int i = 0; i < m_jobs.size(); ++i) {
+    if (m_jobs[i].id == id) {
+      m_jobs.removeAt(i);
+      return;
+    }
+  }
+}

@@ -8,6 +8,7 @@
 #include <QVector>
 
 struct QueueItem {
+  QString jobId;
   QJsonObject requestData; // contains source, prompt, automationMode
   int errorCount = 0;
   QString lastError;
@@ -26,8 +27,10 @@ class QueueModel : public QAbstractListModel {
 Q_SIGNALS:
 
 public:
+  void setItems(const QVector<QueueItem> &items);
   enum Roles {
-    RequestDataRole = Qt::UserRole + 1,
+    JobIdRole = Qt::UserRole + 1,
+    RequestDataRole,
     ErrorCountRole,
     LastErrorRole,
     LastTryRole,

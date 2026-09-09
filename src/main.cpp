@@ -12,6 +12,7 @@
 #include <QTemporaryDir>
 
 #include "mainwindow.h"
+#include "migrationorchestrator.h"
 
 int main(int argc, char *argv[]) {
 #ifdef DEV_MODE
@@ -110,6 +111,9 @@ int main(int argc, char *argv[]) {
       QFile::rename(oldAutostartPath, newAutostartPath);
     }
   }
+
+  // Run migration after data paths have been correctly resolved (including org change and mock isolation).
+  MigrationOrchestrator::executeMigrationIfNecessary();
 
   MainWindow *window = new MainWindow();
 
