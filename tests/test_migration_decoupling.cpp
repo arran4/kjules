@@ -22,9 +22,11 @@ private Q_SLOTS:
   void testLegacyFilesNotWrittenAfterMigration() {
     QTemporaryDir dir;
     QDir::setCurrent(dir.path());
+    QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(appDataDir);
 
     // Write a dummy legacy file to trigger migration
-    QFile qf(QStringLiteral("queue.json"));
+    QFile qf(appDataDir + QStringLiteral("/queue.json"));
     qf.open(QIODevice::WriteOnly);
     qf.write("{\"items\":[{\"requestData\":{\"prompt\":\"legacy\"}}]}");
     qf.close();
@@ -33,7 +35,7 @@ private Q_SLOTS:
     MigrationOrchestrator::getMigratedFlag() = true;
 
     // Snapshot legacy modification time or content
-    QFile qf_check(QStringLiteral("queue.json"));
+    QFile qf_check(appDataDir + QStringLiteral("/queue.json"));
     qf_check.open(QIODevice::ReadOnly);
     QByteArray initialLegacyData = qf_check.readAll();
     qf_check.close();
@@ -58,7 +60,7 @@ private Q_SLOTS:
     QCOMPARE(initialLegacyData, finalLegacyData);
 
     // Verify errors.json wasn't suddenly created
-    QVERIFY(!QFile::exists(QStringLiteral("errors.json")));
+    QVERIFY(!QFile::exists(appDataDir + QStringLiteral("/errors.json")));
   }
 };
 

@@ -698,6 +698,10 @@ void APIManager::fetchGithubInfo(const QString &sourceName, const QString &owner
 void APIManager::createSessionAsync(const QJsonObject &requestData, const QString &jobId, const QString &attemptId) {
   if (!canConnect()) {
     Q_EMIT errorOccurred(QStringLiteral("Cannot create session: No token or previous failure."), false);
+    Q_EMIT sessionCreationFailed(jobId, attemptId, requestData,
+                                 ApiError(ApiError::Type::Authentication,
+                                          QStringLiteral("Cannot create session: No token or previous failure.")),
+                                 QString());
     return;
   }
 

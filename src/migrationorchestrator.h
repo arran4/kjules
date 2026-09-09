@@ -100,10 +100,17 @@ public:
     bool success = safeMigrationSeam(legacyData, destinationPath, QDateTime::currentDateTimeUtc());
     if (success) {
       auto config = KSharedConfig::openConfig();
-      KConfigGroup migrationGroup(config, QStringLiteral("Migration"));
-      migrationGroup.writeEntry(QStringLiteral("JobArchitecturePhase2Complete"), true);
-      config->sync();
-      getMigratedFlag() = true;
+
+      JobStore finalCheckStore(destinationPath);
+      if (finalCheckStore.load()) {
+        KConfigGroup migrationGroup(config, QStringLiteral("Migration"));
+        migrationGroup.writeEntry(QStringLiteral("JobArchitecturePhase2Complete"), true);
+        config->sync();
+        getMigratedFlag() = true;
+      } else {
+        qWarning("Final jobs.json validation failed after write! Rollback state. Do not commit marker.");
+        QFile::remove(destinationPath);
+      }
     }
   }
 
