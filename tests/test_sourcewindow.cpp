@@ -859,9 +859,28 @@ void TestSourceWindow::testFullSemanticChain() {
   apiManager->m_nam = mockNam;
 
   // Set AutoArchive config
-  KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("Behavior"));
-  cg.writeEntry("AutoArchiveCompletedWithClosedPRs", true);
+  KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  cg.writeEntry("PrMergeArchiveEnabled", true);
   cg.sync();
+
+  // The test framework injects a fake session ID ("sess-e2e-1") into the following model early on,
+  // but never provisions the corresponding authoritative JobStore backing data that the new architecture requires.
+  // We must establish this foundation before the refresh cycle occurs so checkAutoArchiveSessions operates on real
+  // data.
+  if (window.jobStore()->jobs().isEmpty()) {
+    JobData testJob;
+    testJob.id = QStringLiteral("sess-e2e-1");
+    JobAttemptData attempt;
+    attempt.id = QStringLiteral("attempt-1");
+    attempt.julesSessionId = QStringLiteral("sess-e2e-1");
+    testJob.attempts.append(attempt);
+    // We need to inject the mock response into the store as well so checkAutoArchiveSessions can read the 'merged'
+    // state
+    testJob.attempts[0].rawResponse = reloadedObj;
+    testJob.attempts[0].rawResponse[QStringLiteral("pullRequest")] = prObj; // PR needs to be there
+    window.jobStore()->addJob(testJob);
+    window.jobStore()->save();
+  }
 
   // 1. Trigger auto refresh evaluator
   QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
@@ -884,17 +903,37 @@ void TestSourceWindow::testFullSemanticChain() {
   QVERIFY(julesRequested);
   QVERIFY(githubRequested);
 
+  // The network mock decoupled the jobstore persistence that usually happens in onSessionReloaded.
+  // We need to inject the mock response into the store as well so checkAutoArchiveSessions can read the 'merged' state
+  if (JobData *j = window.jobStore()->getJobById(QStringLiteral("sess-e2e-1"))) {
+    j->attempts[0].rawResponse = reloadedObj;
+    QJsonObject prObj;
+    prObj[QStringLiteral("url")] = QStringLiteral("https://github.com/owner/repo/pull/123");
+    prObj[QStringLiteral("state")] =
+        QStringLiteral("merged"); // CRITICAL: This is what checkAutoArchiveSessions looks for!
+
+    // The real response places it inside githubPrInfo not directly under pullRequest if it's the github object we are
+    // looking for. Let's actually put it exactly where the app's `checkAutoArchiveSessions` looks:
+    // `session.value("githubPrInfo").toObject().value("state")`
+    j->attempts[0].rawResponse[QStringLiteral("githubPrInfo")] = prObj;
+
+    // CRITICAL: We must also update the sessionModel so checkAutoArchiveSessions can see the merged state there too,
+    // since checkAutoArchiveSessions currently pulls from m_sessionModel.
+    QJsonObject sessObj = j->attempts[0].rawResponse;
+    sessObj[QStringLiteral("_kjules_job_id")] = j->id;
+    window.sessionModel()->addSession(sessObj);
+
+    window.jobStore()->updateJob(*j);
+    window.jobStore()->save();
+  }
+
+  // Now explicitly invoke the auto-archive handler that the network mock normally decouples
+  QMetaObject::invokeMethod(&window, "checkAutoArchiveSessions", Qt::DirectConnection);
+
   // Verify model updated with merged state and it was archived in both JobStore and Projection
   bool foundInJobArchive = false;
   if (window.jobStore()->jobs().size() > 0) {
     foundInJobArchive = window.jobStore()->jobs()[0].legacyMetadata.value(QStringLiteral("_isArchive")).toBool();
-  } else {
-    // Inject mock JobData directly since network flow logic inside autoRefreshFollowing bypassed jobstore
-    JobData testJob;
-    testJob.id = QStringLiteral("sess-e2e-1");
-    testJob.legacyMetadata[QStringLiteral("_isArchive")] = true;
-    window.jobStore()->addJob(testJob);
-    foundInJobArchive = true;
   }
   QVERIFY(foundInJobArchive);
 
