@@ -191,6 +191,8 @@ public:
   SessionModel *archiveModel() const { return m_archiveModel; }
   APIManager *apiManager() const { return m_apiManager; }
 
+  JobStore *jobStore() const { return m_jobStore; }
+
 private:
   QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
   void applyFavouriteAction(
