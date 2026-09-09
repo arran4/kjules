@@ -889,7 +889,7 @@ void TestSourceWindow::testFullSemanticChain() {
   if (window.jobStore()->jobs().size() > 0) {
     foundInJobArchive = window.jobStore()->jobs()[0].legacyMetadata.value(QStringLiteral("_isArchive")).toBool();
   } else {
-    // Inject mock JobData directly since the network flow logic inside autoRefreshFollowing bypassed the jobstore fetch step in test env
+    // Inject mock JobData directly since network flow logic inside autoRefreshFollowing bypassed jobstore
     JobData testJob;
     testJob.id = QStringLiteral("sess-e2e-1");
     testJob.legacyMetadata[QStringLiteral("_isArchive")] = true;
