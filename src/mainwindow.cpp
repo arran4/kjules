@@ -1326,13 +1326,19 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
         QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
         QList<int> rowsToUnarchive = getUniqueSortedRows(selectedRows, m_archiveView);
 
+        bool updated = false;
         for (int row : rowsToUnarchive) {
           QJsonObject session = m_archiveModel->getSession(row);
-          m_sessionModel->addSession(session);
-          m_archiveModel->removeSession(row);
+          QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+          if (JobData *job = m_jobStore->getJobById(jobId)) {
+            job->legacyMetadata[QStringLiteral("_isArchive")] = false;
+            m_jobStore->updateJob(*job);
+            updated = true;
+          }
         }
-        m_sessionModel->saveSessions();
-        m_archiveModel->saveSessions();
+        if (updated && m_jobStore->save()) {
+          syncModelsFromJobStore();
+        }
         updateStatus(i18np("1 session unarchived.", "%1 sessions unarchived.", rowsToUnarchive.size()));
       });
 
@@ -1917,16 +1923,20 @@ void MainWindow::checkAutoArchiveSessions() {
     }
   }
 
+  bool updated = false;
   for (const ArchiveItem &item : itemsToArchive) {
     QJsonObject session = m_sessionModel->getSession(item.row);
-    m_archiveModel->addSession(session);
-    m_sessionModel->removeSession(item.row);
+    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    if (JobData *job = m_jobStore->getJobById(jobId)) {
+      job->legacyMetadata[QStringLiteral("_isArchive")] = true;
+      m_jobStore->updateJob(*job);
+      updated = true;
+    }
     Q_EMIT sessionAutoArchived(item.id, item.reason);
   }
 
-  if (!itemsToArchive.isEmpty()) {
-    m_archiveModel->saveSessions();
-    m_sessionModel->saveSessions();
+  if (updated && m_jobStore->save()) {
+    syncModelsFromJobStore();
     ActivityLogWindow::instance()->logMessage(
         i18np("Auto-archived 1 following session.", "Auto-archived %1 following sessions.", itemsToArchive.size()));
   }
@@ -3752,6 +3762,13 @@ bool MainWindow::processQueue() {
     return false;
   }
 
+  if (m_isWaitingForCreatedRepoSource) {
+    if (resolvePendingGithubSource()) {
+      refreshSources();
+    }
+    return false;
+  }
+
   if (m_queueModel->isEmpty()) {
     return false;
   }
@@ -3788,30 +3805,45 @@ bool MainWindow::processQueue() {
       continue;
 
     bool ignoreConcurrency = item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool(false);
-    bool forceBlockBypass = false; // Could check metadata if explicitly forced
+    bool forceBlockBypass = job->legacyMetadata.value(QStringLiteral("forceBlockBypass")).toBool(false);
     bool blockedByConcurrency = false;
+
+    // pending github repo check
+    QString owner = item.requestData.value(QStringLiteral("_kjules_github_owner")).toString();
+    if (!owner.isEmpty()) {
+      dispatchIndex = i;
+      itemToDispatch = item;
+      jobToDispatch = job;
+      break;
+    }
 
     if (!ignoreConcurrency) {
       if (queueModeStr != QStringLiteral("asap") && job->automationMode != QStringLiteral("AUTOMATION_MODE_ASAP")) {
         if (globalActive >= oneAtATimeLimit)
           blockedByConcurrency = true;
-        if (activeBySource.value(job->source, 0) >= sourceConcurrency)
+
+        KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+        int globalFallbackLimit = queueConfig.readEntry("OneAtATimeLimit", 1);
+
+        KConfigGroup sourceGroup(KSharedConfig::openConfig(), QStringLiteral("SourceConcurrency"));
+        int sLimit = sourceGroup.readEntry(job->source, -1);
+        if (sLimit == -1)
+          sLimit = globalFallbackLimit;
+
+        if (sLimit > 0 && activeBySource.value(job->source, 0) >= sLimit)
           blockedByConcurrency = true;
+        if (sLimit == 0)
+          blockedByConcurrency = false;
+
         if (queueModeStr == QStringLiteral("one_at_a_time_per_branch") &&
             activeByBranch.value(job->startingBranch, 0) > 0)
           blockedByConcurrency = true;
       }
     }
 
-    // Update blocked status if it changed
-    bool currentBlocked = item.isBlocked;
-    if (blockedByConcurrency != currentBlocked) {
-      item.isBlocked = blockedByConcurrency;
-      m_queueModel->updateItem(i, item);
-      job->legacyMetadata[QStringLiteral("blocked")] = blockedByConcurrency;
-      m_jobStore->updateJob(*job);
-      m_jobStore->save(); // Could batch this, but fine for now
-    }
+    item.isBlocked = blockedByConcurrency;
+    job->legacyMetadata[QStringLiteral("blocked")] = blockedByConcurrency;
+    m_jobStore->updateJob(*job);
 
     if (blockedByConcurrency && !ignoreConcurrency && !forceBlockBypass) {
       continue;
@@ -3822,6 +3854,11 @@ bool MainWindow::processQueue() {
     itemToDispatch = item;
     jobToDispatch = job;
     break;
+  }
+
+  // Persist block state changes
+  if (m_jobStore->save()) {
+    syncModelsFromJobStore();
   }
 
   if (dispatchIndex == -1 || !jobToDispatch) {
@@ -3931,7 +3968,9 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
         if (success) {
           attempt.dispatchState = QStringLiteral("COMPLETED");
           attempt.julesSessionId = session.value(QStringLiteral("id")).toString();
-          if (session.contains(QStringLiteral("status"))) {
+          if (session.contains(QStringLiteral("state"))) {
+            attempt.julesState = session.value(QStringLiteral("state")).toString();
+          } else if (session.contains(QStringLiteral("status"))) {
             attempt.julesState = session.value(QStringLiteral("status")).toString();
           }
           attempt.rawResponse = session;
@@ -5996,8 +6035,23 @@ void MainWindow::deleteFollowingSessions() {
   QList<int> rowsToDelete = getUniqueSortedRows(
       selectedRows, m_tabWidget->currentWidget() == m_sessionView->parentWidget() ? m_sessionView : m_snoozedView);
 
+  bool updated = false;
+  auto jobs = m_jobStore->jobs();
   for (int row : rowsToDelete) {
-    m_sessionModel->removeSession(row);
+    QJsonObject session = m_sessionModel->getSession(row);
+    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    for (int i = 0; i < jobs.size(); ++i) {
+      if (jobs[i].id == jobId) {
+        jobs.removeAt(i);
+        updated = true;
+        break;
+      }
+    }
+  }
+  if (updated) {
+    m_jobStore->setJobs(jobs);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
   }
   updateStatus(i18np("1 session deleted.", "%1 sessions deleted.", rowsToDelete.size()));
 }
@@ -6006,12 +6060,19 @@ void MainWindow::archiveSelectedSessions() {
   QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
   QList<int> rowsToArchive = getUniqueSortedRows(selectedRows, m_sessionView);
 
+  bool updated = false;
   for (int row : rowsToArchive) {
     QJsonObject session = m_sessionModel->getSession(row);
-    m_archiveModel->addSession(session);
-    m_sessionModel->removeSession(row);
+    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    if (JobData *job = m_jobStore->getJobById(jobId)) {
+      job->legacyMetadata[QStringLiteral("_isArchive")] = true;
+      m_jobStore->updateJob(*job);
+      updated = true;
+    }
   }
-  m_archiveModel->saveSessions();
+  if (updated && m_jobStore->save()) {
+    syncModelsFromJobStore();
+  }
   updateStatus(i18np("1 session archived.", "%1 sessions archived.", rowsToArchive.size()));
 }
 
@@ -6021,8 +6082,23 @@ void MainWindow::deleteArchiveSessions() {
     return;
   QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_archiveView);
 
+  bool updated = false;
+  auto jobs = m_jobStore->jobs();
   for (int row : rowsToDelete) {
-    m_archiveModel->removeSession(row);
+    QJsonObject session = m_archiveModel->getSession(row);
+    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    for (int i = 0; i < jobs.size(); ++i) {
+      if (jobs[i].id == jobId) {
+        jobs.removeAt(i);
+        updated = true;
+        break;
+      }
+    }
+  }
+  if (updated) {
+    m_jobStore->setJobs(jobs);
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
   }
   updateStatus(i18np("1 session deleted from archive.", "%1 sessions deleted from archive.", rowsToDelete.size()));
 }
@@ -6137,6 +6213,21 @@ void MainWindow::onSessionReloaded(const QJsonObject &session, bool isBackground
   }
   m_inFlightSessionReloads.remove(id);
   m_sessionReloadFailedAt.remove(id);
+
+  // Persist remote session refreshes into JobStore
+  if (JobData *job = m_jobStore->getJobBySessionId(id)) {
+    for (JobAttemptData &attempt : job->attempts) {
+      if (attempt.julesSessionId == id) {
+        attempt.updatedAt = QDateTime::currentDateTimeUtc();
+        if (session.contains(QStringLiteral("state"))) {
+          attempt.julesState = session.value(QStringLiteral("state")).toString();
+        }
+        attempt.rawResponse = session;
+      }
+    }
+    if (m_jobStore->save())
+      syncModelsFromJobStore();
+  }
 
   const QString newState = session.value(QStringLiteral("state")).toString();
   const QString prevState = m_previousSessionStates.value(id);
