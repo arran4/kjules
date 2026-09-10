@@ -56,7 +56,10 @@ public:
   ~SessionWindow();
 
 public:
-  QString jobId() const { return m_jobId; }
+  QString jobId() const
+  {
+    return m_jobId;
+  }
 
 private:
   void setupUi(const QJsonObject &sessionData);
@@ -114,6 +117,7 @@ Q_SIGNALS:
   void watchRequested(const QJsonObject &sessionData);
   void duplicateRequested(const QJsonObject &sessionData);
   void newAttemptRequested(const QString &jobId, const QJsonObject &request);
+  void retryAttemptRequested(const QString &jobId, const QString &attemptId);
   void variantRequested(const QString &jobId, const QJsonObject &request);
   void newJobFromRequested(const QJsonObject &request);
   void archiveRequested(const QString &id);

@@ -4776,8 +4776,42 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::duplicateRequested, this,
           [this](const QJsonObject &sessionData) { showNewSessionDialog(sessionData, true); });
 
+  connect(window, &SessionWindow::retryAttemptRequested, this, [this](const QString &jobId, const QString &attemptId) {
+    if (m_jobStore) {
+        JobData *job = m_jobStore->getJobById(jobId);
+        if (job) {
+            for (const auto &attempt : job->attempts) {
+                if (attempt.id == attemptId) {
+                    QueueItem item;
+                    item.requestData = attempt.requestSnapshot;
+                    item.jobId = jobId;
+                    m_queueModel->enqueueItem(item);
+                    updateStatus(i18n("Retrying failed attempt for Job %1", jobId));
+                    return;
+                }
+            }
+        }
+    }
+  });
+  connect(window, &SessionWindow::retryAttemptRequested, this, [this](const QString &jobId, const QString &attemptId) {
+    if (m_jobStore) {
+        JobData *job = m_jobStore->getJobById(jobId);
+        if (job) {
+            for (const auto &attempt : job->attempts) {
+                if (attempt.id == attemptId) {
+                    QueueItem item;
+                    item.requestData = attempt.requestSnapshot;
+                    item.jobId = jobId;
+                    m_queueModel->enqueueItem(item);
+                    updateStatus(i18n("Retrying failed attempt for Job %1", jobId));
+                    return;
+                }
+            }
+        }
+    }
+  });
   connect(window, &SessionWindow::newAttemptRequested, this, [this](const QString &jobId, const QJsonObject &request) {
-    if (!jobId.isEmpty() && m_jobStore) {
+  if (!jobId.isEmpty() && m_jobStore) {
       JobData *job = m_jobStore->getJobById(jobId);
       if (job) {
         QueueItem item;
@@ -4789,10 +4823,50 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
     }
   });
 
-  connect(window, &SessionWindow::variantRequested, this, [this](const QString &jobId, const QJsonObject &request) {
-    NewSessionDialog *dlg = showNewSessionDialog(request, true);
-    if (dlg) {
-    }
+connect(window, &SessionWindow::variantRequested, this, [this](const QString &jobId, const QJsonObject &request) {
+    bool hasApiKey = m_apiManager && !m_apiManager->apiKey().isEmpty();
+    NewSessionDialog *dlg = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
+    connectNewSessionDialog(dlg);
+
+    disconnect(dlg, &NewSessionDialog::createSessionRequested, this, &MainWindow::onSessionCreated);
+    connect(dlg, &NewSessionDialog::createSessionRequested, this, [this, jobId, dlg](const QMultiMap<QString, QString> &sources, const QString &prompt, const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority, const QString &queueAction) {
+      if (!jobId.isEmpty() && m_jobStore) {
+        JobData *job = m_jobStore->getJobById(jobId);
+        if (job) {
+          QueueItem item;
+
+          QJsonObject requestData;
+          requestData[QStringLiteral("prompt")] = prompt;
+          requestData[QStringLiteral("automationMode")] = automationMode;
+          requestData[QStringLiteral("planApproval")] = requirePlanApproval;
+
+          // Simplified source parsing for the variant.
+          if (!sources.isEmpty()) {
+              QString firstSource = sources.keys().first();
+              QString branch = sources.value(firstSource);
+              QJsonObject sourceContext;
+              sourceContext[QStringLiteral("source")] = firstSource;
+              if (!branch.isEmpty() && branch != i18n("Default Branch")) {
+                  QJsonObject githubContext;
+                  githubContext[QStringLiteral("startingBranch")] = branch;
+                  sourceContext[QStringLiteral("githubRepoContext")] = githubContext;
+              }
+              requestData[QStringLiteral("sourceContext")] = sourceContext;
+          }
+
+          item.requestData = requestData;
+          item.jobId = jobId;
+          m_queueModel->enqueueItem(item);
+          updateStatus(i18n("Variant attempt queued for Job %1", jobId));
+        }
+      } else {
+        onSessionCreated(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority, queueAction);
+      }
+      dlg->close();
+    });
+
+    dlg->setInitialData(request);
+    dlg->show();
   });
 
   connect(window, &SessionWindow::newJobFromRequested, this,

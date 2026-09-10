@@ -30,6 +30,29 @@ private Q_SLOTS:
         QVERIFY(window.windowTitle().contains(QStringLiteral("Zero Job")));
     }
 
+
+    void testOneAttempt() {
+        JobStore store;
+        JobData job;
+        job.id = QStringLiteral("job_one");
+        job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("One Job");
+
+        JobAttemptData att1;
+        att1.id = QStringLiteral("att1");
+        att1.julesSessionId = QStringLiteral("sess1");
+
+        job.attempts = {att1};
+        store.addJob(job);
+
+        SessionWindow window(job.id, &store, nullptr);
+
+        auto *list = window.findChild<QListWidget*>();
+        QVERIFY(list != nullptr);
+        QVERIFY(list->isHidden()); // Hidden for exactly 1 attempt
+
+        QVERIFY(window.windowTitle().contains(QStringLiteral("att1"))); // Uses the only attempt
+    }
+
     void testMultipleAttempts() {
         JobStore store;
         JobData job;
@@ -60,13 +83,15 @@ private Q_SLOTS:
         QVERIFY(window.windowTitle().contains(QStringLiteral("att2"))); // Initializes to winner
     }
 
-    void testActionSignals() {
+void testActionSignals() {
         JobStore store;
         JobData job;
         job.id = QStringLiteral("job_actions");
+        job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Canonical Title");
 
         JobAttemptData att1;
         att1.id = QStringLiteral("att1");
+        att1.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Attempt Prompt");
         job.attempts = {att1};
         store.addJob(job);
 
@@ -74,32 +99,50 @@ private Q_SLOTS:
 
         QSignalSpy spyAttempt(&window, &SessionWindow::newAttemptRequested);
         QSignalSpy spyVariant(&window, &SessionWindow::variantRequested);
+        QSignalSpy spyRetry(&window, &SessionWindow::retryAttemptRequested);
         QSignalSpy spyJobFrom(&window, &SessionWindow::newJobFromRequested);
 
         auto actions = window.findChildren<QAction*>();
         QAction* attemptAction = nullptr;
         QAction* variantAction = nullptr;
+        QAction* retryAction = nullptr;
         QAction* newJobAction = nullptr;
 
         for (auto *a : actions) {
             if (a->text() == QStringLiteral("Launch New Attempt")) attemptAction = a;
             if (a->text() == QStringLiteral("Launch Variant...")) variantAction = a;
+            if (a->text() == QStringLiteral("Retry Failed Attempt")) retryAction = a;
             if (a->text() == QStringLiteral("New Job From This...")) newJobAction = a;
         }
 
         QVERIFY(attemptAction != nullptr);
         QVERIFY(variantAction != nullptr);
+        QVERIFY(retryAction != nullptr);
         QVERIFY(newJobAction != nullptr);
 
         attemptAction->trigger();
         QCOMPARE(spyAttempt.count(), 1);
         QCOMPARE(spyAttempt.at(0).at(0).toString(), QStringLiteral("job_actions"));
+        QCOMPARE(spyAttempt.at(0).at(1).toJsonObject().value(QStringLiteral("title")).toString(), QStringLiteral("Canonical Title"));
 
         variantAction->trigger();
         QCOMPARE(spyVariant.count(), 1);
+        QCOMPARE(spyVariant.at(0).at(0).toString(), QStringLiteral("job_actions"));
+        QCOMPARE(spyVariant.at(0).at(1).toJsonObject().value(QStringLiteral("title")).toString(), QStringLiteral("Canonical Title"));
+
+        // Force the attempt to be selected
+        QListWidgetItem *item = window.findChild<QListWidget*>()->item(0);
+        if (item) {
+            Q_EMIT window.findChild<QListWidget*>()->itemClicked(item);
+        }
+        retryAction->trigger();
+        QCOMPARE(spyRetry.count(), 1);
+        QCOMPARE(spyRetry.at(0).at(0).toString(), QStringLiteral("job_actions"));
+        QCOMPARE(spyRetry.at(0).at(1).toString(), QStringLiteral("att1"));
 
         newJobAction->trigger();
         QCOMPARE(spyJobFrom.count(), 1);
+        QCOMPARE(spyJobFrom.at(0).at(0).toJsonObject().value(QStringLiteral("prompt")).toString(), QStringLiteral("Attempt Prompt"));
     }
 };
 

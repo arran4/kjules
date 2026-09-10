@@ -190,7 +190,7 @@ void SessionWindow::setupActions() {
 
   QAction *retryAttemptAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Retry Failed Attempt"), this);
-  connect(retryAttemptAction, &QAction::triggered, this, [this]() { Q_EMIT duplicateRequested(currentSessionData()); });
+  connect(retryAttemptAction, &QAction::triggered, this, [this]() { Q_EMIT retryAttemptRequested(m_jobId, m_currentAttemptId); });
   actionCollection()->addAction(QStringLiteral("retry_attempt"), retryAttemptAction);
 
   QAction *newJobFromAction =
