@@ -1,5 +1,32 @@
 #include "sessionwindow.h"
 
+#include <QComboBox>
+#include <QDateTime>
+#include <QDesktopServices>
+#include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListView>
+#include <QMenu>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTabWidget>
+#include <QTextBrowser>
+#include <QTimer>
+#include <QVBoxLayout>
+#include <QSplitter>
+#include <QStackedWidget>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <KActionCollection>
+#include <KLocalizedString>
+
+#include "activitybrowser.h"
+#include "apimanager.h"
+#include "clickablelabel.h"
+#include "jobstore.h"
 #include "activitybrowser.h"
 #include "activitylogwindow.h"
 #include "apimanager.h"
@@ -340,6 +367,21 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId, const QJsonAr
 
   m_statusLabel->setText(i18n(
       "Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
+}
+
+
+QJsonObject SessionWindow::currentSessionData() const {
+  if (m_jobStore) {
+      JobData *job = m_jobStore->getJobById(m_jobId);
+      if (job) {
+          for (const auto& attempt : job->attempts) {
+              if (attempt.id == m_currentAttemptId) {
+                  return attempt.rawResponse;
+              }
+          }
+      }
+  }
+  return m_sessionData;
 }
 
 void SessionWindow::renderDetailsAndDiff() {
