@@ -1698,9 +1698,46 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         m_errorsView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         m_errorsView->setCurrentIndex(index);
       }
-      QMenu menu;
+QMenu menu;
+      QAction *editAction = menu.addAction(i18n("Edit / Modify"));
       QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
+      QAction *requeueAction = menu.addAction(i18n("Requeue"));
+      QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
       QAction *deleteAction = menu.addAction(i18n("Delete"));
+
+      connect(editAction, &QAction::triggered, [this]() {
+        QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
+        for (const QModelIndex &idx : selectedRows) {
+          onErrorActivated(idx);
+        }
+      });
+
+      connect(copyTemplateAction, &QAction::triggered, [this, index]() {
+        SaveDialog dlg(QStringLiteral("Template"), this);
+        if (dlg.exec() == QDialog::Accepted) {
+          QJsonObject errData = m_errorsModel->getError(index.row());
+          QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+          req[QStringLiteral("name")] = dlg.nameOrComment();
+          req[QStringLiteral("description")] = dlg.description();
+          m_templatesModel->addTemplate(req);
+          updateStatus(i18n("Template created from error item."));
+        }
+      });
+
+      connect(requeueAction, &QAction::triggered, [this]() {
+        QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
+        QList<int> rowsToRequeue = getUniqueSortedRows(selectedRows, m_errorsView);
+
+        for (int row : rowsToRequeue) {
+          QJsonObject errData = m_errorsModel->getError(row);
+          QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+          m_queueModel->enqueue(req);
+          m_errorsModel->removeError(row);
+        }
+        if (!rowsToRequeue.isEmpty()) {
+          updateStatus(i18np("Requeued 1 error item.", "Requeued %1 error items.", rowsToRequeue.size()));
+        }
+      });
 
       connect(rawTranscriptAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
@@ -1715,10 +1752,55 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
           ErrorWindow *window = new ErrorWindow(
               idx.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr,
               httpDetails, errorDetails, this);
+          connect(window, &ErrorWindow::editRequested, [this](int row) {
+            QModelIndex idx = m_errorsModel->index(row, 0);
+            onErrorActivated(idx);
+          });
           connect(window, &ErrorWindow::deleteRequested, [this](int row) {
             m_errorsModel->removeError(row);
             updateStatus(i18n("Diagnostic removed."));
           });
+          connect(window, &ErrorWindow::draftRequested, [this](int row) {
+            QJsonObject errData = m_errorsModel->getError(row);
+            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+            m_draftsModel->addDraft(req);
+            m_errorsModel->removeError(row);
+            updateStatus(i18n("Error converted to draft."));
+          });
+          connect(window, &ErrorWindow::templateRequested, [this](int row) {
+            SaveDialog dlg(QStringLiteral("Template"), this);
+            if (dlg.exec() == QDialog::Accepted) {
+              QJsonObject errData = m_errorsModel->getError(row);
+              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+              req[QStringLiteral("name")] = dlg.nameOrComment();
+              req[QStringLiteral("description")] = dlg.description();
+              m_templatesModel->addTemplate(req);
+              updateStatus(i18n("Template created from error item."));
+            }
+          });
+          connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
+            QJsonObject errData = m_errorsModel->getError(row);
+            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+            m_errorsModel->removeError(row);
+
+            QueueItem item;
+            item.requestData = req;
+            sendItemNow(item, row, false, errData);
+
+            updateStatus(i18n("Sending error item immediately..."));
+          });
+          connect(window, &ErrorWindow::remapSourceRequested, [this](int row) {
+            const QString source = SourceFixer::source(m_errorsModel->getError(row));
+            showFixSourcesDialog(source);
+          });
+          connect(window, &ErrorWindow::requeueRequested, [this](int row) {
+            QJsonObject errData = m_errorsModel->getError(row);
+            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
+            m_errorsModel->removeError(row);
+            m_queueModel->enqueue(req);
+            updateStatus(i18n("Error item requeued."));
+          });
+
           window->setAttribute(Qt::WA_DeleteOnClose);
           window->show();
         }
