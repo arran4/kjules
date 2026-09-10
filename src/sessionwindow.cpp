@@ -920,11 +920,11 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   setWindowTitle(i18n("Session %1 - %2", sessionId, title));
 
   if (m_jobStore) {
-      updateAttemptList();
+    updateAttemptList();
   } else {
-      m_splitter->widget(0)->hide();
-      m_contentStack->setCurrentWidget(m_detailsWidget);
-      renderDetailsAndDiff();
+    m_splitter->widget(0)->hide();
+    m_contentStack->setCurrentWidget(m_detailsWidget);
+    renderDetailsAndDiff();
   }
 
   if (m_apiManager && !sessionId.isEmpty()) {

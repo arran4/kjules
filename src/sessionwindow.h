@@ -57,6 +57,7 @@ public:
 
 public:
   QString jobId() const { return m_jobId; }
+
 private:
   void setupUi(const QJsonObject &sessionData);
   void renderZeroAttempts();
