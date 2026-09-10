@@ -919,6 +919,22 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   }
   setWindowTitle(i18n("Session %1 - %2", sessionId, title));
 
+  if (m_jobStore) {
+      updateAttemptList();
+  } else {
+      m_splitter->widget(0)->hide();
+      m_contentStack->setCurrentWidget(m_detailsWidget);
+      renderDetailsAndDiff();
+  }
+
+  if (m_apiManager && !sessionId.isEmpty()) {
+    if (m_statusLabel)
+      m_statusLabel->setText(i18n("Loading activities..."));
+    m_apiManager->listActivities(sessionId);
+  } else if (!sessionId.isEmpty()) {
+    onActivitiesReceived(sessionId, QJsonArray());
+  }
+
   resize(800, 600);
 }
 

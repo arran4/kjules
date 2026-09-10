@@ -4692,24 +4692,36 @@ void MainWindow::connectNewSessionDialog(NewSessionDialog *window) {
 
 void MainWindow::connectSessionWindow(SessionWindow *window) {
   connect(window, &SessionWindow::duplicateRequested, this, [this](const QJsonObject &sessionData) {
-    QJsonObject initData;
-    initData[QStringLiteral("prompt")] = sessionData.value(QStringLiteral("prompt")).toString();
-    const QJsonObject sourceContext = sessionData.value(QStringLiteral("sourceContext")).toObject();
-    const QString source = sourceContext.value(QStringLiteral("source")).toString();
-    if (!source.isEmpty()) {
-      QJsonObject sourceObj;
-      sourceObj[QStringLiteral("name")] = source;
-      const QString branch = sourceContext.value(QStringLiteral("githubRepoContext"))
-                                 .toObject()
-                                 .value(QStringLiteral("startingBranch"))
-                                 .toString();
-      if (!branch.isEmpty()) {
-        sourceObj[QStringLiteral("branch")] = branch;
-      }
-      initData[QStringLiteral("sources")] = QJsonArray{sourceObj};
-    }
-    showNewSessionDialog(initData);
+    showNewSessionDialog(sessionData, true);
   });
+
+  connect(window, &SessionWindow::newAttemptRequested, this, [this](const QString &jobId, const QJsonObject &request) {
+    if (!jobId.isEmpty() && m_jobStore) {
+        JobData *job = m_jobStore->getJobById(jobId);
+        if (job) {
+            QueueItem item;
+            item.requestData = request;
+            item.jobId = jobId;
+            m_queueModel->enqueueItem(item);
+            updateStatus(i18n("New attempt queued for Job %1", jobId));
+        }
+    }
+  });
+
+  connect(window, &SessionWindow::variantRequested, this, [this](const QString &jobId, const QJsonObject &request) {
+    NewSessionDialog *dlg = showNewSessionDialog(request, true);
+    if (dlg) {
+        // We can't really block, but showNewSessionDialog connects createSessionRequested to onSessionCreated.
+        // If we want a variant mapped to a Job, we should queue it with jobId.
+        // Actually, NewSessionDialog emits createSessionRequested.
+        // For now, let's just prefill NewSessionDialog. It will act like an independent session unless we add a JobId field to NewSessionDialog.
+    }
+  });
+
+  connect(window, &SessionWindow::newJobFromRequested, this, [this](const QJsonObject &request) {
+    showNewSessionDialog(request, true);
+  });
+
 
   connect(window, &SessionWindow::templateRequested, this, [this](const QJsonObject &templateData) {
     SaveDialog dlg(QStringLiteral("Template"), this);
@@ -4763,6 +4775,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
     }
   });
 
+  connect(window, &SessionWindow::jobMutated, this, [this](const QString &id) { syncModelsFromJobStore(); });
   connect(window, &SessionWindow::deleteRequested, this, [this, window](const QString &id) {
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
