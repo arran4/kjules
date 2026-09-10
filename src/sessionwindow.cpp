@@ -135,15 +135,15 @@ void SessionWindow::setupActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Save prompt as template"), this);
   connect(saveTemplateAction, &QAction::triggered, this, [this]() {
     QJsonObject templateData;
-    templateData[QStringLiteral("prompt")] = m_sessionData.value(QStringLiteral("prompt")).toString();
-    templateData[QStringLiteral("automationMode")] = m_sessionData.value(QStringLiteral("automationMode")).toString();
+    templateData[QStringLiteral("prompt")] = currentSessionData().value(QStringLiteral("prompt")).toString();
+    templateData[QStringLiteral("automationMode")] = currentSessionData().value(QStringLiteral("automationMode")).toString();
     Q_EMIT templateRequested(templateData);
   });
   actionCollection()->addAction(QStringLiteral("save_template"), saveTemplateAction);
 
   QAction *watchAction = new QAction(QIcon::fromTheme(QStringLiteral("visibility")), i18n("Follow Session"), this);
   connect(watchAction, &QAction::triggered, this, [this, watchAction]() {
-    Q_EMIT watchRequested(m_sessionData);
+    Q_EMIT watchRequested(currentSessionData());
     m_isManaged = true;
     watchAction->setEnabled(false);
   });
@@ -154,7 +154,7 @@ void SessionWindow::setupActions() {
 
   QAction *archiveAction = new QAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Session"), this);
   connect(archiveAction, &QAction::triggered, this,
-          [this]() { Q_EMIT archiveRequested(m_sessionData.value(QStringLiteral("id")).toString()); });
+          [this]() { Q_EMIT archiveRequested(currentSessionData().value(QStringLiteral("id")).toString()); });
   actionCollection()->addAction(QStringLiteral("archive_session"), archiveAction);
   if (!m_isManaged) {
     archiveAction->setEnabled(false);
@@ -163,7 +163,7 @@ void SessionWindow::setupActions() {
   QAction *deleteAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Unmanage Session"), this);
   deleteAction->setShortcut(QKeySequence::Delete);
   connect(deleteAction, &QAction::triggered, this,
-          [this]() { Q_EMIT deleteRequested(m_sessionData.value(QStringLiteral("id")).toString()); });
+          [this]() { Q_EMIT deleteRequested(currentSessionData().value(QStringLiteral("id")).toString()); });
   actionCollection()->addAction(QStringLiteral("delete_session"), deleteAction);
   if (!m_isManaged) {
     deleteAction->setEnabled(false);
@@ -171,20 +171,20 @@ void SessionWindow::setupActions() {
 
   QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
   connect(openJulesAction, &QAction::triggered, this, [this]() {
-    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    QString id = currentSessionData().value(QStringLiteral("id")).toString();
     Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
   });
   actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
   QAction *copyJulesAction = new QAction(i18n("Copy Jules URL"), this);
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
-    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    QString id = currentSessionData().value(QStringLiteral("id")).toString();
     QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/session/") + id);
   });
   actionCollection()->addAction(QStringLiteral("copy_jules"), copyJulesAction);
 
   QString prUrlStr;
-  QJsonArray outputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
+  QJsonArray outputs = currentSessionData().value(QStringLiteral("outputs")).toArray();
   for (int i = 0; i < outputs.size(); ++i) {
     QJsonObject outObj = outputs[i].toObject();
     if (outObj.contains(QStringLiteral("pullRequest"))) {
@@ -204,8 +204,8 @@ void SessionWindow::setupActions() {
     connect(copyPrAction, &QAction::triggered, this, [prUrlStr]() { QGuiApplication::clipboard()->setText(prUrlStr); });
     actionCollection()->addAction(QStringLiteral("copy_pr"), copyPrAction);
 
-    if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
-      QJsonObject prInfo = m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+    if (currentSessionData().contains(QStringLiteral("githubPrInfo"))) {
+      QJsonObject prInfo = currentSessionData().value(QStringLiteral("githubPrInfo")).toObject();
       if (prInfo.contains(QStringLiteral("head"))) {
         QString branchName = prInfo.value(QStringLiteral("head")).toObject().value(QStringLiteral("ref")).toString();
         QString branchUrl = prInfo.value(QStringLiteral("head"))
@@ -263,31 +263,42 @@ void SessionWindow::updateAutoRefresh() {
 
 void SessionWindow::refreshSession(bool isBackground) {
   if (m_apiManager) {
-    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    QString id = currentSessionData().value(QStringLiteral("id")).toString();
     m_apiManager->reloadSession(id, isBackground);
     m_statusLabel->setText(i18n("Refreshing..."));
   }
 }
 
 void SessionWindow::onSessionReloaded(const QJsonObject &session, bool isBackground) {
-  Q_UNUSED(isBackground);
-  QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
-  QString incomingId = session.value(QStringLiteral("id")).toString();
+  QString currentId = currentSessionData().value(QStringLiteral("id")).toString();
+  if (session.value(QStringLiteral("id")).toString() == currentId) {
+    if (m_jobStore) {
+        JobData* job = m_jobStore->getJobById(m_jobId);
+        if (job) {
+            for (auto& attempt : job->attempts) {
+                if (attempt.id == m_currentAttemptId) {
+                    attempt.rawResponse = session;
+                    attempt.julesState = session.value(QStringLiteral("state")).toString();
+                    m_jobStore->save();
+                    break;
+                }
+            }
+        }
+    } else {
+        m_sessionData = session;
+        m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    }
 
-  if (currentId == incomingId) {
-    m_sessionData = session;
-    m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    if (m_statusLabel)
+      m_statusLabel->setText(
+          i18n("Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
 
     renderDetailsAndDiff();
-
-    if (m_apiManager) {
-      m_apiManager->listActivities(currentId);
-    }
   }
 }
 
 void SessionWindow::onMessageSent(const QString &sessionId) {
-  QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
+  QString currentId = currentSessionData().value(QStringLiteral("id")).toString();
   if (currentId != sessionId)
     return;
 
@@ -311,7 +322,7 @@ void SessionWindow::onMessageSent(const QString &sessionId) {
 }
 
 void SessionWindow::onMessageSendFailed(const QString &sessionId, const QString &message, const QString &httpDetails) {
-  QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
+  QString currentId = currentSessionData().value(QStringLiteral("id")).toString();
   if (currentId != sessionId)
     return;
 
@@ -341,24 +352,24 @@ void SessionWindow::onMessageSendFailed(const QString &sessionId, const QString 
 }
 
 void SessionWindow::onActivitiesReceived(const QString &sessionId, const QJsonArray &activities) {
-  QString currentId = m_sessionData.value(QStringLiteral("id")).toString();
+  QString currentId = currentSessionData().value(QStringLiteral("id")).toString();
   if (currentId != sessionId)
     return;
 
   QJsonArray turns = activities;
   if (turns.isEmpty()) {
-    if (m_sessionData.contains(QStringLiteral("turns"))) {
-      turns = m_sessionData.value(QStringLiteral("turns")).toArray();
-    } else if (m_sessionData.contains(QStringLiteral("history"))) {
-      turns = m_sessionData.value(QStringLiteral("history")).toArray();
-    } else if (m_sessionData.contains(QStringLiteral("messages"))) {
-      turns = m_sessionData.value(QStringLiteral("messages")).toArray();
-    } else if (m_sessionData.contains(QStringLiteral("actions"))) {
-      turns = m_sessionData.value(QStringLiteral("actions")).toArray();
+    if (currentSessionData().contains(QStringLiteral("turns"))) {
+      turns = currentSessionData().value(QStringLiteral("turns")).toArray();
+    } else if (currentSessionData().contains(QStringLiteral("history"))) {
+      turns = currentSessionData().value(QStringLiteral("history")).toArray();
+    } else if (currentSessionData().contains(QStringLiteral("messages"))) {
+      turns = currentSessionData().value(QStringLiteral("messages")).toArray();
+    } else if (currentSessionData().contains(QStringLiteral("actions"))) {
+      turns = currentSessionData().value(QStringLiteral("actions")).toArray();
     }
   }
 
-  QString prompt = m_sessionData.value(QStringLiteral("prompt")).toString();
+  QString prompt = currentSessionData().value(QStringLiteral("prompt")).toString();
   m_activityBrowser->setPrompt(prompt);
   m_activityBrowser->setActivities(turns);
 
@@ -376,7 +387,32 @@ QJsonObject SessionWindow::currentSessionData() const {
       if (job) {
           for (const auto& attempt : job->attempts) {
               if (attempt.id == m_currentAttemptId) {
-                  return attempt.rawResponse;
+                  QJsonObject data = attempt.requestSnapshot;
+                  QJsonObject outputs;
+                  if (attempt.rawResponse.contains(QStringLiteral("outputs"))) {
+                      outputs = attempt.rawResponse;
+                  }
+
+                  // Keep ID to allow refresh etc
+                  data[QStringLiteral("id")] = attempt.julesSessionId;
+                  data[QStringLiteral("state")] = attempt.julesState;
+
+                  if (!outputs.isEmpty()) {
+                      data[QStringLiteral("outputs")] = outputs.value(QStringLiteral("outputs"));
+                  }
+                  if (attempt.rawResponse.contains(QStringLiteral("turns"))) {
+                      data[QStringLiteral("turns")] = attempt.rawResponse.value(QStringLiteral("turns"));
+                  }
+                  if (attempt.rawResponse.contains(QStringLiteral("githubPrInfo"))) {
+                      data[QStringLiteral("githubPrInfo")] = attempt.rawResponse.value(QStringLiteral("githubPrInfo"));
+                  }
+
+                  // Use canonical request for display title etc if missing in snapshot
+                  if (!data.contains(QStringLiteral("title"))) {
+                      data[QStringLiteral("title")] = job->canonicalRequest.value(QStringLiteral("title"));
+                  }
+
+                  return data;
               }
           }
       }
@@ -385,24 +421,25 @@ QJsonObject SessionWindow::currentSessionData() const {
 }
 
 void SessionWindow::renderDetailsAndDiff() {
-  QJsonDocument doc(m_sessionData);
+  QJsonObject data = currentSessionData();
+  QJsonDocument doc(data);
   QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
   m_textBrowser->setPlainText(jsonString);
 
-  QString title = m_sessionData.value(QStringLiteral("title")).toString();
-  QString sessionId = m_sessionData.value(QStringLiteral("id")).toString();
-  QString lastRefreshed = m_sessionData.value(QStringLiteral("lastRefreshed")).toString();
-  QString state = m_sessionData.value(QStringLiteral("state")).toString();
-  QJsonObject sourceContext = m_sessionData.value(QStringLiteral("sourceContext")).toObject();
+  QString title = currentSessionData().value(QStringLiteral("title")).toString();
+  QString sessionId = currentSessionData().value(QStringLiteral("id")).toString();
+  QString lastRefreshed = currentSessionData().value(QStringLiteral("lastRefreshed")).toString();
+  QString state = currentSessionData().value(QStringLiteral("state")).toString();
+  QJsonObject sourceContext = currentSessionData().value(QStringLiteral("sourceContext")).toObject();
   QString source = sourceContext.value(QStringLiteral("source")).toString();
   bool environmentVariablesEnabled = sourceContext.value(QStringLiteral("environmentVariablesEnabled")).toBool();
   QString startingBranch = sourceContext.value(QStringLiteral("githubRepoContext"))
                                .toObject()
                                .value(QStringLiteral("startingBranch"))
                                .toString();
-  QString createTime = m_sessionData.value(QStringLiteral("createTime")).toString();
-  QString updateTime = m_sessionData.value(QStringLiteral("updateTime")).toString();
-  QString promptText = m_sessionData.value(QStringLiteral("prompt")).toString();
+  QString createTime = currentSessionData().value(QStringLiteral("createTime")).toString();
+  QString updateTime = currentSessionData().value(QStringLiteral("updateTime")).toString();
+  QString promptText = currentSessionData().value(QStringLiteral("prompt")).toString();
 
   if (!createTime.isEmpty()) {
     QDateTime dt = QDateTime::fromString(createTime, Qt::ISODate);
@@ -436,9 +473,9 @@ void SessionWindow::renderDetailsAndDiff() {
                  QStringLiteral("</td></tr>");
 
   QString previousAttemptId;
-  QJsonObject req = m_sessionData.value(QStringLiteral("request")).toObject();
-  if (m_sessionData.contains(QStringLiteral("previousAttemptId"))) {
-    previousAttemptId = m_sessionData.value(QStringLiteral("previousAttemptId")).toString();
+  QJsonObject req = currentSessionData().value(QStringLiteral("request")).toObject();
+  if (currentSessionData().contains(QStringLiteral("previousAttemptId"))) {
+    previousAttemptId = currentSessionData().value(QStringLiteral("previousAttemptId")).toString();
   } else if (req.contains(QStringLiteral("previousAttemptId"))) {
     previousAttemptId = req.value(QStringLiteral("previousAttemptId")).toString();
   }
@@ -470,7 +507,7 @@ void SessionWindow::renderDetailsAndDiff() {
                  QStringLiteral("</td></tr>");
   detailsHtml += QStringLiteral("</table>");
 
-  QJsonArray outputs = m_sessionData.value(QStringLiteral("outputs")).toArray();
+  QJsonArray outputs = currentSessionData().value(QStringLiteral("outputs")).toArray();
   QString diffText;
   for (int i = 0; i < outputs.size(); ++i) {
     QJsonObject outObj = outputs[i].toObject();
@@ -504,8 +541,8 @@ void SessionWindow::renderDetailsAndDiff() {
 
   m_detailsBrowser->setHtml(detailsHtml);
 
-  if (m_sessionData.contains(QStringLiteral("githubPrInfo"))) {
-    QJsonObject prInfo = m_sessionData.value(QStringLiteral("githubPrInfo")).toObject();
+  if (currentSessionData().contains(QStringLiteral("githubPrInfo"))) {
+    QJsonObject prInfo = currentSessionData().value(QStringLiteral("githubPrInfo")).toObject();
     QString prHtml = QStringLiteral("<html><head><style>") +
                      QStringLiteral("body { font-family: sans-serif; font-size: 1.1em; "
                                     "line-height: 1.6; }") +
@@ -578,7 +615,7 @@ void SessionWindow::renderDetailsAndDiff() {
   }
 }
 
-void SessionWindow::duplicateSession() { Q_EMIT duplicateRequested(m_sessionData); }
+void SessionWindow::duplicateSession() { Q_EMIT duplicateRequested(currentSessionData()); }
 
 void SessionWindow::setupUi(const QJsonObject &sessionData) {
   QWidget *centralWidget = new QWidget(this);
@@ -629,7 +666,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
     if (text.isEmpty() || !m_apiManager)
       return;
 
-    QString id = m_sessionData.value(QStringLiteral("id")).toString();
+    QString id = currentSessionData().value(QStringLiteral("id")).toString();
     m_pendingMessage = text;
     m_chatInput->clear();
     m_chatInput->setEnabled(false);
@@ -655,7 +692,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   QVBoxLayout *errorLayout = new QVBoxLayout(m_errorTab);
   QListView *errorView = new QListView(m_errorTab);
   SessionErrorFilterProxyModel *errorProxy =
-      new SessionErrorFilterProxyModel(m_sessionData.value(QStringLiteral("id")).toString(), m_errorTab);
+      new SessionErrorFilterProxyModel(currentSessionData().value(QStringLiteral("id")).toString(), m_errorTab);
   errorProxy->setSourceModel(m_errorsModel);
   errorView->setModel(errorProxy);
   errorLayout->addWidget(errorView);
