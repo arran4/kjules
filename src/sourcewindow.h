@@ -27,9 +27,9 @@ class SourceWindow : public KXmlGuiWindow {
   Q_OBJECT
 
 public:
-  explicit SourceWindow(const QString &sourceId, SourceModel *sourceModel, SessionModel *sessionModel,
+explicit SourceWindow(const QString &sourceId, SourceModel *sourceModel, SessionModel *sessionModel,
                         SessionModel *archiveModel, QueueModel *queueModel, ErrorsModel *errorsModel,
-                        BlockedTreeModel *blockedTreeModel, APIManager *apiManager, QWidget *parent = nullptr);
+                        BlockedTreeModel *blockedTreeModel, APIManager *apiManager, JobStore *jobStore = nullptr, QWidget *parent = nullptr);
   ~SourceWindow() override;
 
 Q_SIGNALS:

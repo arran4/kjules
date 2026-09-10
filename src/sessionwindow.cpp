@@ -257,14 +257,17 @@ void SessionWindow::setupActions() {
   actionCollection()->setDefaultShortcut(closeAction, QKeySequence(Qt::CTRL | Qt::Key_W));
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
-  m_autoRefreshCombo = new QComboBox(this);
-  m_autoRefreshCombo->addItem(i18n("Off"), 0);
-  m_autoRefreshCombo->addItem(i18n("10 seconds"), 10);
-  m_autoRefreshCombo->addItem(i18n("30 seconds"), 30);
-  m_autoRefreshCombo->addItem(i18n("1 minute"), 60);
-  m_autoRefreshCombo->addItem(i18n("5 minutes"), 300);
-  connect(m_autoRefreshCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          &SessionWindow::updateAutoRefresh);
+  // m_autoRefreshCombo is created in the constructor so we only connect it here
+  if (!m_autoRefreshCombo) {
+    m_autoRefreshCombo = new QComboBox(this);
+    m_autoRefreshCombo->addItem(i18n("Disabled"));
+    m_autoRefreshCombo->addItem(i18n("30 Seconds"));
+    m_autoRefreshCombo->addItem(i18n("1 Minute"));
+    m_autoRefreshCombo->addItem(i18n("5 Minutes"));
+    m_autoRefreshCombo->addItem(i18n("10 Minutes"));
+    m_autoRefreshCombo->addItem(i18n("30 Minutes"));
+    connect(m_autoRefreshCombo, &QComboBox::currentIndexChanged, this, &SessionWindow::updateAutoRefresh);
+  }
 
   QAction *saveTemplateAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Save prompt as template"), this);

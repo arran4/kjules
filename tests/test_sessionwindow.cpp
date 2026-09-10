@@ -42,6 +42,7 @@ private Q_SLOTS:
         att1.julesSessionId = QStringLiteral("sess1");
 
         job.attempts = {att1};
+
         store.addJob(job);
 
         SessionWindow window(job.id, &store, nullptr);
@@ -70,6 +71,7 @@ private Q_SLOTS:
         att2.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Prompt 2");
 
         job.attempts = {att1, att2};
+
         job.acceptedAttemptId = QStringLiteral("att2");
         store.addJob(job);
 
@@ -83,7 +85,7 @@ private Q_SLOTS:
         QVERIFY(window.windowTitle().contains(QStringLiteral("att2"))); // Initializes to winner
     }
 
-void testActionSignals() {
+    void testActionSignals() {
         JobStore store;
         JobData job;
         job.id = QStringLiteral("job_actions");
@@ -93,6 +95,7 @@ void testActionSignals() {
         att1.id = QStringLiteral("att1");
         att1.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Attempt Prompt");
         job.attempts = {att1};
+
         store.addJob(job);
 
         SessionWindow window(job.id, &store, nullptr);
@@ -120,7 +123,7 @@ void testActionSignals() {
         QVERIFY(retryAction != nullptr);
         QVERIFY(newJobAction != nullptr);
 
-attemptAction->trigger();
+        attemptAction->trigger();
         QCOMPARE(spyAttempt.count(), 1);
         QCOMPARE(spyAttempt.at(0).at(0).toString(), QStringLiteral("job_actions"));
 
@@ -128,8 +131,7 @@ attemptAction->trigger();
         QCOMPARE(spyVariant.count(), 1);
         QCOMPARE(spyVariant.at(0).at(0).toString(), QStringLiteral("job_actions"));
 
-        // Retry uses list selection, fallback to explicit emit if selection not captured in test UI
-        Q_EMIT window.retryAttemptRequested(job.id, att1.id);
+        retryAction->trigger();
         QCOMPARE(spyRetry.count(), 1);
         QCOMPARE(spyRetry.at(0).at(0).toString(), QStringLiteral("job_actions"));
         QCOMPARE(spyRetry.at(0).at(1).toString(), QStringLiteral("att1"));
@@ -137,6 +139,39 @@ attemptAction->trigger();
         newJobAction->trigger();
         QCOMPARE(spyJobFrom.count(), 1);
         QCOMPARE(spyJobFrom.at(0).at(0).toJsonObject().value(QStringLiteral("prompt")).toString(), QStringLiteral("Attempt Prompt"));
+    }
+
+    void testArchiveAndDeleteActions() {
+        JobStore store;
+        JobData job;
+        job.id = QStringLiteral("job_delete_archive");
+        job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Target Job");
+
+        JobAttemptData att1;
+        att1.id = QStringLiteral("att1");
+        job.attempts = {att1};
+        store.addJob(job);
+
+        SessionWindow window(job.id, &store, nullptr);
+
+        QSignalSpy spyArchive(&window, &SessionWindow::archiveRequested);
+        QSignalSpy spyDelete(&window, &SessionWindow::deleteRequested);
+
+        auto actions = window.findChildren<QAction*>();
+        QAction* archiveAction = nullptr;
+        QAction* deleteAction = nullptr;
+
+        for (auto *a : actions) {
+            if (a->text() == QStringLiteral("Archive Job")) archiveAction = a;
+            if (a->text() == QStringLiteral("Delete Job")) deleteAction = a;
+        }
+
+        QVERIFY(archiveAction != nullptr);
+        QVERIFY(deleteAction != nullptr);
+
+        archiveAction->trigger();
+        QCOMPARE(spyArchive.count(), 1);
+        QCOMPARE(spyArchive.at(0).at(0).toString(), QStringLiteral("job_delete_archive"));
     }
 };
 

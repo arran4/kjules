@@ -3426,8 +3426,8 @@ void MainWindow::showSourceStatusDialog(const QString &sourceName) {
 void MainWindow::openSourceWindow(const QString &sourceId) {
   if (sourceId.isEmpty())
     return;
-  SourceWindow *window = new SourceWindow(sourceId, m_sourceModel, m_sessionModel, m_archiveModel, m_queueModel,
-                                          m_errorsModel, m_blockedTreeModel, m_apiManager, this);
+SourceWindow *window = new SourceWindow(sourceId, m_sourceModel, m_sessionModel, m_archiveModel, m_queueModel,
+                                          m_errorsModel, m_blockedTreeModel, m_apiManager, m_jobStore, this);
   connect(window, &SourceWindow::newSessionRequested, this, [this](const QString &source) {
     QJsonObject initialData;
     QJsonArray sourcesArr;
@@ -4867,18 +4867,30 @@ connect(window, &SessionWindow::variantRequested, this, [this](const QString &jo
     }
   });
 
-  connect(window, &SessionWindow::archiveRequested, this, [this, window](const QString &id) {
-    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
-        QJsonObject session = m_sessionModel->getSession(i);
-        m_archiveModel->addSession(session);
-        m_archiveModel->saveSessions();
-        m_sessionModel->removeSession(i);
-        updateStatus(i18n("Session archived."));
-        window->close();
-        break;
-      }
+connect(window, &SessionWindow::archiveRequested, this, [this, window](const QString &id) {
+    if (m_jobStore) {
+        JobData *job = m_jobStore->getJobById(id);
+        if (job) {
+            job->lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+            m_jobStore->updateJob(*job);
+            m_jobStore->save();
+            syncModelsFromJobStore();
+            updateStatus(i18n("Job archived."));
+            window->close();
+            return;
+        }
     }
+
+    // Legacy fallback
+    QModelIndexList matches = m_sessionModel->match(m_sessionModel->index(0, 0), SessionModel::IdRole, id, 1, Qt::MatchExactly);
+    if (!matches.isEmpty()) {
+      int row = matches.first().row();
+      QJsonObject session = m_sessionModel->getSession(row);
+      m_archiveModel->addSession(session);
+      m_sessionModel->removeSession(row);
+      updateStatus(i18n("Session archived."));
+    }
+    window->close();
   });
 
   connect(window, &SessionWindow::openPreviousAttemptRequested, this, [this](const QString &previousAttemptId) {
