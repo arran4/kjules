@@ -811,7 +811,13 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
             if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
                 firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
-              SessionWindow *window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+QString id = session.value(QStringLiteral("id")).toString();
+              SessionWindow *window = nullptr;
+              if (m_jobStore) {
+                  JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+                  if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
+              }
+              if (!window) window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
               connectSessionWindow(window);
               window->show();
               found = true;
@@ -1280,7 +1286,13 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
             if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
                 firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
-              SessionWindow *window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+QString id = session.value(QStringLiteral("id")).toString();
+              SessionWindow *window = nullptr;
+              if (m_jobStore) {
+                  JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+                  if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
+              }
+              if (!window) window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
               connectSessionWindow(window);
               window->show();
               found = true;
@@ -1311,7 +1323,13 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QJsonObject sessionData = m_archiveModel->getSession(mappedIdx.row());
           if (!sessionData.isEmpty()) {
-            SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
+QString id = sessionData.value(QStringLiteral("id")).toString();
+            SessionWindow *window = nullptr;
+            if (m_jobStore) {
+                JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+                if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
+            }
+            if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
             connectSessionWindow(window);
             window->show();
           } else {
@@ -1366,7 +1384,13 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
     if (!sessionData.isEmpty()) {
-      SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
+QString id = sessionData.value(QStringLiteral("id")).toString();
+      SessionWindow *window = nullptr;
+      if (m_jobStore) {
+          JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+          if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
+      }
+      if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
       connectSessionWindow(window);
       window->show();
     } else {
@@ -4846,8 +4870,13 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
   m_sessionModel->markAsRead(sessionId);
-  SessionWindow *window =
-      new SessionWindow(session, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+  SessionWindow *window = nullptr;
+      if (m_jobStore) {
+          JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
+          if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+      }
+      if (!window) window = new SessionWindow(session, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+      window->show();
   connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
     m_sessionModel->addSession(s);
     m_sessionModel->saveSessions();
@@ -4872,8 +4901,13 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   } else {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
     m_sessionModel->markAsRead(sessionId);
-    SessionWindow *window =
-        new SessionWindow(sessionData, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+    SessionWindow *window = nullptr;
+        if (m_jobStore) {
+            JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
+            if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+        }
+        if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+        window->show();
     connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
       m_sessionModel->addSession(s);
       m_sessionModel->saveSessions();
@@ -6182,7 +6216,13 @@ void MainWindow::processSessionModel(SessionModel *model, int &sessionCount) {
           }
         }
         if (!sessionData.isEmpty()) {
-          SessionWindow *window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, isManaged, this);
+QString id = sessionData.value(QStringLiteral("id")).toString();
+          SessionWindow *window = nullptr;
+          if (m_jobStore) {
+              JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+              if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, isManaged, this);
+          }
+          if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, isManaged, this);
           connectSessionWindow(window);
           window->show();
         } else {

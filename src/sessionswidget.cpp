@@ -1,4 +1,5 @@
 #include "sessionswidget.h"
+#include "jobstore.h"
 #include "apimanager.h"
 #include "sessionmodel.h"
 #include "sessionswindow.h"
@@ -307,10 +308,19 @@ void SessionsWidget::onListViewDoubleClicked(const QModelIndex &index) {
   if (!index.isValid())
     return;
   QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
-  QJsonObject session = m_model->getSession(sourceIndex.row());
+QJsonObject session = m_model->getSession(sourceIndex.row());
   QString id = session.value(QStringLiteral("id")).toString();
   bool isManaged = m_managedModel && m_managedModel->contains(id);
-  SessionWindow *sessionWindow = new SessionWindow(session, m_apiManager, m_errorsModel, isManaged, this);
+  SessionWindow *sessionWindow = nullptr;
+  if (m_jobStore) {
+      JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+      if (job) {
+          sessionWindow = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, isManaged, this);
+      }
+  }
+  if (!sessionWindow) {
+      sessionWindow = new SessionWindow(session, m_apiManager, m_errorsModel, isManaged, this);
+  }
   sessionWindow->show();
 }
 

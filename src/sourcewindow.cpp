@@ -1,4 +1,5 @@
 #include "sourcewindow.h"
+#include "jobstore.h"
 #include "activitylogwindow.h"
 #include "apimanager.h"
 #include "blockedtreemodel.h"

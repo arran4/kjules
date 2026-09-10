@@ -5,6 +5,7 @@
 #include <KXmlGuiWindow>
 
 class SourceModel;
+class JobStore;
 class SessionModel;
 class QueueModel;
 class ErrorsModel;
@@ -70,6 +71,7 @@ private:
   ErrorsModel *m_errorsModel;
   BlockedTreeModel *m_blockedTreeModel;
   APIManager *m_apiManager;
+  JobStore *m_jobStore = nullptr;
 
   QTabWidget *m_tabWidget;
   QWidget *m_queuedBlockedTab = nullptr;

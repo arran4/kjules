@@ -61,6 +61,38 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+SessionWindow::SessionWindow(const QString &jobId, JobStore *jobStore, APIManager *apiManager, ErrorsModel *errorsModel,
+                         bool isManaged, QWidget *parent)
+    : KXmlGuiWindow(parent), m_jobId(jobId), m_jobStore(jobStore), m_apiManager(apiManager), m_isManaged(isManaged), m_tabWidget(nullptr),
+      m_errorsModel(errorsModel), m_statusLabel(nullptr), m_unseenErrorLabel(nullptr), m_autoRefreshTimer(new QTimer(this)),
+      m_autoRefreshCombo(nullptr) {
+
+  if (m_jobStore) {
+      JobData *jobOpt = m_jobStore->getJobById(m_jobId);
+      if (jobOpt && !jobOpt->attempts.isEmpty()) {
+          m_currentAttemptId = jobOpt->acceptedAttemptId.isEmpty() ? jobOpt->attempts.first().id : jobOpt->acceptedAttemptId;
+      }
+  }
+
+  setupUi(QJsonObject());
+  setupActions();
+
+  if (m_isManaged) {
+    if (m_apiManager) {
+      connect(m_apiManager, &APIManager::sessionReloaded, this, &SessionWindow::onSessionReloaded);
+      connect(m_apiManager, &APIManager::activitiesReceived, this, &SessionWindow::onActivitiesReceived);
+      connect(m_apiManager, &APIManager::messageSent, this, &SessionWindow::onMessageSent);
+      connect(m_apiManager, &APIManager::messageSendFailed, this, &SessionWindow::onMessageSendFailed);
+      connect(m_apiManager, &APIManager::errorOccurred, this,
+              [this](const QString &error, bool) { m_statusErrorDetails = error; });
+      connect(m_apiManager, &APIManager::errorOccurredWithResponse, this,
+              [this](const QString &error, const QString &, bool) { m_statusErrorDetails = error; });
+    }
+  }
+
+  connect(m_autoRefreshTimer, &QTimer::timeout, this, [this]() { refreshSession(true); });
+}
+
 SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel,
                              bool isManaged, QWidget *parent)
     : KXmlGuiWindow(parent), m_sessionData(sessionData), m_apiManager(apiManager), m_isManaged(isManaged),
