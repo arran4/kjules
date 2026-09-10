@@ -4793,23 +4793,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
         }
     }
   });
-  connect(window, &SessionWindow::retryAttemptRequested, this, [this](const QString &jobId, const QString &attemptId) {
-    if (m_jobStore) {
-        JobData *job = m_jobStore->getJobById(jobId);
-        if (job) {
-            for (const auto &attempt : job->attempts) {
-                if (attempt.id == attemptId) {
-                    QueueItem item;
-                    item.requestData = attempt.requestSnapshot;
-                    item.jobId = jobId;
-                    m_queueModel->enqueueItem(item);
-                    updateStatus(i18n("Retrying failed attempt for Job %1", jobId));
-                    return;
-                }
-            }
-        }
-    }
-  });
+
   connect(window, &SessionWindow::newAttemptRequested, this, [this](const QString &jobId, const QJsonObject &request) {
   if (!jobId.isEmpty() && m_jobStore) {
       JobData *job = m_jobStore->getJobById(jobId);
