@@ -811,13 +811,15 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
             if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
                 firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
-QString id = session.value(QStringLiteral("id")).toString();
+              QString id = session.value(QStringLiteral("id")).toString();
               SessionWindow *window = nullptr;
               if (m_jobStore) {
-                  JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
-                  if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
+                JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+                if (job)
+                  window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
               }
-              if (!window) window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+              if (!window)
+                window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
               connectSessionWindow(window);
               window->show();
               found = true;
@@ -1286,13 +1288,15 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
             if (m_archiveModel->data(m_archiveModel->index(i, 0), SessionModel::IdRole).toString() ==
                 firstPreviousAttemptId) {
               QJsonObject session = m_archiveModel->getSession(i);
-QString id = session.value(QStringLiteral("id")).toString();
+              QString id = session.value(QStringLiteral("id")).toString();
               SessionWindow *window = nullptr;
               if (m_jobStore) {
-                  JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
-                  if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
+                JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+                if (job)
+                  window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
               }
-              if (!window) window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+              if (!window)
+                window = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
               connectSessionWindow(window);
               window->show();
               found = true;
@@ -1323,13 +1327,15 @@ QString id = session.value(QStringLiteral("id")).toString();
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
           QJsonObject sessionData = m_archiveModel->getSession(mappedIdx.row());
           if (!sessionData.isEmpty()) {
-QString id = sessionData.value(QStringLiteral("id")).toString();
+            QString id = sessionData.value(QStringLiteral("id")).toString();
             SessionWindow *window = nullptr;
             if (m_jobStore) {
-                JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
-                if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
+              JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+              if (job)
+                window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
             }
-            if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
+            if (!window)
+              window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
             connectSessionWindow(window);
             window->show();
           } else {
@@ -1384,13 +1390,15 @@ QString id = sessionData.value(QStringLiteral("id")).toString();
     QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
     QJsonObject sessionData = m_archiveModel->getSession(sourceIndex.row());
     if (!sessionData.isEmpty()) {
-QString id = sessionData.value(QStringLiteral("id")).toString();
+      QString id = sessionData.value(QStringLiteral("id")).toString();
       SessionWindow *window = nullptr;
       if (m_jobStore) {
-          JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
-          if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
+        JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+        if (job)
+          window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
       }
-      if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
+      if (!window)
+        window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, true, this);
       connectSessionWindow(window);
       window->show();
     } else {
@@ -1666,7 +1674,7 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
   QVBoxLayout *errLayout = new QVBoxLayout(tab);
   // Errors View
   m_errorsFilter = new QLineEdit(this);
-  m_errorsFilter->setPlaceholderText(i18n("Filter errors..."));
+  m_errorsFilter->setPlaceholderText(i18n("Filter diagnostics..."));
   errLayout->addWidget(m_errorsFilter);
   m_errorsView = new QListView(this);
   errLayout->addWidget(m_errorsView);
@@ -1691,45 +1699,8 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         m_errorsView->setCurrentIndex(index);
       }
       QMenu menu;
-      QAction *editAction = menu.addAction(i18n("Edit / Modify"));
       QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
-      QAction *requeueAction = menu.addAction(i18n("Requeue"));
-      QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
       QAction *deleteAction = menu.addAction(i18n("Delete"));
-
-      connect(editAction, &QAction::triggered, [this]() {
-        QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
-        for (const QModelIndex &idx : selectedRows) {
-          onErrorActivated(idx);
-        }
-      });
-
-      connect(copyTemplateAction, &QAction::triggered, [this, index]() {
-        SaveDialog dlg(QStringLiteral("Template"), this);
-        if (dlg.exec() == QDialog::Accepted) {
-          QJsonObject errData = m_errorsModel->getError(index.row());
-          QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-          req[QStringLiteral("name")] = dlg.nameOrComment();
-          req[QStringLiteral("description")] = dlg.description();
-          m_templatesModel->addTemplate(req);
-          updateStatus(i18n("Template created from error item."));
-        }
-      });
-
-      connect(requeueAction, &QAction::triggered, [this]() {
-        QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
-        QList<int> rowsToRequeue = getUniqueSortedRows(selectedRows, m_errorsView);
-
-        for (int row : rowsToRequeue) {
-          QJsonObject errData = m_errorsModel->getError(row);
-          QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-          m_queueModel->enqueue(req);
-          m_errorsModel->removeError(row);
-        }
-        if (!rowsToRequeue.isEmpty()) {
-          updateStatus(i18np("Requeued 1 error item.", "Requeued %1 error items.", rowsToRequeue.size()));
-        }
-      });
 
       connect(rawTranscriptAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
@@ -1744,78 +1715,15 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
           ErrorWindow *window = new ErrorWindow(
               idx.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr,
               httpDetails, errorDetails, this);
-          connect(window, &ErrorWindow::editRequested, [this](int row) {
-            QModelIndex idx = m_errorsModel->index(row, 0);
-            onErrorActivated(idx);
-          });
           connect(window, &ErrorWindow::deleteRequested, [this](int row) {
             m_errorsModel->removeError(row);
-            updateStatus(i18n("Error removed."));
+            updateStatus(i18n("Diagnostic removed."));
           });
-          connect(window, &ErrorWindow::draftRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            m_draftsModel->addDraft(req);
-            m_errorsModel->removeError(row);
-            updateStatus(i18n("Error converted to draft."));
-          });
-          connect(window, &ErrorWindow::templateRequested, [this](int row) {
-            SaveDialog dlg(QStringLiteral("Template"), this);
-            if (dlg.exec() == QDialog::Accepted) {
-              QJsonObject errData = m_errorsModel->getError(row);
-              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-              req[QStringLiteral("name")] = dlg.nameOrComment();
-              req[QStringLiteral("description")] = dlg.description();
-              m_templatesModel->addTemplate(req);
-              updateStatus(i18n("Template created from error item."));
-            }
-          });
-          connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            m_errorsModel->removeError(row);
-
-            QueueItem item;
-            item.requestData = req;
-            sendItemNow(item, row, false, errData);
-
-            updateStatus(i18n("Sending error item immediately..."));
-          });
-          connect(window, &ErrorWindow::remapSourceRequested, [this](int row) {
-            const QString source = SourceFixer::source(m_errorsModel->getError(row));
-            showFixSourcesDialog(source);
-          });
-          connect(window, &ErrorWindow::requeueRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            m_errorsModel->removeError(row);
-            m_queueModel->enqueue(req);
-            updateStatus(i18n("Error item requeued."));
-          });
-
-          connect(window, &ErrorWindow::requeueRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            QueueItem item;
-            item.requestData = req;
-            if (errData.contains(QStringLiteral("pastErrors"))) {
-              item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
-            }
-            QJsonObject strippedError = errData;
-            strippedError.remove(QStringLiteral("pastErrors"));
-            item.pastErrors.append(strippedError);
-            m_queueModel->enqueueItem(item);
-            m_errorsModel->removeError(row);
-            updateStatus(i18n("Error requeued."));
-          });
-
           window->setAttribute(Qt::WA_DeleteOnClose);
           window->show();
         }
       });
-
       connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteErrors);
-
       menu.exec(m_errorsView->mapToGlobal(pos));
     }
   });
@@ -2012,7 +1920,7 @@ void MainWindow::updateTabTitles() {
       m_tabWidget->setTabText(i, count > 0 ? i18n("Templates (%1)", count) : i18n("Templates"));
     } else if (page == m_errorsView->parentWidget()) {
       int count = m_errorsModel->rowCount();
-      m_tabWidget->setTabText(i, count > 0 ? i18n("Errors (%1)", count) : i18n("Errors"));
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Diagnostics (%1)", count) : i18n("Errors"));
     } else if (page == m_queueView) {
       int count = m_queueModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Queue (%1)", count) : i18n("Queue"));
@@ -4871,12 +4779,15 @@ void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
   m_sessionModel->markAsRead(sessionId);
   SessionWindow *window = nullptr;
-      if (m_jobStore) {
-          JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
-          if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
-      }
-      if (!window) window = new SessionWindow(session, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
-      window->show();
+  if (m_jobStore) {
+    JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
+    if (job)
+      window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId),
+                                 this);
+  }
+  if (!window)
+    window = new SessionWindow(session, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+  window->show();
   connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
     m_sessionModel->addSession(s);
     m_sessionModel->saveSessions();
@@ -4902,12 +4813,15 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
     QString sessionId = sessionData.value(QStringLiteral("id")).toString();
     m_sessionModel->markAsRead(sessionId);
     SessionWindow *window = nullptr;
-        if (m_jobStore) {
-            JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
-            if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
-        }
-        if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
-        window->show();
+    if (m_jobStore) {
+      JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
+      if (job)
+        window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel,
+                                   m_sessionModel->contains(sessionId), this);
+    }
+    if (!window)
+      window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
+    window->show();
     connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
       m_sessionModel->addSession(s);
       m_sessionModel->saveSessions();
@@ -6216,13 +6130,15 @@ void MainWindow::processSessionModel(SessionModel *model, int &sessionCount) {
           }
         }
         if (!sessionData.isEmpty()) {
-QString id = sessionData.value(QStringLiteral("id")).toString();
+          QString id = sessionData.value(QStringLiteral("id")).toString();
           SessionWindow *window = nullptr;
           if (m_jobStore) {
-              JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
-              if (job) window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, isManaged, this);
+            JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+            if (job)
+              window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, isManaged, this);
           }
-          if (!window) window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, isManaged, this);
+          if (!window)
+            window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, isManaged, this);
           connectSessionWindow(window);
           window->show();
         } else {

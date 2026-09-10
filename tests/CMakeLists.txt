@@ -86,3 +86,7 @@ add_executable(test_migration_decoupling test_migration_decoupling.cpp
 )
 target_link_libraries(test_migration_decoupling Qt6::Test Qt6::Widgets Qt6::Network KF6::I18n KF6::ConfigCore KF6::XmlGui)
 add_test(NAME test_migration_decoupling COMMAND test_migration_decoupling)
+
+add_executable(test_sessionwindow test_sessionwindow.cpp ../src/sessionwindow.cpp ../src/jobstore.cpp ../src/jobdata.cpp ../src/activitybrowser.cpp ../src/apimanager.cpp ../src/api/apierror.cpp ../src/sessionrequestbuilder.cpp ../src/clickablelabel.cpp ../src/kjules.qrc ../src/errorsmodel.cpp ../src/activitylogwindow.cpp)
+target_link_libraries(test_sessionwindow Qt6::Test Qt6::Concurrent KF6::XmlGui KF6::Notifications KF6::Wallet KF6::GlobalAccel KF6::Archive Qt6::Network KF6::ConfigWidgets KF6::ColorScheme KF6::I18n KF6::ConfigGui KF6::CoreAddons KF6::WidgetsAddons Qt6::Widgets Qt6::Xml KF6::GuiAddons KF6::ConfigCore Qt6::Gui Qt6::DBus Qt6::Core)
+add_test(NAME SessionWindowTest COMMAND test_sessionwindow)

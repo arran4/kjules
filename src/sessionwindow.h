@@ -1,7 +1,6 @@
 #ifndef SESSIONWINDOW_H
 #define SESSIONWINDOW_H
 
-
 #include <KXmlGuiWindow>
 #include <QJsonObject>
 #include <QSortFilterProxyModel>
@@ -32,6 +31,12 @@ public:
            m_sessionId; // SessionIdRole is usually +4 in ErrorsModel
   }
 
+public:
+  void setSessionId(const QString &id) {
+    m_sessionId = id;
+    invalidate();
+  }
+
 private:
   QString m_sessionId;
 };
@@ -42,15 +47,13 @@ class SessionWindow : public KXmlGuiWindow {
 Q_SIGNALS:
   void openPreviousAttemptRequested(const QString &previousAttemptId);
 
-
 public:
-  explicit SessionWindow(const QString &jobId, JobStore *jobStore, APIManager *apiManager, ErrorsModel *errorsModel = nullptr,
-                         bool isManaged = true, QWidget *parent = nullptr);
+  explicit SessionWindow(const QString &jobId, JobStore *jobStore, APIManager *apiManager,
+                         ErrorsModel *errorsModel = nullptr, bool isManaged = true, QWidget *parent = nullptr);
   explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel = nullptr,
                          bool isManaged = true, QWidget *parent = nullptr);
 
   ~SessionWindow();
-
 
 private:
   void setupUi(const QJsonObject &sessionData);
@@ -68,7 +71,6 @@ private:
   void duplicateSession();
   void updateAutoRefresh();
   void renderDetailsAndDiff();
-
 
   QJsonObject m_sessionData;
   QString m_jobId;

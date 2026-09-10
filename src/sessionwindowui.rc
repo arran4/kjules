@@ -5,14 +5,21 @@
     <Menu name="file"><text>&amp;File</text>
       <Action name="close_window"/>
     </Menu>
-    <Menu name="session"><text>&amp;Session</text>
+    <Menu name="job"><text>&amp;Job</text>
+      <Action name="launch_new_attempt"/>
+      <Action name="launch_variant"/>
+      <Action name="retry_attempt"/>
+      <Action name="new_job_from"/>
+      <Separator/>
+      <Action name="choose_winner"/>
+      <Separator/>
       <Action name="refresh_session"/>
       <Action name="duplicate_session"/>
       <Action name="save_template"/>
       <Separator/>
       <Action name="watch_session"/>
-      <Action name="archive_session"/>
-      <Action name="delete_session"/>
+      <Action name="archive_job"/>
+      <Action name="delete_job"/>
     </Menu>
     <Menu name="links"><text>&amp;Links</text>
       <Action name="open_jules"/>

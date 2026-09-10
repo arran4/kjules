@@ -1,5 +1,7 @@
 #include "sessionwindow.h"
 
+#include <KActionCollection>
+#include <KLocalizedString>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
@@ -9,29 +11,24 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QListWidget>
+#include <QListWidgetItem>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSplitter>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QSplitter>
-#include <QStackedWidget>
-#include <QListWidget>
-#include <QListWidgetItem>
-#include <KActionCollection>
-#include <KLocalizedString>
 
-#include "activitybrowser.h"
-#include "apimanager.h"
-#include "clickablelabel.h"
-#include "jobstore.h"
 #include "activitybrowser.h"
 #include "activitylogwindow.h"
 #include "apimanager.h"
 #include "clickablelabel.h"
 #include "errorsmodel.h"
+#include "jobstore.h"
 #include "sourcestatuswidget.h"
 #include "utils.h"
 #include <KActionCollection>
@@ -62,20 +59,47 @@
 #include <QVBoxLayout>
 
 SessionWindow::SessionWindow(const QString &jobId, JobStore *jobStore, APIManager *apiManager, ErrorsModel *errorsModel,
-                         bool isManaged, QWidget *parent)
-    : KXmlGuiWindow(parent), m_jobId(jobId), m_jobStore(jobStore), m_apiManager(apiManager), m_isManaged(isManaged), m_tabWidget(nullptr),
-      m_errorsModel(errorsModel), m_statusLabel(nullptr), m_unseenErrorLabel(nullptr), m_autoRefreshTimer(new QTimer(this)),
-      m_autoRefreshCombo(nullptr) {
+                             bool isManaged, QWidget *parent)
+    : KXmlGuiWindow(parent), m_jobId(jobId), m_jobStore(jobStore), m_apiManager(apiManager), m_isManaged(isManaged),
+      m_tabWidget(nullptr), m_errorsModel(errorsModel), m_statusLabel(nullptr), m_unseenErrorLabel(nullptr),
+      m_autoRefreshTimer(new QTimer(this)), m_autoRefreshCombo(nullptr) {
+
+  setObjectName(QStringLiteral("SessionWindow_Job_%1").arg(jobId));
+  setAttribute(Qt::WA_DeleteOnClose);
 
   if (m_jobStore) {
-      JobData *jobOpt = m_jobStore->getJobById(m_jobId);
-      if (jobOpt && !jobOpt->attempts.isEmpty()) {
-          m_currentAttemptId = jobOpt->acceptedAttemptId.isEmpty() ? jobOpt->attempts.first().id : jobOpt->acceptedAttemptId;
-      }
+    JobData *jobOpt = m_jobStore->getJobById(m_jobId);
+    if (jobOpt && !jobOpt->attempts.isEmpty()) {
+      m_currentAttemptId =
+          jobOpt->acceptedAttemptId.isEmpty() ? jobOpt->attempts.first().id : jobOpt->acceptedAttemptId;
+    }
   }
 
   setupUi(QJsonObject());
   setupActions();
+  setupGUI(Default, QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "sessionwindowui.rc"));
+
+  m_autoRefreshCombo = new QComboBox(this);
+  m_autoRefreshCombo->addItem(i18n("Disabled"));
+  m_autoRefreshCombo->addItem(i18n("30 Seconds"));
+  m_autoRefreshCombo->addItem(i18n("1 Minute"));
+  m_autoRefreshCombo->addItem(i18n("5 Minutes"));
+  m_autoRefreshCombo->addItem(i18n("10 Minutes"));
+  m_autoRefreshCombo->addItem(i18n("30 Minutes"));
+  connect(m_autoRefreshCombo, &QComboBox::currentIndexChanged, this, &SessionWindow::updateAutoRefresh);
+
+  if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
+    QAction *closeAct = actionCollection()->action(QStringLiteral("close_window"));
+    tb->insertWidget(closeAct, new QLabel(i18n(" Auto Refresh: "), this));
+    tb->insertWidget(closeAct, m_autoRefreshCombo);
+    tb->insertSeparator(closeAct);
+    tb->show();
+  }
+
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  int autoRefreshIndex = config.readEntry("AutoRefreshIndex", 0);
+  m_autoRefreshCombo->setCurrentIndex(autoRefreshIndex);
+  updateAutoRefresh();
 
   if (m_isManaged) {
     if (m_apiManager) {
@@ -117,6 +141,15 @@ SessionWindow::SessionWindow(const QJsonObject &sessionData, APIManager *apiMana
   setupActions();
   setupGUI(Default, QStringLiteral(KJULES_KXMLGUI_RESOURCE_PREFIX "sessionwindowui.rc"));
 
+  m_autoRefreshCombo = new QComboBox(this);
+  m_autoRefreshCombo->addItem(i18n("Disabled"));
+  m_autoRefreshCombo->addItem(i18n("30 Seconds"));
+  m_autoRefreshCombo->addItem(i18n("1 Minute"));
+  m_autoRefreshCombo->addItem(i18n("5 Minutes"));
+  m_autoRefreshCombo->addItem(i18n("10 Minutes"));
+  m_autoRefreshCombo->addItem(i18n("30 Minutes"));
+  connect(m_autoRefreshCombo, &QComboBox::currentIndexChanged, this, &SessionWindow::updateAutoRefresh);
+
   if (auto *tb = toolBar(QStringLiteral("mainToolBar"))) {
     QAction *closeAct = actionCollection()->action(QStringLiteral("close_window"));
     tb->insertWidget(closeAct, new QLabel(i18n(" Auto Refresh: "), this));
@@ -139,6 +172,76 @@ SessionWindow::~SessionWindow() {
 
 void SessionWindow::setupActions() {
   // Add core actions to actionCollection
+
+  QAction *launchNewAttemptAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("media-playback-start")), i18n("Launch New Attempt"), this);
+  connect(launchNewAttemptAction, &QAction::triggered, this, [this]() {
+    // Create new attempt from job canonical
+    Q_EMIT duplicateRequested(m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+  });
+  actionCollection()->addAction(QStringLiteral("launch_new_attempt"), launchNewAttemptAction);
+
+  QAction *launchVariantAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."), this);
+  connect(launchVariantAction, &QAction::triggered, this, [this]() {
+    Q_EMIT duplicateRequested(m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+  });
+  actionCollection()->addAction(QStringLiteral("launch_variant"), launchVariantAction);
+
+  QAction *retryAttemptAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Retry Failed Attempt"), this);
+  connect(retryAttemptAction, &QAction::triggered, this, [this]() { Q_EMIT duplicateRequested(currentSessionData()); });
+  actionCollection()->addAction(QStringLiteral("retry_attempt"), retryAttemptAction);
+
+  QAction *newJobFromAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("window-new")), i18n("New Job From This..."), this);
+  connect(newJobFromAction, &QAction::triggered, this, [this]() {
+    Q_EMIT duplicateRequested(currentSessionData()); // Main window will need to distinguish these later
+  });
+  actionCollection()->addAction(QStringLiteral("new_job_from"), newJobFromAction);
+
+  QAction *chooseWinnerAction =
+      new QAction(QIcon::fromTheme(QStringLiteral("dialog-ok-apply")), i18n("Choose as Winner"), this);
+  connect(chooseWinnerAction, &QAction::triggered, this, [this]() {
+    if (m_jobStore && !m_jobId.isEmpty() && !m_currentAttemptId.isEmpty()) {
+      JobData *job = m_jobStore->getJobById(m_jobId);
+      if (job) {
+        job->acceptedAttemptId = m_currentAttemptId;
+        m_jobStore->updateJob(*job);
+        m_jobStore->save();
+        updateAttemptList();
+      }
+    }
+  });
+  actionCollection()->addAction(QStringLiteral("choose_winner"), chooseWinnerAction);
+
+  QAction *archiveJobAction = new QAction(QIcon::fromTheme(QStringLiteral("archive")), i18n("Archive Job"), this);
+  connect(archiveJobAction, &QAction::triggered, this, [this]() {
+    if (m_jobStore) {
+      Q_EMIT archiveRequested(m_jobId); // Overloaded to take job ID if it exists?
+                                        // MainWindow uses Session ID right now.
+    } else {
+      Q_EMIT archiveRequested(currentSessionData().value(QStringLiteral("id")).toString());
+    }
+  });
+  actionCollection()->addAction(QStringLiteral("archive_job"), archiveJobAction);
+
+  QAction *deleteJobAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete Job"), this);
+  connect(deleteJobAction, &QAction::triggered, this, [this]() {
+    if (QMessageBox::question(
+            this, i18n("Confirm Delete"),
+            i18n("Are you sure you want to delete this Job and all its attempts? This cannot be undone.")) ==
+        QMessageBox::Yes) {
+      if (m_jobStore) {
+        m_jobStore->removeJob(m_jobId);
+        m_jobStore->save();
+        close();
+      }
+    }
+  });
+  actionCollection()->addAction(QStringLiteral("delete_job"), deleteJobAction);
+
+  // Re-map the existing Zero Attempt layout buttons
   QAction *refreshAction = new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
   actionCollection()->addAction(QStringLiteral("refresh_session"), refreshAction);
   actionCollection()->setDefaultShortcut(refreshAction, QKeySequence(Qt::Key_F5));
@@ -168,7 +271,8 @@ void SessionWindow::setupActions() {
   connect(saveTemplateAction, &QAction::triggered, this, [this]() {
     QJsonObject templateData;
     templateData[QStringLiteral("prompt")] = currentSessionData().value(QStringLiteral("prompt")).toString();
-    templateData[QStringLiteral("automationMode")] = currentSessionData().value(QStringLiteral("automationMode")).toString();
+    templateData[QStringLiteral("automationMode")] =
+        currentSessionData().value(QStringLiteral("automationMode")).toString();
     Q_EMIT templateRequested(templateData);
   });
   actionCollection()->addAction(QStringLiteral("save_template"), saveTemplateAction);
@@ -305,25 +409,25 @@ void SessionWindow::onSessionReloaded(const QJsonObject &session, bool isBackgro
   QString currentId = currentSessionData().value(QStringLiteral("id")).toString();
   if (session.value(QStringLiteral("id")).toString() == currentId) {
     if (m_jobStore) {
-        JobData* job = m_jobStore->getJobById(m_jobId);
-        if (job) {
-            for (auto& attempt : job->attempts) {
-                if (attempt.id == m_currentAttemptId) {
-                    attempt.rawResponse = session;
-                    attempt.julesState = session.value(QStringLiteral("state")).toString();
-                    m_jobStore->save();
-                    break;
-                }
-            }
+      JobData *job = m_jobStore->getJobById(m_jobId);
+      if (job) {
+        for (auto &attempt : job->attempts) {
+          if (attempt.id == m_currentAttemptId) {
+            attempt.rawResponse = session;
+            attempt.julesState = session.value(QStringLiteral("state")).toString();
+            m_jobStore->save();
+            break;
+          }
         }
+      }
     } else {
-        m_sessionData = session;
-        m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+      m_sessionData = session;
+      m_sessionData[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
     }
 
     if (m_statusLabel)
-      m_statusLabel->setText(
-          i18n("Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
+      m_statusLabel->setText(i18n("Refreshed at %1", QDateTime::currentDateTime().toString(
+                                                         QLocale::system().dateFormat(QLocale::ShortFormat))));
 
     renderDetailsAndDiff();
   }
@@ -412,42 +516,41 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId, const QJsonAr
       "Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
 }
 
-
 QJsonObject SessionWindow::currentSessionData() const {
   if (m_jobStore) {
-      JobData *job = m_jobStore->getJobById(m_jobId);
-      if (job) {
-          for (const auto& attempt : job->attempts) {
-              if (attempt.id == m_currentAttemptId) {
-                  QJsonObject data = attempt.requestSnapshot;
-                  QJsonObject outputs;
-                  if (attempt.rawResponse.contains(QStringLiteral("outputs"))) {
-                      outputs = attempt.rawResponse;
-                  }
-
-                  // Keep ID to allow refresh etc
-                  data[QStringLiteral("id")] = attempt.julesSessionId;
-                  data[QStringLiteral("state")] = attempt.julesState;
-
-                  if (!outputs.isEmpty()) {
-                      data[QStringLiteral("outputs")] = outputs.value(QStringLiteral("outputs"));
-                  }
-                  if (attempt.rawResponse.contains(QStringLiteral("turns"))) {
-                      data[QStringLiteral("turns")] = attempt.rawResponse.value(QStringLiteral("turns"));
-                  }
-                  if (attempt.rawResponse.contains(QStringLiteral("githubPrInfo"))) {
-                      data[QStringLiteral("githubPrInfo")] = attempt.rawResponse.value(QStringLiteral("githubPrInfo"));
-                  }
-
-                  // Use canonical request for display title etc if missing in snapshot
-                  if (!data.contains(QStringLiteral("title"))) {
-                      data[QStringLiteral("title")] = job->canonicalRequest.value(QStringLiteral("title"));
-                  }
-
-                  return data;
-              }
+    JobData *job = m_jobStore->getJobById(m_jobId);
+    if (job) {
+      for (const auto &attempt : job->attempts) {
+        if (attempt.id == m_currentAttemptId) {
+          QJsonObject data = attempt.requestSnapshot;
+          QJsonObject outputs;
+          if (attempt.rawResponse.contains(QStringLiteral("outputs"))) {
+            outputs = attempt.rawResponse;
           }
+
+          // Keep ID to allow refresh etc
+          data[QStringLiteral("id")] = attempt.julesSessionId;
+          data[QStringLiteral("state")] = attempt.julesState;
+
+          if (!outputs.isEmpty()) {
+            data[QStringLiteral("outputs")] = outputs.value(QStringLiteral("outputs"));
+          }
+          if (attempt.rawResponse.contains(QStringLiteral("turns"))) {
+            data[QStringLiteral("turns")] = attempt.rawResponse.value(QStringLiteral("turns"));
+          }
+          if (attempt.rawResponse.contains(QStringLiteral("githubPrInfo"))) {
+            data[QStringLiteral("githubPrInfo")] = attempt.rawResponse.value(QStringLiteral("githubPrInfo"));
+          }
+
+          // Use canonical request for display title etc if missing in snapshot
+          if (!data.contains(QStringLiteral("title"))) {
+            data[QStringLiteral("title")] = job->canonicalRequest.value(QStringLiteral("title"));
+          }
+
+          return data;
+        }
       }
+    }
   }
   return m_sessionData;
 }
@@ -655,8 +758,31 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
   QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
+  m_splitter = new QSplitter(Qt::Horizontal, this);
+  mainLayout->addWidget(m_splitter);
+
+  m_attemptList = new QListWidget(this);
+  m_splitter->addWidget(m_attemptList);
+
+  connect(m_attemptList, &QListWidget::itemClicked, this, &SessionWindow::onAttemptSelected);
+
+  m_contentStack = new QStackedWidget(this);
+  m_splitter->addWidget(m_contentStack);
+
+  m_splitter->setStretchFactor(0, 1);
+  m_splitter->setStretchFactor(1, 4);
+
+  m_zeroAttemptWidget = new QWidget(this);
+  new QVBoxLayout(m_zeroAttemptWidget);
+  // It is populated by renderZeroAttempts()
+  m_contentStack->addWidget(m_zeroAttemptWidget);
+
+  m_detailsWidget = new QWidget(this);
+  QVBoxLayout *detailsLayout = new QVBoxLayout(m_detailsWidget);
+
   m_tabWidget = new QTabWidget(this);
-  mainLayout->addWidget(m_tabWidget);
+  detailsLayout->addWidget(m_tabWidget);
+  m_contentStack->addWidget(m_detailsWidget);
 
   m_detailsBrowser = new QTextBrowser(this);
   m_detailsBrowser->setOpenExternalLinks(false);
@@ -725,6 +851,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   QListView *errorView = new QListView(m_errorTab);
   SessionErrorFilterProxyModel *errorProxy =
       new SessionErrorFilterProxyModel(currentSessionData().value(QStringLiteral("id")).toString(), m_errorTab);
+  errorProxy->setObjectName(QStringLiteral("errorProxy")); // Important for later updates
   errorProxy->setSourceModel(m_errorsModel);
   errorView->setModel(errorProxy);
   errorLayout->addWidget(errorView);
@@ -771,34 +898,36 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
 
   connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() { m_tabWidget->setCurrentWidget(m_errorTab); });
 
-  statusBar()->addWidget(m_unseenErrorLabel); // Need a statusBar? SessionWindow is a KXmlGuiWindow, it has statusBar()
+  statusBar()->addWidget(m_unseenErrorLabel);
 
-  QString title = sessionData.value(QStringLiteral("title")).toString();
-  QString sessionId = sessionData.value(QStringLiteral("id")).toString();
+  QString title;
+  QString sessionId;
+
+  if (m_jobStore) {
+    JobData *jobOpt = m_jobStore->getJobById(m_jobId);
+    if (jobOpt) {
+      title = jobOpt->canonicalRequest.value(QStringLiteral("title")).toString();
+    }
+    sessionId = m_currentAttemptId;
+  } else {
+    title = sessionData.value(QStringLiteral("title")).toString();
+    sessionId = sessionData.value(QStringLiteral("id")).toString();
+  }
+
   if (title.isEmpty()) {
     title = i18n("Details");
   }
   setWindowTitle(i18n("Session %1 - %2", sessionId, title));
 
-  renderDetailsAndDiff();
-
-  // Load activities initially if API manager exists, otherwise fallback to
-  // embedded in onActivitiesReceived
-  if (m_apiManager) {
-    if (m_statusLabel)
-      m_statusLabel->setText(i18n("Loading activities..."));
-    m_apiManager->listActivities(sessionId);
-  } else {
-    onActivitiesReceived(sessionId, QJsonArray());
-  }
-
   resize(800, 600);
 }
 
 void SessionWindow::renderZeroAttempts() {
-  if (!m_jobStore) return;
+  if (!m_jobStore)
+    return;
   JobData *jobOpt = m_jobStore->getJobById(m_jobId);
-  if (!jobOpt) return;
+  if (!jobOpt)
+    return;
 
   JobData job = *jobOpt;
 
@@ -814,7 +943,8 @@ void SessionWindow::renderZeroAttempts() {
 
   QVBoxLayout *zeroLayout = new QVBoxLayout(m_zeroAttemptWidget);
 
-  QLabel *titleLabel = new QLabel(i18n("<b>Job:</b> %1", job.canonicalRequest.value(QStringLiteral("title")).toString()), m_zeroAttemptWidget);
+  QLabel *titleLabel = new QLabel(
+      i18n("<b>Job:</b> %1", job.canonicalRequest.value(QStringLiteral("title")).toString()), m_zeroAttemptWidget);
   zeroLayout->addWidget(titleLabel);
 
   QLabel *idLabel = new QLabel(i18n("<b>ID:</b> %1", job.id), m_zeroAttemptWidget);
@@ -825,13 +955,17 @@ void SessionWindow::renderZeroAttempts() {
   QLabel *sourceLabel = new QLabel(i18n("<b>Source:</b> %1", source), m_zeroAttemptWidget);
   zeroLayout->addWidget(sourceLabel);
 
-  QString branch = sourceContext.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch")).toString();
+  QString branch = sourceContext.value(QStringLiteral("githubRepoContext"))
+                       .toObject()
+                       .value(QStringLiteral("startingBranch"))
+                       .toString();
   if (!branch.isEmpty()) {
-      QLabel *branchLabel = new QLabel(i18n("<b>Branch:</b> %1", branch), m_zeroAttemptWidget);
-      zeroLayout->addWidget(branchLabel);
+    QLabel *branchLabel = new QLabel(i18n("<b>Branch:</b> %1", branch), m_zeroAttemptWidget);
+    zeroLayout->addWidget(branchLabel);
   }
 
-  QLabel *statusLabel = new QLabel(i18n("<b>Status:</b> No remote Jules sessions (attempts) have been made yet."), m_zeroAttemptWidget);
+  QLabel *statusLabel =
+      new QLabel(i18n("<b>Status:</b> No remote Jules sessions (attempts) have been made yet."), m_zeroAttemptWidget);
   zeroLayout->addWidget(statusLabel);
 
   zeroLayout->addSpacing(10);
@@ -843,13 +977,34 @@ void SessionWindow::renderZeroAttempts() {
   promptBrowser->setPlainText(job.canonicalRequest.value(QStringLiteral("prompt")).toString());
   zeroLayout->addWidget(promptBrowser);
 
+  zeroLayout->addSpacing(10);
+
+  QHBoxLayout *buttonsLayout = new QHBoxLayout();
+  QPushButton *launchButton =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("media-playback-start")), i18n("Launch Attempt"));
+  connect(launchButton, &QPushButton::clicked, this, [this]() {
+    Q_EMIT duplicateRequested(m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+  });
+  buttonsLayout->addWidget(launchButton);
+
+  QPushButton *variantButton =
+      new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."));
+  connect(variantButton, &QPushButton::clicked, this, [this]() {
+    Q_EMIT duplicateRequested(m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+  });
+  buttonsLayout->addWidget(variantButton);
+  buttonsLayout->addStretch();
+  zeroLayout->addLayout(buttonsLayout);
+
   zeroLayout->addStretch();
 }
 
 void SessionWindow::updateAttemptList() {
-  if (!m_jobStore) return;
+  if (!m_jobStore)
+    return;
   JobData *jobOpt = m_jobStore->getJobById(m_jobId);
-  if (!jobOpt) return;
+  if (!jobOpt)
+    return;
 
   JobData job = *jobOpt;
 
@@ -894,11 +1049,22 @@ void SessionWindow::updateAttemptList() {
 }
 
 void SessionWindow::onAttemptSelected(QListWidgetItem *item) {
-  if (!item) return;
+  if (!item)
+    return;
   QString attemptId = item->data(Qt::UserRole).toString();
   if (attemptId != m_currentAttemptId) {
     m_currentAttemptId = attemptId;
     renderDetailsAndDiff();
+
+    // Update the error proxy filter if it exists
+    if (m_errorTab) {
+      SessionErrorFilterProxyModel *proxy =
+          m_errorTab->findChild<SessionErrorFilterProxyModel *>(QStringLiteral("errorProxy"));
+      if (proxy) {
+        proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
+      }
+    }
+
     refreshSession(false);
   }
 }
