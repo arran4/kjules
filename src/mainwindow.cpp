@@ -6506,11 +6506,16 @@ void MainWindow::syncModelsFromJobStore() {
     bool hasActiveAttempt = false;
     JobAttemptData latestAttempt;
     bool hasAnyAttempt = false;
+    bool hasFailedOnly = true;
 
     for (int j = 0; j < job.attempts.size(); ++j) {
       const JobAttemptData &attempt = job.attempts[j];
       hasAnyAttempt = true;
       latestAttempt = attempt;
+
+      if (attempt.julesState != QStringLiteral("ERROR_STATE") && attempt.julesState != QStringLiteral("FAILED")) {
+        hasFailedOnly = false;
+      }
 
       if (attempt.dispatchState == QStringLiteral("FAILED")) {
         item.errorCount++;
@@ -6530,40 +6535,47 @@ void MainWindow::syncModelsFromJobStore() {
       }
     }
 
-    QString status = job.lifecycleMetadata.value(QStringLiteral("status")).toString();
+    if (job.attempts.isEmpty()) {
+        hasFailedOnly = false;
+    }
 
-    if (status == QStringLiteral("ERROR_STATE") || (status == QStringLiteral("QUEUED") && !hasActiveAttempt)) {
-      if (job.legacyMetadata.value(QStringLiteral("holding")).toBool(false)) {
+    QString status = job.lifecycleMetadata.value(QStringLiteral("status")).toString();
+    QString state = job.lifecycleMetadata.value(QStringLiteral("state")).toString();
+    bool isArchived = (state == QStringLiteral("archived") || job.legacyMetadata.value(QStringLiteral("_isArchive")).toString() == QStringLiteral("true"));
+
+    if (isArchived) {
+      QJsonObject projection = job.canonicalRequest;
+      projection[QStringLiteral("id")] = job.id;
+      projection[QStringLiteral("state")] = state;
+      projection[QStringLiteral("jobMode")] = true;
+      archiveArray.append(projection);
+    } else if (status == QStringLiteral("ERROR_STATE") || (status == QStringLiteral("QUEUED") && !hasActiveAttempt)) {
+      if (item.isBlocked) {
         holdingItems.append(item);
       } else {
         queueItems.append(item);
       }
     } else {
-      QJsonObject sessionObj;
+      QJsonObject projection;
       if (hasAnyAttempt) {
-        if (!latestAttempt.rawResponse.isEmpty()) {
-          sessionObj = latestAttempt.rawResponse;
-        } else {
-          sessionObj[QStringLiteral("id")] = job.id;
-          sessionObj[QStringLiteral("source")] = job.source;
-          sessionObj[QStringLiteral("prompt")] = job.prompt;
-          sessionObj[QStringLiteral("status")] = QStringLiteral("ERROR_STATE");
-          sessionObj[QStringLiteral("errorMsg")] = item.lastError;
+        projection = latestAttempt.rawResponse;
+        if (projection.isEmpty()) {
+            projection = latestAttempt.requestSnapshot;
         }
+        projection[QStringLiteral("state")] = hasFailedOnly ? QStringLiteral("ERROR_STATE") : latestAttempt.julesState;
+        projection[QStringLiteral("id")] = job.id; // Map back to job
+        projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
       } else {
-        sessionObj[QStringLiteral("id")] = job.id;
-        sessionObj[QStringLiteral("source")] = job.source;
-        sessionObj[QStringLiteral("prompt")] = job.prompt;
-        sessionObj[QStringLiteral("status")] = QStringLiteral("PENDING");
+        projection = job.canonicalRequest;
+        projection[QStringLiteral("id")] = job.id;
+        projection[QStringLiteral("state")] = QStringLiteral("PENDING");
       }
 
-      sessionObj[QStringLiteral("_kjules_job_id")] = job.id;
-
-      if (job.legacyMetadata.value(QStringLiteral("_isArchive")).toBool(false)) {
-        archiveArray.append(sessionObj);
-      } else if (status != QStringLiteral("ERROR_STATE") && status != QStringLiteral("QUEUED")) {
-        followingArray.append(sessionObj);
+      if (!projection.contains(QStringLiteral("title"))) {
+          projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title")).toString();
       }
+
+      followingArray.append(projection);
     }
   }
 
