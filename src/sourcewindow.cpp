@@ -335,7 +335,17 @@ void SourceWindow::setupArchivedTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_archiveModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+    SessionWindow *win = nullptr;
+    QString id = session.value(QStringLiteral("id")).toString();
+    if (m_jobStore) {
+      JobData *job = m_jobStore->getJobBySessionId(id);
+      if (job) {
+        win = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
+      }
+    }
+    if (!win) {
+      win = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+    }
     win->show();
   });
 

@@ -28,6 +28,7 @@
 #include "savedialog.h"
 #include "sessiondelegate.h"
 #include "sessionmodel.h"
+#include "sessionrequestbuilder.h"
 #include "sessionwindow.h"
 #include "settingsdialog.h"
 #include "sourcefixer.h"
@@ -2002,7 +2003,7 @@ void MainWindow::updateTabTitles() {
       m_tabWidget->setTabText(i, count > 0 ? i18n("Templates (%1)", count) : i18n("Templates"));
     } else if (page == m_errorsView->parentWidget()) {
       int count = m_errorsModel->rowCount();
-      m_tabWidget->setTabText(i, count > 0 ? i18n("Diagnostics (%1)", count) : i18n("Errors"));
+      m_tabWidget->setTabText(i, count > 0 ? i18n("Diagnostics (%1)", count) : i18n("Diagnostics"));
     } else if (page == m_queueView) {
       int count = m_queueModel->rowCount();
       m_tabWidget->setTabText(i, count > 0 ? i18n("Queue (%1)", count) : i18n("Queue"));
@@ -4826,19 +4827,26 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
                   requestData[QStringLiteral("prompt")] = prompt;
                   requestData[QStringLiteral("automationMode")] = automationMode;
                   requestData[QStringLiteral("planApproval")] = requirePlanApproval;
+                  requestData[QStringLiteral("ignoreConcurrency")] = ignoreConcurrency;
+                  requestData[QStringLiteral("priority")] = priority;
+                  requestData[QStringLiteral("_kjules_action")] = queueAction;
 
-                  // Simplified source parsing for the variant.
-                  if (!sources.isEmpty()) {
-                    QString firstSource = sources.keys().first();
-                    QString branch = sources.value(firstSource);
+                  QJsonArray sourcesArr;
+                  for (auto it = sources.cbegin(); it != sources.cend(); ++it) {
                     QJsonObject sourceContext;
-                    sourceContext[QStringLiteral("source")] = firstSource;
-                    if (!branch.isEmpty() && branch != i18n("Default Branch")) {
+                    sourceContext[QStringLiteral("source")] = it.key();
+                    if (!it.value().isEmpty() && it.value() != i18n("Default Branch")) {
                       QJsonObject githubContext;
-                      githubContext[QStringLiteral("startingBranch")] = branch;
+                      githubContext[QStringLiteral("startingBranch")] = it.value();
                       sourceContext[QStringLiteral("githubRepoContext")] = githubContext;
                     }
-                    requestData[QStringLiteral("sourceContext")] = sourceContext;
+                    sourcesArr.append(sourceContext);
+                  }
+
+                  if (sourcesArr.size() == 1) {
+                    requestData[QStringLiteral("sourceContext")] = sourcesArr.first().toObject();
+                  } else if (!sourcesArr.isEmpty()) {
+                    requestData[QStringLiteral("sources")] = sourcesArr;
                   }
 
                   item.requestData = requestData;
@@ -6581,6 +6589,7 @@ void MainWindow::syncModelsFromJobStore() {
   }
 
   m_queueModel->setItems(queueItems);
+  m_holdingModel->setItems(holdingItems);
   m_errorsModel->setErrors(errorsArray);
   m_sessionModel->setSessions(followingArray);
   m_archiveModel->setSessions(archiveArray);
