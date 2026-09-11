@@ -198,6 +198,9 @@ JobData *JobStore::getJobByAttemptId(const QString &attemptId) {
 
 JobData *JobStore::getJobBySessionId(const QString &sessionId) {
   for (int i = 0; i < m_jobs.size(); ++i) {
+    if (m_jobs[i].id == sessionId) {
+      return &m_jobs[i];
+    }
     for (const JobAttemptData &attempt : m_jobs[i].attempts) {
       if (attempt.julesSessionId == sessionId) {
         return &m_jobs[i];
