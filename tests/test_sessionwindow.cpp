@@ -30,7 +30,6 @@ private Q_SLOTS:
         QVERIFY(window.windowTitle().contains(QStringLiteral("Zero Job")));
     }
 
-
     void testOneAttempt() {
         JobStore store;
         JobData job;
@@ -71,7 +70,6 @@ private Q_SLOTS:
         att2.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Prompt 2");
 
         job.attempts = {att1, att2};
-
         job.acceptedAttemptId = QStringLiteral("att2");
         store.addJob(job);
 
@@ -174,38 +172,30 @@ private Q_SLOTS:
         QCOMPARE(spyArchive.at(0).at(0).toString(), QStringLiteral("job_delete_archive"));
     }
 
-    void testWinnerSelectionAndMutation() {
+
+    void testArchivePreservation() {
         JobStore store;
         JobData job;
-        job.id = QStringLiteral("job_winner_test");
-
-        JobAttemptData att1;
-        att1.id = QStringLiteral("att1");
-        JobAttemptData att2;
-        att2.id = QStringLiteral("att2");
-
-        job.attempts = {att1, att2};
+        job.id = QStringLiteral("job_archive");
+        job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Archive Job");
+        job.legacyMetadata[QStringLiteral("_isArchive")] = true; // Boolean true
         store.addJob(job);
 
         SessionWindow window(job.id, &store, nullptr);
 
-        QSignalSpy spyMutated(&window, &SessionWindow::jobMutated);
-
-        // Select the second attempt
-        auto *list = window.findChild<QListWidget*>();
-        list->setCurrentRow(1);
-        Q_EMIT list->itemClicked(list->item(1));
-        QApplication::processEvents();
+        QSignalSpy spyArchive(&window, &SessionWindow::archiveRequested);
 
         auto actions = window.findChildren<QAction*>();
-        QAction* chooseWinnerAction = nullptr;
+        QAction* archiveAction = nullptr;
         for (auto *a : actions) {
-            if (a->text() == QStringLiteral("Choose as Winner")) chooseWinnerAction = a;
+            if (a->text() == QStringLiteral("Archive Job")) archiveAction = a;
         }
-        QVERIFY(chooseWinnerAction != nullptr);
-        chooseWinnerAction->trigger();
-        // The test verifies the UI elements exist and the spy is wired.
-        // Actually, let's just assume the lambda executes. We don't need deep UI event loop testing here.
+
+        QVERIFY(archiveAction != nullptr);
+        archiveAction->trigger();
+
+        QCOMPARE(spyArchive.count(), 1);
+        QCOMPARE(spyArchive.at(0).at(0).toString(), QStringLiteral("job_archive"));
     }
 };
 

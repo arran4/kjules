@@ -6541,15 +6541,24 @@ void MainWindow::syncModelsFromJobStore() {
 
     QString status = job.lifecycleMetadata.value(QStringLiteral("status")).toString();
     QString state = job.lifecycleMetadata.value(QStringLiteral("state")).toString();
-    bool isArchived = (state == QStringLiteral("archived") || job.legacyMetadata.value(QStringLiteral("_isArchive")).toString() == QStringLiteral("true"));
+    bool isArchived = (state == QStringLiteral("archived") || job.legacyMetadata.value(QStringLiteral("_isArchive")).toString() == QStringLiteral("true") || job.legacyMetadata.value(QStringLiteral("_isArchive")).toBool());
 
-    if (isArchived) {
+if (isArchived) {
       QJsonObject projection = job.canonicalRequest;
       projection[QStringLiteral("id")] = job.id;
       projection[QStringLiteral("state")] = state;
       projection[QStringLiteral("jobMode")] = true;
       archiveArray.append(projection);
-    } else if (status == QStringLiteral("ERROR_STATE") || (status == QStringLiteral("QUEUED") && !hasActiveAttempt)) {
+    } else if (hasFailedOnly || status == QStringLiteral("ERROR_STATE") || item.errorCount > 0) {
+      // Failed-only or explicit ERROR_STATE belongs in Following as needs-attention
+      QJsonObject projection = hasAnyAttempt ? latestAttempt.rawResponse : job.canonicalRequest;
+      if (projection.isEmpty() && hasAnyAttempt) projection = latestAttempt.requestSnapshot;
+      projection[QStringLiteral("state")] = QStringLiteral("ERROR_STATE");
+      projection[QStringLiteral("id")] = job.id;
+      if (hasAnyAttempt) projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
+      if (!projection.contains(QStringLiteral("title"))) projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title"));
+      followingArray.append(projection);
+    } else if (status == QStringLiteral("QUEUED") && !hasActiveAttempt) {
       if (item.isBlocked) {
         holdingItems.append(item);
       } else {
@@ -6562,7 +6571,7 @@ void MainWindow::syncModelsFromJobStore() {
         if (projection.isEmpty()) {
             projection = latestAttempt.requestSnapshot;
         }
-        projection[QStringLiteral("state")] = hasFailedOnly ? QStringLiteral("ERROR_STATE") : latestAttempt.julesState;
+        projection[QStringLiteral("state")] = latestAttempt.julesState;
         projection[QStringLiteral("id")] = job.id; // Map back to job
         projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
       } else {
