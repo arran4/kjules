@@ -56,10 +56,7 @@ public:
   ~SessionWindow();
 
 public:
-  QString jobId() const
-  {
-    return m_jobId;
-  }
+  QString jobId() const { return m_jobId; }
 
 private:
   void setupUi(const QJsonObject &sessionData);

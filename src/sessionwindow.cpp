@@ -177,27 +177,28 @@ void SessionWindow::setupActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("media-playback-start")), i18n("Launch New Attempt"), this);
   connect(launchNewAttemptAction, &QAction::triggered, this, [this]() {
     // Create new attempt from job canonical
-    Q_EMIT newAttemptRequested(m_jobId, m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+    Q_EMIT newAttemptRequested(m_jobId,
+                               m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
   });
   actionCollection()->addAction(QStringLiteral("launch_new_attempt"), launchNewAttemptAction);
 
   QAction *launchVariantAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."), this);
   connect(launchVariantAction, &QAction::triggered, this, [this]() {
-    Q_EMIT variantRequested(m_jobId, m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+    Q_EMIT variantRequested(m_jobId,
+                            m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
   });
   actionCollection()->addAction(QStringLiteral("launch_variant"), launchVariantAction);
 
   QAction *retryAttemptAction =
       new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Retry Failed Attempt"), this);
-  connect(retryAttemptAction, &QAction::triggered, this, [this]() { Q_EMIT retryAttemptRequested(m_jobId, m_currentAttemptId); });
+  connect(retryAttemptAction, &QAction::triggered, this,
+          [this]() { Q_EMIT retryAttemptRequested(m_jobId, m_currentAttemptId); });
   actionCollection()->addAction(QStringLiteral("retry_attempt"), retryAttemptAction);
 
   QAction *newJobFromAction =
       new QAction(QIcon::fromTheme(QStringLiteral("window-new")), i18n("New Job From This..."), this);
-  connect(newJobFromAction, &QAction::triggered, this, [this]() {
-    Q_EMIT newJobFromRequested(currentSessionData());
-  });
+  connect(newJobFromAction, &QAction::triggered, this, [this]() { Q_EMIT newJobFromRequested(currentSessionData()); });
   actionCollection()->addAction(QStringLiteral("new_job_from"), newJobFromAction);
 
   QAction *chooseWinnerAction =
@@ -1002,14 +1003,16 @@ void SessionWindow::renderZeroAttempts() {
   QPushButton *launchButton =
       new QPushButton(QIcon::fromTheme(QStringLiteral("media-playback-start")), i18n("Launch Attempt"));
   connect(launchButton, &QPushButton::clicked, this, [this]() {
-    Q_EMIT newAttemptRequested(m_jobId, m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+    Q_EMIT newAttemptRequested(m_jobId,
+                               m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
   });
   buttonsLayout->addWidget(launchButton);
 
   QPushButton *variantButton =
       new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."));
   connect(variantButton, &QPushButton::clicked, this, [this]() {
-    Q_EMIT variantRequested(m_jobId, m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+    Q_EMIT variantRequested(m_jobId,
+                            m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
   });
   buttonsLayout->addWidget(variantButton);
   buttonsLayout->addStretch();

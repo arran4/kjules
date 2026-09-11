@@ -64,12 +64,13 @@ private:
 
 SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, SessionModel *sessionModel,
                            SessionModel *archiveModel, QueueModel *queueModel, ErrorsModel *errorsModel,
-                           BlockedTreeModel *blockedTreeModel, APIManager *apiManager, JobStore *jobStore, QWidget *parent)
+                           BlockedTreeModel *blockedTreeModel, APIManager *apiManager, JobStore *jobStore,
+                           QWidget *parent)
     : KXmlGuiWindow(parent), m_sourceId(sourceId), m_sourceModel(sourceModel), m_sessionModel(sessionModel),
       m_archiveModel(archiveModel), m_queueModel(queueModel), m_errorsModel(errorsModel),
-      m_blockedTreeModel(blockedTreeModel), m_apiManager(apiManager), m_jobStore(jobStore), m_tabWidget(nullptr), m_sessionsWidget(nullptr),
-      m_autoFollowCheckBox(nullptr), m_concurrencySpinBox(nullptr), m_defaultBranchesList(nullptr),
-      m_rawDataEdit(nullptr) {
+      m_blockedTreeModel(blockedTreeModel), m_apiManager(apiManager), m_jobStore(jobStore), m_tabWidget(nullptr),
+      m_sessionsWidget(nullptr), m_autoFollowCheckBox(nullptr), m_concurrencySpinBox(nullptr),
+      m_defaultBranchesList(nullptr), m_rawDataEdit(nullptr) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Source: %1").arg(sourceId));
   resize(800, 600);
@@ -376,7 +377,7 @@ void SourceWindow::setupQueuedBlockedTab() {
 }
 
 void SourceWindow::setupSessionsTab() {
-  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, m_errorsModel, this);
+  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_jobStore, m_sessionModel, m_errorsModel, this);
   connect(m_sessionsWidget, &SessionsWidget::watchRequested, this, [this](const QJsonObject &session) {
     if (m_sessionModel) {
       m_sessionModel->addSession(session);

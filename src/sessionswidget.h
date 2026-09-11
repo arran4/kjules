@@ -48,8 +48,8 @@ class SessionsWidget : public QWidget {
 
 public:
   explicit SessionsWidget(const QString &filterSource = QString(), APIManager *apiManager = nullptr,
-                          SessionModel *managedModel = nullptr, ErrorsModel *errorsModel = nullptr,
-                          QWidget *parent = nullptr);
+                          JobStore *jobStore = nullptr, SessionModel *managedModel = nullptr,
+                          ErrorsModel *errorsModel = nullptr, QWidget *parent = nullptr);
   ~SessionsWidget() override;
 
   SessionsProxyModel *proxyModel() const;

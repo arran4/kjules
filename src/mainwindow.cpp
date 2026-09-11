@@ -1698,7 +1698,7 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         m_errorsView->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         m_errorsView->setCurrentIndex(index);
       }
-QMenu menu;
+      QMenu menu;
       QAction *editAction = menu.addAction(i18n("Edit / Modify"));
       QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
       QAction *requeueAction = menu.addAction(i18n("Requeue"));
@@ -3426,7 +3426,7 @@ void MainWindow::showSourceStatusDialog(const QString &sourceName) {
 void MainWindow::openSourceWindow(const QString &sourceId) {
   if (sourceId.isEmpty())
     return;
-SourceWindow *window = new SourceWindow(sourceId, m_sourceModel, m_sessionModel, m_archiveModel, m_queueModel,
+  SourceWindow *window = new SourceWindow(sourceId, m_sourceModel, m_sessionModel, m_archiveModel, m_queueModel,
                                           m_errorsModel, m_blockedTreeModel, m_apiManager, m_jobStore, this);
   connect(window, &SourceWindow::newSessionRequested, this, [this](const QString &source) {
     QJsonObject initialData;
@@ -4778,24 +4778,24 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
   connect(window, &SessionWindow::retryAttemptRequested, this, [this](const QString &jobId, const QString &attemptId) {
     if (m_jobStore) {
-        JobData *job = m_jobStore->getJobById(jobId);
-        if (job) {
-            for (const auto &attempt : job->attempts) {
-                if (attempt.id == attemptId) {
-                    QueueItem item;
-                    item.requestData = attempt.requestSnapshot;
-                    item.jobId = jobId;
-                    m_queueModel->enqueueItem(item);
-                    updateStatus(i18n("Retrying failed attempt for Job %1", jobId));
-                    return;
-                }
-            }
+      JobData *job = m_jobStore->getJobById(jobId);
+      if (job) {
+        for (const auto &attempt : job->attempts) {
+          if (attempt.id == attemptId) {
+            QueueItem item;
+            item.requestData = attempt.requestSnapshot;
+            item.jobId = jobId;
+            m_queueModel->enqueueItem(item);
+            updateStatus(i18n("Retrying failed attempt for Job %1", jobId));
+            return;
+          }
         }
+      }
     }
   });
 
   connect(window, &SessionWindow::newAttemptRequested, this, [this](const QString &jobId, const QJsonObject &request) {
-  if (!jobId.isEmpty() && m_jobStore) {
+    if (!jobId.isEmpty() && m_jobStore) {
       JobData *job = m_jobStore->getJobById(jobId);
       if (job) {
         QueueItem item;
@@ -4807,47 +4807,51 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
     }
   });
 
-connect(window, &SessionWindow::variantRequested, this, [this](const QString &jobId, const QJsonObject &request) {
+  connect(window, &SessionWindow::variantRequested, this, [this](const QString &jobId, const QJsonObject &request) {
     bool hasApiKey = m_apiManager && !m_apiManager->apiKey().isEmpty();
     NewSessionDialog *dlg = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
     connectNewSessionDialog(dlg);
 
     disconnect(dlg, &NewSessionDialog::createSessionRequested, this, &MainWindow::onSessionCreated);
-    connect(dlg, &NewSessionDialog::createSessionRequested, this, [this, jobId, dlg](const QMultiMap<QString, QString> &sources, const QString &prompt, const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority, const QString &queueAction) {
-      if (!jobId.isEmpty() && m_jobStore) {
-        JobData *job = m_jobStore->getJobById(jobId);
-        if (job) {
-          QueueItem item;
+    connect(dlg, &NewSessionDialog::createSessionRequested, this,
+            [this, jobId, dlg](const QMultiMap<QString, QString> &sources, const QString &prompt,
+                               const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                               int priority, const QString &queueAction) {
+              if (!jobId.isEmpty() && m_jobStore) {
+                JobData *job = m_jobStore->getJobById(jobId);
+                if (job) {
+                  QueueItem item;
 
-          QJsonObject requestData;
-          requestData[QStringLiteral("prompt")] = prompt;
-          requestData[QStringLiteral("automationMode")] = automationMode;
-          requestData[QStringLiteral("planApproval")] = requirePlanApproval;
+                  QJsonObject requestData;
+                  requestData[QStringLiteral("prompt")] = prompt;
+                  requestData[QStringLiteral("automationMode")] = automationMode;
+                  requestData[QStringLiteral("planApproval")] = requirePlanApproval;
 
-          // Simplified source parsing for the variant.
-          if (!sources.isEmpty()) {
-              QString firstSource = sources.keys().first();
-              QString branch = sources.value(firstSource);
-              QJsonObject sourceContext;
-              sourceContext[QStringLiteral("source")] = firstSource;
-              if (!branch.isEmpty() && branch != i18n("Default Branch")) {
-                  QJsonObject githubContext;
-                  githubContext[QStringLiteral("startingBranch")] = branch;
-                  sourceContext[QStringLiteral("githubRepoContext")] = githubContext;
+                  // Simplified source parsing for the variant.
+                  if (!sources.isEmpty()) {
+                    QString firstSource = sources.keys().first();
+                    QString branch = sources.value(firstSource);
+                    QJsonObject sourceContext;
+                    sourceContext[QStringLiteral("source")] = firstSource;
+                    if (!branch.isEmpty() && branch != i18n("Default Branch")) {
+                      QJsonObject githubContext;
+                      githubContext[QStringLiteral("startingBranch")] = branch;
+                      sourceContext[QStringLiteral("githubRepoContext")] = githubContext;
+                    }
+                    requestData[QStringLiteral("sourceContext")] = sourceContext;
+                  }
+
+                  item.requestData = requestData;
+                  item.jobId = jobId;
+                  m_queueModel->enqueueItem(item);
+                  updateStatus(i18n("Variant attempt queued for Job %1", jobId));
+                }
+              } else {
+                onSessionCreated(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority,
+                                 queueAction);
               }
-              requestData[QStringLiteral("sourceContext")] = sourceContext;
-          }
-
-          item.requestData = requestData;
-          item.jobId = jobId;
-          m_queueModel->enqueueItem(item);
-          updateStatus(i18n("Variant attempt queued for Job %1", jobId));
-        }
-      } else {
-        onSessionCreated(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority, queueAction);
-      }
-      dlg->close();
-    });
+              dlg->close();
+            });
 
     dlg->setInitialData(request);
     dlg->show();
@@ -4867,22 +4871,23 @@ connect(window, &SessionWindow::variantRequested, this, [this](const QString &jo
     }
   });
 
-connect(window, &SessionWindow::archiveRequested, this, [this, window](const QString &id) {
+  connect(window, &SessionWindow::archiveRequested, this, [this, window](const QString &id) {
     if (m_jobStore) {
-        JobData *job = m_jobStore->getJobById(id);
-        if (job) {
-            job->lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
-            m_jobStore->updateJob(*job);
-            m_jobStore->save();
-            syncModelsFromJobStore();
-            updateStatus(i18n("Job archived."));
-            window->close();
-            return;
-        }
+      JobData *job = m_jobStore->getJobById(id);
+      if (job) {
+        job->lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+        m_jobStore->updateJob(*job);
+        m_jobStore->save();
+        syncModelsFromJobStore();
+        updateStatus(i18n("Job archived."));
+        window->close();
+        return;
+      }
     }
 
     // Legacy fallback
-    QModelIndexList matches = m_sessionModel->match(m_sessionModel->index(0, 0), SessionModel::IdRole, id, 1, Qt::MatchExactly);
+    QModelIndexList matches =
+        m_sessionModel->match(m_sessionModel->index(0, 0), SessionModel::IdRole, id, 1, Qt::MatchExactly);
     if (!matches.isEmpty()) {
       int row = matches.first().row();
       QJsonObject session = m_sessionModel->getSession(row);
@@ -6536,14 +6541,16 @@ void MainWindow::syncModelsFromJobStore() {
     }
 
     if (job.attempts.isEmpty()) {
-        hasFailedOnly = false;
+      hasFailedOnly = false;
     }
 
     QString status = job.lifecycleMetadata.value(QStringLiteral("status")).toString();
     QString state = job.lifecycleMetadata.value(QStringLiteral("state")).toString();
-    bool isArchived = (state == QStringLiteral("archived") || job.legacyMetadata.value(QStringLiteral("_isArchive")).toString() == QStringLiteral("true") || job.legacyMetadata.value(QStringLiteral("_isArchive")).toBool());
+    bool isArchived = (state == QStringLiteral("archived") ||
+                       job.legacyMetadata.value(QStringLiteral("_isArchive")).toString() == QStringLiteral("true") ||
+                       job.legacyMetadata.value(QStringLiteral("_isArchive")).toBool());
 
-if (isArchived) {
+    if (isArchived) {
       QJsonObject projection = job.canonicalRequest;
       projection[QStringLiteral("id")] = job.id;
       projection[QStringLiteral("state")] = state;
@@ -6552,11 +6559,14 @@ if (isArchived) {
     } else if (hasFailedOnly || status == QStringLiteral("ERROR_STATE") || item.errorCount > 0) {
       // Failed-only or explicit ERROR_STATE belongs in Following as needs-attention
       QJsonObject projection = hasAnyAttempt ? latestAttempt.rawResponse : job.canonicalRequest;
-      if (projection.isEmpty() && hasAnyAttempt) projection = latestAttempt.requestSnapshot;
+      if (projection.isEmpty() && hasAnyAttempt)
+        projection = latestAttempt.requestSnapshot;
       projection[QStringLiteral("state")] = QStringLiteral("ERROR_STATE");
       projection[QStringLiteral("id")] = job.id;
-      if (hasAnyAttempt) projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
-      if (!projection.contains(QStringLiteral("title"))) projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title"));
+      if (hasAnyAttempt)
+        projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
+      if (!projection.contains(QStringLiteral("title")))
+        projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title"));
       followingArray.append(projection);
     } else if (status == QStringLiteral("QUEUED") && !hasActiveAttempt) {
       if (item.isBlocked) {
@@ -6569,7 +6579,7 @@ if (isArchived) {
       if (hasAnyAttempt) {
         projection = latestAttempt.rawResponse;
         if (projection.isEmpty()) {
-            projection = latestAttempt.requestSnapshot;
+          projection = latestAttempt.requestSnapshot;
         }
         projection[QStringLiteral("state")] = latestAttempt.julesState;
         projection[QStringLiteral("id")] = job.id; // Map back to job
@@ -6581,7 +6591,7 @@ if (isArchived) {
       }
 
       if (!projection.contains(QStringLiteral("title"))) {
-          projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title")).toString();
+        projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title")).toString();
       }
 
       followingArray.append(projection);
