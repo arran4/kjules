@@ -6504,14 +6504,14 @@ void MainWindow::syncModelsFromJobStore() {
     if (job.legacyMetadata.contains(QStringLiteral("blocked"))) {
       item.isBlocked = job.legacyMetadata.value(QStringLiteral("blocked")).toBool();
     } else {
-      item.isBlocked =
-          false; // We can update this during processQueue if needed, but for now we rely on explicit blocks
+      item.isBlocked = false;
     }
 
     bool hasActiveAttempt = false;
     JobAttemptData latestAttempt;
     bool hasAnyAttempt = false;
     bool hasFailedOnly = true;
+    bool hasWinner = !job.acceptedAttemptId.isEmpty();
 
     for (int j = 0; j < job.attempts.size(); ++j) {
       const JobAttemptData &attempt = job.attempts[j];
@@ -6535,7 +6535,8 @@ void MainWindow::syncModelsFromJobStore() {
         errorObj[QStringLiteral("jobId")] = job.id;
         errorObj[QStringLiteral("attemptId")] = attempt.id;
         errorsArray.append(errorObj);
-      } else if (attempt.dispatchState == QStringLiteral("IN_PROGRESS")) {
+      } else if (attempt.dispatchState == QStringLiteral("IN_PROGRESS") ||
+                 attempt.julesState == QStringLiteral("RUNNING") || attempt.julesState == QStringLiteral("QUEUED")) {
         hasActiveAttempt = true;
       }
     }
@@ -6556,50 +6557,30 @@ void MainWindow::syncModelsFromJobStore() {
       projection[QStringLiteral("state")] = state;
       projection[QStringLiteral("jobMode")] = true;
       archiveArray.append(projection);
-    } else if (hasFailedOnly || status == QStringLiteral("ERROR_STATE") || item.errorCount > 0) {
-      // Failed-only or explicit ERROR_STATE belongs in Following as needs-attention
-      QJsonObject projection = hasAnyAttempt ? latestAttempt.rawResponse : job.canonicalRequest;
-      if (projection.isEmpty() && hasAnyAttempt)
-        projection = latestAttempt.requestSnapshot;
-      projection[QStringLiteral("state")] = QStringLiteral("ERROR_STATE");
+    } else if (!hasWinner && (hasFailedOnly || (!hasActiveAttempt && item.errorCount > 0))) {
+      // Failed-only or explicit ERROR_STATE without active attempt belongs in Following as needs-attention
+      QJsonObject projection = job.canonicalRequest;
       projection[QStringLiteral("id")] = job.id;
-      if (hasAnyAttempt)
-        projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
-      if (!projection.contains(QStringLiteral("title")))
-        projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title"));
+      projection[QStringLiteral("state")] = QStringLiteral("ERROR_STATE");
+      projection[QStringLiteral("jobMode")] = true;
       followingArray.append(projection);
-    } else if (status == QStringLiteral("QUEUED") && !hasActiveAttempt) {
-      if (item.isBlocked) {
-        holdingItems.append(item);
-      } else {
-        queueItems.append(item);
-      }
+    } else if (hasWinner || hasAnyAttempt || hasActiveAttempt || state == QStringLiteral("Following") ||
+               status == QStringLiteral("RUNNING") || job.legacyMetadata.value(QStringLiteral("following")).toBool()) {
+      QJsonObject projection = job.canonicalRequest;
+      projection[QStringLiteral("id")] = job.id;
+      projection[QStringLiteral("state")] = state;
+      projection[QStringLiteral("jobMode")] = true;
+      if (hasWinner)
+        projection[QStringLiteral("winner")] = job.acceptedAttemptId;
+      followingArray.append(projection);
+    } else if (job.legacyMetadata.value(QStringLiteral("holding")).toBool()) {
+      holdingItems.append(item);
     } else {
-      QJsonObject projection;
-      if (hasAnyAttempt) {
-        projection = latestAttempt.rawResponse;
-        if (projection.isEmpty()) {
-          projection = latestAttempt.requestSnapshot;
-        }
-        projection[QStringLiteral("state")] = latestAttempt.julesState;
-        projection[QStringLiteral("id")] = job.id; // Map back to job
-        projection[QStringLiteral("julesSessionId")] = latestAttempt.julesSessionId;
-      } else {
-        projection = job.canonicalRequest;
-        projection[QStringLiteral("id")] = job.id;
-        projection[QStringLiteral("state")] = QStringLiteral("PENDING");
-      }
-
-      if (!projection.contains(QStringLiteral("title"))) {
-        projection[QStringLiteral("title")] = job.canonicalRequest.value(QStringLiteral("title")).toString();
-      }
-
-      followingArray.append(projection);
+      queueItems.append(item);
     }
   }
 
   m_queueModel->setItems(queueItems);
-  m_holdingModel->setItems(holdingItems);
   m_errorsModel->setErrors(errorsArray);
   m_sessionModel->setSessions(followingArray);
   m_archiveModel->setSessions(archiveArray);

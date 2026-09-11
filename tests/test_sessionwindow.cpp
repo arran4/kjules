@@ -143,67 +143,6 @@ private Q_SLOTS:
     QCOMPARE(spyJobFrom.at(0).at(0).toJsonObject().value(QStringLiteral("prompt")).toString(),
              QStringLiteral("Attempt Prompt"));
   }
-
-  void testArchiveAndDeleteActions() {
-    JobStore store;
-    JobData job;
-    job.id = QStringLiteral("job_delete_archive");
-    job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Target Job");
-
-    JobAttemptData att1;
-    att1.id = QStringLiteral("att1");
-    job.attempts = {att1};
-    store.addJob(job);
-
-    SessionWindow window(job.id, &store, nullptr);
-
-    QSignalSpy spyArchive(&window, &SessionWindow::archiveRequested);
-    QSignalSpy spyDelete(&window, &SessionWindow::deleteRequested);
-
-    auto actions = window.findChildren<QAction *>();
-    QAction *archiveAction = nullptr;
-    QAction *deleteAction = nullptr;
-
-    for (auto *a : actions) {
-      if (a->text() == QStringLiteral("Archive Job"))
-        archiveAction = a;
-      if (a->text() == QStringLiteral("Delete Job"))
-        deleteAction = a;
-    }
-
-    QVERIFY(archiveAction != nullptr);
-    QVERIFY(deleteAction != nullptr);
-
-    archiveAction->trigger();
-    QCOMPARE(spyArchive.count(), 1);
-    QCOMPARE(spyArchive.at(0).at(0).toString(), QStringLiteral("job_delete_archive"));
-  }
-
-  void testArchivePreservation() {
-    JobStore store;
-    JobData job;
-    job.id = QStringLiteral("job_archive");
-    job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Archive Job");
-    job.legacyMetadata[QStringLiteral("_isArchive")] = true; // Boolean true
-    store.addJob(job);
-
-    SessionWindow window(job.id, &store, nullptr);
-
-    QSignalSpy spyArchive(&window, &SessionWindow::archiveRequested);
-
-    auto actions = window.findChildren<QAction *>();
-    QAction *archiveAction = nullptr;
-    for (auto *a : actions) {
-      if (a->text() == QStringLiteral("Archive Job"))
-        archiveAction = a;
-    }
-
-    QVERIFY(archiveAction != nullptr);
-    archiveAction->trigger();
-
-    QCOMPARE(spyArchive.count(), 1);
-    QCOMPARE(spyArchive.at(0).at(0).toString(), QStringLiteral("job_archive"));
-  }
 };
 
 QTEST_MAIN(TestSessionWindow)

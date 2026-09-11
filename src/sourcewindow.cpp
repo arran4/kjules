@@ -296,7 +296,17 @@ void SourceWindow::setupFollowingTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_sessionModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, true, this);
+    SessionWindow *win = nullptr;
+    QString id = session.value(QStringLiteral("id")).toString();
+    if (m_jobStore) {
+      JobData *job = m_jobStore->getJobBySessionId(id);
+      if (job) {
+        win = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
+      }
+    }
+    if (!win) {
+      win = new SessionWindow(session, m_apiManager, m_errorsModel, true, this);
+    }
     win->show();
   });
 
