@@ -236,6 +236,7 @@ void SessionWindow::setupActions() {
         QMessageBox::Yes) {
       if (m_jobStore) {
         m_jobStore->removeJob(m_jobId);
+        Q_EMIT jobMutated(m_jobId);
         m_jobStore->save();
         close();
       }
@@ -260,8 +261,6 @@ void SessionWindow::setupActions() {
   connect(closeAction, &QAction::triggered, this, &SessionWindow::close);
 
   // m_autoRefreshCombo is created in the constructor so we only connect it here
-  if (!m_autoRefreshCombo) {
-  }
 
   QAction *saveTemplateAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18n("Save prompt as template"), this);

@@ -3882,7 +3882,7 @@ bool MainWindow::processQueue() {
 
   JobAttemptData attempt;
   attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-  attempt.requestSnapshot = jobToDispatch->canonicalRequest;
+  attempt.requestSnapshot = itemToDispatch.requestData;
   attempt.dispatchState = QStringLiteral("IN_PROGRESS");
   attempt.createdAt = QDateTime::currentDateTimeUtc();
   attempt.updatedAt = attempt.createdAt;
@@ -6642,7 +6642,7 @@ void MainWindow::sendJobNow(const QString &jobId) {
     // This is a direct dispatch bypassing queue interval checks
     JobAttemptData attempt;
     attempt.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    attempt.requestSnapshot = job->canonicalRequest;
+    attempt.requestSnapshot = item.requestData;
     attempt.dispatchState = QStringLiteral("IN_PROGRESS");
     attempt.createdAt = QDateTime::currentDateTimeUtc();
     attempt.updatedAt = attempt.createdAt;
