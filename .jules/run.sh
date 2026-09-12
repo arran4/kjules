@@ -31,39 +31,28 @@ cleanup() {
     fi
 }
 
-# Check if bind mounts are permitted, otherwise fallback to proot
-if sudo mount --bind /dev "${ROOTFS_DIR}/dev" 2>/dev/null; then
-    sudo umount "${ROOTFS_DIR}/dev" || true
+# Trap to ensure cleanup happens on exit
+trap cleanup EXIT
 
-    # Trap to ensure cleanup happens on exit
-    trap cleanup EXIT
+# Bind mounts
+sudo mount -t proc proc "${ROOTFS_DIR}/proc"
+sudo mount -t sysfs sys "${ROOTFS_DIR}/sys"
+sudo mount --bind /dev "${ROOTFS_DIR}/dev"
+sudo mount --bind /dev/pts "${ROOTFS_DIR}/dev/pts"
+sudo mount --bind "$(pwd)" "${ROOTFS_DIR}/workspace"
 
-    # Bind mounts
-    sudo mount -t proc proc "${ROOTFS_DIR}/proc"
-    sudo mount -t sysfs sys "${ROOTFS_DIR}/sys"
-    sudo mount --bind /dev "${ROOTFS_DIR}/dev"
-    sudo mount --bind /dev/pts "${ROOTFS_DIR}/dev/pts"
-    sudo mount --bind "$(pwd)" "${ROOTFS_DIR}/workspace"
-
-    # Setup DNS
-    if [ -f "${ROOTFS_DIR}/etc/resolv.conf" ]; then
-        sudo mv "${ROOTFS_DIR}/etc/resolv.conf" "${ROOTFS_DIR}/etc/resolv.conf.orig"
-    fi
-    sudo cp /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
-
-    # Execute command inside chroot
-    sudo chroot "${ROOTFS_DIR}" /bin/bash -c "
-        export QT_QPA_PLATFORM=offscreen
-        export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-        cd /workspace
-        \"\$@\"
-    " -- "$@"
-else
-    # Fallback to proot when container restricts mount syscall
-    exec proot -0 -r "${ROOTFS_DIR}" -b "$(pwd)":/workspace -b "${HOME}":"${HOME}" -b /tmp:/tmp -b /dev -b /proc -b /sys -b /etc/resolv.conf:/etc/resolv.conf /bin/bash -c "
-        export QT_QPA_PLATFORM=offscreen
-        export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-        cd /workspace
-        \"\$@\"
-    " -- "$@"
+# Setup DNS
+if [ -f "${ROOTFS_DIR}/etc/resolv.conf" ]; then
+    sudo mv "${ROOTFS_DIR}/etc/resolv.conf" "${ROOTFS_DIR}/etc/resolv.conf.orig"
 fi
+sudo cp /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
+
+# Execute command inside chroot
+# Run as user with same uid/gid (defaults to root if not specified,
+# but better to run as normal user if possible, or we can just run as root for build)
+sudo chroot "${ROOTFS_DIR}" /bin/bash -c "
+    export QT_QPA_PLATFORM=offscreen
+    export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+    cd /workspace
+    \"\$@\"
+" -- "$@"

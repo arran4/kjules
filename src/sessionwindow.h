@@ -14,11 +14,7 @@ class APIManager;
 class ActivityBrowser;
 class ErrorsModel;
 class ClickableLabel;
-class QSplitter;
-class QStackedWidget;
-class QListWidget;
-class QListWidgetItem;
-class JobStore;
+
 #include "errorsmodel.h"
 class SessionErrorFilterProxyModel : public QSortFilterProxyModel {
   Q_OBJECT
@@ -29,12 +25,6 @@ public:
     QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
     return sourceModel()->data(index, ErrorsModel::SessionIdRole).toString() ==
            m_sessionId; // SessionIdRole is usually +4 in ErrorsModel
-  }
-
-public:
-  void setSessionId(const QString &id) {
-    m_sessionId = id;
-    invalidate();
   }
 
 private:
@@ -48,25 +38,13 @@ Q_SIGNALS:
   void openPreviousAttemptRequested(const QString &previousAttemptId);
 
 public:
-  explicit SessionWindow(const QString &jobId, JobStore *jobStore, APIManager *apiManager,
-                         ErrorsModel *errorsModel = nullptr, bool isManaged = true, QWidget *parent = nullptr);
   explicit SessionWindow(const QJsonObject &sessionData, APIManager *apiManager, ErrorsModel *errorsModel = nullptr,
                          bool isManaged = true, QWidget *parent = nullptr);
-
   ~SessionWindow();
-
-public:
-  QString jobId() const { return m_jobId; }
-  QJsonObject currentVariantRequest() const;
-  QJsonObject currentSessionData() const;
 
 private:
   void setupUi(const QJsonObject &sessionData);
-  void renderZeroAttempts();
-  void updateAttemptList();
-  void onAttemptSelected(QListWidgetItem *item);
   void setupActions();
-
   void refreshSession(bool isBackground = false);
   void onSessionReloaded(const QJsonObject &session, bool isBackground);
   void onActivitiesReceived(const QString &sessionId, const QJsonArray &activities);
@@ -77,18 +55,7 @@ private:
   void renderDetailsAndDiff();
 
   QJsonObject m_sessionData;
-  QString m_jobId;
-  JobStore *m_jobStore = nullptr;
-  QString m_currentAttemptId;
-
-  QSplitter *m_splitter;
-  QListWidget *m_attemptList;
-  QStackedWidget *m_contentStack;
-  QWidget *m_zeroAttemptWidget;
-  QWidget *m_detailsWidget;
-
   APIManager *m_apiManager;
-
   bool m_isManaged;
   QString m_statusErrorDetails;
   QTabWidget *m_tabWidget;
@@ -114,12 +81,7 @@ private:
 Q_SIGNALS:
   void watchRequested(const QJsonObject &sessionData);
   void duplicateRequested(const QJsonObject &sessionData);
-  void newAttemptRequested(const QString &jobId, const QJsonObject &request);
-  void retryAttemptRequested(const QString &jobId, const QString &attemptId);
-  void variantRequested(const QString &jobId, const QJsonObject &request);
-  void newJobFromRequested(const QJsonObject &request);
   void archiveRequested(const QString &id);
-  void jobMutated(const QString &jobId);
   void deleteRequested(const QString &id);
   void templateRequested(const QJsonObject &templateData);
   void refreshRequested(const QString &id);

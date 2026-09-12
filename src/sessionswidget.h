@@ -7,7 +7,6 @@
 #include <functional>
 
 class APIManager;
-class JobStore;
 class SessionModel;
 class ErrorsModel;
 class QTreeView;
@@ -48,8 +47,8 @@ class SessionsWidget : public QWidget {
 
 public:
   explicit SessionsWidget(const QString &filterSource = QString(), APIManager *apiManager = nullptr,
-                          JobStore *jobStore = nullptr, SessionModel *managedModel = nullptr,
-                          ErrorsModel *errorsModel = nullptr, QWidget *parent = nullptr);
+                          SessionModel *managedModel = nullptr, ErrorsModel *errorsModel = nullptr,
+                          QWidget *parent = nullptr);
   ~SessionsWidget() override;
 
   SessionsProxyModel *proxyModel() const;
@@ -107,7 +106,6 @@ private:
   QString getSourceUrl(const QModelIndex &idx) const;
 
   APIManager *m_apiManager;
-  JobStore *m_jobStore = nullptr;
   ErrorsModel *m_errorsModel;
   SessionModel *m_model;
   SessionModel *m_managedModel;
