@@ -21,6 +21,7 @@ private Q_SLOTS:
   void embedsApiRequestInSessionResponse();
   void buildsCanonicalSessionRequestWithAllFields();
   void normalizesPlanApprovalAndActionFields();
+  void normalizesMixedSourceAndBranch();
 };
 
 void SessionRequestBuilderTest::createsDocumentedFullRequest() {
@@ -196,6 +197,25 @@ void SessionRequestBuilderTest::normalizesPlanApprovalAndActionFields() {
   // createSession also honors planApproval
   const QJsonObject apiReq = SessionRequestBuilder::createSession(input);
   QCOMPARE(apiReq.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+}
+
+void SessionRequestBuilderTest::normalizesMixedSourceAndBranch() {
+  const QJsonObject legacy{
+      {QStringLiteral("sourceContext"),
+       QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/legacy")},
+                   {QStringLiteral("githubRepoContext"),
+                    QJsonObject{{QStringLiteral("startingBranch"), QStringLiteral("legacy-branch")}}}}}};
+  auto normalized = SessionRequestBuilder::normalizeSessionRequest(legacy);
+  QCOMPARE(normalized.value(QStringLiteral("source")).toString(), QStringLiteral("sources/legacy"));
+  QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("legacy-branch"));
+  auto mixed = legacy;
+  mixed[QStringLiteral("source")] = QStringLiteral("sources/current");
+  normalized = SessionRequestBuilder::normalizeSessionRequest(mixed);
+  QCOMPARE(normalized.value(QStringLiteral("source")).toString(), QStringLiteral("sources/current"));
+  QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("legacy-branch"));
+  mixed[QStringLiteral("startingBranch")] = QStringLiteral("current-branch");
+  normalized = SessionRequestBuilder::normalizeSessionRequest(mixed);
+  QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("current-branch"));
 }
 
 QTEST_MAIN(SessionRequestBuilderTest)

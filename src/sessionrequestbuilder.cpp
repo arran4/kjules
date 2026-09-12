@@ -3,8 +3,7 @@
 namespace SessionRequestBuilder {
 
 QJsonObject createSession(const QJsonObject &requestData) {
-  const QJsonObject nestedRequest = requestData.value(QStringLiteral("request")).toObject();
-  const QJsonObject &input = nestedRequest.isEmpty() ? requestData : nestedRequest;
+  const QJsonObject input = normalizeSessionRequest(requestData);
   QJsonObject request;
   request[QStringLiteral("prompt")] = input.value(QStringLiteral("prompt")).toString();
 
@@ -13,20 +12,10 @@ QJsonObject createSession(const QJsonObject &requestData) {
     request[QStringLiteral("title")] = title;
   }
 
-  const QJsonObject suppliedSourceContext = input.value(QStringLiteral("sourceContext")).toObject();
-  QString source = input.value(QStringLiteral("source")).toString();
-  if (source.isEmpty()) {
-    source = suppliedSourceContext.value(QStringLiteral("source")).toString();
-  }
+  const QString source = input.value(QStringLiteral("source")).toString();
   if (!source.isEmpty()) {
     QJsonObject sourceContext{{QStringLiteral("source"), source}};
-    QString startingBranch = input.value(QStringLiteral("startingBranch")).toString();
-    if (startingBranch.isEmpty()) {
-      startingBranch = suppliedSourceContext.value(QStringLiteral("githubRepoContext"))
-                           .toObject()
-                           .value(QStringLiteral("startingBranch"))
-                           .toString();
-    }
+    const QString startingBranch = input.value(QStringLiteral("startingBranch")).toString();
     if (!startingBranch.isEmpty()) {
       sourceContext[QStringLiteral("githubRepoContext")] =
           QJsonObject{{QStringLiteral("startingBranch"), startingBranch}};
@@ -91,18 +80,12 @@ QJsonObject normalizeSessionRequest(const QJsonObject &requestData) {
     req[QStringLiteral("_kjules_action")] = input.value(QStringLiteral("queueAction")).toString();
   }
 
-  if (!req.contains(QStringLiteral("source")) && req.contains(QStringLiteral("sourceContext"))) {
-    QJsonObject sc = req.value(QStringLiteral("sourceContext")).toObject();
-    if (sc.contains(QStringLiteral("source"))) {
-      req[QStringLiteral("source")] = sc.value(QStringLiteral("source")).toString();
-    }
-    if (sc.contains(QStringLiteral("githubRepoContext"))) {
-      QJsonObject gh = sc.value(QStringLiteral("githubRepoContext")).toObject();
-      if (gh.contains(QStringLiteral("startingBranch"))) {
-        req[QStringLiteral("startingBranch")] = gh.value(QStringLiteral("startingBranch")).toString();
-      }
-    }
-  }
+  const auto sc = input.value(QStringLiteral("sourceContext")).toObject();
+  if (req.value(QStringLiteral("source")).toString().isEmpty())
+    req[QStringLiteral("source")] = sc.value(QStringLiteral("source"));
+  if (req.value(QStringLiteral("startingBranch")).toString().isEmpty())
+    req[QStringLiteral("startingBranch")] =
+        sc.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch"));
 
   return req;
 }

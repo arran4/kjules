@@ -95,6 +95,9 @@ private Q_SLOTS:
   void openSourceWindow(const QString &sourceId);
   void showManageCustomSourcesDialog();
   void showSettingsDialog();
+  void submitVariantForJob(const QString &jobId, const QMultiMap<QString, QString> &sources, const QString &prompt,
+                           const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                           int priority, const QString &queueAction);
   void onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
                         const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
                         int priority = 0, const QString &queueAction = QString());

@@ -1,4 +1,5 @@
 #include "sessionwindow.h"
+#include "sessionrequestbuilder.h"
 
 #include <KActionCollection>
 #include <KLocalizedString>
@@ -197,7 +198,8 @@ void SessionWindow::setupActions() {
 
   QAction *newJobFromAction =
       new QAction(QIcon::fromTheme(QStringLiteral("window-new")), i18n("New Job From This..."), this);
-  connect(newJobFromAction, &QAction::triggered, this, [this]() { Q_EMIT newJobFromRequested(currentSessionData()); });
+  connect(newJobFromAction, &QAction::triggered, this,
+          [this]() { Q_EMIT newJobFromRequested(currentVariantRequest()); });
   actionCollection()->addAction(QStringLiteral("new_job_from"), newJobFromAction);
 
   QAction *chooseWinnerAction =
@@ -205,7 +207,8 @@ void SessionWindow::setupActions() {
   connect(chooseWinnerAction, &QAction::triggered, this, [this]() {
     if (m_jobStore && !m_jobId.isEmpty() && !m_currentAttemptId.isEmpty()) {
       JobData *job = m_jobStore->getJobById(m_jobId);
-      if (job) {
+      if (job && JobPolicy::isEligibleWinner(*job, m_currentAttemptId) &&
+          JobPolicy::aggregateState(*job) != JobPolicy::JobAggregateState::Archived) {
         JobData updatedJob = *job;
         updatedJob.acceptedAttemptId = m_currentAttemptId;
         if (m_jobStore->updateJobTransactional(updatedJob)) {
@@ -409,7 +412,8 @@ void SessionWindow::updateActionStates() {
     act->setEnabled(!isArchived);
   }
   if (auto *act = actionCollection()->action(QStringLiteral("choose_winner"))) {
-    act->setEnabled(!isArchived);
+    const auto *job = m_jobStore ? m_jobStore->getJobById(m_jobId) : nullptr;
+    act->setEnabled(!isArchived && job && JobPolicy::isEligibleWinner(*job, m_currentAttemptId));
   }
   if (auto *act = actionCollection()->action(QStringLiteral("archive_job"))) {
     act->setEnabled(!isArchived);
@@ -621,13 +625,11 @@ void SessionWindow::renderDetailsAndDiff() {
   QString sessionId = currentSessionData().value(QStringLiteral("id")).toString();
   QString lastRefreshed = currentSessionData().value(QStringLiteral("lastRefreshed")).toString();
   QString state = currentSessionData().value(QStringLiteral("state")).toString();
+  const auto normalized = SessionRequestBuilder::normalizeSessionRequest(currentSessionData());
   QJsonObject sourceContext = currentSessionData().value(QStringLiteral("sourceContext")).toObject();
-  QString source = sourceContext.value(QStringLiteral("source")).toString();
+  QString source = normalized.value(QStringLiteral("source")).toString();
   bool environmentVariablesEnabled = sourceContext.value(QStringLiteral("environmentVariablesEnabled")).toBool();
-  QString startingBranch = sourceContext.value(QStringLiteral("githubRepoContext"))
-                               .toObject()
-                               .value(QStringLiteral("startingBranch"))
-                               .toString();
+  QString startingBranch = normalized.value(QStringLiteral("startingBranch")).toString();
   QString createTime = currentSessionData().value(QStringLiteral("createTime")).toString();
   QString updateTime = currentSessionData().value(QStringLiteral("updateTime")).toString();
   QString promptText = currentSessionData().value(QStringLiteral("prompt")).toString();
@@ -1030,16 +1032,13 @@ void SessionWindow::renderZeroAttempts() {
   idLabel->setObjectName(QStringLiteral("zeroIdLabel"));
   zeroLayout->addWidget(idLabel);
 
-  QJsonObject sourceContext = job.canonicalRequest.value(QStringLiteral("sourceContext")).toObject();
-  QString source = sourceContext.value(QStringLiteral("source")).toString();
+  const auto normalized = SessionRequestBuilder::normalizeSessionRequest(job.canonicalRequest);
+  QString source = normalized.value(QStringLiteral("source")).toString();
   QLabel *sourceLabel = new QLabel(i18n("<b>Source:</b> %1", source), m_zeroAttemptWidget);
   sourceLabel->setObjectName(QStringLiteral("zeroSourceLabel"));
   zeroLayout->addWidget(sourceLabel);
 
-  QString branch = sourceContext.value(QStringLiteral("githubRepoContext"))
-                       .toObject()
-                       .value(QStringLiteral("startingBranch"))
-                       .toString();
+  QString branch = normalized.value(QStringLiteral("startingBranch")).toString();
   if (!branch.isEmpty()) {
     QLabel *branchLabel = new QLabel(i18n("<b>Branch:</b> %1", branch), m_zeroAttemptWidget);
     branchLabel->setObjectName(QStringLiteral("zeroBranchLabel"));
@@ -1095,6 +1094,20 @@ void SessionWindow::renderZeroAttempts() {
 
   QLabel *statusHeader = new QLabel(i18n("<b>Job Status & History:</b>"), m_zeroAttemptWidget);
   zeroLayout->addWidget(statusHeader);
+
+  QStringList historyLines;
+  for (const auto &value : job.lifecycleMetadata.value(QStringLiteral("history")).toArray()) {
+    const auto entry = value.toObject();
+    historyLines.append(QStringLiteral("%1 — %2: %3")
+                            .arg(entry.value(QStringLiteral("timestamp")).toString(),
+                                 entry.value(QStringLiteral("event")).toString(),
+                                 entry.value(QStringLiteral("message")).toString()));
+  }
+  auto *historyLabel = new QLabel(historyLines.join(QLatin1Char('\n')), m_zeroAttemptWidget);
+  historyLabel->setObjectName(QStringLiteral("zeroHistoryLabel"));
+  historyLabel->setTextFormat(Qt::PlainText);
+  historyLabel->setWordWrap(true);
+  zeroLayout->addWidget(historyLabel);
 
   QLabel *schedLabel = new QLabel(i18n("• Scheduling: %1", schedState), m_zeroAttemptWidget);
   schedLabel->setObjectName(QStringLiteral("zeroSchedulingStateLabel"));

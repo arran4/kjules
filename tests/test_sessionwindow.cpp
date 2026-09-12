@@ -4,6 +4,7 @@
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
 #include "../src/mainwindow.h"
+#include "../src/newsessiondialog.h"
 #include "../src/queuemodel.h"
 #include "../src/sessionrequestbuilder.h"
 #include "../src/sessionwindow.h"
@@ -41,6 +42,118 @@ private Q_SLOTS:
   void cleanupTestCase() {
     QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir(dataDir).removeRecursively();
+  }
+
+  void testCanonicalPresentationAndRecovery_data() {
+    QTest::addColumn<bool>("direct");
+    QTest::newRow("queue") << false;
+    QTest::newRow("direct") << true;
+  }
+
+  void testCanonicalPresentationAndRecovery() {
+    QFETCH(bool, direct);
+    const auto request = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/edited/repo"), QStringLiteral("edited-branch"),
+        QStringLiteral("Canonical prompt"), QStringLiteral("AUTO_CREATE_PR"), true, true, 9, QStringLiteral("queue"));
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    QueueItem item;
+    item.jobId = QStringLiteral("recovered");
+    item.requestData = request;
+    if (direct) {
+      // Observe dispatch without opening the interactive direct-send failure dialog.
+      disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
+      window.sendItemNow(item, -1, false);
+    } else {
+      window.queueModel()->enqueueItem(item);
+      QVERIFY(window.processQueueForTest());
+    }
+    auto *job = window.jobStore()->getJobById(item.jobId);
+    QVERIFY(job);
+    QCOMPARE(job->source, QStringLiteral("sources/github/edited/repo"));
+    QCOMPARE(job->startingBranch, QStringLiteral("edited-branch"));
+    QCOMPARE(job->automationMode, QStringLiteral("AUTO_CREATE_PR"));
+    QVERIFY(job->planApproval);
+    QVERIFY(job->ignoreConcurrency);
+    QCOMPARE(job->priority, 9);
+    QCOMPARE(job->canonicalRequest, request);
+    QCOMPARE(job->attempts.size(), 1);
+    SessionWindow selected(job->id, window.jobStore(), nullptr);
+    bool rendered = false;
+    for (auto *browser : selected.findChildren<QTextBrowser *>())
+      if (browser->toPlainText().contains(QStringLiteral("Starting Branch:")) &&
+          browser->toPlainText().contains(job->source) && browser->toPlainText().contains(job->startingBranch))
+        rendered = true;
+    QVERIFY(rendered);
+
+    JobStore zeroStore;
+    auto zero = JobData::fromRequest(request);
+    zero.id = QStringLiteral("zero-canonical");
+    zeroStore.addJob(zero);
+    SessionWindow zeroWindow(zero.id, &zeroStore, nullptr);
+    QVERIFY(zeroWindow.findChild<QLabel *>(QStringLiteral("zeroSourceLabel"))->text().contains(zero.source));
+    QVERIFY(zeroWindow.findChild<QLabel *>(QStringLiteral("zeroBranchLabel"))->text().contains(zero.startingBranch));
+  }
+
+  void testWinnerEligibility_data() {
+    QTest::addColumn<QString>("state");
+    QTest::addColumn<bool>("eligible");
+    QTest::newRow("completed") << QStringLiteral("COMPLETED") << true;
+    QTest::newRow("failed") << QStringLiteral("FAILED") << false;
+    QTest::newRow("active") << QStringLiteral("IN_PROGRESS") << false;
+    QTest::newRow("cancelled") << QStringLiteral("CANCELED") << false;
+  }
+
+  void testWinnerEligibility() {
+    QFETCH(QString, state);
+    QFETCH(bool, eligible);
+    JobStore store;
+    JobData job;
+    job.id = QStringLiteral("winner-eligibility");
+    JobAttemptData attempt;
+    attempt.id = QStringLiteral("accepted");
+    attempt.julesState = state;
+    job.attempts.append(attempt);
+    job.acceptedAttemptId = attempt.id;
+    QCOMPARE(JobPolicy::aggregateState(job) == JobPolicy::JobAggregateState::WinnerSatisfied, eligible);
+    store.addJob(job);
+    SessionWindow window(job.id, &store, nullptr);
+    QCOMPARE(window.actionCollection()->action(QStringLiteral("choose_winner"))->isEnabled(), eligible);
+    JobAttemptData sibling;
+    sibling.id = QStringLiteral("sibling");
+    sibling.julesState = QStringLiteral("IN_PROGRESS");
+    job.attempts.append(sibling);
+    QCOMPARE(JobPolicy::aggregateState(job) == JobPolicy::JobAggregateState::WinnerWithActive, eligible);
+  }
+
+  void testDurableZeroHistory() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    QMultiMap<QString, QString> sources;
+    sources.insert(QStringLiteral("sources/github/org/repo"), QStringLiteral("main"));
+    window.onSessionCreated(sources, QStringLiteral("History task"), QString(), false, false, 0,
+                            QStringLiteral("queue"));
+    QCOMPARE(window.jobStore()->jobs().size(), 1);
+    const auto id = window.jobStore()->jobs().first().id;
+    window.onMoveToHoldingRequested(id);
+    window.onMoveToQueueRequested(id);
+    window.onMoveToHoldingRequested(id);
+    window.onSessionCreatedResult(false, id, QString(), QJsonObject(),
+                                  ApiError(ApiError::Type::Unknown, QStringLiteral("First launch error")));
+    window.onSessionCreatedResult(false, id, QString(), QJsonObject(),
+                                  ApiError(ApiError::Type::Unknown, QStringLiteral("Second launch error")));
+    const auto job = *window.jobStore()->getJobById(id);
+    JobStore reloaded;
+    QVERIFY(reloaded.load());
+    const auto history = reloaded.getJobById(id)->lifecycleMetadata.value(QStringLiteral("history")).toArray();
+    QCOMPARE(history.size(), 6);
+    QCOMPARE(history, job.lifecycleMetadata.value(QStringLiteral("history")).toArray());
+    QCOMPARE(history[1].toObject().value(QStringLiteral("event")).toString(), QStringLiteral("holding"));
+    QCOMPARE(history[2].toObject().value(QStringLiteral("event")).toString(), QStringLiteral("released"));
+    SessionWindow sw(id, &reloaded, nullptr);
+    const auto text = sw.findChild<QLabel *>(QStringLiteral("zeroHistoryLabel"))->text();
+    QVERIFY(text.contains(QStringLiteral("First launch error")));
+    QVERIFY(text.indexOf(QStringLiteral("First launch error")) < text.indexOf(QStringLiteral("Second launch error")));
   }
 
   void testZeroAttempts() {
@@ -542,11 +655,17 @@ private Q_SLOTS:
 
     QCOMPARE(store->jobs().size(), 1);
 
-    // Create session via MainWindow::onSessionCreated (the real path invoked after New Job From dialog)
+    SessionWindow sw(originalJob.id, store, window.apiManager(), window.errorsModel(), true, &window);
+    window.connectSessionWindow(&sw);
+    sw.actionCollection()->action(QStringLiteral("new_job_from"))->trigger();
+    auto *dialog = window.findChild<NewSessionDialog *>();
+    QVERIFY(dialog);
     QMultiMap<QString, QString> sources;
     sources.insert(QStringLiteral("sources/github/org/repo"), QStringLiteral("feature-branch"));
-    window.onSessionCreated(sources, QStringLiteral("New Independent Workflow Prompt"),
-                            QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0, QStringLiteral("queue"));
+    Q_EMIT dialog->createSessionRequested(sources, QStringLiteral("New Independent Workflow Prompt"),
+                                          QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0,
+                                          QStringLiteral("queue"));
+    dialog->close();
 
     // Resulting job gets a distinct ID
     QCOMPARE(store->jobs().size(), 2);
@@ -617,7 +736,15 @@ private Q_SLOTS:
     QVERIFY(updatedJob->attempts[1].id != QStringLiteral("att_failed_orig"));
   }
 
+  void testWorkflowVariant_data() {
+    QTest::addColumn<QString>("action");
+    QTest::newRow("queue") << QStringLiteral("queue");
+    QTest::newRow("send-next") << QStringLiteral("send_next");
+    QTest::newRow("send-now") << QStringLiteral("send_now");
+  }
+
   void testWorkflowVariant() {
+    QFETCH(QString, action);
     MainWindow window;
     window.setAttribute(Qt::WA_DeleteOnClose, false);
 
@@ -627,6 +754,9 @@ private Q_SLOTS:
 
     JobData job;
     job.id = QStringLiteral("variant_workflow_job");
+    job.canonicalRequest =
+        SessionRequestBuilder::buildSessionRequest(QStringLiteral("sources/original"), QStringLiteral("main"),
+                                                   QStringLiteral("Default prompt"), QString(), false, false, 0);
     JobAttemptData att1;
     att1.id = QStringLiteral("att1_orig");
     att1.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Original prompt");
@@ -639,18 +769,37 @@ private Q_SLOTS:
     // In variant flow: stays under the same Job, edited values pass through shared request builder
     QJsonObject editedRequest = SessionRequestBuilder::buildSessionRequest(
         QStringLiteral("sources/github/org/repo"), QStringLiteral("dev-branch"),
-        QStringLiteral("Edited Variant Prompt"), QStringLiteral("AUTOMATION_MODE_ASAP"), true, false, 7,
-        QStringLiteral("queue"));
+        QStringLiteral("Edited Variant Prompt"), QStringLiteral("AUTOMATION_MODE_ASAP"), true, true, 7, action);
 
-    QueueItem varItem;
-    varItem.jobId = job.id;
-    varItem.requestData = editedRequest;
-    queue->enqueueItem(varItem);
-
-    QCOMPARE(queue->size(), 1);
-    QCOMPARE(queue->getItem(0).jobId, QStringLiteral("variant_workflow_job"));
-
-    window.processQueueForTest();
+    QMultiMap<QString, QString> sources;
+    sources.insert(QStringLiteral("sources/github/org/repo"), QStringLiteral("dev-branch"));
+    // Direct-send failures have an interactive recovery dialog, outside this coordinator test.
+    if (action == QStringLiteral("send_now"))
+      disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
+    QSignalSpy dispatch(window.apiManager(), &APIManager::sessionCreationFailed);
+    QueueItem sentinel;
+    sentinel.jobId = QStringLiteral("other-job");
+    sentinel.requestData[QStringLiteral("priority")] = 100;
+    queue->enqueueItem(sentinel);
+    window.submitVariantForJob(job.id, sources, QStringLiteral("Edited Variant Prompt"),
+                               QStringLiteral("AUTOMATION_MODE_ASAP"), true, true, 7, action);
+    QCOMPARE(store->getJobById(job.id)->canonicalRequest, job.canonicalRequest);
+    if (action == QStringLiteral("send_now")) {
+      QCOMPARE(queue->size(), 1);
+    } else {
+      const int row = action == QStringLiteral("send_next") ? 0 : 1;
+      QCOMPARE(queue->size(), 2);
+      QCOMPARE(queue->getItem(row).jobId, job.id);
+      QCOMPARE(queue->getItem(row).requestData, editedRequest);
+      window.syncModelsFromJobStore();
+      QCOMPARE(queue->getItem(row).requestData, editedRequest);
+      queue->removeItem(1 - row);
+      QVERIFY(window.processQueueForTest());
+    }
+    QCOMPARE(dispatch.count(), 1);
+    const auto dispatchedRequest = dispatch.first().at(2).toJsonObject();
+    QCOMPARE(SessionRequestBuilder::createSession(dispatchedRequest),
+             SessionRequestBuilder::createSession(editedRequest));
 
     JobData *updatedJob = store->getJobById(QStringLiteral("variant_workflow_job"));
     QVERIFY(updatedJob != nullptr);
@@ -664,6 +813,29 @@ private Q_SLOTS:
     QCOMPARE(updatedJob->attempts[1].requestSnapshot.value(QStringLiteral("prompt")).toString(),
              QStringLiteral("Edited Variant Prompt"));
     QCOMPARE(updatedJob->attempts[1].requestSnapshot.value(QStringLiteral("priority")).toInt(), 7);
+    QCOMPARE(updatedJob->attempts[1].requestSnapshot, dispatchedRequest);
+    JobStore reloaded;
+    QVERIFY(reloaded.load());
+    QCOMPARE(reloaded.getJobById(job.id)->attempts[1].requestSnapshot, dispatchedRequest);
+  }
+
+  void testQueueProjectionPreservesExplicitReorderAndDispatch() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    for (const auto &id : {QStringLiteral("first"), QStringLiteral("second")}) {
+      auto job = JobData::fromRequest(SessionRequestBuilder::buildSessionRequest(
+          QStringLiteral("sources/repo"), QStringLiteral("main"), id, QString(), false, false, 0));
+      job.id = id;
+      QVERIFY(window.jobStore()->addJobTransactional(job));
+    }
+    window.syncModelsFromJobStore();
+    QCOMPARE(window.queueModel()->size(), 2);
+    window.onMoveRequested(QStringLiteral("first"), 2);
+    QCOMPARE(window.queueModel()->getItem(0).jobId, QStringLiteral("second"));
+    window.sendJobNow(QStringLiteral("second"));
+    QCOMPARE(window.jobStore()->getJobById(QStringLiteral("second"))->attempts.size(), 1);
+    QCOMPARE(window.queueModel()->size(), 1);
+    QCOMPARE(window.queueModel()->getItem(0).jobId, QStringLiteral("first"));
   }
 
   void testWorkflowLaunchNewAttempt() {

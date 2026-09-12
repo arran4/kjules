@@ -41,6 +41,8 @@ struct JobData {
   QString acceptedAttemptId;
   QJsonObject legacyMetadata;
 
+  void recordHistory(const QString &event, const QString &message);
+  static JobData fromRequest(const QJsonObject &request);
   QJsonObject toJson() const;
   static JobData fromJson(const QJsonObject &obj);
 };

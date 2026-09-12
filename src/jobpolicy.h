@@ -40,6 +40,13 @@ public:
     return false;
   }
 
+  static bool isEligibleWinner(const JobData &job, const QString &id) {
+    for (const auto &attempt : job.attempts)
+      if (attempt.id == id)
+        return isAttemptSuccessful(attempt);
+    return false;
+  }
+
   static bool hasViableActiveAttempt(const JobData &job) {
     for (const auto &attempt : job.attempts) {
       if (!isAttemptTerminal(attempt) && (!attempt.julesState.isEmpty() || !attempt.dispatchState.isEmpty()))
@@ -130,7 +137,7 @@ public:
       return JobAggregateState::Archived;
     }
 
-    bool hasWinner = !job.acceptedAttemptId.isEmpty() && isValidAttempt(job, job.acceptedAttemptId);
+    bool hasWinner = isEligibleWinner(job, job.acceptedAttemptId);
 
     bool hasActive = false;
     bool hasFailed = false;
