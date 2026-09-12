@@ -168,7 +168,7 @@ void TestSessionsWidget::testPerSourceAutoFollowIgnoresForeignAndInactiveSession
   const QString sourceA = QStringLiteral("sources/github/kde/kjules");
   const QString sourceB = QStringLiteral("sources/github/qt/qtbase");
 
-  SessionsWidget widget(sourceA, nullptr, &managedModel);
+  SessionsWidget widget(sourceA, nullptr, nullptr, &managedModel);
   widget.setAutoFollowOnRefresh(true);
 
   QSignalSpy watchSpy(&widget, &SessionsWidget::watchRequested);
@@ -222,7 +222,7 @@ void TestSessionsWidget::testGlobalSessionsWindowPreservesGlobalAutoFollow() {
   const QString sourceA = QStringLiteral("sources/github/kde/kjules");
   const QString sourceB = QStringLiteral("sources/github/qt/qtbase");
 
-  SessionsWidget widget(QString(), nullptr, &managedModel);
+  SessionsWidget widget(QString(), nullptr, nullptr, &managedModel);
   widget.setAutoFollowOnRefresh(true);
 
   QSignalSpy watchSpy(&widget, &SessionsWidget::watchRequested);
@@ -319,7 +319,7 @@ void TestSessionsWidget::testActionStatesAndTriggeredConnections() {
   sManaged[QStringLiteral("title")] = QStringLiteral("Managed Session");
   managedModel.addSession(sManaged);
 
-  SessionsWidget widget(QString(), nullptr, &managedModel);
+  SessionsWidget widget(QString(), nullptr, nullptr, &managedModel);
   widget.model()->clearSessions();
   widget.model()->addSession(sManaged);
   SessionModel *model = widget.model();
@@ -364,7 +364,7 @@ void TestSessionsWidget::testUnmanageOwnership() {
   sManaged[QStringLiteral("id")] = QStringLiteral("sess-1");
   managedModel.addSession(sManaged);
 
-  SessionsWidget widget(QString(), nullptr, &managedModel);
+  SessionsWidget widget(QString(), nullptr, nullptr, &managedModel);
   SessionModel *model = widget.model();
   model->clearSessions();
   model->addSessions(QJsonArray{sManaged});

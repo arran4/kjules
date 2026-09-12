@@ -1,4 +1,5 @@
 #include "jobdata.h"
+#include "sessionrequestbuilder.h"
 #include <QUuid>
 
 QJsonObject JobAttemptData::toJson() const {
@@ -90,4 +91,29 @@ JobData JobData::fromJson(const QJsonObject &obj) {
   data.acceptedAttemptId = obj[QStringLiteral("acceptedAttemptId")].toString();
   data.legacyMetadata = obj[QStringLiteral("legacyMetadata")].toObject();
   return data;
+}
+
+JobData JobData::fromRequest(const QJsonObject &request) {
+  JobData job;
+  const auto normalized = SessionRequestBuilder::normalizeSessionRequest(request);
+  job.canonicalRequest = request;
+  job.source = normalized.value(QStringLiteral("source")).toString();
+  job.startingBranch = normalized.value(QStringLiteral("startingBranch")).toString();
+  job.prompt = normalized.value(QStringLiteral("prompt")).toString();
+  job.automationMode = normalized.value(QStringLiteral("automationMode")).toString();
+  job.planApproval = normalized.value(QStringLiteral("requirePlanApproval")).toBool();
+  job.ignoreConcurrency = normalized.value(QStringLiteral("ignoreConcurrency")).toBool();
+  job.priority = normalized.value(QStringLiteral("priority")).toInt();
+  job.createdAt = QDateTime::currentDateTimeUtc();
+  job.updatedAt = job.createdAt;
+  job.recordHistory(QStringLiteral("queued"), QStringLiteral("Scheduled for launch"));
+  return job;
+}
+
+void JobData::recordHistory(const QString &event, const QString &message) {
+  auto history = lifecycleMetadata.value(QStringLiteral("history")).toArray();
+  history.append(QJsonObject{{QStringLiteral("timestamp"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+                             {QStringLiteral("event"), event},
+                             {QStringLiteral("message"), message}});
+  lifecycleMetadata[QStringLiteral("history")] = history;
 }

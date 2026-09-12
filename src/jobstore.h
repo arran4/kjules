@@ -22,6 +22,9 @@ public:
   JobData *getJobBySessionId(const QString &sessionId);
   void updateJob(const JobData &job);
   void removeJob(const QString &id);
+  bool updateJobTransactional(const JobData &job);
+  bool removeJobTransactional(const QString &id);
+  bool addJobTransactional(const JobData &job);
 
   // For migration seams
   static JobStore fromMemory(const QVector<JobData> &jobs);

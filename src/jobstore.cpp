@@ -198,6 +198,9 @@ JobData *JobStore::getJobByAttemptId(const QString &attemptId) {
 
 JobData *JobStore::getJobBySessionId(const QString &sessionId) {
   for (int i = 0; i < m_jobs.size(); ++i) {
+    if (m_jobs[i].id == sessionId) {
+      return &m_jobs[i];
+    }
     for (const JobAttemptData &attempt : m_jobs[i].attempts) {
       if (attempt.julesSessionId == sessionId) {
         return &m_jobs[i];
@@ -223,4 +226,34 @@ void JobStore::removeJob(const QString &id) {
       return;
     }
   }
+}
+
+bool JobStore::updateJobTransactional(const JobData &job) {
+  QVector<JobData> backup = m_jobs;
+  updateJob(job);
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
+
+bool JobStore::removeJobTransactional(const QString &id) {
+  QVector<JobData> backup = m_jobs;
+  removeJob(id);
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
+
+bool JobStore::addJobTransactional(const JobData &job) {
+  QVector<JobData> backup = m_jobs;
+  addJob(job);
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
 }

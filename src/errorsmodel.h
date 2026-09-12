@@ -4,6 +4,8 @@
 #include <QAbstractListModel>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
+#include <QVector>
 
 class ErrorsModel : public QAbstractListModel {
   Q_OBJECT
@@ -20,7 +22,9 @@ public:
     SourceIdRole,
     SessionIdRole,
     OperationRole,
-    ProviderRole
+    ProviderRole,
+    JobIdRole,
+    AttemptIdRole
   };
 
   explicit ErrorsModel(QObject *parent = nullptr, const QString &filename = QStringLiteral("errors.json"));
@@ -34,12 +38,11 @@ public:
    *
    * The expected JSON structure for errorObj is:
    * {
-   *   "request": QJsonObject,     // The request payload/details (optional but
-   * expected) "response": QJsonObject,    // The response payload/details
-   * (optional but expected) "message": QString,         // A human-readable
-   * error message (used as the title) "httpDetails": QString,     // (Optional)
-   * Detailed HTTP status/headers "timestamp": QString        // (Optional) ISO
-   * 8601 formatted UTC timestamp
+   *   "request": QJsonObject,     // The request payload/details (optional but expected)
+   *   "response": QJsonObject,    // The response payload/details (optional but expected)
+   *   "message": QString,         // A human-readable error message (used as the title)
+   *   "httpDetails": QString,     // (Optional) Detailed HTTP status/headers
+   *   "timestamp": QString        // (Optional) ISO 8601 formatted UTC timestamp
    * }
    */
   void addErrorObj(const QJsonObject &errorObj);
@@ -49,6 +52,7 @@ public:
   void loadErrors();
   void saveErrors();
   void setErrors(const QJsonArray &errors);
+  void syncJobErrors(const QJsonArray &jobErrors);
   void clear();
 
   int unseenCount() const;
@@ -60,11 +64,14 @@ Q_SIGNALS:
 
 private:
   QString cacheFilePath() const;
-
-  QJsonArray m_errors;
-  QList<bool> m_seenState;
-  int m_unseenCount = 0;
   void updateUnseenCount();
+
+  QVector<QJsonObject> m_operationalErrors;
+  QList<bool> m_operationalSeenState;
+  QVector<QJsonObject> m_jobErrors;
+  QSet<QString> m_seenJobKeys;
+  QSet<QString> m_dismissedJobKeys;
+  int m_unseenCount = 0;
   QString m_filename;
 };
 

@@ -1,5 +1,6 @@
 #include "sessionswidget.h"
 #include "apimanager.h"
+#include "jobstore.h"
 #include "sessionmodel.h"
 #include "sessionswindow.h"
 #include "sessionwindow.h"
@@ -131,11 +132,11 @@ bool SessionsProxyModel::lessThan(const QModelIndex &source_left, const QModelIn
   return QSortFilterProxyModel::lessThan(source_left, source_right);
 }
 
-SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, SessionModel *managedModel,
-                               ErrorsModel *errorsModel, QWidget *parent)
-    : QWidget(parent), m_apiManager(apiManager), m_errorsModel(errorsModel), m_managedModel(managedModel),
-      m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false), m_pagesLoaded(0),
-      m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
+SessionsWidget::SessionsWidget(const QString &filterSource, APIManager *apiManager, JobStore *jobStore,
+                               SessionModel *managedModel, ErrorsModel *errorsModel, QWidget *parent)
+    : QWidget(parent), m_apiManager(apiManager), m_jobStore(jobStore), m_errorsModel(errorsModel),
+      m_managedModel(managedModel), m_filterSource(filterSource), m_sessionsLoaded(0), m_isRefreshing(false),
+      m_pagesLoaded(0), m_isRefreshingAll(false), m_autoLoadGroup(nullptr) {
 
   m_model = new SessionModel(QStringLiteral("cached_all_sessions.json"), this);
   m_proxyModel = new SessionsProxyModel(this);
@@ -310,7 +311,16 @@ void SessionsWidget::onListViewDoubleClicked(const QModelIndex &index) {
   QJsonObject session = m_model->getSession(sourceIndex.row());
   QString id = session.value(QStringLiteral("id")).toString();
   bool isManaged = m_managedModel && m_managedModel->contains(id);
-  SessionWindow *sessionWindow = new SessionWindow(session, m_apiManager, m_errorsModel, isManaged, this);
+  SessionWindow *sessionWindow = nullptr;
+  if (m_jobStore) {
+    JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(id) : nullptr;
+    if (job) {
+      sessionWindow = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, isManaged, this);
+    }
+  }
+  if (!sessionWindow) {
+    sessionWindow = new SessionWindow(session, m_apiManager, m_errorsModel, isManaged, this);
+  }
   sessionWindow->show();
 }
 

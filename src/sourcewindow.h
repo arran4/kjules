@@ -5,6 +5,7 @@
 #include <KXmlGuiWindow>
 
 class SourceModel;
+class JobStore;
 class SessionModel;
 class QueueModel;
 class ErrorsModel;
@@ -28,7 +29,8 @@ class SourceWindow : public KXmlGuiWindow {
 public:
   explicit SourceWindow(const QString &sourceId, SourceModel *sourceModel, SessionModel *sessionModel,
                         SessionModel *archiveModel, QueueModel *queueModel, ErrorsModel *errorsModel,
-                        BlockedTreeModel *blockedTreeModel, APIManager *apiManager, QWidget *parent = nullptr);
+                        BlockedTreeModel *blockedTreeModel, APIManager *apiManager, JobStore *jobStore = nullptr,
+                        QWidget *parent = nullptr);
   ~SourceWindow() override;
 
 Q_SIGNALS:
@@ -70,6 +72,7 @@ private:
   ErrorsModel *m_errorsModel;
   BlockedTreeModel *m_blockedTreeModel;
   APIManager *m_apiManager;
+  JobStore *m_jobStore = nullptr;
 
   QTabWidget *m_tabWidget;
   QWidget *m_queuedBlockedTab = nullptr;
