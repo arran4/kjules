@@ -4822,7 +4822,6 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
                 JobData *job = m_jobStore->getJobById(jobId);
                 if (job) {
                   QueueItem item;
-
                   QJsonObject requestData;
                   requestData[QStringLiteral("prompt")] = prompt;
                   requestData[QStringLiteral("automationMode")] = automationMode;
@@ -4830,7 +4829,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
                   requestData[QStringLiteral("ignoreConcurrency")] = ignoreConcurrency;
                   requestData[QStringLiteral("priority")] = priority;
                   requestData[QStringLiteral("_kjules_action")] = queueAction;
-
+                  // Pass through original parsed sources identically to New Session
                   QJsonArray sourcesArr;
                   for (auto it = sources.cbegin(); it != sources.cend(); ++it) {
                     QJsonObject sourceContext;
@@ -4842,14 +4841,15 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
                     }
                     sourcesArr.append(sourceContext);
                   }
-
                   if (sourcesArr.size() == 1) {
                     requestData[QStringLiteral("sourceContext")] = sourcesArr.first().toObject();
                   } else if (!sourcesArr.isEmpty()) {
                     requestData[QStringLiteral("sources")] = sourcesArr;
                   }
 
-                  item.requestData = requestData;
+                  // Use builder properly
+                  QJsonObject fullRequest = SessionRequestBuilder::createSession(requestData);
+                  item.requestData = fullRequest;
                   item.jobId = jobId;
                   m_queueModel->enqueueItem(item);
                   updateStatus(i18n("Variant attempt queued for Job %1", jobId));
@@ -4858,7 +4858,6 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
                 onSessionCreated(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority,
                                  queueAction);
               }
-              dlg->close();
             });
 
     dlg->setInitialData(request);
@@ -6496,9 +6495,12 @@ void MainWindow::onUnseenErrorsCountChanged(int count) {
 }
 
 void MainWindow::syncModelsFromJobStore() {
+  QJsonArray errorsArray;
+  for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+    errorsArray.append(m_errorsModel->getError(i));
+  }
   QVector<QueueItem> queueItems;
   QVector<QueueItem> holdingItems;
-  QJsonArray errorsArray;
   QJsonArray followingArray;
   QJsonArray archiveArray;
 
