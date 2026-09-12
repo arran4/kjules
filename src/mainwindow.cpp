@@ -6369,9 +6369,12 @@ void MainWindow::onUnseenErrorsCountChanged(int count) {
 }
 
 void MainWindow::syncModelsFromJobStore() {
+  QJsonArray errorsArray;
+  for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+    errorsArray.append(m_errorsModel->getError(i));
+  }
   QVector<QueueItem> queueItems;
   QVector<QueueItem> holdingItems;
-  QJsonArray errorsArray;
   QJsonArray followingArray;
   QJsonArray archiveArray;
 
