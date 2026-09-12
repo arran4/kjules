@@ -35,7 +35,7 @@ if [ "${EXPECTED_HASH}" != "${ACTUAL_HASH}" ]; then
 fi
 
 echo "Extracting archive to ${ROOTFS_DIR}..."
-sudo tar --numeric-owner -I zstd -xf archive.tar.zst -C "${ROOTFS_DIR}"
+sudo tar --numeric-owner --exclude='./dev/*' --exclude='dev/*' -I zstd -xf archive.tar.zst -C "${ROOTFS_DIR}"
 
 sudo touch "${MARKER_FILE}"
 sudo chown $(id -u):$(id -g) "${MARKER_FILE}"

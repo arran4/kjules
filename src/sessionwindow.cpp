@@ -184,10 +184,8 @@ void SessionWindow::setupActions() {
 
   QAction *launchVariantAction =
       new QAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."), this);
-  connect(launchVariantAction, &QAction::triggered, this, [this]() {
-    Q_EMIT variantRequested(m_jobId,
-                            m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
-  });
+  connect(launchVariantAction, &QAction::triggered, this,
+          [this]() { Q_EMIT variantRequested(m_jobId, currentVariantRequest()); });
   actionCollection()->addAction(QStringLiteral("launch_variant"), launchVariantAction);
 
   QAction *retryAttemptAction =
@@ -207,11 +205,14 @@ void SessionWindow::setupActions() {
     if (m_jobStore && !m_jobId.isEmpty() && !m_currentAttemptId.isEmpty()) {
       JobData *job = m_jobStore->getJobById(m_jobId);
       if (job) {
-        job->acceptedAttemptId = m_currentAttemptId;
-        m_jobStore->updateJob(*job);
-        m_jobStore->save();
-        updateAttemptList();
-        Q_EMIT jobMutated(m_jobId);
+        JobData updatedJob = *job;
+        updatedJob.acceptedAttemptId = m_currentAttemptId;
+        if (m_jobStore->updateJobTransactional(updatedJob)) {
+          updateAttemptList();
+          Q_EMIT jobMutated(m_jobId);
+        } else {
+          QMessageBox::warning(this, i18n("Error"), i18n("Failed to save winner selection to disk."));
+        }
       }
     }
   });
@@ -235,10 +236,12 @@ void SessionWindow::setupActions() {
             i18n("Are you sure you want to delete this Job and all its attempts? This cannot be undone.")) ==
         QMessageBox::Yes) {
       if (m_jobStore) {
-        m_jobStore->removeJob(m_jobId);
-        Q_EMIT jobMutated(m_jobId);
-        m_jobStore->save();
-        close();
+        if (m_jobStore->removeJobTransactional(m_jobId)) {
+          Q_EMIT jobMutated(m_jobId);
+          close();
+        } else {
+          QMessageBox::warning(this, i18n("Error"), i18n("Failed to delete Job from disk."));
+        }
       }
     }
   });
@@ -551,6 +554,23 @@ QJsonObject SessionWindow::currentSessionData() const {
   return m_sessionData;
 }
 
+QJsonObject SessionWindow::currentVariantRequest() const {
+  if (m_jobStore && !m_jobId.isEmpty()) {
+    JobData *job = m_jobStore->getJobById(m_jobId);
+    if (job) {
+      if (!m_currentAttemptId.isEmpty()) {
+        for (const auto &attempt : job->attempts) {
+          if (attempt.id == m_currentAttemptId && !attempt.requestSnapshot.isEmpty()) {
+            return attempt.requestSnapshot;
+          }
+        }
+      }
+      return job->canonicalRequest;
+    }
+  }
+  return currentSessionData();
+}
+
 void SessionWindow::renderDetailsAndDiff() {
   QJsonObject data = currentSessionData();
   QJsonDocument doc(data);
@@ -761,6 +781,8 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_splitter->addWidget(m_attemptList);
 
   connect(m_attemptList, &QListWidget::itemClicked, this, &SessionWindow::onAttemptSelected);
+  connect(m_attemptList, &QListWidget::currentItemChanged, this,
+          [this](QListWidgetItem *current, QListWidgetItem *) { onAttemptSelected(current); });
 
   m_contentStack = new QStackedWidget(this);
   m_splitter->addWidget(m_contentStack);
@@ -1002,10 +1024,8 @@ void SessionWindow::renderZeroAttempts() {
 
   QPushButton *variantButton =
       new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."));
-  connect(variantButton, &QPushButton::clicked, this, [this]() {
-    Q_EMIT variantRequested(m_jobId,
-                            m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
-  });
+  connect(variantButton, &QPushButton::clicked, this,
+          [this]() { Q_EMIT variantRequested(m_jobId, currentVariantRequest()); });
   buttonsLayout->addWidget(variantButton);
   buttonsLayout->addStretch();
   zeroLayout->addLayout(buttonsLayout);

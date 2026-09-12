@@ -683,6 +683,153 @@ private Q_SLOTS:
     QVERIFY(!store.load()); // Should fail because acceptedAttemptId references nonexistent attempt
     QFile::remove(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/bad.json"));
   }
+
+  void testJobAggregateStateAllCombinations() {
+    // 1. Archived
+    JobData archivedJob;
+    archivedJob.id = QStringLiteral("j_archived");
+    archivedJob.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+    QCOMPARE(JobPolicy::aggregateState(archivedJob), JobPolicy::JobAggregateState::Archived);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::Archived), QStringLiteral("archived"));
+
+    JobData legacyArchivedJob;
+    legacyArchivedJob.id = QStringLiteral("j_leg_archived");
+    legacyArchivedJob.legacyMetadata[QStringLiteral("_isArchive")] = true;
+    QCOMPARE(JobPolicy::aggregateState(legacyArchivedJob), JobPolicy::JobAggregateState::Archived);
+
+    // 2. Pending (0 attempts)
+    JobData pendingJob;
+    pendingJob.id = QStringLiteral("j_pending");
+    QCOMPARE(JobPolicy::aggregateState(pendingJob), JobPolicy::JobAggregateState::Pending);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::Pending), QStringLiteral("pending"));
+
+    // 3. Active (1 running attempt)
+    JobData activeJob;
+    activeJob.id = QStringLiteral("j_active");
+    JobAttemptData actAtt;
+    actAtt.id = QStringLiteral("a_act");
+    actAtt.julesState = QStringLiteral("IN_PROGRESS");
+    activeJob.attempts.append(actAtt);
+    QCOMPARE(JobPolicy::aggregateState(activeJob), JobPolicy::JobAggregateState::Active);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::Active), QStringLiteral("active"));
+
+    // 4. Active + Failed (1 running, 1 failed)
+    JobData activeFailedJob;
+    activeFailedJob.id = QStringLiteral("j_act_failed");
+    JobAttemptData failAtt;
+    failAtt.id = QStringLiteral("a_fail");
+    failAtt.dispatchState = QStringLiteral("FAILED");
+    activeFailedJob.attempts.append(failAtt);
+    activeFailedJob.attempts.append(actAtt);
+    QCOMPARE(JobPolicy::aggregateState(activeFailedJob), JobPolicy::JobAggregateState::ActiveWithFailed);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::ActiveWithFailed),
+             QStringLiteral("active+failed"));
+
+    // 5. Needs Attention (all failed)
+    JobData needsAttentionJob;
+    needsAttentionJob.id = QStringLiteral("j_attn");
+    needsAttentionJob.attempts.append(failAtt);
+    QCOMPARE(JobPolicy::aggregateState(needsAttentionJob), JobPolicy::JobAggregateState::NeedsAttention);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::NeedsAttention),
+             QStringLiteral("needs-attention"));
+
+    // 6. Awaiting User Action
+    JobData awaitingJob;
+    awaitingJob.id = QStringLiteral("j_awaiting");
+    JobAttemptData awaitAtt;
+    awaitAtt.id = QStringLiteral("a_await");
+    awaitAtt.julesState = QStringLiteral("AWAITING_USER_FEEDBACK");
+    awaitingJob.attempts.append(awaitAtt);
+    QCOMPARE(JobPolicy::aggregateState(awaitingJob), JobPolicy::JobAggregateState::AwaitingUserAction);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::AwaitingUserAction),
+             QStringLiteral("awaiting-user"));
+
+    // 7. Completed Without Winner
+    JobData completedNoWinnerJob;
+    completedNoWinnerJob.id = QStringLiteral("j_comp_no_winner");
+    JobAttemptData compAtt;
+    compAtt.id = QStringLiteral("a_comp");
+    compAtt.julesState = QStringLiteral("COMPLETED");
+    completedNoWinnerJob.attempts.append(compAtt);
+    completedNoWinnerJob.attempts.append(failAtt);
+    QCOMPARE(JobPolicy::aggregateState(completedNoWinnerJob), JobPolicy::JobAggregateState::CompletedWithoutWinner);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::CompletedWithoutWinner),
+             QStringLiteral("completed without winner"));
+
+    // 8. Winner Satisfied (winner chosen, no active attempts)
+    JobData winnerSatisfiedJob;
+    winnerSatisfiedJob.id = QStringLiteral("j_winner_sat");
+    winnerSatisfiedJob.attempts.append(compAtt);
+    winnerSatisfiedJob.acceptedAttemptId = QStringLiteral("a_comp");
+    QCOMPARE(JobPolicy::aggregateState(winnerSatisfiedJob), JobPolicy::JobAggregateState::WinnerSatisfied);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::WinnerSatisfied),
+             QStringLiteral("winner/satisfied"));
+
+    // 9. Winner With Active (winner chosen, but another attempt is still running)
+    JobData winnerActiveJob;
+    winnerActiveJob.id = QStringLiteral("j_winner_act");
+    winnerActiveJob.attempts.append(compAtt);
+    winnerActiveJob.attempts.append(actAtt);
+    winnerActiveJob.acceptedAttemptId = QStringLiteral("a_comp");
+    QCOMPARE(JobPolicy::aggregateState(winnerActiveJob), JobPolicy::JobAggregateState::WinnerWithActive);
+    QCOMPARE(JobPolicy::aggregateStateToString(JobPolicy::JobAggregateState::WinnerWithActive),
+             QStringLiteral("winner+active"));
+  }
+
+  void testTransactionalStorePersistence() {
+    QString validPath =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("/trans_test.json");
+    JobStore store(validPath);
+
+    JobData jobA;
+    jobA.id = QStringLiteral("job_A");
+    jobA.source = QStringLiteral("src_A");
+    JobAttemptData attA1;
+    attA1.id = QStringLiteral("att_A1");
+    jobA.attempts.append(attA1);
+
+    // 1. Transactional Add Success
+    QVERIFY(store.addJobTransactional(jobA));
+    QCOMPARE(store.jobs().size(), 1);
+
+    // 2. Transactional Update Success
+    jobA.acceptedAttemptId = QStringLiteral("att_A1");
+    QVERIFY(store.updateJobTransactional(jobA));
+    QCOMPARE(store.getJobById(QStringLiteral("job_A"))->acceptedAttemptId, QStringLiteral("att_A1"));
+
+    // Verify persisted on disk
+    JobStore verifyStore(validPath);
+    QVERIFY(verifyStore.load());
+    QCOMPARE(verifyStore.getJobById(QStringLiteral("job_A"))->acceptedAttemptId, QStringLiteral("att_A1"));
+
+    // 3. Rollback on Failure: Unwritable path
+    JobStore failingStore(QStringLiteral("/proc/nonexistent_kjules_dir/cannot_write.json"));
+    failingStore.setJobs(store.jobs());
+
+    // Update fails and rolls back in memory
+    JobData mutatedA = jobA;
+    mutatedA.acceptedAttemptId = QStringLiteral("invalid_never_persisted");
+    QVERIFY(!failingStore.updateJobTransactional(mutatedA));
+    QCOMPARE(failingStore.getJobById(QStringLiteral("job_A"))->acceptedAttemptId, QStringLiteral("att_A1"));
+
+    // Remove fails and rolls back in memory
+    QVERIFY(!failingStore.removeJobTransactional(QStringLiteral("job_A")));
+    QCOMPARE(failingStore.jobs().size(), 1);
+    QCOMPARE(failingStore.jobs()[0].id, QStringLiteral("job_A"));
+
+    // Add fails and rolls back in memory
+    JobData jobB;
+    jobB.id = QStringLiteral("job_B");
+    QVERIFY(!failingStore.addJobTransactional(jobB));
+    QCOMPARE(failingStore.jobs().size(), 1);
+    QVERIFY(failingStore.getJobById(QStringLiteral("job_B")) == nullptr);
+
+    // 4. Transactional Remove Success
+    QVERIFY(store.removeJobTransactional(QStringLiteral("job_A")));
+    QCOMPARE(store.jobs().size(), 0);
+
+    QFile::remove(validPath);
+  }
 };
 
 QTEST_MAIN(TestJob)

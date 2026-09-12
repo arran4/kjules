@@ -227,3 +227,33 @@ void JobStore::removeJob(const QString &id) {
     }
   }
 }
+
+bool JobStore::updateJobTransactional(const JobData &job) {
+  QVector<JobData> backup = m_jobs;
+  updateJob(job);
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
+
+bool JobStore::removeJobTransactional(const QString &id) {
+  QVector<JobData> backup = m_jobs;
+  removeJob(id);
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
+
+bool JobStore::addJobTransactional(const JobData &job) {
+  QVector<JobData> backup = m_jobs;
+  addJob(job);
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}

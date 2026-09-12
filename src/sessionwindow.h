@@ -65,6 +65,7 @@ private:
   void onAttemptSelected(QListWidgetItem *item);
   void setupActions();
   QJsonObject currentSessionData() const;
+  QJsonObject currentVariantRequest() const;
 
   void refreshSession(bool isBackground = false);
   void onSessionReloaded(const QJsonObject &session, bool isBackground);

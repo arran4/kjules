@@ -1547,6 +1547,8 @@ void NewSessionDialog::setInitialData(const QJsonObject &data) {
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
     m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+  } else if (data.contains(QStringLiteral("planApproval"))) {
+    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("planApproval")).toBool());
   }
 
   if (data.contains(QStringLiteral("ignoreConcurrency"))) {

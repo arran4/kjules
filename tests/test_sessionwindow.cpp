@@ -132,6 +132,8 @@ private Q_SLOTS:
     variantAction->trigger();
     QCOMPARE(spyVariant.count(), 1);
     QCOMPARE(spyVariant.at(0).at(0).toString(), QStringLiteral("job_actions"));
+    QCOMPARE(spyVariant.at(0).at(1).toJsonObject().value(QStringLiteral("prompt")).toString(),
+             QStringLiteral("Attempt Prompt"));
 
     retryAction->trigger();
     QCOMPARE(spyRetry.count(), 1);
@@ -142,6 +144,101 @@ private Q_SLOTS:
     QCOMPARE(spyJobFrom.count(), 1);
     QCOMPARE(spyJobFrom.at(0).at(0).toJsonObject().value(QStringLiteral("prompt")).toString(),
              QStringLiteral("Attempt Prompt"));
+  }
+
+  void testVariantUsesImmutableSnapshot() {
+    JobStore store;
+    JobData job;
+    job.id = QStringLiteral("job_snap");
+    job.canonicalRequest[QStringLiteral("prompt")] = QStringLiteral("Original Canonical Prompt");
+    job.canonicalRequest[QStringLiteral("source")] = QStringLiteral("sources/github/org/repo");
+
+    JobAttemptData att1;
+    att1.id = QStringLiteral("att1");
+    att1.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Snapshot Attempt 1 Prompt");
+    att1.requestSnapshot[QStringLiteral("source")] = QStringLiteral("sources/github/org/repo");
+    job.attempts.append(att1);
+
+    store.addJob(job);
+
+    SessionWindow window(job.id, &store, nullptr);
+    QSignalSpy spyVariant(&window, &SessionWindow::variantRequested);
+
+    auto actions = window.findChildren<QAction *>();
+    QAction *variantAction = nullptr;
+    for (auto *a : actions) {
+      if (a->text() == QStringLiteral("Launch Variant...")) {
+        variantAction = a;
+        break;
+      }
+    }
+    QVERIFY(variantAction != nullptr);
+
+    variantAction->trigger();
+    QCOMPARE(spyVariant.count(), 1);
+    QCOMPARE(spyVariant.at(0).at(0).toString(), QStringLiteral("job_snap"));
+    // Must use attempt's immutable request snapshot, NOT the canonical prompt
+    QCOMPARE(spyVariant.at(0).at(1).toJsonObject().value(QStringLiteral("prompt")).toString(),
+             QStringLiteral("Snapshot Attempt 1 Prompt"));
+  }
+
+  void testChooseWinnerSavesToStoreAndEmitsSignal() {
+    QTemporaryDir dir;
+    QString storePath = dir.path() + QStringLiteral("/jobs.json");
+    JobStore store(storePath);
+
+    JobData job;
+    job.id = QStringLiteral("job_winner");
+    job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Winner Test");
+
+    JobAttemptData att1;
+    att1.id = QStringLiteral("att1");
+    att1.julesState = QStringLiteral("COMPLETED");
+
+    JobAttemptData att2;
+    att2.id = QStringLiteral("att2");
+    att2.julesState = QStringLiteral("COMPLETED");
+
+    job.attempts = {att1, att2};
+    store.addJob(job);
+    QVERIFY(store.save());
+
+    SessionWindow window(job.id, &store, nullptr);
+    QSignalSpy spyMutated(&window, &SessionWindow::jobMutated);
+
+    auto actions = window.findChildren<QAction *>();
+    QAction *winnerAction = nullptr;
+    for (auto *a : actions) {
+      if (a->text() == QStringLiteral("Choose as Winner")) {
+        winnerAction = a;
+        break;
+      }
+    }
+    QVERIFY(winnerAction != nullptr);
+
+    // Initial selected attempt is att1
+    winnerAction->trigger();
+    QCOMPARE(spyMutated.count(), 1);
+    QCOMPARE(spyMutated.at(0).at(0).toString(), QStringLiteral("job_winner"));
+    QCOMPARE(store.getJobById(QStringLiteral("job_winner"))->acceptedAttemptId, QStringLiteral("att1"));
+
+    // Verify persisted on disk
+    JobStore verifyStore(storePath);
+    QVERIFY(verifyStore.load());
+    QCOMPARE(verifyStore.getJobById(QStringLiteral("job_winner"))->acceptedAttemptId, QStringLiteral("att1"));
+
+    // Switch selection to att2 in list widget
+    auto *list = window.findChild<QListWidget *>();
+    QVERIFY(list != nullptr);
+    list->setCurrentRow(1);
+
+    winnerAction->trigger();
+    QCOMPARE(spyMutated.count(), 2);
+    QCOMPARE(store.getJobById(QStringLiteral("job_winner"))->acceptedAttemptId, QStringLiteral("att2"));
+
+    // Verify updated on disk
+    QVERIFY(verifyStore.load());
+    QCOMPARE(verifyStore.getJobById(QStringLiteral("job_winner"))->acceptedAttemptId, QStringLiteral("att2"));
   }
 };
 
