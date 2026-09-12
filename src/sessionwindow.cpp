@@ -511,8 +511,10 @@ void SessionWindow::onActivitiesReceived(const QString &sessionId, const QJsonAr
   QJsonDocument activitiesDoc(turns);
   m_rawActivitiesBrowser->setPlainText(QString::fromUtf8(activitiesDoc.toJson(QJsonDocument::Indented)));
 
-  m_statusLabel->setText(i18n(
-      "Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
+  if (m_statusLabel) {
+    m_statusLabel->setText(i18n(
+        "Refreshed at %1", QDateTime::currentDateTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))));
+  }
 }
 
 QJsonObject SessionWindow::currentSessionData() const {

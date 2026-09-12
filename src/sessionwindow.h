@@ -57,6 +57,8 @@ public:
 
 public:
   QString jobId() const { return m_jobId; }
+  QJsonObject currentVariantRequest() const;
+  QJsonObject currentSessionData() const;
 
 private:
   void setupUi(const QJsonObject &sessionData);
@@ -64,8 +66,6 @@ private:
   void updateAttemptList();
   void onAttemptSelected(QListWidgetItem *item);
   void setupActions();
-  QJsonObject currentSessionData() const;
-  QJsonObject currentVariantRequest() const;
 
   void refreshSession(bool isBackground = false);
   void onSessionReloaded(const QJsonObject &session, bool isBackground);
