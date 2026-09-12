@@ -1,18 +1,48 @@
 
 #include "../src/apimanager.h"
+#include "../src/errorsmodel.h"
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
+#include "../src/mainwindow.h"
+#include "../src/queuemodel.h"
+#include "../src/sessionrequestbuilder.h"
 #include "../src/sessionwindow.h"
+#include <KActionCollection>
+#include <QDir>
+#include <QLabel>
 #include <QListWidget>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QTest>
+#include <QTextBrowser>
 #include <QUuid>
 
 class TestSessionWindow : public QObject {
   Q_OBJECT
 private Q_SLOTS:
+  void initTestCase() {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    qputenv("KDE_HOME_READONLY", "1");
+    qputenv("CANBERRA_DRIVER", "null");
+    qputenv("KNOTIFICATIONS_DEFAULT_BACKEND", "null");
+    QStandardPaths::setTestModeEnabled(true);
+  }
+
+  void init() {
+    QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir(dataDir).removeRecursively();
+    QDir().mkpath(dataDir);
+  }
+
+  void cleanupTestCase() {
+    QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir(dataDir).removeRecursively();
+  }
+
   void testZeroAttempts() {
     JobStore store;
     JobData job;
@@ -299,91 +329,379 @@ private Q_SLOTS:
     QCOMPARE(window.currentVariantRequest().value(QStringLiteral("prompt")).toString(), QStringLiteral("Beta Prompt"));
   }
 
-  void testNewJobFromCreatesIndependentIdentity() {
-    JobStore store;
-    JobData originalJob;
-    originalJob.id = QStringLiteral("job_original_ident");
+  void testDiagnosticIdentityAndAttemptFiltering() {
+    QTemporaryDir dir;
+    QString errPath = dir.path() + QStringLiteral("/errors.json");
+    ErrorsModel errorsModel(nullptr, errPath);
 
-    JobAttemptData att;
-    att.id = QStringLiteral("att_orig");
-    att.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Original prompt");
-    originalJob.attempts.append(att);
-    store.addJob(originalJob);
+    // 1. Unrelated operational diagnostic (no jobId, sessionId = "sess_other")
+    QJsonObject opErr1;
+    opErr1[QStringLiteral("message")] = QStringLiteral("Operational error other session");
+    opErr1[QStringLiteral("sessionId")] = QStringLiteral("sess_other");
+    errorsModel.addErrorObj(opErr1);
 
-    SessionWindow window(originalJob.id, &store, nullptr);
-    QSignalSpy spyJobFrom(&window, &SessionWindow::newJobFromRequested);
+    // 2. Unrelated operational diagnostic (no jobId, no sessionId)
+    QJsonObject opErr2;
+    opErr2[QStringLiteral("message")] = QStringLiteral("Operational error no session");
+    errorsModel.addErrorObj(opErr2);
 
-    auto actions = window.findChildren<QAction *>();
-    QAction *newJobAction = nullptr;
-    for (auto *a : actions) {
-      if (a->text() == QStringLiteral("New Job From This...")) {
-        newJobAction = a;
-        break;
-      }
+    // Sync job errors from JobStore:
+    // 3. Job diagnostic for job_1, attempt_1: FAILED dispatch with NO remote session ID
+    QJsonObject jobErr1;
+    jobErr1[QStringLiteral("message")] = QStringLiteral("Pre-launch validation failed");
+    jobErr1[QStringLiteral("jobId")] = QStringLiteral("job_1");
+    jobErr1[QStringLiteral("attemptId")] = QStringLiteral("att_1");
+    // Notice: NO sessionId
+
+    // 4. Job diagnostic for job_1, attempt_2: FAILED with remote session ID
+    QJsonObject jobErr2;
+    jobErr2[QStringLiteral("message")] = QStringLiteral("Jules remote execution error");
+    jobErr2[QStringLiteral("jobId")] = QStringLiteral("job_1");
+    jobErr2[QStringLiteral("attemptId")] = QStringLiteral("att_2");
+    jobErr2[QStringLiteral("sessionId")] = QStringLiteral("remote_sess_2");
+
+    // 5. Operational diagnostic tied to remote_sess_2 (e.g. from API manager during execution)
+    QJsonObject opErr3;
+    opErr3[QStringLiteral("message")] = QStringLiteral("API call error on remote session");
+    opErr3[QStringLiteral("sessionId")] = QStringLiteral("remote_sess_2");
+    errorsModel.addErrorObj(opErr3);
+
+    // 6. Job diagnostic for another job
+    QJsonObject jobErrOther;
+    jobErrOther[QStringLiteral("message")] = QStringLiteral("Other job failure");
+    jobErrOther[QStringLiteral("jobId")] = QStringLiteral("job_other");
+    jobErrOther[QStringLiteral("attemptId")] = QStringLiteral("att_x");
+
+    QJsonArray jobErrors{jobErr1, jobErr2, jobErrOther};
+    errorsModel.syncJobErrors(jobErrors);
+
+    // Test SessionErrorFilterProxyModel:
+    SessionErrorFilterProxyModel proxy(QStringLiteral(""));
+    proxy.setSourceModel(&errorsModel);
+
+    // Target attempt 1 (job_1, att_1, NO remote session):
+    proxy.setFilterTarget(QStringLiteral("job_1"), QStringLiteral("att_1"), QString());
+    // Should accept ONLY jobErr1 (pre-launch failure with no remote session).
+    // Sibling attempt_2, other job, and operational diagnostics must not leak!
+    QCOMPARE(proxy.rowCount(), 1);
+    QCOMPARE(proxy.data(proxy.index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Pre-launch validation failed"));
+
+    // Switch selection to sibling attempt 2 (job_1, att_2, remote_sess_2):
+    proxy.setFilterTarget(QStringLiteral("job_1"), QStringLiteral("att_2"), QStringLiteral("remote_sess_2"));
+    // Should accept jobErr2 AND opErr3 (both associated with attempt 2 / remote_sess_2).
+    // attempt 1 must disappear!
+    QCOMPARE(proxy.rowCount(), 2);
+    QStringList msgs;
+    for (int i = 0; i < proxy.rowCount(); ++i) {
+      msgs.append(proxy.data(proxy.index(i, 0), ErrorsModel::MessageRole).toString());
     }
-    QVERIFY(newJobAction != nullptr);
-    newJobAction->trigger();
-    QCOMPARE(spyJobFrom.count(), 1);
+    QVERIFY(msgs.contains(QStringLiteral("Jules remote execution error")));
+    QVERIFY(msgs.contains(QStringLiteral("API call error on remote session")));
+    QVERIFY(!msgs.contains(QStringLiteral("Pre-launch validation failed")));
 
-    // Verify a new job created from this payload has a completely independent ID
-    QJsonObject payload = spyJobFrom.at(0).at(0).toJsonObject();
-    JobData newJob;
-    newJob.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    newJob.canonicalRequest = payload;
-    store.addJob(newJob);
-
-    QVERIFY(newJob.id != originalJob.id);
-    QCOMPARE(store.jobs().size(), 2);
-    QCOMPARE(store.getJobById(originalJob.id)->id, QStringLiteral("job_original_ident"));
-    QCOMPARE(store.getJobById(newJob.id)->canonicalRequest.value(QStringLiteral("prompt")).toString(),
-             QStringLiteral("Original prompt"));
+    // Standalone legacy SessionWindow mode: filter by remote session ID
+    SessionErrorFilterProxyModel legacyProxy(QStringLiteral("sess_other"));
+    legacyProxy.setSourceModel(&errorsModel);
+    QCOMPARE(legacyProxy.rowCount(), 1);
+    QCOMPARE(legacyProxy.data(legacyProxy.index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Operational error other session"));
   }
 
-  void testRetryPreservesFailedAttemptAndCreatesAnotherAttempt() {
+  void testAttemptTimestampsExposedAndVisible() {
     JobStore store;
     JobData job;
-    job.id = QStringLiteral("job_retry_test");
+    job.id = QStringLiteral("job_timestamps");
 
-    JobAttemptData failedAtt;
-    failedAtt.id = QStringLiteral("att_failed");
-    failedAtt.dispatchState = QStringLiteral("FAILED");
-    QJsonObject err;
-    err[QStringLiteral("message")] = QStringLiteral("Compile error");
-    failedAtt.launchErrors.append(err);
-    job.attempts.append(failedAtt);
+    JobAttemptData att;
+    att.id = QStringLiteral("att_time");
+    att.createdAt = QDateTime::fromString(QStringLiteral("2026-09-10T10:15:00Z"), Qt::ISODate);
+    att.updatedAt = QDateTime::fromString(QStringLiteral("2026-09-10T11:45:00Z"), Qt::ISODate);
+    att.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Timestamp prompt");
+    job.attempts.append(att);
     store.addJob(job);
 
     SessionWindow window(job.id, &store, nullptr);
-    QSignalSpy spyRetry(&window, &SessionWindow::retryAttemptRequested);
+    QJsonObject sessionData = window.currentSessionData();
 
-    auto actions = window.findChildren<QAction *>();
-    QAction *retryAction = nullptr;
-    for (auto *a : actions) {
-      if (a->text() == QStringLiteral("Retry Failed Attempt")) {
-        retryAction = a;
+    // Verify fields are projected into currentSessionData
+    QVERIFY(sessionData.contains(QStringLiteral("createTime")));
+    QVERIFY(sessionData.contains(QStringLiteral("updateTime")));
+    QCOMPARE(sessionData.value(QStringLiteral("createTime")).toString(), QStringLiteral("2026-09-10T10:15:00Z"));
+    QCOMPARE(sessionData.value(QStringLiteral("updateTime")).toString(), QStringLiteral("2026-09-10T11:45:00Z"));
+
+    // Verify details HTML contains the timestamps
+    auto browsers = window.findChildren<QTextBrowser *>();
+    bool foundDetails = false;
+    for (auto *b : browsers) {
+      if (b->toHtml().contains(QStringLiteral("Create Time:")) &&
+          b->toHtml().contains(QStringLiteral("Update Time:"))) {
+        foundDetails = true;
         break;
       }
     }
-    QVERIFY(retryAction != nullptr);
-    retryAction->trigger();
-    QCOMPARE(spyRetry.count(), 1);
-    QCOMPARE(spyRetry.at(0).at(0).toString(), QStringLiteral("job_retry_test"));
-    QCOMPARE(spyRetry.at(0).at(1).toString(), QStringLiteral("att_failed"));
+    QVERIFY(foundDetails);
+  }
 
-    // Simulating retry dispatch creating a new attempt:
-    JobAttemptData retriedAtt;
-    retriedAtt.id = QStringLiteral("att_retry_success");
-    retriedAtt.julesState = QStringLiteral("IN_PROGRESS");
-    job.attempts.append(retriedAtt);
-    store.updateJob(job);
+  void testZeroAttemptCompactStatusAndHistory() {
+    JobStore store;
+    JobData job;
+    job.id = QStringLiteral("job_zero_history");
+    job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Zero History Title");
+    job.canonicalRequest[QStringLiteral("prompt")] = QStringLiteral("Zero History Prompt");
+    job.legacyMetadata[QStringLiteral("blocked")] = true;
+    job.legacyMetadata[QStringLiteral("lastError")] = QStringLiteral("Failed to resolve branch before dispatch");
+    job.createdAt = QDateTime::currentDateTimeUtc();
+    store.addJob(job);
 
-    // Failed attempt MUST be preserved alongside the new attempt
-    JobData *updatedJob = store.getJobById(QStringLiteral("job_retry_test"));
+    SessionWindow window(job.id, &store, nullptr);
+
+    QLabel *titleLabel = window.findChild<QLabel *>(QStringLiteral("zeroTitleLabel"));
+    QVERIFY(titleLabel != nullptr && titleLabel->text().contains(QStringLiteral("Zero History Title")));
+
+    QLabel *idLabel = window.findChild<QLabel *>(QStringLiteral("zeroIdLabel"));
+    QVERIFY(idLabel != nullptr && idLabel->text().contains(QStringLiteral("job_zero_history")));
+
+    QLabel *schedLabel = window.findChild<QLabel *>(QStringLiteral("zeroSchedulingStateLabel"));
+    QVERIFY(schedLabel != nullptr && schedLabel->text().contains(QStringLiteral("Blocked")));
+
+    QLabel *reasonLabel = window.findChild<QLabel *>(QStringLiteral("zeroReasonLabel"));
+    QVERIFY(reasonLabel != nullptr && reasonLabel->text().contains(QStringLiteral("concurrency")));
+
+    QLabel *errorLabel = window.findChild<QLabel *>(QStringLiteral("zeroErrorLabel"));
+    QVERIFY(errorLabel != nullptr && errorLabel->text().contains(QStringLiteral("Failed to resolve branch")));
+
+    QLabel *timestampsLabel = window.findChild<QLabel *>(QStringLiteral("zeroTimestampsLabel"));
+    QVERIFY(timestampsLabel != nullptr && timestampsLabel->text().contains(QStringLiteral("Created:")));
+
+    QTextBrowser *promptBrowser = window.findChild<QTextBrowser *>(QStringLiteral("zeroPromptBrowser"));
+    QVERIFY(promptBrowser != nullptr && promptBrowser->toPlainText() == QStringLiteral("Zero History Prompt"));
+
+    QPushButton *launchBtn = window.findChild<QPushButton *>(QStringLiteral("zeroLaunchButton"));
+    QVERIFY(launchBtn != nullptr && launchBtn->isEnabled());
+
+    QPushButton *variantBtn = window.findChild<QPushButton *>(QStringLiteral("zeroVariantButton"));
+    QVERIFY(variantBtn != nullptr && variantBtn->isEnabled());
+  }
+
+  void testArchivedJobActionConstraints() {
+    JobStore store;
+    JobData job;
+    job.id = QStringLiteral("job_archived_actions");
+    job.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+
+    JobAttemptData att;
+    att.id = QStringLiteral("att_archived");
+    job.attempts.append(att);
+    store.addJob(job);
+
+    SessionWindow window(job.id, &store, nullptr);
+
+    // Mutating actions must be disabled
+    QAction *newAttempt = window.actionCollection()->action(QStringLiteral("launch_new_attempt"));
+    QVERIFY(newAttempt != nullptr && !newAttempt->isEnabled());
+
+    QAction *variant = window.actionCollection()->action(QStringLiteral("launch_variant"));
+    QVERIFY(variant != nullptr && !variant->isEnabled());
+
+    QAction *retry = window.actionCollection()->action(QStringLiteral("retry_attempt"));
+    QVERIFY(retry != nullptr && !retry->isEnabled());
+
+    QAction *winner = window.actionCollection()->action(QStringLiteral("choose_winner"));
+    QVERIFY(winner != nullptr && !winner->isEnabled());
+
+    QAction *archive = window.actionCollection()->action(QStringLiteral("archive_job"));
+    QVERIFY(archive != nullptr && !archive->isEnabled());
+
+    // Explicit non-mutating or confirmed actions remain enabled
+    QAction *newJobFrom = window.actionCollection()->action(QStringLiteral("new_job_from"));
+    QVERIFY(newJobFrom != nullptr && newJobFrom->isEnabled());
+
+    QAction *deleteJob = window.actionCollection()->action(QStringLiteral("delete_job"));
+    QVERIFY(deleteJob != nullptr && deleteJob->isEnabled());
+  }
+
+  void testWorkflowNewJobFrom() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+    JobStore *store = window.jobStore();
+    QVERIFY(store != nullptr);
+
+    JobData originalJob;
+    originalJob.id = QStringLiteral("orig_job_workflow");
+    originalJob.prompt = QStringLiteral("Original prompt");
+    originalJob.source = QStringLiteral("sources/github/org/repo");
+    originalJob.startingBranch = QStringLiteral("main");
+    originalJob.canonicalRequest[QStringLiteral("prompt")] = originalJob.prompt;
+    originalJob.canonicalRequest[QStringLiteral("source")] = originalJob.source;
+    JobAttemptData origAtt;
+    origAtt.id = QStringLiteral("orig_att");
+    originalJob.attempts.append(origAtt);
+    store->addJobTransactional(originalJob);
+
+    QCOMPARE(store->jobs().size(), 1);
+
+    // Create session via MainWindow::onSessionCreated (the real path invoked after New Job From dialog)
+    QMultiMap<QString, QString> sources;
+    sources.insert(QStringLiteral("sources/github/org/repo"), QStringLiteral("feature-branch"));
+    window.onSessionCreated(sources, QStringLiteral("New Independent Workflow Prompt"),
+                            QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0, QStringLiteral("queue"));
+
+    // Resulting job gets a distinct ID
+    QCOMPARE(store->jobs().size(), 2);
+    JobData *resultingJob = nullptr;
+    for (const auto &j : store->jobs()) {
+      if (j.id != QStringLiteral("orig_job_workflow")) {
+        resultingJob = store->getJobById(j.id);
+        break;
+      }
+    }
+    QVERIFY(resultingJob != nullptr);
+    QVERIFY(resultingJob->id != QStringLiteral("orig_job_workflow"));
+    QCOMPARE(resultingJob->prompt, QStringLiteral("New Independent Workflow Prompt"));
+
+    // Original job remains completely unchanged
+    JobData *origCheck = store->getJobById(QStringLiteral("orig_job_workflow"));
+    QVERIFY(origCheck != nullptr);
+    QCOMPARE(origCheck->prompt, QStringLiteral("Original prompt"));
+    QCOMPARE(origCheck->attempts.size(), 1);
+    QCOMPARE(origCheck->attempts[0].id, QStringLiteral("orig_att"));
+  }
+
+  void testWorkflowRetry() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+    JobStore *store = window.jobStore();
+    QueueModel *queue = window.queueModel();
+    QVERIFY(store != nullptr && queue != nullptr);
+
+    JobData job;
+    job.id = QStringLiteral("retry_workflow_job");
+    JobAttemptData failedAtt;
+    failedAtt.id = QStringLiteral("att_failed_orig");
+    failedAtt.dispatchState = QStringLiteral("FAILED");
+    failedAtt.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Retry snapshot prompt");
+    failedAtt.requestSnapshot[QStringLiteral("source")] = QStringLiteral("sources/github/org/repo");
+    job.attempts.append(failedAtt);
+    store->addJobTransactional(job);
+
+    SessionWindow sw(job.id, store, window.apiManager(), window.errorsModel(), true, &window);
+    window.connectSessionWindow(&sw);
+
+    QAction *retryAct = sw.actionCollection()->action(QStringLiteral("retry_attempt"));
+    QVERIFY(retryAct != nullptr);
+    retryAct->trigger();
+
+    // Retry queues an item under the SAME Job ID with request matching failed snapshot
+    QCOMPARE(queue->size(), 1);
+    QueueItem qItem = queue->getItem(0);
+    QCOMPARE(qItem.jobId, QStringLiteral("retry_workflow_job"));
+    QCOMPARE(qItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Retry snapshot prompt"));
+
+    // Processing queue creates a second JobAttemptData
+    window.processQueueForTest();
+
+    JobData *updatedJob = store->getJobById(QStringLiteral("retry_workflow_job"));
+    QVERIFY(updatedJob != nullptr);
     QCOMPARE(updatedJob->attempts.size(), 2);
-    QCOMPARE(updatedJob->attempts[0].id, QStringLiteral("att_failed"));
+
+    // Failed original attempt remains intact
+    QCOMPARE(updatedJob->attempts[0].id, QStringLiteral("att_failed_orig"));
     QCOMPARE(updatedJob->attempts[0].dispatchState, QStringLiteral("FAILED"));
-    QCOMPARE(updatedJob->attempts[0].launchErrors.size(), 1);
-    QCOMPARE(updatedJob->attempts[1].id, QStringLiteral("att_retry_success"));
+
+    // New attempt requestSnapshot matches what was actually dispatched
+    QCOMPARE(updatedJob->attempts[1].requestSnapshot.value(QStringLiteral("prompt")).toString(),
+             QStringLiteral("Retry snapshot prompt"));
+    QVERIFY(updatedJob->attempts[1].id != QStringLiteral("att_failed_orig"));
+  }
+
+  void testWorkflowVariant() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+    JobStore *store = window.jobStore();
+    QueueModel *queue = window.queueModel();
+    QVERIFY(store != nullptr && queue != nullptr);
+
+    JobData job;
+    job.id = QStringLiteral("variant_workflow_job");
+    JobAttemptData att1;
+    att1.id = QStringLiteral("att1_orig");
+    att1.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Original prompt");
+    job.attempts.append(att1);
+    store->addJobTransactional(job);
+
+    SessionWindow sw(job.id, store, window.apiManager(), window.errorsModel(), true, &window);
+    window.connectSessionWindow(&sw);
+
+    // In variant flow: stays under the same Job, edited values pass through shared request builder
+    QJsonObject editedRequest = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/org/repo"), QStringLiteral("dev-branch"),
+        QStringLiteral("Edited Variant Prompt"), QStringLiteral("AUTOMATION_MODE_ASAP"), true, false, 7,
+        QStringLiteral("queue"));
+
+    QueueItem varItem;
+    varItem.jobId = job.id;
+    varItem.requestData = editedRequest;
+    queue->enqueueItem(varItem);
+
+    QCOMPARE(queue->size(), 1);
+    QCOMPARE(queue->getItem(0).jobId, QStringLiteral("variant_workflow_job"));
+
+    window.processQueueForTest();
+
+    JobData *updatedJob = store->getJobById(QStringLiteral("variant_workflow_job"));
+    QVERIFY(updatedJob != nullptr);
+    // Stays under the same Job
+    QCOMPARE(updatedJob->id, QStringLiteral("variant_workflow_job"));
+    QCOMPARE(updatedJob->attempts.size(), 2);
+
+    // Resulting dispatched attempt has exact immutable distinct requestSnapshot
+    QCOMPARE(updatedJob->attempts[0].requestSnapshot.value(QStringLiteral("prompt")).toString(),
+             QStringLiteral("Original prompt"));
+    QCOMPARE(updatedJob->attempts[1].requestSnapshot.value(QStringLiteral("prompt")).toString(),
+             QStringLiteral("Edited Variant Prompt"));
+    QCOMPARE(updatedJob->attempts[1].requestSnapshot.value(QStringLiteral("priority")).toInt(), 7);
+  }
+
+  void testWorkflowLaunchNewAttempt() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+    JobStore *store = window.jobStore();
+    QueueModel *queue = window.queueModel();
+    QVERIFY(store != nullptr && queue != nullptr);
+
+    JobData job;
+    job.id = QStringLiteral("launch_new_workflow_job");
+    job.canonicalRequest[QStringLiteral("prompt")] = QStringLiteral("Canonical default prompt");
+    job.canonicalRequest[QStringLiteral("title")] = QStringLiteral("Canonical Title");
+    store->addJobTransactional(job);
+
+    SessionWindow sw(job.id, store, window.apiManager(), window.errorsModel(), true, &window);
+    window.connectSessionWindow(&sw);
+
+    QAction *newAttAct = sw.actionCollection()->action(QStringLiteral("launch_new_attempt"));
+    QVERIFY(newAttAct != nullptr);
+    newAttAct->trigger();
+
+    // Enqueued with same Job ID and canonical defaults
+    QCOMPARE(queue->size(), 1);
+    QueueItem qItem = queue->getItem(0);
+    QCOMPARE(qItem.jobId, QStringLiteral("launch_new_workflow_job"));
+    QCOMPARE(qItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Canonical default prompt"));
+
+    // Processing queue creates another attempt rather than a new Job
+    window.processQueueForTest();
+
+    QCOMPARE(store->jobs().size(), 1);
+    JobData *updatedJob = store->getJobById(QStringLiteral("launch_new_workflow_job"));
+    QVERIFY(updatedJob != nullptr);
+    QCOMPARE(updatedJob->attempts.size(), 1);
+    QCOMPARE(updatedJob->attempts[0].requestSnapshot.value(QStringLiteral("prompt")).toString(),
+             QStringLiteral("Canonical default prompt"));
   }
 
   void testArchiveRetainsFullHistory() {

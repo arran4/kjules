@@ -830,6 +830,59 @@ private Q_SLOTS:
 
     QFile::remove(validPath);
   }
+
+  void testErrorStateAggregateSemantics() {
+    // 1. Single attempt with julesState == "ERROR_STATE" must aggregate to NeedsAttention, not Active
+    JobData errorStateJob;
+    errorStateJob.id = QStringLiteral("job_err_state");
+    JobAttemptData errStateAtt;
+    errStateAtt.id = QStringLiteral("att_err_state");
+    errStateAtt.julesState = QStringLiteral("ERROR_STATE");
+    errorStateJob.attempts.append(errStateAtt);
+    QVERIFY(JobPolicy::isAttemptTerminal(errStateAtt));
+    QVERIFY(JobPolicy::isAttemptFailed(errStateAtt));
+    QCOMPARE(JobPolicy::aggregateState(errorStateJob), JobPolicy::JobAggregateState::NeedsAttention);
+
+    // 2. Single attempt with julesState == "ERROR"
+    JobData errorJob;
+    errorJob.id = QStringLiteral("job_err");
+    JobAttemptData errAtt;
+    errAtt.id = QStringLiteral("att_err");
+    errAtt.julesState = QStringLiteral("ERROR");
+    errorJob.attempts.append(errAtt);
+    QVERIFY(JobPolicy::isAttemptTerminal(errAtt));
+    QVERIFY(JobPolicy::isAttemptFailed(errAtt));
+    QCOMPARE(JobPolicy::aggregateState(errorJob), JobPolicy::JobAggregateState::NeedsAttention);
+
+    // 3. Single attempt with dispatchState == "FAILED"
+    JobData failedDispatchJob;
+    failedDispatchJob.id = QStringLiteral("job_dispatch_fail");
+    JobAttemptData dispatchFailAtt;
+    dispatchFailAtt.id = QStringLiteral("att_dispatch_fail");
+    dispatchFailAtt.dispatchState = QStringLiteral("FAILED");
+    failedDispatchJob.attempts.append(dispatchFailAtt);
+    QVERIFY(JobPolicy::isAttemptTerminal(dispatchFailAtt));
+    QVERIFY(JobPolicy::isAttemptFailed(dispatchFailAtt));
+    QCOMPARE(JobPolicy::aggregateState(failedDispatchJob), JobPolicy::JobAggregateState::NeedsAttention);
+
+    // 4. Failed sibling + active sibling (aggregates to ActiveWithFailed)
+    JobData siblingJob;
+    siblingJob.id = QStringLiteral("job_sibling");
+    JobAttemptData activeAtt;
+    activeAtt.id = QStringLiteral("att_active");
+    activeAtt.julesState = QStringLiteral("IN_PROGRESS");
+    siblingJob.attempts.append(errStateAtt);
+    siblingJob.attempts.append(activeAtt);
+    QCOMPARE(JobPolicy::aggregateState(siblingJob), JobPolicy::JobAggregateState::ActiveWithFailed);
+
+    // 5. Failed-only multi-attempt job (NeedsAttention)
+    JobData failedOnlyJob;
+    failedOnlyJob.id = QStringLiteral("job_failed_only");
+    failedOnlyJob.attempts.append(errStateAtt);
+    failedOnlyJob.attempts.append(dispatchFailAtt);
+    failedOnlyJob.attempts.append(errAtt);
+    QCOMPARE(JobPolicy::aggregateState(failedOnlyJob), JobPolicy::JobAggregateState::NeedsAttention);
+  }
 };
 
 QTEST_MAIN(TestJob)

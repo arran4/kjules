@@ -25,19 +25,57 @@ class SessionErrorFilterProxyModel : public QSortFilterProxyModel {
 public:
   explicit SessionErrorFilterProxyModel(const QString &sessionId, QObject *parent = nullptr)
       : QSortFilterProxyModel(parent), m_sessionId(sessionId) {}
-  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
-    QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-    return sourceModel()->data(index, ErrorsModel::SessionIdRole).toString() ==
-           m_sessionId; // SessionIdRole is usually +4 in ErrorsModel
+
+  void setFilterTarget(const QString &jobId, const QString &attemptId, const QString &sessionId) {
+    m_jobId = jobId;
+    m_attemptId = attemptId;
+    m_sessionId = sessionId;
+    invalidate();
   }
 
-public:
+  void setJobAndAttempt(const QString &jobId, const QString &attemptId) {
+    m_jobId = jobId;
+    m_attemptId = attemptId;
+    invalidate();
+  }
+
   void setSessionId(const QString &id) {
     m_sessionId = id;
     invalidate();
   }
 
+  bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
+    if (!sourceModel())
+      return false;
+    QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+    QString errorJobId = sourceModel()->data(index, ErrorsModel::JobIdRole).toString();
+    QString errorAttemptId = sourceModel()->data(index, ErrorsModel::AttemptIdRole).toString();
+    QString errorSessionId = sourceModel()->data(index, ErrorsModel::SessionIdRole).toString();
+
+    // If this proxy is configured for a Job-aware window
+    if (!m_jobId.isEmpty()) {
+      // If error has a jobId: it must match this job and this attempt
+      if (!errorJobId.isEmpty()) {
+        return errorJobId == m_jobId && errorAttemptId == m_attemptId;
+      }
+      // If error does not have a jobId, but has a sessionId:
+      // It can match if the current attempt has a valid remote sessionId and they match
+      if (!m_sessionId.isEmpty() && !errorSessionId.isEmpty()) {
+        return errorSessionId == m_sessionId;
+      }
+      return false;
+    }
+
+    // Standalone legacy SessionWindow: match on sessionId
+    if (!m_sessionId.isEmpty() && !errorSessionId.isEmpty()) {
+      return errorSessionId == m_sessionId;
+    }
+    return false;
+  }
+
 private:
+  QString m_jobId;
+  QString m_attemptId;
   QString m_sessionId;
 };
 
@@ -66,6 +104,7 @@ private:
   void updateAttemptList();
   void onAttemptSelected(QListWidgetItem *item);
   void setupActions();
+  void updateActionStates();
 
   void refreshSession(bool isBackground = false);
   void onSessionReloaded(const QJsonObject &session, bool isBackground);

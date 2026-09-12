@@ -50,6 +50,7 @@ struct SourceRemapEntry;
 class MainWindow : public KXmlGuiWindow {
   Q_OBJECT
   friend class TestSourceWindow;
+  friend class TestSessionWindow;
 
 public:
   explicit MainWindow(QWidget *parent = nullptr);
@@ -190,8 +191,10 @@ public:
   SessionModel *sessionModel() const { return m_sessionModel; }
   SessionModel *archiveModel() const { return m_archiveModel; }
   APIManager *apiManager() const { return m_apiManager; }
-
   JobStore *jobStore() const { return m_jobStore; }
+  QueueModel *queueModel() const { return m_queueModel; }
+  ErrorsModel *errorsModel() const { return m_errorsModel; }
+  bool processQueueForTest() { return processQueue(); }
 
 private:
   QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
@@ -246,9 +249,9 @@ private:
   TemplatesModel *m_templatesModel;
   QueueModel *m_queueModel;
   QueueModel *m_holdingModel;
-  JobStore *m_jobStore;
   ErrorsModel *m_errorsModel;
   APIManager *m_apiManager;
+  JobStore *m_jobStore;
 
   QTreeView *m_sourceView;
   QTreeView *m_sessionView;

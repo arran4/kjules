@@ -28,6 +28,7 @@
 #include "apimanager.h"
 #include "clickablelabel.h"
 #include "errorsmodel.h"
+#include "jobpolicy.h"
 #include "jobstore.h"
 #include "sourcestatuswidget.h"
 #include "utils.h"
@@ -385,6 +386,34 @@ void SessionWindow::setupActions() {
   if (m_apiManager) {
     m_statusLabel->setText(i18n("Loading activities..."));
   }
+
+  updateActionStates();
+}
+
+void SessionWindow::updateActionStates() {
+  bool isArchived = false;
+  if (m_jobStore && !m_jobId.isEmpty()) {
+    JobData *job = m_jobStore->getJobById(m_jobId);
+    if (job) {
+      isArchived = (JobPolicy::aggregateState(*job) == JobPolicy::JobAggregateState::Archived);
+    }
+  }
+
+  if (auto *act = actionCollection()->action(QStringLiteral("launch_new_attempt"))) {
+    act->setEnabled(!isArchived);
+  }
+  if (auto *act = actionCollection()->action(QStringLiteral("launch_variant"))) {
+    act->setEnabled(!isArchived);
+  }
+  if (auto *act = actionCollection()->action(QStringLiteral("retry_attempt"))) {
+    act->setEnabled(!isArchived);
+  }
+  if (auto *act = actionCollection()->action(QStringLiteral("choose_winner"))) {
+    act->setEnabled(!isArchived);
+  }
+  if (auto *act = actionCollection()->action(QStringLiteral("archive_job"))) {
+    act->setEnabled(!isArchived);
+  }
 }
 
 void SessionWindow::updateAutoRefresh() {
@@ -539,6 +568,15 @@ QJsonObject SessionWindow::currentSessionData() const {
           if (attempt.rawResponse.contains(QStringLiteral("turns"))) {
             data[QStringLiteral("turns")] = attempt.rawResponse.value(QStringLiteral("turns"));
           }
+          if (attempt.createdAt.isValid()) {
+            data[QStringLiteral("createTime")] = attempt.createdAt.toUTC().toString(Qt::ISODate);
+            data[QStringLiteral("createdAt")] = attempt.createdAt.toUTC().toString(Qt::ISODate);
+          }
+          if (attempt.updatedAt.isValid()) {
+            data[QStringLiteral("updateTime")] = attempt.updatedAt.toUTC().toString(Qt::ISODate);
+            data[QStringLiteral("updatedAt")] = attempt.updatedAt.toUTC().toString(Qt::ISODate);
+          }
+
           if (attempt.rawResponse.contains(QStringLiteral("githubPrInfo"))) {
             data[QStringLiteral("githubPrInfo")] = attempt.rawResponse.value(QStringLiteral("githubPrInfo"));
           }
@@ -872,6 +910,10 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   SessionErrorFilterProxyModel *errorProxy =
       new SessionErrorFilterProxyModel(currentSessionData().value(QStringLiteral("id")).toString(), m_errorTab);
   errorProxy->setObjectName(QStringLiteral("errorProxy")); // Important for later updates
+  if (m_jobStore) {
+    errorProxy->setFilterTarget(m_jobId, m_currentAttemptId,
+                                currentSessionData().value(QStringLiteral("id")).toString());
+  }
   errorProxy->setSourceModel(m_errorsModel);
   errorView->setModel(errorProxy);
   errorLayout->addWidget(errorView);
@@ -981,14 +1023,17 @@ void SessionWindow::renderZeroAttempts() {
 
   QLabel *titleLabel = new QLabel(
       i18n("<b>Job:</b> %1", job.canonicalRequest.value(QStringLiteral("title")).toString()), m_zeroAttemptWidget);
+  titleLabel->setObjectName(QStringLiteral("zeroTitleLabel"));
   zeroLayout->addWidget(titleLabel);
 
   QLabel *idLabel = new QLabel(i18n("<b>ID:</b> %1", job.id), m_zeroAttemptWidget);
+  idLabel->setObjectName(QStringLiteral("zeroIdLabel"));
   zeroLayout->addWidget(idLabel);
 
   QJsonObject sourceContext = job.canonicalRequest.value(QStringLiteral("sourceContext")).toObject();
   QString source = sourceContext.value(QStringLiteral("source")).toString();
   QLabel *sourceLabel = new QLabel(i18n("<b>Source:</b> %1", source), m_zeroAttemptWidget);
+  sourceLabel->setObjectName(QStringLiteral("zeroSourceLabel"));
   zeroLayout->addWidget(sourceLabel);
 
   QString branch = sourceContext.value(QStringLiteral("githubRepoContext"))
@@ -997,12 +1042,81 @@ void SessionWindow::renderZeroAttempts() {
                        .toString();
   if (!branch.isEmpty()) {
     QLabel *branchLabel = new QLabel(i18n("<b>Branch:</b> %1", branch), m_zeroAttemptWidget);
+    branchLabel->setObjectName(QStringLiteral("zeroBranchLabel"));
     zeroLayout->addWidget(branchLabel);
   }
 
-  QLabel *statusLabel =
-      new QLabel(i18n("<b>Status:</b> No remote Jules sessions (attempts) have been made yet."), m_zeroAttemptWidget);
-  zeroLayout->addWidget(statusLabel);
+  zeroLayout->addSpacing(8);
+
+  bool isArchived = (JobPolicy::aggregateState(job) == JobPolicy::JobAggregateState::Archived);
+  bool isHolding = job.legacyMetadata.value(QStringLiteral("holding")).toBool();
+  bool isBlocked = job.legacyMetadata.value(QStringLiteral("blocked")).toBool();
+
+  QString schedState;
+  if (isArchived) {
+    schedState = i18n("Archived");
+  } else if (isHolding) {
+    schedState = i18n("Holding");
+  } else if (isBlocked) {
+    schedState = i18n("Queued (Blocked by concurrency)");
+  } else {
+    schedState = i18n("Queued (Pending dispatch)");
+  }
+
+  QString reasonNoSession;
+  if (job.lifecycleMetadata.contains(QStringLiteral("reason"))) {
+    reasonNoSession = job.lifecycleMetadata.value(QStringLiteral("reason")).toString();
+  } else if (isArchived) {
+    reasonNoSession = i18n("Job is archived; no active attempts exist.");
+  } else if (isHolding) {
+    reasonNoSession = i18n("Job is held in holding queue; dispatch is paused.");
+  } else if (isBlocked) {
+    reasonNoSession = i18n("Job is waiting for concurrency limit availability.");
+  } else if (job.lifecycleMetadata.value(QStringLiteral("status")).toString() == QStringLiteral("ERROR_STATE")) {
+    reasonNoSession = i18n("Previous dispatch attempt failed before a remote Jules session could be established.");
+  } else {
+    reasonNoSession = i18n("Job is awaiting initial dispatch to Jules.");
+  }
+
+  QString lastErrorText;
+  if (job.lifecycleMetadata.contains(QStringLiteral("lastError"))) {
+    lastErrorText = job.lifecycleMetadata.value(QStringLiteral("lastError")).toString();
+  } else if (job.legacyMetadata.contains(QStringLiteral("lastError"))) {
+    lastErrorText = job.legacyMetadata.value(QStringLiteral("lastError")).toString();
+  } else if (m_errorsModel) {
+    for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
+      QModelIndex idx = m_errorsModel->index(i, 0);
+      if (m_errorsModel->data(idx, ErrorsModel::JobIdRole).toString() == job.id) {
+        lastErrorText = m_errorsModel->data(idx, ErrorsModel::MessageRole).toString();
+        break;
+      }
+    }
+  }
+
+  QLabel *statusHeader = new QLabel(i18n("<b>Job Status & History:</b>"), m_zeroAttemptWidget);
+  zeroLayout->addWidget(statusHeader);
+
+  QLabel *schedLabel = new QLabel(i18n("• Scheduling: %1", schedState), m_zeroAttemptWidget);
+  schedLabel->setObjectName(QStringLiteral("zeroSchedulingStateLabel"));
+  zeroLayout->addWidget(schedLabel);
+
+  QLabel *reasonLabel = new QLabel(i18n("• Jules Session Status: %1", reasonNoSession), m_zeroAttemptWidget);
+  reasonLabel->setObjectName(QStringLiteral("zeroReasonLabel"));
+  zeroLayout->addWidget(reasonLabel);
+
+  if (!lastErrorText.isEmpty()) {
+    QLabel *errorLabel = new QLabel(i18n("• Launch/Dispatch Error: %1", lastErrorText), m_zeroAttemptWidget);
+    errorLabel->setObjectName(QStringLiteral("zeroErrorLabel"));
+    errorLabel->setStyleSheet(QStringLiteral("color: #d9534f;"));
+    zeroLayout->addWidget(errorLabel);
+  }
+
+  QString createdStr = job.createdAt.isValid()
+                           ? job.createdAt.toLocalTime().toString(QLocale::system().dateFormat(QLocale::ShortFormat))
+                           : i18n("Unknown");
+  QLabel *timestampsLabel = new QLabel(i18n("• Created: %1", createdStr), m_zeroAttemptWidget);
+  timestampsLabel->setObjectName(QStringLiteral("zeroTimestampsLabel"));
+  zeroLayout->addWidget(timestampsLabel);
 
   zeroLayout->addSpacing(10);
 
@@ -1010,6 +1124,7 @@ void SessionWindow::renderZeroAttempts() {
   zeroLayout->addWidget(promptLabel);
 
   QTextBrowser *promptBrowser = new QTextBrowser(m_zeroAttemptWidget);
+  promptBrowser->setObjectName(QStringLiteral("zeroPromptBrowser"));
   promptBrowser->setPlainText(job.canonicalRequest.value(QStringLiteral("prompt")).toString());
   zeroLayout->addWidget(promptBrowser);
 
@@ -1018,16 +1133,26 @@ void SessionWindow::renderZeroAttempts() {
   QHBoxLayout *buttonsLayout = new QHBoxLayout();
   QPushButton *launchButton =
       new QPushButton(QIcon::fromTheme(QStringLiteral("media-playback-start")), i18n("Launch Attempt"));
+  launchButton->setObjectName(QStringLiteral("zeroLaunchButton"));
   connect(launchButton, &QPushButton::clicked, this, [this]() {
     Q_EMIT newAttemptRequested(m_jobId,
                                m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
   });
+  if (isArchived) {
+    launchButton->setEnabled(false);
+    launchButton->setToolTip(i18n("Cannot launch attempts on an archived job."));
+  }
   buttonsLayout->addWidget(launchButton);
 
   QPushButton *variantButton =
       new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Launch Variant..."));
+  variantButton->setObjectName(QStringLiteral("zeroVariantButton"));
   connect(variantButton, &QPushButton::clicked, this,
           [this]() { Q_EMIT variantRequested(m_jobId, currentVariantRequest()); });
+  if (isArchived) {
+    variantButton->setEnabled(false);
+    variantButton->setToolTip(i18n("Cannot launch variant on an archived job."));
+  }
   buttonsLayout->addWidget(variantButton);
   buttonsLayout->addStretch();
   zeroLayout->addLayout(buttonsLayout);
@@ -1082,6 +1207,21 @@ void SessionWindow::updateAttemptList() {
     m_contentStack->setCurrentWidget(m_detailsWidget);
     renderDetailsAndDiff();
   }
+
+  if (m_errorTab) {
+    SessionErrorFilterProxyModel *proxy =
+        m_errorTab->findChild<SessionErrorFilterProxyModel *>(QStringLiteral("errorProxy"));
+    if (proxy) {
+      if (m_jobStore) {
+        proxy->setFilterTarget(m_jobId, m_currentAttemptId,
+                               currentSessionData().value(QStringLiteral("id")).toString());
+      } else {
+        proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
+      }
+    }
+  }
+
+  updateActionStates();
 }
 
 void SessionWindow::onAttemptSelected(QListWidgetItem *item) {
@@ -1097,7 +1237,12 @@ void SessionWindow::onAttemptSelected(QListWidgetItem *item) {
       SessionErrorFilterProxyModel *proxy =
           m_errorTab->findChild<SessionErrorFilterProxyModel *>(QStringLiteral("errorProxy"));
       if (proxy) {
-        proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
+        if (m_jobStore) {
+          proxy->setFilterTarget(m_jobId, m_currentAttemptId,
+                                 currentSessionData().value(QStringLiteral("id")).toString());
+        } else {
+          proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
+        }
       }
     }
 

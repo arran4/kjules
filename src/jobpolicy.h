@@ -7,8 +7,9 @@ class JobPolicy {
 public:
   static bool isAttemptTerminal(const JobAttemptData &attempt) {
     return attempt.julesState == QLatin1String("COMPLETED") || attempt.julesState == QLatin1String("ERROR") ||
+           attempt.julesState == QLatin1String("ERROR_STATE") || attempt.julesState == QLatin1String("FAILED") ||
            attempt.julesState == QLatin1String("CANCELED") || attempt.dispatchState == QLatin1String("FAILED") ||
-           attempt.dispatchState == QLatin1String("CANCELED");
+           attempt.dispatchState == QLatin1String("ERROR") || attempt.dispatchState == QLatin1String("CANCELED");
   }
 
   static bool isAttemptSuccessful(const JobAttemptData &attempt) {
@@ -16,7 +17,9 @@ public:
   }
 
   static bool isAttemptFailed(const JobAttemptData &attempt) {
-    return attempt.julesState == QLatin1String("ERROR") || attempt.dispatchState == QLatin1String("FAILED");
+    return attempt.julesState == QLatin1String("ERROR") || attempt.julesState == QLatin1String("ERROR_STATE") ||
+           attempt.julesState == QLatin1String("FAILED") || attempt.dispatchState == QLatin1String("FAILED") ||
+           attempt.dispatchState == QLatin1String("ERROR");
   }
 
   static bool consumesConcurrency(const JobAttemptData &attempt) {

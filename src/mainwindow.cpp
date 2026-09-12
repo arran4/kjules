@@ -3679,19 +3679,40 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
   for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req = SessionRequestBuilder::buildSessionRequest(
         it.key(), it.value(), prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority, queueAction);
+
+    QueueItem item;
+    item.requestData = req;
+
+    if (m_jobStore) {
+      JobData newJob;
+      newJob.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+      newJob.canonicalRequest = req;
+      newJob.source = it.key();
+      newJob.startingBranch = it.value();
+      newJob.prompt = prompt;
+      newJob.automationMode = automationMode;
+      newJob.planApproval = requirePlanApproval;
+      newJob.ignoreConcurrency = ignoreConcurrency;
+      newJob.priority = priority;
+      newJob.createdAt = QDateTime::currentDateTimeUtc();
+      newJob.updatedAt = newJob.createdAt;
+      m_jobStore->addJobTransactional(newJob);
+      item.jobId = newJob.id;
+    }
+
     if (queueAction == QStringLiteral("send_now")) {
-      QueueItem item;
-      item.requestData = req;
       sendItemNow(item, -1, false);
     } else if (queueAction == QStringLiteral("send_next")) {
-      QueueItem item;
-      item.requestData = req;
       m_queueModel->insertItem(0, item);
     } else {
-      m_queueModel->enqueue(req);
+      m_queueModel->enqueueItem(item);
     }
   }
   updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.", sources.size()));
+
+  if (m_jobStore) {
+    syncModelsFromJobStore();
+  }
 
   // Start timer if not running
 
@@ -3777,7 +3798,6 @@ bool MainWindow::processQueue() {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   QString queueModeStr = config.readEntry(QStringLiteral("QueueMode"), QStringLiteral("one_at_a_time"));
   int oneAtATimeLimit = config.readEntry(QStringLiteral("OneAtATimeLimit"), 1);
-  int sourceConcurrency = config.readEntry(QStringLiteral("SourceConcurrency"), 1);
 
   // Evaluate active concurrency natively via JobPolicy
   int globalActive = 0;
@@ -3802,6 +3822,20 @@ bool MainWindow::processQueue() {
   for (int i = 0; i < m_queueModel->size(); ++i) {
     QueueItem item = m_queueModel->getItem(i);
     JobData *job = m_jobStore->getJobById(item.jobId);
+    if (!job && m_jobStore) {
+      JobData newJob;
+      newJob.id = item.jobId.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : item.jobId;
+      newJob.canonicalRequest = item.requestData;
+      newJob.source =
+          item.requestData.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+      newJob.prompt = item.requestData.value(QStringLiteral("prompt")).toString();
+      newJob.createdAt = QDateTime::currentDateTimeUtc();
+      newJob.updatedAt = newJob.createdAt;
+      m_jobStore->addJobTransactional(newJob);
+      item.jobId = newJob.id;
+      m_queueModel->updateItem(i, item);
+      job = m_jobStore->getJobById(newJob.id);
+    }
     if (!job)
       continue;
 
@@ -4331,6 +4365,17 @@ void MainWindow::sendItemNow(const QueueItem &item, int originRow, bool sourceIs
   }
 
   JobData *job = m_jobStore->getJobById(item.jobId);
+  if (!job && m_jobStore) {
+    JobData newJob;
+    newJob.id = item.jobId.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : item.jobId;
+    newJob.canonicalRequest = req;
+    newJob.source = req.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+    newJob.prompt = req.value(QStringLiteral("prompt")).toString();
+    newJob.createdAt = QDateTime::currentDateTimeUtc();
+    newJob.updatedAt = newJob.createdAt;
+    m_jobStore->addJobTransactional(newJob);
+    job = m_jobStore->getJobById(newJob.id);
+  }
   if (!job)
     return;
 
@@ -4906,7 +4951,7 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
     }
   });
 
-  connect(window, &SessionWindow::jobMutated, this, [this](const QString &id) { syncModelsFromJobStore(); });
+  connect(window, &SessionWindow::jobMutated, this, [this](const QString &) { syncModelsFromJobStore(); });
   connect(window, &SessionWindow::deleteRequested, this, [this, window](const QString &id) {
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
@@ -6491,8 +6536,7 @@ void MainWindow::syncModelsFromJobStore() {
     for (int j = 0; j < job.attempts.size(); ++j) {
       const JobAttemptData &attempt = job.attempts[j];
 
-      if (attempt.dispatchState == QStringLiteral("FAILED") || attempt.julesState == QStringLiteral("ERROR") ||
-          attempt.julesState == QStringLiteral("ERROR_STATE")) {
+      if (JobPolicy::isAttemptFailed(attempt)) {
         item.errorCount++;
         item.lastError = attempt.launchErrors.isEmpty()
                              ? QString()
@@ -6504,7 +6548,9 @@ void MainWindow::syncModelsFromJobStore() {
         errorObj[QStringLiteral("request")] = attempt.requestSnapshot;
         errorObj[QStringLiteral("jobId")] = job.id;
         errorObj[QStringLiteral("attemptId")] = attempt.id;
-        errorObj[QStringLiteral("sessionId")] = attempt.id;
+        if (!attempt.julesSessionId.isEmpty()) {
+          errorObj[QStringLiteral("sessionId")] = attempt.julesSessionId;
+        }
         if (!attempt.launchErrors.isEmpty()) {
           QJsonObject lastErr = attempt.launchErrors.last().toObject();
           if (lastErr.contains(QStringLiteral("details")))
