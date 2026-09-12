@@ -60,9 +60,8 @@ private Q_SLOTS:
     QueueItem item;
     item.jobId = QStringLiteral("recovered");
     item.requestData = request;
+    disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
     if (direct) {
-      // Observe dispatch without opening the interactive direct-send failure dialog.
-      disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
       window.sendItemNow(item, -1, false);
     } else {
       window.queueModel()->enqueueItem(item);
@@ -720,6 +719,7 @@ private Q_SLOTS:
     QCOMPARE(qItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Retry snapshot prompt"));
 
     // Processing queue creates a second JobAttemptData
+    disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
     window.processQueueForTest();
 
     JobData *updatedJob = store->getJobById(QStringLiteral("retry_workflow_job"));
@@ -763,9 +763,6 @@ private Q_SLOTS:
     job.attempts.append(att1);
     store->addJobTransactional(job);
 
-    SessionWindow sw(job.id, store, window.apiManager(), window.errorsModel(), true, &window);
-    window.connectSessionWindow(&sw);
-
     // In variant flow: stays under the same Job, edited values pass through shared request builder
     QJsonObject editedRequest = SessionRequestBuilder::buildSessionRequest(
         QStringLiteral("sources/github/org/repo"), QStringLiteral("dev-branch"),
@@ -773,9 +770,9 @@ private Q_SLOTS:
 
     QMultiMap<QString, QString> sources;
     sources.insert(QStringLiteral("sources/github/org/repo"), QStringLiteral("dev-branch"));
-    // Direct-send failures have an interactive recovery dialog, outside this coordinator test.
-    if (action == QStringLiteral("send_now"))
-      disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
+    // Dispatch failure presentation is covered separately. Keep this coordinator
+    // test focused on the request delivered to APIManager.
+    disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
     QSignalSpy dispatch(window.apiManager(), &APIManager::sessionCreationFailed);
     QueueItem sentinel;
     sentinel.jobId = QStringLiteral("other-job");
@@ -832,6 +829,7 @@ private Q_SLOTS:
     QCOMPARE(window.queueModel()->size(), 2);
     window.onMoveRequested(QStringLiteral("first"), 2);
     QCOMPARE(window.queueModel()->getItem(0).jobId, QStringLiteral("second"));
+    disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
     window.sendJobNow(QStringLiteral("second"));
     QCOMPARE(window.jobStore()->getJobById(QStringLiteral("second"))->attempts.size(), 1);
     QCOMPARE(window.queueModel()->size(), 1);
@@ -866,6 +864,7 @@ private Q_SLOTS:
     QCOMPARE(qItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Canonical default prompt"));
 
     // Processing queue creates another attempt rather than a new Job
+    disconnect(window.apiManager(), &APIManager::sessionCreationFailed, &window, nullptr);
     window.processQueueForTest();
 
     QCOMPARE(store->jobs().size(), 1);
