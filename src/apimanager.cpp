@@ -26,6 +26,19 @@ APIManager::APIManager(QObject *parent)
   loadApiKeyFromWallet();
 }
 
+void APIManager::setNetworkAccessManager(QNetworkAccessManager *nam) {
+  if (m_nam == nam) {
+    return;
+  }
+  if (m_nam) {
+    m_nam->deleteLater();
+  }
+  m_nam = nam;
+  if (m_nam && !m_nam->parent()) {
+    m_nam->setParent(this);
+  }
+}
+
 APIManager::~APIManager() {
   if (m_listSourcesReply) {
     m_listSourcesReply->abort();

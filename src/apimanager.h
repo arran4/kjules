@@ -17,14 +17,11 @@
 
 class APIManager : public QObject {
   Q_OBJECT
-  friend class TestBackgroundErrors;
-  friend class TestSourceWindow;
-  friend class TestAPIManagerPagination;
-  friend class BenchAPIManager;
 
 public:
   explicit APIManager(QObject *parent = nullptr);
   ~APIManager();
+  void setNetworkAccessManager(QNetworkAccessManager *nam);
 
   static QString julesSessionBaseUrl() { return QStringLiteral("https://jules.google.com/session/"); }
 

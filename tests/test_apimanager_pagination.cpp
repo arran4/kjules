@@ -73,8 +73,8 @@ private Q_SLOTS:
     apiManager.setGithubToken(QStringLiteral("fake-token"));
 
     MockNetworkAccessManager *mockNam = new MockNetworkAccessManager(&apiManager);
-    delete apiManager.m_nam;
-    apiManager.m_nam = mockNam;
+
+    apiManager.setNetworkAccessManager(mockNam);
 
     QSignalSpy spy(&apiManager, &APIManager::githubIssuesReceived);
     apiManager.fetchGithubIssues(QStringLiteral("src-1"), QStringLiteral("owner"), QStringLiteral("repo"));
