@@ -80,6 +80,73 @@ private Q_SLOTS:
     QCOMPARE(model.unseenCount(), 0);
     QCOMPARE(model.data(model.index(0, 0), ErrorsModel::UnseenRole).toBool(), false);
   }
+
+  void testJobErrorsSyncAndIdempotency() {
+    QTemporaryDir dir;
+    QString path = dir.path() + QStringLiteral("/errors.json");
+    ErrorsModel model(nullptr, path);
+
+    // Add 1 operational error
+    QJsonObject opErr;
+    opErr[QStringLiteral("message")] = QStringLiteral("Network failure");
+    model.addErrorObj(opErr);
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.unseenCount(), 1);
+
+    // Sync 2 job errors
+    QJsonArray jobErrors;
+    QJsonObject jErr1;
+    jErr1[QStringLiteral("jobId")] = QStringLiteral("job-1");
+    jErr1[QStringLiteral("attemptId")] = QStringLiteral("att-1");
+    jErr1[QStringLiteral("message")] = QStringLiteral("Build failure in job 1");
+    jobErrors.append(jErr1);
+
+    QJsonObject jErr2;
+    jErr2[QStringLiteral("jobId")] = QStringLiteral("job-2");
+    jErr2[QStringLiteral("attemptId")] = QStringLiteral("att-2");
+    jErr2[QStringLiteral("message")] = QStringLiteral("Auth failure in job 2");
+    jobErrors.append(jErr2);
+
+    model.syncJobErrors(jobErrors);
+    QCOMPARE(model.rowCount(), 3);
+    QCOMPARE(model.unseenCount(), 3);
+
+    // Idempotency: calling syncJobErrors again must not duplicate errors
+    model.syncJobErrors(jobErrors);
+    QCOMPARE(model.rowCount(), 3);
+    QCOMPARE(model.unseenCount(), 3);
+
+    // Mark jErr1 as seen (row 1)
+    model.markSeen(1);
+    QCOMPARE(model.unseenCount(), 2);
+    QCOMPARE(model.data(model.index(1, 0), ErrorsModel::SeenRole).toBool(), true);
+    QCOMPARE(model.data(model.index(1, 0), ErrorsModel::UnseenRole).toBool(), false);
+
+    // Re-syncing preserves seen state for jErr1
+    model.syncJobErrors(jobErrors);
+    QCOMPARE(model.rowCount(), 3);
+    QCOMPARE(model.unseenCount(), 2);
+    QCOMPARE(model.data(model.index(1, 0), ErrorsModel::SeenRole).toBool(), true);
+
+    // Disk isolation: errors.json only contains operational errors
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    QCOMPARE(doc.array().size(), 1);
+    QCOMPARE(doc.array().at(0).toObject().value(QStringLiteral("message")).toString(),
+             QStringLiteral("Network failure"));
+
+    // User dismisses job error jErr2 (row 2)
+    model.removeError(2);
+    QCOMPARE(model.rowCount(), 2);
+    QCOMPARE(model.unseenCount(), 1); // Only operational error left unseen
+
+    // Re-syncing does not resurrect dismissed job error
+    model.syncJobErrors(jobErrors);
+    QCOMPARE(model.rowCount(), 2);
+    QCOMPARE(model.unseenCount(), 1);
+  }
 };
 
 QTEST_MAIN(ErrorsModelTest)

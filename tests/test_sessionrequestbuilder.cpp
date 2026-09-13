@@ -19,6 +19,9 @@ private Q_SLOTS:
   void excludesApplicationFields();
   void createsDocumentedSendMessageRequest();
   void embedsApiRequestInSessionResponse();
+  void buildsCanonicalSessionRequestWithAllFields();
+  void normalizesPlanApprovalAndActionFields();
+  void normalizesMixedSourceAndBranch();
 };
 
 void SessionRequestBuilderTest::createsDocumentedFullRequest() {
@@ -158,6 +161,61 @@ void SessionRequestBuilderTest::embedsApiRequestInSessionResponse() {
   const QJsonObject emptyRequestResult = SessionRequestBuilder::sessionResponseWithRequest(response, {});
   QVERIFY(emptyRequestResult.contains(QStringLiteral("request")));
   QCOMPARE(emptyRequestResult.value(QStringLiteral("request")).toObject(), QJsonObject{});
+}
+
+void SessionRequestBuilderTest::buildsCanonicalSessionRequestWithAllFields() {
+  const QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/testorg/testrepo"), QStringLiteral("feature-branch"),
+      QStringLiteral("Fix bug in calculation"), QStringLiteral("AUTO_CREATE_PR"), true /* requirePlanApproval */,
+      true /* ignoreConcurrency */, 42 /* priority */, QStringLiteral("send_now") /* queueAction */);
+
+  QCOMPARE(req.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/testorg/testrepo"));
+  QCOMPARE(req.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("feature-branch"));
+  QCOMPARE(req.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix bug in calculation"));
+  QCOMPARE(req.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(req.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(req.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
+  QCOMPARE(req.value(QStringLiteral("priority")).toInt(), 42);
+  QCOMPARE(req.value(QStringLiteral("_kjules_action")).toString(), QStringLiteral("send_now"));
+}
+
+void SessionRequestBuilderTest::normalizesPlanApprovalAndActionFields() {
+  QJsonObject input;
+  input[QStringLiteral("prompt")] = QStringLiteral("Variant prompt");
+  input[QStringLiteral("planApproval")] = true;
+  input[QStringLiteral("queueAction")] = QStringLiteral("send_next");
+  input[QStringLiteral("ignoreConcurrency")] = true;
+  input[QStringLiteral("priority")] = 99;
+
+  const QJsonObject normalized = SessionRequestBuilder::normalizeSessionRequest(input);
+  QCOMPARE(normalized.value(QStringLiteral("prompt")).toString(), QStringLiteral("Variant prompt"));
+  QCOMPARE(normalized.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(normalized.value(QStringLiteral("_kjules_action")).toString(), QStringLiteral("send_next"));
+  QCOMPARE(normalized.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
+  QCOMPARE(normalized.value(QStringLiteral("priority")).toInt(), 99);
+
+  // createSession also honors planApproval
+  const QJsonObject apiReq = SessionRequestBuilder::createSession(input);
+  QCOMPARE(apiReq.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+}
+
+void SessionRequestBuilderTest::normalizesMixedSourceAndBranch() {
+  const QJsonObject legacy{
+      {QStringLiteral("sourceContext"),
+       QJsonObject{{QStringLiteral("source"), QStringLiteral("sources/legacy")},
+                   {QStringLiteral("githubRepoContext"),
+                    QJsonObject{{QStringLiteral("startingBranch"), QStringLiteral("legacy-branch")}}}}}};
+  auto normalized = SessionRequestBuilder::normalizeSessionRequest(legacy);
+  QCOMPARE(normalized.value(QStringLiteral("source")).toString(), QStringLiteral("sources/legacy"));
+  QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("legacy-branch"));
+  auto mixed = legacy;
+  mixed[QStringLiteral("source")] = QStringLiteral("sources/current");
+  normalized = SessionRequestBuilder::normalizeSessionRequest(mixed);
+  QCOMPARE(normalized.value(QStringLiteral("source")).toString(), QStringLiteral("sources/current"));
+  QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("legacy-branch"));
+  mixed[QStringLiteral("startingBranch")] = QStringLiteral("current-branch");
+  normalized = SessionRequestBuilder::normalizeSessionRequest(mixed);
+  QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("current-branch"));
 }
 
 QTEST_MAIN(SessionRequestBuilderTest)

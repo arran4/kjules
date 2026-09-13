@@ -3,6 +3,7 @@
 #include "filtereditor.h"
 #include "filterparser.h"
 #include "savedialog.h"
+#include "sessionrequestbuilder.h"
 #include "templateselectiondialog.h"
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -1542,11 +1543,14 @@ void NewSessionDialog::setEditMode(bool isEdit) {
   }
 }
 
-void NewSessionDialog::setInitialData(const QJsonObject &data) {
+void NewSessionDialog::setInitialData(const QJsonObject &initialData) {
+  const auto data = SessionRequestBuilder::normalizeSessionRequest(initialData);
   QString prompt = data.value(QStringLiteral("prompt")).toString();
 
   if (data.contains(QStringLiteral("requirePlanApproval"))) {
     m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("requirePlanApproval")).toBool());
+  } else if (data.contains(QStringLiteral("planApproval"))) {
+    m_requirePlanApprovalCheckBox->setChecked(data.value(QStringLiteral("planApproval")).toBool());
   }
 
   if (data.contains(QStringLiteral("ignoreConcurrency"))) {

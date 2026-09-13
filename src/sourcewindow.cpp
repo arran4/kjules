@@ -5,6 +5,7 @@
 #include "clickablelabel.h"
 #include "draftdelegate.h"
 #include "errorsmodel.h"
+#include "jobstore.h"
 #include "queuedelegate.h"
 #include "queuemodel.h"
 #include "sessionmodel.h"
@@ -63,12 +64,13 @@ private:
 
 SourceWindow::SourceWindow(const QString &sourceId, SourceModel *sourceModel, SessionModel *sessionModel,
                            SessionModel *archiveModel, QueueModel *queueModel, ErrorsModel *errorsModel,
-                           BlockedTreeModel *blockedTreeModel, APIManager *apiManager, QWidget *parent)
+                           BlockedTreeModel *blockedTreeModel, APIManager *apiManager, JobStore *jobStore,
+                           QWidget *parent)
     : KXmlGuiWindow(parent), m_sourceId(sourceId), m_sourceModel(sourceModel), m_sessionModel(sessionModel),
       m_archiveModel(archiveModel), m_queueModel(queueModel), m_errorsModel(errorsModel),
-      m_blockedTreeModel(blockedTreeModel), m_apiManager(apiManager), m_tabWidget(nullptr), m_sessionsWidget(nullptr),
-      m_autoFollowCheckBox(nullptr), m_concurrencySpinBox(nullptr), m_defaultBranchesList(nullptr),
-      m_rawDataEdit(nullptr) {
+      m_blockedTreeModel(blockedTreeModel), m_apiManager(apiManager), m_jobStore(jobStore), m_tabWidget(nullptr),
+      m_sessionsWidget(nullptr), m_autoFollowCheckBox(nullptr), m_concurrencySpinBox(nullptr),
+      m_defaultBranchesList(nullptr), m_rawDataEdit(nullptr) {
   setAttribute(Qt::WA_DeleteOnClose);
   setWindowTitle(tr("Source: %1").arg(sourceId));
   resize(800, 600);
@@ -294,7 +296,17 @@ void SourceWindow::setupFollowingTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_sessionModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, true, this);
+    SessionWindow *win = nullptr;
+    QString id = session.value(QStringLiteral("id")).toString();
+    if (m_jobStore) {
+      JobData *job = m_jobStore->getJobBySessionId(id);
+      if (job) {
+        win = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, true, this);
+      }
+    }
+    if (!win) {
+      win = new SessionWindow(session, m_apiManager, m_errorsModel, true, this);
+    }
     win->show();
   });
 
@@ -323,7 +335,17 @@ void SourceWindow::setupArchivedTab() {
       return;
     QModelIndex sourceIdx = proxy->mapToSource(index);
     QJsonObject session = m_archiveModel->getSession(sourceIdx.row());
-    SessionWindow *win = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+    SessionWindow *win = nullptr;
+    QString id = session.value(QStringLiteral("id")).toString();
+    if (m_jobStore) {
+      JobData *job = m_jobStore->getJobBySessionId(id);
+      if (job) {
+        win = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, false, this);
+      }
+    }
+    if (!win) {
+      win = new SessionWindow(session, m_apiManager, m_errorsModel, false, this);
+    }
     win->show();
   });
 
@@ -375,7 +397,7 @@ void SourceWindow::setupQueuedBlockedTab() {
 }
 
 void SourceWindow::setupSessionsTab() {
-  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_sessionModel, m_errorsModel, this);
+  m_sessionsWidget = new SessionsWidget(m_sourceId, m_apiManager, m_jobStore, m_sessionModel, m_errorsModel, this);
   connect(m_sessionsWidget, &SessionsWidget::watchRequested, this, [this](const QJsonObject &session) {
     if (m_sessionModel) {
       m_sessionModel->addSession(session);
