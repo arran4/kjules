@@ -21,7 +21,7 @@ class APIManager : public QObject {
 public:
   explicit APIManager(QObject *parent = nullptr);
   ~APIManager();
-  void setNetworkAccessManager(QNetworkAccessManager *nam);
+  void injectNetworkAccessManagerForTesting(QNetworkAccessManager *nam);
 
   static QString julesSessionBaseUrl() { return QStringLiteral("https://jules.google.com/session/"); }
 

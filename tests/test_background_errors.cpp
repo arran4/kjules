@@ -103,7 +103,7 @@ private Q_SLOTS:
     Mock200EmptyJsonNetworkAccessManager *mockNam1 =
         new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam1);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam1);
 
     QSignalSpy reloadedSpy1(&apiManager, &APIManager::sessionReloaded);
     QSignalSpy failedSpy1(&apiManager, &APIManager::sessionReloadFailed);
@@ -117,7 +117,7 @@ private Q_SLOTS:
     // request sessions/foo, response foo
     Mock200EmptyJsonNetworkAccessManager *mockNam2 =
         new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
-    apiManager.setNetworkAccessManager(mockNam2);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam2);
     QSignalSpy reloadedSpy2(&apiManager, &APIManager::sessionReloaded);
     apiManager.reloadSession(QStringLiteral("sessions/foo"), false);
     QVERIFY(reloadedSpy2.wait(1000));
@@ -126,7 +126,7 @@ private Q_SLOTS:
     // request /sessions/foo, response foo
     Mock200EmptyJsonNetworkAccessManager *mockNam3 =
         new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
-    apiManager.setNetworkAccessManager(mockNam3);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam3);
     QSignalSpy reloadedSpy3(&apiManager, &APIManager::sessionReloaded);
     apiManager.reloadSession(QStringLiteral("/sessions/foo"), false);
     QVERIFY(reloadedSpy3.wait(1000));
@@ -135,7 +135,7 @@ private Q_SLOTS:
     // request session/foo, response foo (since cleanSessionId does session/foo)
     Mock200EmptyJsonNetworkAccessManager *mockNam4 =
         new Mock200EmptyJsonNetworkAccessManager(validResponse, &apiManager);
-    apiManager.setNetworkAccessManager(mockNam4);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam4);
     QSignalSpy reloadedSpy4(&apiManager, &APIManager::sessionReloaded);
     apiManager.reloadSession(QStringLiteral("session/foo"), false);
     QVERIFY(reloadedSpy4.wait(1000));
@@ -151,7 +151,7 @@ private Q_SLOTS:
     Mock200EmptyJsonNetworkAccessManager *mockNam =
         new Mock200EmptyJsonNetworkAccessManager(emptyIdResponse, &apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy reloadedSpy(&apiManager, &APIManager::sessionReloaded);
     QSignalSpy failedSpy(&apiManager, &APIManager::sessionReloadFailed);
@@ -173,7 +173,7 @@ private Q_SLOTS:
     Mock200EmptyJsonNetworkAccessManager *mockNam =
         new Mock200EmptyJsonNetworkAccessManager(missingIdResponse, &apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy reloadedSpy(&apiManager, &APIManager::sessionReloaded);
     QSignalSpy failedSpy(&apiManager, &APIManager::sessionReloadFailed);
@@ -195,7 +195,7 @@ private Q_SLOTS:
     Mock200EmptyJsonNetworkAccessManager *mockNam =
         new Mock200EmptyJsonNetworkAccessManager(wrongIdResponse, &apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy reloadedSpy(&apiManager, &APIManager::sessionReloaded);
     QSignalSpy failedSpy(&apiManager, &APIManager::sessionReloadFailed);
@@ -217,7 +217,7 @@ private Q_SLOTS:
     Mock200EmptyJsonNetworkAccessManager *mockNam =
         new Mock200EmptyJsonNetworkAccessManager(malformedJsonResponse, &apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy reloadedSpy(&apiManager, &APIManager::sessionReloaded);
     QSignalSpy failedSpy(&apiManager, &APIManager::sessionReloadFailed);
@@ -239,7 +239,7 @@ private Q_SLOTS:
     Mock200EmptyJsonNetworkAccessManager *mockNam =
         new Mock200EmptyJsonNetworkAccessManager(arrayJsonResponse, &apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy reloadedSpy(&apiManager, &APIManager::sessionReloaded);
     QSignalSpy failedSpy(&apiManager, &APIManager::sessionReloadFailed);
@@ -259,7 +259,7 @@ private Q_SLOTS:
 
     Mock503NetworkAccessManager *mockNam = new Mock503NetworkAccessManager(&apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy errorSpy(&apiManager, &APIManager::errorOccurred);
     QSignalSpy reloadSpy(&apiManager, &APIManager::sessionReloadFailed);

@@ -856,7 +856,7 @@ void TestSourceWindow::testFullSemanticChain() {
   mockNam->julesResponse = QJsonDocument(reloadedObj).toJson();
   mockNam->githubResponse = QJsonDocument(githubPr).toJson();
 
-  apiManager->setNetworkAccessManager(mockNam);
+  apiManager->injectNetworkAccessManagerForTesting(mockNam);
 
   // Set AutoArchive config
   KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
@@ -989,7 +989,7 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   mockNamAuto->julesResponse = QJsonDocument(reloadedObj).toJson();
   mockNamAuto->githubResponse = QJsonDocument(githubPr).toJson();
 
-  apiManagerAuto->setNetworkAccessManager(mockNamAuto);
+  apiManagerAuto->injectNetworkAccessManagerForTesting(mockNamAuto);
 
   QMetaObject::invokeMethod(&windowAuto, "autoRefreshFollowing", Qt::DirectConnection);
 
@@ -1021,7 +1021,7 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   mockNamManual->julesResponse = QJsonDocument(reloadedObj).toJson();
   mockNamManual->githubResponse = QJsonDocument(githubPr).toJson();
 
-  apiManagerManual->setNetworkAccessManager(mockNamManual);
+  apiManagerManual->injectNetworkAccessManagerForTesting(mockNamManual);
 
   // Setup spy to detect RefreshProgressWindow completion before it is deleted
   // In MainWindow, m_refreshProgressWindow is created on heap and deleted via deleteLater() when done.
@@ -1128,7 +1128,7 @@ void TestSourceWindow::testInFlightRecovery() {
   auto *mockNam = new MockE2ENetworkAccessManager(apiManager);
   mockNam->julesResponse = QByteArray("malformed json");
 
-  apiManager->setNetworkAccessManager(mockNam);
+  apiManager->injectNetworkAccessManagerForTesting(mockNam);
 
   // Trigger first automatic refresh
   QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);

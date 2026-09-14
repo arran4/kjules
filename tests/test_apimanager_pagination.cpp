@@ -68,13 +68,35 @@ protected:
 class TestAPIManagerPagination : public QObject {
   Q_OBJECT
 private Q_SLOTS:
+  void testNetworkManagerInjectionOwnership() {
+    APIManager apiManager;
+
+    // Test rejecting null
+    apiManager.injectNetworkAccessManagerForTesting(nullptr);
+
+    // Test successful injection and ownership
+    QPointer<QNetworkAccessManager> mockNam1 = new QNetworkAccessManager();
+    QVERIFY(mockNam1->parent() == nullptr);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam1);
+    QCOMPARE(mockNam1->parent(), &apiManager);
+
+    // Test replacement disposes of the old one
+    QPointer<QNetworkAccessManager> mockNam2 = new QNetworkAccessManager();
+    apiManager.injectNetworkAccessManagerForTesting(mockNam2);
+    QCOMPARE(mockNam2->parent(), &apiManager);
+
+    // Process events so deleteLater gets handled
+    QTest::qWait(10);
+    QVERIFY(mockNam1.isNull());
+  }
+
   void testIssuesPaginationAndFiltering() {
     APIManager apiManager;
     apiManager.setGithubToken(QStringLiteral("fake-token"));
 
     MockNetworkAccessManager *mockNam = new MockNetworkAccessManager(&apiManager);
 
-    apiManager.setNetworkAccessManager(mockNam);
+    apiManager.injectNetworkAccessManagerForTesting(mockNam);
 
     QSignalSpy spy(&apiManager, &APIManager::githubIssuesReceived);
     apiManager.fetchGithubIssues(QStringLiteral("src-1"), QStringLiteral("owner"), QStringLiteral("repo"));
