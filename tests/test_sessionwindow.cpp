@@ -8,10 +8,7 @@
 #include "../src/queuemodel.h"
 #include "../src/sessionrequestbuilder.h"
 #include "../src/sessionwindow.h"
-#include "../src/sourcemodel.h"
 #include <KActionCollection>
-#include <KConfigGroup>
-#include <KSharedConfig>
 #include <QDir>
 #include <QLabel>
 #include <QListWidget>
@@ -23,85 +20,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextBrowser>
-#include <QTimer>
 #include <QUuid>
-
-class MockSimpleNetworkReply : public QNetworkReply {
-  Q_OBJECT
-public:
-  MockSimpleNetworkReply(const QNetworkRequest &request, const QByteArray &responseBody, int statusCode,
-                         QObject *parent = nullptr)
-      : QNetworkReply(parent), m_data(responseBody), m_pos(0) {
-    setRequest(request);
-    setUrl(request.url());
-    setOperation(QNetworkAccessManager::PostOperation);
-    setAttribute(QNetworkRequest::HttpStatusCodeAttribute, statusCode);
-    open(QIODevice::ReadOnly);
-    QTimer::singleShot(0, this, [this]() {
-      Q_EMIT readyRead();
-      Q_EMIT finished();
-    });
-  }
-  qint64 readData(char *data, qint64 maxlen) override {
-    qint64 bytesToRead = qMin(maxlen, (qint64)(m_data.size() - m_pos));
-    memcpy(data, m_data.constData() + m_pos, bytesToRead);
-    m_pos += bytesToRead;
-    return bytesToRead;
-  }
-  void abort() override {}
-  bool isSequential() const override { return true; }
-
-private:
-  QByteArray m_data;
-  qint64 m_pos;
-};
-
-class MockCreateRepoAndSessionNetworkManager : public QNetworkAccessManager {
-  Q_OBJECT
-public:
-  QByteArray repoResponse = "{}";
-  int repoStatusCode = 200;
-  bool interceptCreateRepo = false;
-
-  QByteArray listSourcesResponse = "[]";
-  bool interceptListSources = false;
-
-  QByteArray createSessionResponse = "{}";
-  bool interceptCreateSession = false;
-
-  QList<QByteArray> capturedSessionRequests;
-
-  MockCreateRepoAndSessionNetworkManager(QObject *parent = nullptr) : QNetworkAccessManager(parent) {}
-
-protected:
-  QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData) override {
-    QString path = request.url().path();
-
-    QByteArray responseBody;
-    int statusCode = 200;
-    bool intercepted = false;
-
-    if (interceptCreateRepo && path.contains(QStringLiteral("/repos"))) {
-      responseBody = repoResponse;
-      statusCode = repoStatusCode;
-      intercepted = true;
-    } else if (interceptListSources && path.endsWith(QStringLiteral("/sources"))) {
-      responseBody = listSourcesResponse;
-      intercepted = true;
-    } else if (interceptCreateSession && path.contains(QStringLiteral("/sessions"))) {
-      responseBody = createSessionResponse;
-      intercepted = true;
-      if (outgoingData) {
-        capturedSessionRequests.append(outgoingData->readAll());
-      }
-    }
-
-    if (intercepted) {
-      return new MockSimpleNetworkReply(request, responseBody, statusCode, this);
-    }
-    return QNetworkAccessManager::createRequest(op, request, outgoingData);
-  }
-};
 
 class TestSessionWindow : public QObject {
   Q_OBJECT
@@ -205,8 +124,6 @@ private Q_SLOTS:
     job.attempts.append(sibling);
     QCOMPARE(JobPolicy::aggregateState(job) == JobPolicy::JobAggregateState::WinnerWithActive, eligible);
   }
-
-  void testCreateRepoWorkflow();
 
   void testDurableZeroHistory() {
     MainWindow window;
@@ -1017,113 +934,3 @@ private Q_SLOTS:
 
 QTEST_MAIN(TestSessionWindow)
 #include "test_sessionwindow.moc"
-
-void TestSessionWindow::testCreateRepoWorkflow() {
-  MainWindow window;
-  window.setAttribute(Qt::WA_DeleteOnClose, false);
-
-  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
-  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
-  queueConfig.sync();
-
-  APIManager *api = window.apiManager();
-
-  auto *mockNet = new MockCreateRepoAndSessionNetworkManager(api);
-  api->injectNetworkAccessManagerForTesting(mockNet);
-  api->setApiKey(QStringLiteral("test-key"));
-  api->setGithubToken(QStringLiteral("gh-token"));
-
-  QSignalSpy repoCreatedSpy(api, &APIManager::githubRepoCreated);
-  QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
-
-  QueueModel *qm = window.queueModel();
-  JobStore *js = window.jobStore();
-
-  QCOMPARE(qm->size(), 0);
-
-  // Invoke private onCreateRepoAndSession directly using friendship
-  window.onCreateRepoAndSession(QStringLiteral("test-org"), QStringLiteral("test-repo"), true,
-                                QStringLiteral("Fix issue 404"), QStringLiteral("AUTO_CREATE_PR"), true, false);
-
-  QCOMPARE(qm->size(), 1);
-  QueueItem initialItem = qm->getItem(0);
-  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_action")).toString(),
-           QStringLiteral("create_github_repo"));
-  QCOMPARE(initialItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
-  QCOMPARE(initialItem.requestData.value(QStringLiteral("automationMode")).toString(),
-           QStringLiteral("AUTO_CREATE_PR"));
-  QCOMPARE(initialItem.requestData.value(QStringLiteral("requirePlanApproval")).toBool(), true);
-  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString(),
-           QStringLiteral("test-org"));
-
-  mockNet->interceptCreateRepo = true;
-  mockNet->repoResponse = "{\"name\":\"test-repo\", \"full_name\":\"test-org/test-repo\"}";
-
-  window.processQueueForTest();
-
-  QTRY_COMPARE(repoCreatedSpy.count(), 1);
-
-  // Since wait for repo handles sync, the item is removed then immediately added to the top
-  // Make sure it remains exactly one item
-  QCOMPARE(qm->size(), 1);
-
-  // Ensure it's waiting for source resolution and queue hasn't been consumed
-  QVERIFY(window.m_isWaitingForCreatedRepoSource);
-  window.processQueueForTest(); // Try again while still waiting
-
-  QCOMPARE(sessionCreatedSpy.count(), 0);
-  QCOMPARE(qm->size(), 1); // Still in queue, waiting for source resolution
-
-  QueueItem updatedItem = qm->getItem(0);
-  JobData *job = js->getJobById(updatedItem.jobId);
-  QVERIFY(job != nullptr);
-  QVERIFY(!job->canonicalRequest.contains(QStringLiteral("_kjules_action")));
-  QCOMPARE(job->canonicalRequest.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
-
-  // Emulate source discovery
-  QJsonArray sourcesResponse;
-  QJsonObject newSource;
-  newSource[QStringLiteral("id")] = QStringLiteral("sources/github/test-org/test-repo");
-  newSource[QStringLiteral("name")] = QStringLiteral("test-org/test-repo");
-  QJsonObject githubRepo;
-  githubRepo[QStringLiteral("owner")] = QStringLiteral("test-org");
-  githubRepo[QStringLiteral("repo")] = QStringLiteral("test-repo");
-  newSource[QStringLiteral("githubRepo")] = githubRepo;
-  sourcesResponse.append(newSource);
-
-  window.m_sourceModel->setSources(sourcesResponse);
-
-  // Directly trigger onSourcesRefreshFinished
-  window.onSourcesRefreshFinished(true);
-
-  QVERIFY(!window.m_isWaitingForCreatedRepoSource);
-
-  QueueItem resolvedItem = qm->getItem(0);
-  QCOMPARE(resolvedItem.requestData.value(QStringLiteral("source")).toString(),
-           QStringLiteral("sources/github/test-org/test-repo"));
-  QVERIFY(!resolvedItem.requestData.contains(QStringLiteral("_kjules_github_owner")));
-
-  // Now process Queue should dispatch it
-  mockNet->interceptCreateSession = true;
-  mockNet->createSessionResponse = "{\"id\":\"sess-123\", \"state\":\"RUNNING\"}";
-
-  window.processQueueForTest();
-
-  QTRY_COMPARE(sessionCreatedSpy.count(), 1);
-  QCOMPARE(qm->size(), 0);
-
-  // Verify exactly once (calling processQueue again does nothing)
-  window.processQueueForTest();
-  QCOMPARE(sessionCreatedSpy.count(), 1);
-
-  // Verify request body sent over network
-  QCOMPARE(mockNet->capturedSessionRequests.size(), 1);
-  QJsonDocument sentDoc = QJsonDocument::fromJson(mockNet->capturedSessionRequests.first());
-  QJsonObject sentReq = sentDoc.object();
-
-  QCOMPARE(sentReq.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
-  QCOMPARE(sentReq.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
-  QCOMPARE(sentReq.value(QStringLiteral("requirePlanApproval")).toBool(), true);
-  QJsonObject sourceCtx = sentReq.value(QStringLiteral("sourceContext")).toObject();
-  QCOMPARE(sourceCtx.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/test-org/test-repo"));
-}

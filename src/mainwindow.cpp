@@ -3944,7 +3944,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
       if (attempt.id == attemptId) {
         attempt.updatedAt = QDateTime::currentDateTimeUtc();
         if (success) {
-          attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+          attempt.dispatchState = QStringLiteral("COMPLETED");
           attempt.rawResponse = response;
         } else {
           attempt.dispatchState = QStringLiteral("FAILED");
@@ -5479,6 +5479,14 @@ bool MainWindow::resolvePendingGithubSource() {
       item.requestData.remove(QStringLiteral("_kjules_github_repository"));
       m_queueModel->updateItem(0, item);
       m_isWaitingForCreatedRepoSource = false;
+
+      if (JobData *job = m_jobStore->getJobById(item.jobId)) {
+        job->canonicalRequest = item.requestData;
+        job->source = sourceIndex.data(SourceModel::IdRole).toString();
+        m_jobStore->updateJobTransactional(*job);
+        syncModelsFromJobStore();
+      }
+
       return true;
     }
   }
