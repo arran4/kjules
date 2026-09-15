@@ -71,13 +71,15 @@ private Q_SLOTS:
   void testNetworkManagerInjectionOwnership() {
     APIManager apiManager;
 
-    // Test rejecting null
-    apiManager.injectNetworkAccessManagerForTesting(nullptr);
-
     // Test successful injection and ownership
     QPointer<QNetworkAccessManager> mockNam1 = new QNetworkAccessManager();
     QVERIFY(mockNam1->parent() == nullptr);
     apiManager.injectNetworkAccessManagerForTesting(mockNam1);
+    QCOMPARE(mockNam1->parent(), &apiManager);
+
+    // Test rejecting null (preserves existing manager)
+    apiManager.injectNetworkAccessManagerForTesting(nullptr);
+    QVERIFY(!mockNam1.isNull());
     QCOMPARE(mockNam1->parent(), &apiManager);
 
     // Test replacement disposes of the old one
@@ -86,8 +88,7 @@ private Q_SLOTS:
     QCOMPARE(mockNam2->parent(), &apiManager);
 
     // Process events so deleteLater gets handled
-    QTest::qWait(10);
-    QVERIFY(mockNam1.isNull());
+    QTRY_VERIFY(mockNam1.isNull());
   }
 
   void testIssuesPaginationAndFiltering() {
