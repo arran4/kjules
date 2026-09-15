@@ -3511,30 +3511,28 @@ void MainWindow::showNewSessionDialogSlot() {
 void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoName, bool isPrivate,
                                         const QString &prompt, const QString &automationMode, bool requirePlanApproval,
                                         bool ignoreConcurrency) {
-  QJsonObject repoReq;
-  repoReq[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
-  repoReq[QStringLiteral("org")] = org;
-  repoReq[QStringLiteral("repoName")] = repoName;
-  repoReq[QStringLiteral("private")] = isPrivate;
+  QJsonObject req;
+  req[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
+  req[QStringLiteral("org")] = org;
+  req[QStringLiteral("repoName")] = repoName;
+  req[QStringLiteral("private")] = isPrivate;
 
-  QJsonObject sessionReq;
-  sessionReq[QStringLiteral("_kjules_github_owner")] = org.isEmpty() ? m_apiManager->githubUsername() : org;
-  sessionReq[QStringLiteral("_kjules_github_repository")] = repoName;
-  sessionReq[QStringLiteral("prompt")] = prompt;
+  req[QStringLiteral("_kjules_github_owner")] = org.isEmpty() ? m_apiManager->githubUsername() : org;
+  req[QStringLiteral("_kjules_github_repository")] = repoName;
+  req[QStringLiteral("prompt")] = prompt;
   if (requirePlanApproval) {
-    sessionReq[QStringLiteral("requirePlanApproval")] = true;
+    req[QStringLiteral("requirePlanApproval")] = true;
   }
   if (ignoreConcurrency) {
-    sessionReq[QStringLiteral("ignoreConcurrency")] = true;
+    req[QStringLiteral("ignoreConcurrency")] = true;
   }
   if (!automationMode.isEmpty()) {
-    sessionReq[QStringLiteral("automationMode")] = automationMode;
+    req[QStringLiteral("automationMode")] = automationMode;
   }
 
-  m_queueModel->enqueue(repoReq);
-  m_queueModel->enqueue(sessionReq);
+  m_queueModel->enqueue(req);
 
-  updateStatus(i18n("Added 2 tasks to queue for creating repo and session."));
+  updateStatus(i18n("Added task to queue for creating repo and session."));
   QTimer::singleShot(0, this, &MainWindow::processQueue);
 }
 
@@ -3831,11 +3829,20 @@ bool MainWindow::processQueue() {
 
     // pending github repo check
     QString owner = item.requestData.value(QStringLiteral("_kjules_github_owner")).toString();
+    QString action = item.requestData.value(QStringLiteral("_kjules_action")).toString();
+
     if (!owner.isEmpty()) {
-      dispatchIndex = i;
-      itemToDispatch = item;
-      jobToDispatch = job;
-      break;
+      if (action == QStringLiteral("create_github_repo")) {
+        // Dispatch this to create the repo
+        dispatchIndex = i;
+        itemToDispatch = item;
+        jobToDispatch = job;
+        break;
+      } else {
+        // We are waiting for this new repo to appear as a source, do not dispatch it.
+        // It will be resolved by resolvePendingGithubSource after refresh.
+        continue;
+      }
     }
 
     if (!ignoreConcurrency) {
@@ -3959,22 +3966,28 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
     updateStatus(
         i18n("GitHub repository created successfully: %1", response.value(QStringLiteral("full_name")).toString()));
 
-    // In original code, creating repo successfully triggers createSession immediately using the updated payload
-    QJsonObject updatedReq = requestData;
-    QJsonObject sourceCtx = updatedReq.value(QStringLiteral("sourceContext")).toObject();
-    QJsonObject repoCtx = sourceCtx.value(QStringLiteral("githubRepoContext")).toObject();
-    repoCtx[QStringLiteral("name")] = response.value(QStringLiteral("name"));
-    sourceCtx[QStringLiteral("githubRepoContext")] = repoCtx;
-    updatedReq[QStringLiteral("sourceContext")] = sourceCtx;
-
-    // We should enqueue or dispatch it now
     if (JobData *job = m_jobStore->getJobById(jobId)) {
+      QJsonObject updatedReq = requestData;
+      updatedReq.remove(QStringLiteral("_kjules_action")); // Remove repo creation trigger
+
       job->canonicalRequest = updatedReq;
       m_jobStore->updateJob(*job);
       if (m_jobStore->save()) {
         syncModelsFromJobStore();
-        m_apiManager->createSessionAsync(updatedReq, jobId, attemptId);
+        QueueItem item;
+        item.jobId = job->id;
+        item.requestData = updatedReq;
+        m_queueModel->insertItem(0, item);
       }
+    }
+
+    m_isWaitingForCreatedRepoSource = true;
+    updateStatus(i18n("Waiting for new repository to appear in sources..."));
+    refreshSourcesImpl(true); // background refresh
+
+    if (m_isProcessingQueue) {
+      m_isProcessingQueue = false;
+      scheduleNextQueueAttempt();
     }
   } else {
     updateStatus(i18n("Failed to create GitHub repository: %1", errorMsg));
