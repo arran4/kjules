@@ -855,8 +855,8 @@ void TestSourceWindow::testFullSemanticChain() {
   auto *mockNam = new MockE2ENetworkAccessManager(apiManager);
   mockNam->julesResponse = QJsonDocument(reloadedObj).toJson();
   mockNam->githubResponse = QJsonDocument(githubPr).toJson();
-  delete apiManager->m_nam;
-  apiManager->m_nam = mockNam;
+
+  apiManager->injectNetworkAccessManagerForTesting(mockNam);
 
   // Set AutoArchive config
   KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
@@ -988,8 +988,8 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   auto *mockNamAuto = new MockE2ENetworkAccessManager(apiManagerAuto);
   mockNamAuto->julesResponse = QJsonDocument(reloadedObj).toJson();
   mockNamAuto->githubResponse = QJsonDocument(githubPr).toJson();
-  delete apiManagerAuto->m_nam;
-  apiManagerAuto->m_nam = mockNamAuto;
+
+  apiManagerAuto->injectNetworkAccessManagerForTesting(mockNamAuto);
 
   QMetaObject::invokeMethod(&windowAuto, "autoRefreshFollowing", Qt::DirectConnection);
 
@@ -1020,8 +1020,8 @@ void TestSourceWindow::testManualVsAutomaticRefreshEquivalent() {
   auto *mockNamManual = new MockE2ENetworkAccessManager(apiManagerManual);
   mockNamManual->julesResponse = QJsonDocument(reloadedObj).toJson();
   mockNamManual->githubResponse = QJsonDocument(githubPr).toJson();
-  delete apiManagerManual->m_nam;
-  apiManagerManual->m_nam = mockNamManual;
+
+  apiManagerManual->injectNetworkAccessManagerForTesting(mockNamManual);
 
   // Setup spy to detect RefreshProgressWindow completion before it is deleted
   // In MainWindow, m_refreshProgressWindow is created on heap and deleted via deleteLater() when done.
@@ -1127,8 +1127,8 @@ void TestSourceWindow::testInFlightRecovery() {
 
   auto *mockNam = new MockE2ENetworkAccessManager(apiManager);
   mockNam->julesResponse = QByteArray("malformed json");
-  delete apiManager->m_nam;
-  apiManager->m_nam = mockNam;
+
+  apiManager->injectNetworkAccessManagerForTesting(mockNam);
 
   // Trigger first automatic refresh
   QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);
