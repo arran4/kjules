@@ -5,7 +5,16 @@
 
 class JobPolicy {
 public:
+  static bool isRepoProvisioningAttempt(const JobAttemptData &attempt) {
+    return attempt.requestSnapshot.value(QStringLiteral("_kjules_action")).toString() ==
+           QLatin1String("create_github_repo");
+  }
+
   static bool isAttemptTerminal(const JobAttemptData &attempt) {
+    if (isRepoProvisioningAttempt(attempt)) {
+      return attempt.dispatchState == QLatin1String("COMPLETED") || attempt.dispatchState == QLatin1String("FAILED") ||
+             attempt.dispatchState == QLatin1String("ERROR") || attempt.dispatchState == QLatin1String("CANCELED");
+    }
     return attempt.julesState == QLatin1String("COMPLETED") || attempt.julesState == QLatin1String("ERROR") ||
            attempt.julesState == QLatin1String("ERROR_STATE") || attempt.julesState == QLatin1String("FAILED") ||
            attempt.julesState == QLatin1String("CANCELED") || attempt.dispatchState == QLatin1String("FAILED") ||
@@ -13,6 +22,9 @@ public:
   }
 
   static bool isAttemptSuccessful(const JobAttemptData &attempt) {
+    if (isRepoProvisioningAttempt(attempt)) {
+      return false;
+    }
     return attempt.julesState == QLatin1String("COMPLETED");
   }
 
@@ -143,8 +155,12 @@ public:
     bool hasFailed = false;
     bool hasCompleted = false;
     bool hasAwaitingUser = false;
+    bool hasJulesAttempt = false;
 
     for (const auto &attempt : job.attempts) {
+      if (!isRepoProvisioningAttempt(attempt)) {
+        hasJulesAttempt = true;
+      }
       bool isTerminal = isAttemptTerminal(attempt);
       bool isFailedAttempt = isAttemptFailed(attempt);
       bool isSuccessAttempt = isAttemptSuccessful(attempt);
@@ -182,6 +198,10 @@ public:
         return JobAggregateState::ActiveWithFailed;
       }
       return JobAggregateState::Active;
+    }
+
+    if (!hasJulesAttempt && !hasFailed) {
+      return JobAggregateState::Pending;
     }
 
     if (job.attempts.isEmpty()) {

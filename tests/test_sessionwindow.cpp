@@ -1107,11 +1107,15 @@ void TestSessionWindow::testCreateRepoWorkflow() {
   QVERIFY(!job->canonicalRequest.contains(QStringLiteral("_kjules_action")));
   QCOMPARE(job->canonicalRequest.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
 
-  // Verify that the repo creation attempt was marked as COMPLETED
+  // Verify that the repo creation attempt was marked as COMPLETED but NOT as a successful Jules execution
   QCOMPARE(job->attempts.size(), 1);
   QCOMPARE(job->attempts[0].dispatchState, QStringLiteral("COMPLETED"));
+  QVERIFY(job->attempts[0].julesState.isEmpty());
   QVERIFY(JobPolicy::isAttemptTerminal(job->attempts[0])); // It no longer consumes concurrency
   QVERIFY(!JobPolicy::consumesConcurrency(job->attempts[0]));
+  QVERIFY(!JobPolicy::isAttemptSuccessful(job->attempts[0])); // Must NOT be treated as a successful Jules execution
+  QVERIFY(!JobPolicy::isSuccessfullyComplete(*job));          // Job is not successfully complete
+  QCOMPARE(JobPolicy::aggregateState(*job), JobPolicy::JobAggregateState::Pending); // Job remains Pending in queue
 
   // Emulate source discovery: new repository now appears in Jules sources
   QJsonArray sourcesResponse;
@@ -1154,6 +1158,13 @@ void TestSessionWindow::testCreateRepoWorkflow() {
 
   QTRY_COMPARE(sessionCreatedSpy.count(), 1);
   QCOMPARE(qm->size(), 0);
+
+  // Job should now have 2 attempts, and aggregateState should be Active (session is RUNNING)
+  JobData *dispatchedJob = js->getJobById(resolvedItem.jobId);
+  QVERIFY(dispatchedJob != nullptr);
+  QCOMPARE(dispatchedJob->attempts.size(), 2);
+  QCOMPARE(dispatchedJob->attempts[1].julesState, QStringLiteral("RUNNING"));
+  QCOMPARE(JobPolicy::aggregateState(*dispatchedJob), JobPolicy::JobAggregateState::Active);
 
   // Verify exactly once (calling processQueue again does nothing)
   window.processQueueForTest();
@@ -1216,10 +1227,13 @@ void TestSessionWindow::testCreateRepoWorkflowRepoFailure() {
   QCOMPARE(failedJob->attempts.size(), 1);
   const JobAttemptData &attempt = failedJob->attempts.first();
   QCOMPARE(attempt.dispatchState, QStringLiteral("FAILED"));
-  QCOMPARE(attempt.julesState, QStringLiteral("FAILED"));
+  QVERIFY(attempt.julesState.isEmpty());
   QVERIFY(JobPolicy::isAttemptTerminal(attempt));
   QVERIFY(JobPolicy::isAttemptFailed(attempt));
+  QVERIFY(!JobPolicy::isAttemptSuccessful(attempt));
   QVERIFY(!JobPolicy::consumesConcurrency(attempt));
+  QVERIFY(!JobPolicy::isSuccessfullyComplete(*failedJob));
+  QCOMPARE(JobPolicy::aggregateState(*failedJob), JobPolicy::JobAggregateState::NeedsAttention);
   QVERIFY(!attempt.launchErrors.isEmpty());
 
   // Concurrency accounting remains 0

@@ -3957,11 +3957,11 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
         attempt.updatedAt = QDateTime::currentDateTimeUtc();
         if (success) {
           attempt.dispatchState = QStringLiteral("COMPLETED");
-          attempt.julesState = QStringLiteral("COMPLETED"); // Terminate the repo attempt natively
+          attempt.julesState.clear();
           attempt.rawResponse = response;
         } else {
           attempt.dispatchState = QStringLiteral("FAILED");
-          attempt.julesState = QStringLiteral("FAILED");
+          attempt.julesState.clear();
           QJsonObject errObj;
           errObj[QStringLiteral("message")] = errorMsg;
           job->recordHistory(QStringLiteral("launch-error"), errObj.value(QStringLiteral("message")).toString());
@@ -3971,6 +3971,18 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
         break;
       }
     }
+
+    if (success) {
+      QJsonObject updatedReq = requestData;
+      updatedReq.remove(QStringLiteral("_kjules_action")); // Remove repo creation trigger
+      job->canonicalRequest = updatedReq;
+
+      QueueItem item;
+      item.jobId = job->id;
+      item.requestData = updatedReq;
+      m_queueModel->insertItem(0, item);
+    }
+
     m_jobStore->updateJob(*job);
     if (m_jobStore->save())
       syncModelsFromJobStore();
@@ -3979,21 +3991,6 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
   if (success) {
     updateStatus(
         i18n("GitHub repository created successfully: %1", response.value(QStringLiteral("full_name")).toString()));
-
-    if (JobData *job = m_jobStore->getJobById(jobId)) {
-      QJsonObject updatedReq = requestData;
-      updatedReq.remove(QStringLiteral("_kjules_action")); // Remove repo creation trigger
-
-      job->canonicalRequest = updatedReq;
-      m_jobStore->updateJob(*job);
-      if (m_jobStore->save()) {
-        syncModelsFromJobStore();
-        QueueItem item;
-        item.jobId = job->id;
-        item.requestData = updatedReq;
-        m_queueModel->insertItem(0, item);
-      }
-    }
 
     m_isWaitingForCreatedRepoSource = true;
     updateStatus(i18n("Waiting for new repository to appear in sources..."));
