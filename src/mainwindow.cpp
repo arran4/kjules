@@ -102,10 +102,10 @@ MainWindow::MainWindow(QWidget *parent)
       m_templatesModel(new TemplatesModel(this)), m_queueModel(new QueueModel(this)),
       m_holdingModel(new QueueModel(this, QStringLiteral("holding.json"), true)), m_errorsModel(new ErrorsModel(this)),
       m_apiManager(new APIManager(this)), m_jobStore(new JobStore()), m_tabWidget(nullptr), m_trayIcon(nullptr),
-      m_trayMenu(nullptr), m_isRefreshingSources(false), m_sourcesLoadedCount(0), m_sourcesAddedCount(0),
-      m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)), m_masterSecondTimer(new QTimer(this)),
-      m_isProcessingQueue(false), m_isProcessingMinuteTimer(false), m_queuePaused(false),
-      m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
+      m_trayMenu(nullptr), m_isRefreshingSources(false), m_isBackgroundSourcesRefresh(false), m_sourcesLoadedCount(0),
+      m_sourcesAddedCount(0), m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)),
+      m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
+      m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
   ConfigMigration::migrate();
   setObjectName(QStringLiteral("MainWindow"));
   m_throttleTimer.start();
@@ -267,7 +267,11 @@ void MainWindow::setMockApi(bool useMock) {
   }
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() {
+  if (m_apiManager) {
+    disconnect(m_apiManager, nullptr, this, nullptr);
+  }
+}
 
 void MainWindow::closeEvent(QCloseEvent *event) {
   KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("General"));
@@ -3387,27 +3391,32 @@ void MainWindow::refreshSources() { refreshSourcesImpl(false); }
 
 void MainWindow::refreshSourcesImpl(bool isBackground) {
   if (m_isRefreshingSources) {
-    cancelSourcesRefresh();
+    if (!isBackground) {
+      cancelSourcesRefresh();
+    }
     return;
   }
   m_isRefreshingSources = true;
+  m_isBackgroundSourcesRefresh = isBackground;
   m_sourcesLoadedCount = 0;
   m_sourcesAddedCount = 0;
   m_pagesLoadedCount = 0;
   m_refreshedSources = {};
 
-  m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
-  m_sourceProgressBar->show();
-  m_cancelRefreshBtn->show();
+  if (!isBackground) {
+    m_refreshSourcesAction->setText(i18n("Cancel Refresh"));
+    m_sourceProgressBar->show();
+    m_cancelRefreshBtn->show();
 
-  if (!m_sourcesRefreshProgressWindow) {
-    m_sourcesRefreshProgressWindow = new SourcesRefreshProgressWindow(m_apiManager, this);
-    connect(m_sourcesRefreshProgressWindow, &SourcesRefreshProgressWindow::progressSummary, this,
-            &MainWindow::updateStatus);
+    if (!m_sourcesRefreshProgressWindow) {
+      m_sourcesRefreshProgressWindow = new SourcesRefreshProgressWindow(m_apiManager, this);
+      connect(m_sourcesRefreshProgressWindow, &SourcesRefreshProgressWindow::progressSummary, this,
+              &MainWindow::updateStatus);
+    }
+    m_sourcesRefreshProgressWindow->reset();
+
+    updateStatus(i18n("Refreshing sources..."));
   }
-  m_sourcesRefreshProgressWindow->reset();
-
-  updateStatus(i18n("Refreshing sources..."));
   m_apiManager->listSources(QString(), isBackground);
 }
 
@@ -3775,11 +3784,13 @@ bool MainWindow::processQueue() {
 
   if (m_isWaitingForCreatedRepoSource) {
     if (resolvePendingGithubSource()) {
-      QTimer::singleShot(0, this, &MainWindow::processQueue); // Resumed
+      // Source resolved; fall through to process queue
     } else {
-      refreshSourcesImpl(true); // Autonomous background refresh to fetch new repo
+      if (!m_isRefreshingSources) {
+        refreshSourcesImpl(true); // Autonomous background refresh to fetch new repo
+      }
+      return false;
     }
-    return false;
   }
 
   if (m_queueModel->isEmpty()) {
@@ -3938,7 +3949,6 @@ bool MainWindow::processQueue() {
 void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, const QString &attemptId,
                                            const QJsonObject &requestData, const QJsonObject &response,
                                            const ApiError &apiError) {
-  Q_UNUSED(requestData);
   QString errorMsg = apiError.message();
 
   if (JobData *job = m_jobStore->getJobById(jobId)) {
@@ -3951,6 +3961,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
           attempt.rawResponse = response;
         } else {
           attempt.dispatchState = QStringLiteral("FAILED");
+          attempt.julesState = QStringLiteral("FAILED");
           QJsonObject errObj;
           errObj[QStringLiteral("message")] = errorMsg;
           job->recordHistory(QStringLiteral("launch-error"), errObj.value(QStringLiteral("message")).toString());
@@ -3993,6 +4004,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
       scheduleNextQueueAttempt();
     }
   } else {
+    m_isWaitingForCreatedRepoSource = false;
     updateStatus(i18n("Failed to create GitHub repository: %1", errorMsg));
     onError(i18n("Failed to create GitHub repository: %1", errorMsg));
     if (m_isProcessingQueue) {
@@ -5417,45 +5429,60 @@ void MainWindow::onGithubInfoReceived(const QString &sourceId, const QJsonObject
 
 void MainWindow::onSourcesRefreshFinished(bool complete) {
   bool wasRefreshing = m_isRefreshingSources;
+  bool wasBackground = m_isBackgroundSourcesRefresh;
   m_isRefreshingSources = false;
-  m_sourceProgressBar->hide();
-  m_cancelRefreshBtn->hide();
+  m_isBackgroundSourcesRefresh = false;
 
-  m_refreshSourcesAction->setText(i18n("Refresh Sources"));
+  if (!wasBackground) {
+    m_sourceProgressBar->hide();
+    m_cancelRefreshBtn->hide();
+    m_refreshSourcesAction->setText(i18n("Refresh Sources"));
+  }
 
   if (wasRefreshing && complete) {
     // A completed paginated refresh is the authoritative API snapshot.
     // setSources preserves unmatched custom rows while removing stale API
     // rows that must not be offered as valid remap destinations.
-    m_sourceModel->setSources(m_refreshedSources);
-    updateStatus(
-        i18n("Finished refreshing. Loaded %1 sources in total, %2 new.", m_sourcesLoadedCount, m_sourcesAddedCount));
-    if (m_sourcesAddedCount > 0) {
-      ActivityLogWindow::instance()->logMessage(i18np("Source refresh completed: 1 new source found.",
-                                                      "Source refresh completed: %1 new sources found.",
-                                                      m_sourcesAddedCount));
+    if (m_pagesLoadedCount > 0 || !m_refreshedSources.isEmpty()) {
+      m_sourceModel->setSources(m_refreshedSources);
+    }
+    if (!wasBackground) {
+      updateStatus(
+          i18n("Finished refreshing. Loaded %1 sources in total, %2 new.", m_sourcesLoadedCount, m_sourcesAddedCount));
+      if (m_sourcesAddedCount > 0) {
+        ActivityLogWindow::instance()->logMessage(i18np("Source refresh completed: 1 new source found.",
+                                                        "Source refresh completed: %1 new sources found.",
+                                                        m_sourcesAddedCount));
 
-      KNotification *notification =
-          new KNotification(QStringLiteral("sourcesRefreshFinished"), KNotification::CloseOnTimeout, this);
-      notification->setTitle(i18n("Sources Refresh Finished"));
-      notification->setText(i18np("Loaded %2 sources in total, 1 new source found.",
-                                  "Loaded %2 sources in total, %1 new sources found.", m_sourcesAddedCount,
-                                  m_sourcesLoadedCount));
-      connect(notification, &KNotification::closed, notification, &QObject::deleteLater);
-      notification->sendEvent();
+        KNotification *notification =
+            new KNotification(QStringLiteral("sourcesRefreshFinished"), KNotification::CloseOnTimeout, this);
+        notification->setTitle(i18n("Sources Refresh Finished"));
+        notification->setText(i18np("Loaded %2 sources in total, 1 new source found.",
+                                    "Loaded %2 sources in total, %1 new sources found.", m_sourcesAddedCount,
+                                    m_sourcesLoadedCount));
+        connect(notification, &KNotification::closed, notification, &QObject::deleteLater);
+        notification->sendEvent();
+      }
     }
   } else {
-    updateStatus(i18n("Source refresh incomplete. Kept the previous source list after loading %1 sources.",
-                      m_sourcesLoadedCount));
+    if (!wasBackground) {
+      updateStatus(i18n("Source refresh incomplete. Kept the previous source list after loading %1 sources.",
+                        m_sourcesLoadedCount));
+    }
   }
 
-  if (m_isWaitingForCreatedRepoSource && complete) {
-    if (resolvePendingGithubSource()) {
+  if (m_isWaitingForCreatedRepoSource) {
+    if (complete && resolvePendingGithubSource()) {
       updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     } else {
-      updateStatus(
-          i18n("The new repository is not available in Jules sources yet. Waiting for next queue interval to retry."));
+      if (!complete) {
+        updateStatus(i18n("Source refresh failed or was incomplete while waiting for repository. Waiting for next "
+                          "queue interval to retry."));
+      } else {
+        updateStatus(i18n(
+            "The new repository is not available in Jules sources yet. Waiting for next queue interval to retry."));
+      }
       scheduleNextQueueAttempt();
     }
   }
@@ -5471,7 +5498,8 @@ bool MainWindow::resolvePendingGithubSource() {
   QueueItem item;
   for (int i = 0; i < m_queueModel->size(); ++i) {
     QueueItem qItem = m_queueModel->getItem(i);
-    if (!qItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString().isEmpty()) {
+    if (qItem.requestData.value(QStringLiteral("_kjules_action")).toString() != QLatin1String("create_github_repo") &&
+        !qItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString().isEmpty()) {
       targetQueueIndex = i;
       item = qItem;
       break;
@@ -5480,7 +5508,7 @@ bool MainWindow::resolvePendingGithubSource() {
 
   if (targetQueueIndex == -1) {
     m_isWaitingForCreatedRepoSource = false;
-    return true;
+    return false;
   }
 
   const QString owner = item.requestData.value(QStringLiteral("_kjules_github_owner")).toString();
@@ -5490,7 +5518,8 @@ bool MainWindow::resolvePendingGithubSource() {
     const QModelIndex sourceIndex = m_sourceModel->index(row, 0);
     const QJsonObject raw = sourceIndex.data(SourceModel::RawDataRole).toJsonObject();
     if (SourceModel::githubOwner(raw) == owner && SourceModel::githubRepository(raw) == repository) {
-      item.requestData[QStringLiteral("source")] = sourceIndex.data(SourceModel::IdRole).toString();
+      const QString sourceId = sourceIndex.data(SourceModel::IdRole).toString();
+      item.requestData[QStringLiteral("source")] = sourceId;
       item.requestData.remove(QStringLiteral("_kjules_github_owner"));
       item.requestData.remove(QStringLiteral("_kjules_github_repository"));
       m_queueModel->updateItem(targetQueueIndex, item);
@@ -5498,7 +5527,7 @@ bool MainWindow::resolvePendingGithubSource() {
 
       if (JobData *job = m_jobStore->getJobById(item.jobId)) {
         job->canonicalRequest = item.requestData;
-        job->source = sourceIndex.data(SourceModel::IdRole).toString();
+        job->source = sourceId;
         m_jobStore->updateJobTransactional(*job);
         syncModelsFromJobStore();
       }
@@ -5518,6 +5547,7 @@ void MainWindow::onSourceDetailsReceived(const QJsonObject &source) {
 void MainWindow::cancelSourcesRefresh() {
   m_apiManager->cancelListSources();
   m_isRefreshingSources = false;
+  m_isBackgroundSourcesRefresh = false;
   m_sourceProgressBar->hide();
   m_cancelRefreshBtn->hide();
 

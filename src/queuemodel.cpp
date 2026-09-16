@@ -490,7 +490,7 @@ void QueueModel::save() {
   QFileInfo fileInfo(path);
   QDir dir = fileInfo.dir();
   if (!dir.exists()) {
-    dir.mkpath(QStringLiteral("."));
+    dir.mkpath(dir.absolutePath());
   }
 
   QFile file(path);
