@@ -145,14 +145,18 @@ bool JobStore::save() const {
   QFileInfo fi(m_filename);
   QDir dir = fi.dir();
   if (!dir.exists()) {
-    if (!dir.mkpath(QStringLiteral(".")))
+    if (!dir.mkpath(dir.absolutePath())) {
+      qWarning() << "[JobStore::save] mkpath failed for" << dir.absolutePath();
       return false;
+    }
   }
 
   QSaveFile saveFile(m_filename);
   saveFile.setDirectWriteFallback(false);
-  if (!saveFile.open(QIODevice::WriteOnly))
+  if (!saveFile.open(QIODevice::WriteOnly)) {
+    qWarning() << "[JobStore::save] open failed for" << m_filename << ":" << saveFile.errorString();
     return false;
+  }
 
   QJsonArray jobsArray;
   for (const auto &job : m_jobs) {
@@ -164,10 +168,16 @@ bool JobStore::save() const {
   root[QStringLiteral("jobs")] = jobsArray;
 
   QJsonDocument doc(root);
-  if (saveFile.write(doc.toJson(QJsonDocument::Compact)) == -1)
+  if (saveFile.write(doc.toJson(QJsonDocument::Compact)) == -1) {
+    qWarning() << "[JobStore::save] write failed:" << saveFile.errorString();
     return false;
+  }
 
-  return saveFile.commit();
+  bool committed = saveFile.commit();
+  if (!committed) {
+    qWarning() << "[JobStore::save] commit failed:" << saveFile.errorString();
+  }
+  return committed;
 }
 
 JobStore JobStore::fromMemory(const QVector<JobData> &jobs) {

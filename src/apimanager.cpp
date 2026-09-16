@@ -39,11 +39,13 @@ void APIManager::injectNetworkAccessManagerForTesting(QNetworkAccessManager *nam
 
 APIManager::~APIManager() {
   if (m_listSourcesReply) {
+    disconnect(m_listSourcesReply, nullptr, this, nullptr);
     m_listSourcesReply->abort();
     m_listSourcesReply->deleteLater();
     m_listSourcesReply = nullptr;
   }
   if (m_listSessionsReply) {
+    disconnect(m_listSessionsReply, nullptr, this, nullptr);
     m_listSessionsReply->abort();
     m_listSessionsReply->deleteLater();
     m_listSessionsReply = nullptr;

@@ -16,6 +16,16 @@ fi
 # Ensure workspace directory exists in rootfs
 sudo mkdir -p "${ROOTFS_DIR}/workspace"
 
+if ! sudo mount -t proc proc "${ROOTFS_DIR}/proc" 2>/dev/null; then
+    # In unprivileged environments where mount is disallowed, use proot
+    exec proot -0 -r "${ROOTFS_DIR}" -b "$(pwd):/workspace" -b "${HOME}:${HOME}" -b /tmp:/tmp -b /dev -b /proc -b /sys /bin/bash -c "
+        export QT_QPA_PLATFORM=offscreen
+        export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+        cd /workspace
+        \"\$@\"
+    " -- "$@"
+fi
+
 # Function to unmount bind mounts
 cleanup() {
     sudo umount "${ROOTFS_DIR}/workspace" || true

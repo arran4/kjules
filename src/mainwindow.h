@@ -352,6 +352,7 @@ private:
   QAction *m_mergeLegacyDataAction;
 
   bool m_isRefreshingSources;
+  bool m_isBackgroundSourcesRefresh;
   int m_sourcesLoadedCount;
   int m_sourcesAddedCount;
   int m_pagesLoadedCount;

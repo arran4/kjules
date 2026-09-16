@@ -1196,7 +1196,8 @@ void SessionWindow::updateAttemptList() {
     if (job.acceptedAttemptId == attempt.id) {
       title += QStringLiteral(" [WINNER]");
     }
-    title += QStringLiteral(" - ") + attempt.julesState;
+    QString displayState = !attempt.julesState.isEmpty() ? attempt.julesState : attempt.dispatchState;
+    title += QStringLiteral(" - ") + displayState;
 
     QListWidgetItem *item = new QListWidgetItem(title);
     item->setData(Qt::UserRole, attempt.id);

@@ -1,5 +1,6 @@
 
 #include "../src/apimanager.h"
+#include "../src/clickableprogressbar.h"
 #include "../src/errorsmodel.h"
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
@@ -8,7 +9,10 @@
 #include "../src/queuemodel.h"
 #include "../src/sessionrequestbuilder.h"
 #include "../src/sessionwindow.h"
+#include "../src/sourcemodel.h"
 #include <KActionCollection>
+#include <KConfigGroup>
+#include <KSharedConfig>
 #include <QDir>
 #include <QLabel>
 #include <QListWidget>
@@ -20,7 +24,101 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextBrowser>
+#include <QTimer>
 #include <QUuid>
+
+class MockSimpleNetworkReply : public QNetworkReply {
+  Q_OBJECT
+public:
+  MockSimpleNetworkReply(const QNetworkRequest &request, const QByteArray &responseBody, int statusCode,
+                         QObject *parent = nullptr)
+      : QNetworkReply(parent), m_data(responseBody), m_pos(0) {
+    setRequest(request);
+    setUrl(request.url());
+    setOperation(QNetworkAccessManager::PostOperation);
+    setAttribute(QNetworkRequest::HttpStatusCodeAttribute, statusCode);
+    if (statusCode >= 400) {
+      setError(QNetworkReply::UnknownServerError, QStringLiteral("Server error %1").arg(statusCode));
+    }
+    open(QIODevice::ReadOnly);
+    QTimer::singleShot(0, this, [this]() {
+      Q_EMIT readyRead();
+      Q_EMIT finished();
+    });
+  }
+  qint64 bytesAvailable() const override { return (m_data.size() - m_pos) + QNetworkReply::bytesAvailable(); }
+  qint64 readData(char *data, qint64 maxlen) override {
+    qint64 bytesToRead = qMin(maxlen, (qint64)(m_data.size() - m_pos));
+    memcpy(data, m_data.constData() + m_pos, bytesToRead);
+    m_pos += bytesToRead;
+    return bytesToRead;
+  }
+  void abort() override { close(); }
+  bool isSequential() const override { return true; }
+
+private:
+  QByteArray m_data;
+  qint64 m_pos;
+};
+
+class MockCreateRepoAndSessionNetworkManager : public QNetworkAccessManager {
+  Q_OBJECT
+public:
+  QByteArray repoResponse = "{}";
+  int repoStatusCode = 200;
+  bool interceptCreateRepo = false;
+  int createRepoCount = 0;
+
+  QByteArray listSourcesResponse = "{\"sources\":[]}";
+  int listSourcesStatusCode = 200;
+  bool interceptListSources = false;
+  int listSourcesCount = 0;
+
+  QByteArray createSessionResponse = "{}";
+  int createSessionStatusCode = 200;
+  bool interceptCreateSession = false;
+  int createSessionCount = 0;
+
+  QList<QByteArray> capturedSessionRequests;
+
+  MockCreateRepoAndSessionNetworkManager(QObject *parent = nullptr) : QNetworkAccessManager(parent) {}
+
+protected:
+  QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData) override {
+    QString path = request.url().path();
+
+    QByteArray responseBody;
+    int statusCode = 200;
+    bool intercepted = false;
+
+    if (interceptCreateRepo && path.contains(QStringLiteral("/repos"))) {
+      responseBody = repoResponse;
+      statusCode = repoStatusCode;
+      intercepted = true;
+      createRepoCount++;
+    } else if (interceptListSources && path.contains(QStringLiteral("/sources"))) {
+      responseBody = listSourcesResponse;
+      statusCode = listSourcesStatusCode;
+      intercepted = true;
+      listSourcesCount++;
+    } else if (interceptCreateSession && path.contains(QStringLiteral("/sessions"))) {
+      responseBody = createSessionResponse;
+      statusCode = createSessionStatusCode;
+      intercepted = true;
+      if (op == PostOperation) {
+        createSessionCount++;
+        if (outgoingData) {
+          capturedSessionRequests.append(outgoingData->readAll());
+        }
+      }
+    }
+
+    if (intercepted) {
+      return new MockSimpleNetworkReply(request, responseBody, statusCode, this);
+    }
+    return QNetworkAccessManager::createRequest(op, request, outgoingData);
+  }
+};
 
 class TestSessionWindow : public QObject {
   Q_OBJECT
@@ -124,6 +222,11 @@ private Q_SLOTS:
     job.attempts.append(sibling);
     QCOMPARE(JobPolicy::aggregateState(job) == JobPolicy::JobAggregateState::WinnerWithActive, eligible);
   }
+
+  void testCreateRepoWorkflow();
+  void testCreateRepoWorkflowRepoFailure();
+  void testCreateRepoWorkflowSourceRefreshRetry();
+  void testCreateRepoWorkflowBackgroundClassification();
 
   void testDurableZeroHistory() {
     MainWindow window;
@@ -934,3 +1037,438 @@ private Q_SLOTS:
 
 QTEST_MAIN(TestSessionWindow)
 #include "test_sessionwindow.moc"
+
+void TestSessionWindow::testCreateRepoWorkflow() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.sync();
+
+  APIManager *api = window.apiManager();
+
+  auto *mockNet = new MockCreateRepoAndSessionNetworkManager(api);
+  api->injectNetworkAccessManagerForTesting(mockNet);
+  api->setApiKey(QStringLiteral("test-key"));
+  api->setGithubToken(QStringLiteral("gh-token"));
+
+  QSignalSpy repoCreatedSpy(api, &APIManager::githubRepoCreated);
+  QSignalSpy repoFailedSpy(api, &APIManager::githubRepoCreationFailed);
+  QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
+
+  QueueModel *qm = window.queueModel();
+  JobStore *js = window.jobStore();
+
+  QCOMPARE(qm->size(), 0);
+
+  // Invoke private onCreateRepoAndSession directly using friendship
+  window.onCreateRepoAndSession(QStringLiteral("test-org"), QStringLiteral("test-repo"), true,
+                                QStringLiteral("Fix issue 404"), QStringLiteral("AUTO_CREATE_PR"), true, false);
+
+  QCOMPARE(qm->size(), 1);
+  QueueItem initialItem = qm->getItem(0);
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_action")).toString(),
+           QStringLiteral("create_github_repo"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("automationMode")).toString(),
+           QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString(),
+           QStringLiteral("test-org"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_github_repository")).toString(),
+           QStringLiteral("test-repo"));
+
+  mockNet->interceptCreateRepo = true;
+  mockNet->repoResponse = "{\"name\":\"test-repo\", \"full_name\":\"test-org/test-repo\"}";
+  mockNet->interceptListSources = true;
+  mockNet->listSourcesResponse = "{\"sources\":[]}";
+
+  QSignalSpy initialRefreshSpy(api, &APIManager::sourcesRefreshFinished);
+  window.processQueueForTest();
+
+  QTRY_COMPARE(repoCreatedSpy.count(), 1);
+  QTRY_COMPARE(initialRefreshSpy.count(), 1);
+  QCOMPARE(repoFailedSpy.count(), 0);
+
+  // Since wait for repo handles sync, the item is removed then immediately added to the top
+  // Make sure it remains exactly one item
+  QCOMPARE(qm->size(), 1);
+
+  // Ensure it's waiting for source resolution and queue hasn't been consumed
+  QSignalSpy waitingRefreshSpy(api, &APIManager::sourcesRefreshFinished);
+  window.processQueueForTest(); // Try again while still waiting
+  QTRY_COMPARE(waitingRefreshSpy.count(), 1);
+
+  QCOMPARE(sessionCreatedSpy.count(), 0);
+  QCOMPARE(qm->size(), 1); // Still in queue, waiting for source resolution
+
+  QueueItem updatedItem = qm->getItem(0);
+  JobData *job = js->getJobById(updatedItem.jobId);
+  QVERIFY(job != nullptr);
+  QVERIFY(!job->canonicalRequest.contains(QStringLiteral("_kjules_action")));
+  QCOMPARE(job->canonicalRequest.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
+
+  // Verify that the repo creation attempt was marked as COMPLETED but NOT as a successful Jules execution
+  QCOMPARE(job->attempts.size(), 1);
+  QCOMPARE(job->attempts[0].dispatchState, QStringLiteral("COMPLETED"));
+  QVERIFY(job->attempts[0].julesState.isEmpty());
+  QVERIFY(JobPolicy::isAttemptTerminal(job->attempts[0])); // It no longer consumes concurrency
+  QVERIFY(!JobPolicy::consumesConcurrency(job->attempts[0]));
+  QVERIFY(!JobPolicy::isAttemptSuccessful(job->attempts[0])); // Must NOT be treated as a successful Jules execution
+  QVERIFY(!JobPolicy::isSuccessfullyComplete(*job));          // Job is not successfully complete
+  QCOMPARE(JobPolicy::aggregateState(*job), JobPolicy::JobAggregateState::Pending); // Job remains Pending in queue
+
+  // Emulate source discovery: new repository now appears in Jules sources
+  QJsonArray sourcesResponse;
+  QJsonObject newSource;
+  newSource[QStringLiteral("id")] = QStringLiteral("sources/github/test-org/test-repo");
+  newSource[QStringLiteral("name")] = QStringLiteral("sources/github/test-org/test-repo");
+  QJsonObject githubRepo;
+  githubRepo[QStringLiteral("owner")] = QStringLiteral("test-org");
+  githubRepo[QStringLiteral("repo")] = QStringLiteral("test-repo");
+  newSource[QStringLiteral("githubRepo")] = githubRepo;
+  sourcesResponse.append(newSource);
+
+  QJsonObject sourcesDoc;
+  sourcesDoc[QStringLiteral("sources")] = sourcesResponse;
+  mockNet->listSourcesResponse = QJsonDocument(sourcesDoc).toJson();
+
+  QSignalSpy sourcesRefreshSpy(api, &APIManager::sourcesRefreshFinished);
+  window.refreshSourcesImpl(true);
+  QTRY_COMPARE(sourcesRefreshSpy.count(), 1);
+
+  QueueItem resolvedItem = qm->getItem(0);
+  QCOMPARE(resolvedItem.requestData.value(QStringLiteral("source")).toString(),
+           QStringLiteral("sources/github/test-org/test-repo"));
+  QVERIFY(!resolvedItem.requestData.contains(QStringLiteral("_kjules_github_owner")));
+  QVERIFY(!resolvedItem.requestData.contains(QStringLiteral("_kjules_github_repository")));
+
+  // Verify Job persistence of resolved source
+  JobData *resolvedJob = js->getJobById(resolvedItem.jobId);
+  QCOMPARE(resolvedJob->source, QStringLiteral("sources/github/test-org/test-repo"));
+  QCOMPARE(resolvedJob->canonicalRequest.value(QStringLiteral("source")).toString(),
+           QStringLiteral("sources/github/test-org/test-repo"));
+  QVERIFY(!resolvedJob->canonicalRequest.contains(QStringLiteral("_kjules_github_owner")));
+  QVERIFY(!resolvedJob->canonicalRequest.contains(QStringLiteral("_kjules_github_repository")));
+
+  // Now process Queue should dispatch it
+  mockNet->interceptCreateSession = true;
+  mockNet->createSessionResponse = "{\"id\":\"sess-123\", \"state\":\"RUNNING\"}";
+
+  window.processQueueForTest();
+
+  QTRY_COMPARE(sessionCreatedSpy.count(), 1);
+  QCOMPARE(qm->size(), 0);
+
+  // Job should now have 2 attempts, and aggregateState should be Active (session is RUNNING)
+  JobData *dispatchedJob = js->getJobById(resolvedItem.jobId);
+  QVERIFY(dispatchedJob != nullptr);
+  QCOMPARE(dispatchedJob->attempts.size(), 2);
+  QCOMPARE(dispatchedJob->attempts[1].julesState, QStringLiteral("RUNNING"));
+  QCOMPARE(JobPolicy::aggregateState(*dispatchedJob), JobPolicy::JobAggregateState::Active);
+
+  // Verify exactly once (calling processQueue again does nothing)
+  window.processQueueForTest();
+  QCOMPARE(sessionCreatedSpy.count(), 1);
+
+  // Verify request body sent over network
+  QCOMPARE(mockNet->capturedSessionRequests.size(), 1);
+  QJsonDocument sentDoc = QJsonDocument::fromJson(mockNet->capturedSessionRequests.first());
+  QJsonObject sentReq = sentDoc.object();
+
+  QCOMPARE(sentReq.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix issue 404"));
+  QCOMPARE(sentReq.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(sentReq.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QJsonObject sourceCtx = sentReq.value(QStringLiteral("sourceContext")).toObject();
+  QCOMPARE(sourceCtx.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/test-org/test-repo"));
+}
+
+void TestSessionWindow::testCreateRepoWorkflowRepoFailure() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.sync();
+
+  APIManager *api = window.apiManager();
+  auto *mockNet = new MockCreateRepoAndSessionNetworkManager(api);
+  api->injectNetworkAccessManagerForTesting(mockNet);
+  api->setApiKey(QStringLiteral("test-key"));
+  api->setGithubToken(QStringLiteral("gh-token"));
+
+  QSignalSpy repoFailedSpy(api, &APIManager::githubRepoCreationFailed);
+  QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
+
+  QueueModel *qm = window.queueModel();
+  JobStore *js = window.jobStore();
+
+  window.onCreateRepoAndSession(QStringLiteral("test-org"), QStringLiteral("fail-repo"), true,
+                                QStringLiteral("Fail test prompt"), QStringLiteral("AUTO_CREATE_PR"), false, false);
+
+  QCOMPARE(qm->size(), 1);
+
+  mockNet->interceptCreateRepo = true;
+  mockNet->repoStatusCode = 422;
+  mockNet->repoResponse = "{\"message\":\"Repository already exists\"}";
+
+  window.processQueueForTest();
+
+  QTRY_COMPARE(repoFailedSpy.count(), 1);
+  QCOMPARE(sessionCreatedSpy.count(), 0);
+
+  // Queue item was removed during dispatch, and on failure it is NOT re-added to queue as pending source
+  QCOMPARE(qm->size(), 0);
+
+  // Job should record the attempt as terminal failure and concurrency is not consumed
+  QList<JobData> jobs = js->jobs();
+  QVERIFY(!jobs.isEmpty());
+  JobData *failedJob = js->getJobById(jobs.first().id);
+  QVERIFY(failedJob != nullptr);
+  QCOMPARE(failedJob->attempts.size(), 1);
+  const JobAttemptData &attempt = failedJob->attempts.first();
+  QCOMPARE(attempt.dispatchState, QStringLiteral("FAILED"));
+  QVERIFY(attempt.julesState.isEmpty());
+  QVERIFY(JobPolicy::isAttemptTerminal(attempt));
+  QVERIFY(JobPolicy::isAttemptFailed(attempt));
+  QVERIFY(!JobPolicy::isAttemptSuccessful(attempt));
+  QVERIFY(!JobPolicy::consumesConcurrency(attempt));
+  QVERIFY(!JobPolicy::isSuccessfullyComplete(*failedJob));
+  QCOMPARE(JobPolicy::aggregateState(*failedJob), JobPolicy::JobAggregateState::NeedsAttention);
+  QVERIFY(!attempt.launchErrors.isEmpty());
+
+  // Concurrency accounting remains 0
+  int globalActive = 0;
+  for (const JobData &j : js->jobs()) {
+    for (const JobAttemptData &a : j.attempts) {
+      if (JobPolicy::consumesConcurrency(a)) {
+        globalActive++;
+      }
+    }
+  }
+  QCOMPARE(globalActive, 0);
+}
+
+void TestSessionWindow::testCreateRepoWorkflowSourceRefreshRetry() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 1);
+  queueConfig.sync();
+
+  APIManager *api = window.apiManager();
+  auto *mockNet = new MockCreateRepoAndSessionNetworkManager(api);
+  api->injectNetworkAccessManagerForTesting(mockNet);
+  api->setApiKey(QStringLiteral("test-key"));
+  api->setGithubToken(QStringLiteral("gh-token"));
+
+  QSignalSpy repoCreatedSpy(api, &APIManager::githubRepoCreated);
+  QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
+
+  QueueModel *qm = window.queueModel();
+  JobStore *js = window.jobStore();
+
+  // 1. Start create-repo-and-session Job
+  window.onCreateRepoAndSession(QStringLiteral("test-org"), QStringLiteral("retry-repo"), true,
+                                QStringLiteral("Retry test prompt"), QStringLiteral("AUTO_CREATE_PR"), true, false);
+
+  QCOMPARE(qm->size(), 1);
+  QueueItem initialItem = qm->getItem(0);
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_action")).toString(),
+           QStringLiteral("create_github_repo"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Retry test prompt"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("automationMode")).toString(),
+           QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString(),
+           QStringLiteral("test-org"));
+  QCOMPARE(initialItem.requestData.value(QStringLiteral("_kjules_github_repository")).toString(),
+           QStringLiteral("retry-repo"));
+
+  // 2. GitHub repo creation succeeds
+  mockNet->interceptCreateRepo = true;
+  mockNet->repoResponse = "{\"name\":\"retry-repo\", \"full_name\":\"test-org/retry-repo\"}";
+
+  // 3 & 4. Initial Jules source discovery runs as background work and fails with 500 error
+  mockNet->interceptListSources = true;
+  mockNet->listSourcesStatusCode = 500;
+  mockNet->listSourcesResponse = "{\"error\":\"internal error\"}";
+
+  QSignalSpy initialRefreshSpy(api, &APIManager::sourcesRefreshFinished);
+  window.processQueueForTest();
+  QTRY_COMPARE(repoCreatedSpy.count(), 1);
+  QTRY_COMPARE(initialRefreshSpy.count(), 1);
+
+  // 5. Incomplete/failed refresh must not discard pending work
+  QCOMPARE(qm->size(), 1);
+  QCOMPARE(sessionCreatedSpy.count(), 0);
+  QVERIFY(window.m_isWaitingForCreatedRepoSource);
+
+  QueueItem pendingItem = qm->getItem(0);
+  QString jobId = pendingItem.jobId;
+  QVERIFY(!jobId.isEmpty());
+  JobData *job = js->getJobById(jobId);
+  QVERIFY(job != nullptr);
+  QCOMPARE(JobPolicy::aggregateState(*job), JobPolicy::JobAggregateState::Pending);
+
+  QCOMPARE(pendingItem.jobId, jobId);
+  QVERIFY(!pendingItem.requestData.contains(QStringLiteral("_kjules_action")));
+  QCOMPARE(pendingItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString(),
+           QStringLiteral("test-org"));
+  QCOMPARE(pendingItem.requestData.value(QStringLiteral("_kjules_github_repository")).toString(),
+           QStringLiteral("retry-repo"));
+  QCOMPARE(pendingItem.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Retry test prompt"));
+
+  // Assert: Job remains Pending while waiting; provisioning attempt is terminal and non-concurrency-consuming
+  job = js->getJobById(jobId);
+  QVERIFY(job != nullptr);
+  QCOMPARE(JobPolicy::aggregateState(*job), JobPolicy::JobAggregateState::Pending);
+  QCOMPARE(job->attempts.size(), 1);
+  const JobAttemptData &provisionAttempt = job->attempts[0];
+  QVERIFY(JobPolicy::isRepoProvisioningAttempt(provisionAttempt));
+  QCOMPARE(provisionAttempt.dispatchState, QStringLiteral("COMPLETED"));
+  QVERIFY(JobPolicy::isAttemptTerminal(provisionAttempt));
+  QVERIFY(!JobPolicy::consumesConcurrency(provisionAttempt));
+  QVERIFY(!JobPolicy::isAttemptSuccessful(provisionAttempt));
+  QVERIFY(!JobPolicy::isEligibleWinner(*job, provisionAttempt.id));
+
+  // 6. Production retry mechanism schedules the next queue attempt
+  QVERIFY(window.m_queueScheduler.nextQueueProcessAt().isValid());
+  QVERIFY(window.m_queueScheduler.nextQueueProcessAt() > QDateTime::currentDateTimeUtc());
+
+  // A minute timer tick before the scheduled interval must NOT trigger queue work prematurely
+  window.onMasterMinuteTimer();
+  QCOMPARE(qm->size(), 1);
+  QCOMPARE(sessionCreatedSpy.count(), 0);
+  QVERIFY(window.m_isWaitingForCreatedRepoSource);
+  QVERIFY(!window.m_isRefreshingSources);
+
+  // 7 & 8. Configure responses for when the scheduled retry occurs: source appears and session succeeds
+  mockNet->listSourcesStatusCode = 200;
+  QJsonArray sourcesArr;
+  QJsonObject newSource;
+  newSource[QStringLiteral("id")] = QStringLiteral("sources/github/test-org/retry-repo");
+  newSource[QStringLiteral("name")] = QStringLiteral("sources/github/test-org/retry-repo");
+  QJsonObject ghRepo;
+  ghRepo[QStringLiteral("owner")] = QStringLiteral("test-org");
+  ghRepo[QStringLiteral("repo")] = QStringLiteral("retry-repo");
+  newSource[QStringLiteral("githubRepo")] = ghRepo;
+  sourcesArr.append(newSource);
+  QJsonObject docObj;
+  docObj[QStringLiteral("sources")] = sourcesArr;
+  mockNet->listSourcesResponse = QJsonDocument(docObj).toJson();
+
+  mockNet->interceptCreateSession = true;
+  mockNet->createSessionResponse = "{\"id\":\"sess-retry\", \"state\":\"RUNNING\"}";
+
+  // Advance time to the scheduled queue attempt
+  window.m_queueScheduler.setNextProcessAt(QDateTime::currentDateTimeUtc().addSecs(-1));
+  QVERIFY(window.m_queueScheduler.isDue(QDateTime::currentDateTimeUtc()));
+
+  QSignalSpy retryRefreshSpy(api, &APIManager::sourcesRefreshFinished);
+
+  // Drive the retry via the production scheduler/queue mechanism (without calling refreshSourcesImpl directly)
+  window.onMasterMinuteTimer();
+
+  // Assert: Autonomous retry is classified as background and foreground UI is not activated
+  QVERIFY(window.m_isRefreshingSources);
+  QVERIFY(window.m_isBackgroundSourcesRefresh);
+  QVERIFY(window.m_sourceProgressBar->isHidden());
+  QVERIFY(window.m_cancelRefreshBtn->isHidden());
+  QCOMPARE(window.m_refreshSourcesAction->text(), QStringLiteral("Refresh Sources"));
+
+  // Wait for background source discovery to complete
+  QTRY_COMPARE(retryRefreshSpy.count(), 1);
+
+  // 9 & 10. Source is resolved and exactly one Jules session is dispatched
+  QVERIFY(!window.m_isWaitingForCreatedRepoSource);
+  QTRY_COMPARE(sessionCreatedSpy.count(), 1);
+  QCOMPARE(qm->size(), 0);
+
+  // Assert: Job transitions to Active, source resolved, and real Jules session consumes concurrency
+  job = js->getJobById(jobId);
+  QVERIFY(job != nullptr);
+  QCOMPARE(job->source, QStringLiteral("sources/github/test-org/retry-repo"));
+  QCOMPARE(job->canonicalRequest.value(QStringLiteral("source")).toString(),
+           QStringLiteral("sources/github/test-org/retry-repo"));
+  QVERIFY(!job->canonicalRequest.contains(QStringLiteral("_kjules_github_owner")));
+  QVERIFY(!job->canonicalRequest.contains(QStringLiteral("_kjules_github_repository")));
+  QCOMPARE(job->attempts.size(), 2);
+
+  const JobAttemptData &julesAttempt = job->attempts[1];
+  QVERIFY(!JobPolicy::isRepoProvisioningAttempt(julesAttempt));
+  QCOMPARE(julesAttempt.julesSessionId, QStringLiteral("sess-retry"));
+  QCOMPARE(julesAttempt.julesState, QStringLiteral("RUNNING"));
+  QVERIFY(!JobPolicy::isAttemptTerminal(julesAttempt));
+  QVERIFY(JobPolicy::consumesConcurrency(julesAttempt));
+  QCOMPARE(JobPolicy::aggregateState(*job), JobPolicy::JobAggregateState::Active);
+
+  // Verify captured network request for session creation
+  QCOMPARE(mockNet->capturedSessionRequests.size(), 1);
+  QJsonDocument sentDoc = QJsonDocument::fromJson(mockNet->capturedSessionRequests.first());
+  QJsonObject sentReq = sentDoc.object();
+  QCOMPARE(sentReq.value(QStringLiteral("prompt")).toString(), QStringLiteral("Retry test prompt"));
+  QCOMPARE(sentReq.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(sentReq.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QJsonObject sourceCtx = sentReq.value(QStringLiteral("sourceContext")).toObject();
+  QCOMPARE(sourceCtx.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/test-org/retry-repo"));
+
+  // 11. Duplicate queue/scheduler ticks or refresh completion events do not create another session
+  window.onMasterMinuteTimer();
+  window.processQueueForTest();
+  window.onSourcesRefreshFinished(true);
+
+  QCOMPARE(sessionCreatedSpy.count(), 1);
+  QCOMPARE(mockNet->createSessionCount, 1);
+  QCOMPARE(qm->size(), 0);
+}
+
+void TestSessionWindow::testCreateRepoWorkflowBackgroundClassification() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  APIManager *api = window.apiManager();
+  auto *mockNet = new MockCreateRepoAndSessionNetworkManager(api);
+  api->injectNetworkAccessManagerForTesting(mockNet);
+  api->setApiKey(QStringLiteral("test-key"));
+
+  mockNet->interceptListSources = true;
+  mockNet->listSourcesResponse = "{\"sources\":[]}";
+
+  // 1. Background refresh: must not show foreground UI (progress bar, cancel button)
+  // and action text must remain "Refresh Sources"
+  window.refreshSourcesImpl(true);
+  QVERIFY(window.m_isBackgroundSourcesRefresh);
+  QVERIFY(window.m_sourceProgressBar->isHidden());
+  QVERIFY(window.m_cancelRefreshBtn->isHidden());
+  QCOMPARE(window.m_refreshSourcesAction->text(), QStringLiteral("Refresh Sources"));
+
+  // While background refresh is running, a second background refresh must NOT cancel it
+  window.refreshSourcesImpl(true);
+  QVERIFY(window.m_isRefreshingSources);
+
+  // Wait for finish
+  QSignalSpy refreshSpy(api, &APIManager::sourcesRefreshFinished);
+  QTRY_COMPARE(refreshSpy.count(), 1);
+  QVERIFY(!window.m_isRefreshingSources);
+  QVERIFY(!window.m_isBackgroundSourcesRefresh);
+
+  // 2. Foreground refresh (manual user action): must show progress bar, cancel button,
+  // and action text "Cancel Refresh"
+  window.refreshSources(); // refreshSourcesImpl(false)
+  QVERIFY(!window.m_isBackgroundSourcesRefresh);
+  QVERIFY(window.m_isRefreshingSources);
+  QVERIFY(!window.m_sourceProgressBar->isHidden());
+  QVERIFY(!window.m_cancelRefreshBtn->isHidden());
+  QCOMPARE(window.m_refreshSourcesAction->text(), QStringLiteral("Cancel Refresh"));
+
+  // Calling refreshSources() again while active acts as user clicking "Cancel Refresh"
+  window.refreshSources();
+  QVERIFY(!window.m_isRefreshingSources);
+  QVERIFY(window.m_sourceProgressBar->isHidden());
+  QVERIFY(window.m_cancelRefreshBtn->isHidden());
+  QCOMPARE(window.m_refreshSourcesAction->text(), QStringLiteral("Refresh Sources"));
+}

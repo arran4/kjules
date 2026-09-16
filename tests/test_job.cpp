@@ -883,6 +883,85 @@ private Q_SLOTS:
     failedOnlyJob.attempts.append(errAtt);
     QCOMPARE(JobPolicy::aggregateState(failedOnlyJob), JobPolicy::JobAggregateState::NeedsAttention);
   }
+
+  void testRepoProvisioningAttemptSemantics() {
+    // 1. Repo provisioning in-progress attempt
+    JobAttemptData inProgressAtt;
+    inProgressAtt.id = QStringLiteral("att_repo_prog");
+    QJsonObject reqProg;
+    reqProg[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
+    inProgressAtt.requestSnapshot = reqProg;
+    inProgressAtt.dispatchState = QStringLiteral("IN_PROGRESS");
+    QVERIFY(JobPolicy::isRepoProvisioningAttempt(inProgressAtt));
+    QVERIFY(!JobPolicy::isAttemptTerminal(inProgressAtt));
+    QVERIFY(JobPolicy::consumesConcurrency(inProgressAtt));
+    QVERIFY(!JobPolicy::isAttemptSuccessful(inProgressAtt));
+    QVERIFY(!JobPolicy::isAttemptFailed(inProgressAtt));
+
+    JobData progJob;
+    progJob.id = QStringLiteral("job_repo_prog");
+    progJob.attempts.append(inProgressAtt);
+    QCOMPARE(JobPolicy::aggregateState(progJob), JobPolicy::JobAggregateState::Active);
+
+    // 2. Repo provisioning successful attempt
+    JobAttemptData successAtt;
+    successAtt.id = QStringLiteral("att_repo_succ");
+    QJsonObject reqSucc;
+    reqSucc[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
+    successAtt.requestSnapshot = reqSucc;
+    successAtt.dispatchState = QStringLiteral("COMPLETED");
+    QVERIFY(JobPolicy::isRepoProvisioningAttempt(successAtt));
+    QVERIFY(JobPolicy::isAttemptTerminal(successAtt));
+    QVERIFY(!JobPolicy::consumesConcurrency(successAtt));
+    QVERIFY(!JobPolicy::isAttemptSuccessful(successAtt)); // Must NOT be considered a successful Jules execution
+    QVERIFY(!JobPolicy::isAttemptFailed(successAtt));
+
+    JobData succJob;
+    succJob.id = QStringLiteral("job_repo_succ");
+    succJob.attempts.append(successAtt);
+    // When only repo provisioning succeeded, job is NOT successfully complete and aggregates to Pending
+    QVERIFY(!JobPolicy::isSuccessfullyComplete(succJob));
+    QVERIFY(!JobPolicy::isEligibleWinner(succJob, successAtt.id));
+    QCOMPARE(JobPolicy::aggregateState(succJob), JobPolicy::JobAggregateState::Pending);
+
+    // 3. Repo provisioning failed attempt
+    JobAttemptData failAtt;
+    failAtt.id = QStringLiteral("att_repo_fail");
+    QJsonObject reqFail;
+    reqFail[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
+    failAtt.requestSnapshot = reqFail;
+    failAtt.dispatchState = QStringLiteral("FAILED");
+    QVERIFY(JobPolicy::isRepoProvisioningAttempt(failAtt));
+    QVERIFY(JobPolicy::isAttemptTerminal(failAtt));
+    QVERIFY(!JobPolicy::consumesConcurrency(failAtt));
+    QVERIFY(!JobPolicy::isAttemptSuccessful(failAtt));
+    QVERIFY(JobPolicy::isAttemptFailed(failAtt));
+
+    JobData failedJob;
+    failedJob.id = QStringLiteral("job_repo_fail");
+    failedJob.attempts.append(failAtt);
+    QVERIFY(!JobPolicy::isSuccessfullyComplete(failedJob));
+    QCOMPARE(JobPolicy::aggregateState(failedJob), JobPolicy::JobAggregateState::NeedsAttention);
+
+    // 4. Multi-attempt: Repo provisioning followed by Jules session attempt
+    JobData multiJob;
+    multiJob.id = QStringLiteral("job_repo_and_session");
+    multiJob.attempts.append(successAtt);
+
+    JobAttemptData julesAtt;
+    julesAtt.id = QStringLiteral("att_jules");
+    julesAtt.dispatchState = QStringLiteral("COMPLETED");
+    julesAtt.julesState = QStringLiteral("COMPLETED");
+    multiJob.attempts.append(julesAtt);
+
+    QVERIFY(!JobPolicy::isRepoProvisioningAttempt(julesAtt));
+    QVERIFY(JobPolicy::isAttemptTerminal(julesAtt));
+    QVERIFY(JobPolicy::isAttemptSuccessful(julesAtt));
+    QVERIFY(JobPolicy::isSuccessfullyComplete(multiJob));
+    QVERIFY(JobPolicy::isEligibleWinner(multiJob, julesAtt.id));
+    QVERIFY(!JobPolicy::isEligibleWinner(multiJob, successAtt.id)); // Repo attempt cannot be winner
+    QCOMPARE(JobPolicy::aggregateState(multiJob), JobPolicy::JobAggregateState::CompletedWithoutWinner);
+  }
 };
 
 QTEST_MAIN(TestJob)
