@@ -3775,7 +3775,9 @@ bool MainWindow::processQueue() {
 
   if (m_isWaitingForCreatedRepoSource) {
     if (resolvePendingGithubSource()) {
-      refreshSources();
+      QTimer::singleShot(0, this, &MainWindow::processQueue); // Resumed
+    } else {
+      refreshSourcesImpl(true); // Autonomous background refresh to fetch new repo
     }
     return false;
   }
@@ -3945,6 +3947,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
         attempt.updatedAt = QDateTime::currentDateTimeUtc();
         if (success) {
           attempt.dispatchState = QStringLiteral("COMPLETED");
+          attempt.julesState = QStringLiteral("COMPLETED"); // Terminate the repo attempt natively
           attempt.rawResponse = response;
         } else {
           attempt.dispatchState = QStringLiteral("FAILED");
@@ -5451,7 +5454,9 @@ void MainWindow::onSourcesRefreshFinished(bool complete) {
       updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
       QTimer::singleShot(0, this, &MainWindow::processQueue);
     } else {
-      updateStatus(i18n("The new repository is not available in Jules sources yet. Refresh sources to retry."));
+      updateStatus(
+          i18n("The new repository is not available in Jules sources yet. Waiting for next queue interval to retry."));
+      scheduleNextQueueAttempt();
     }
   }
 }
@@ -5462,13 +5467,24 @@ bool MainWindow::resolvePendingGithubSource() {
     return false;
   }
 
-  QueueItem item = m_queueModel->peek();
-  const QString owner = item.requestData.value(QStringLiteral("_kjules_github_owner")).toString();
-  const QString repository = item.requestData.value(QStringLiteral("_kjules_github_repository")).toString();
-  if (owner.isEmpty() || repository.isEmpty()) {
+  int targetQueueIndex = -1;
+  QueueItem item;
+  for (int i = 0; i < m_queueModel->size(); ++i) {
+    QueueItem qItem = m_queueModel->getItem(i);
+    if (!qItem.requestData.value(QStringLiteral("_kjules_github_owner")).toString().isEmpty()) {
+      targetQueueIndex = i;
+      item = qItem;
+      break;
+    }
+  }
+
+  if (targetQueueIndex == -1) {
     m_isWaitingForCreatedRepoSource = false;
     return true;
   }
+
+  const QString owner = item.requestData.value(QStringLiteral("_kjules_github_owner")).toString();
+  const QString repository = item.requestData.value(QStringLiteral("_kjules_github_repository")).toString();
 
   for (int row = 0; row < m_sourceModel->rowCount(); ++row) {
     const QModelIndex sourceIndex = m_sourceModel->index(row, 0);
@@ -5477,7 +5493,7 @@ bool MainWindow::resolvePendingGithubSource() {
       item.requestData[QStringLiteral("source")] = sourceIndex.data(SourceModel::IdRole).toString();
       item.requestData.remove(QStringLiteral("_kjules_github_owner"));
       item.requestData.remove(QStringLiteral("_kjules_github_repository"));
-      m_queueModel->updateItem(0, item);
+      m_queueModel->updateItem(targetQueueIndex, item);
       m_isWaitingForCreatedRepoSource = false;
 
       if (JobData *job = m_jobStore->getJobById(item.jobId)) {
