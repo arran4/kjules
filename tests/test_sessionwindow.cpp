@@ -80,6 +80,11 @@ public:
   bool interceptCreateSession = false;
   int createSessionCount = 0;
 
+  QByteArray reloadSessionResponse = "{}";
+  int reloadSessionStatusCode = 200;
+  bool interceptReloadSession = false;
+  int reloadSessionCount = 0;
+
   QList<QByteArray> capturedSessionRequests;
 
   MockCreateRepoAndSessionNetworkManager(QObject *parent = nullptr) : QNetworkAccessManager(parent) {}
@@ -102,16 +107,19 @@ protected:
       statusCode = listSourcesStatusCode;
       intercepted = true;
       listSourcesCount++;
-    } else if (interceptCreateSession && path.contains(QStringLiteral("/sessions"))) {
+    } else if (interceptCreateSession && op == PostOperation && path.contains(QStringLiteral("/sessions"))) {
       responseBody = createSessionResponse;
       statusCode = createSessionStatusCode;
       intercepted = true;
-      if (op == PostOperation) {
-        createSessionCount++;
-        if (outgoingData) {
-          capturedSessionRequests.append(outgoingData->readAll());
-        }
+      createSessionCount++;
+      if (outgoingData) {
+        capturedSessionRequests.append(outgoingData->readAll());
       }
+    } else if (interceptReloadSession && op == GetOperation && path.contains(QStringLiteral("/sessions/"))) {
+      responseBody = reloadSessionResponse;
+      statusCode = reloadSessionStatusCode;
+      intercepted = true;
+      reloadSessionCount++;
     }
 
     if (intercepted) {
@@ -1448,6 +1456,7 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   api->setGithubToken(QStringLiteral("gh-token"));
 
   mockNet->interceptCreateSession = true;
+  mockNet->interceptReloadSession = true;
 
   QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
   QSignalSpy sessionReloadedSpy(api, &APIManager::sessionReloaded);
