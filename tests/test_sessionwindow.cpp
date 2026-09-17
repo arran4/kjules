@@ -7,6 +7,7 @@
 #include "../src/mainwindow.h"
 #include "../src/newsessiondialog.h"
 #include "../src/queuemodel.h"
+#include "../src/sessionmodel.h"
 #include "../src/sessionrequestbuilder.h"
 #include "../src/sessionwindow.h"
 #include "../src/sourcemodel.h"
