@@ -227,6 +227,7 @@ private Q_SLOTS:
   void testCreateRepoWorkflowRepoFailure();
   void testCreateRepoWorkflowSourceRefreshRetry();
   void testCreateRepoWorkflowBackgroundClassification();
+  void testProcessQueueIndependenceFromFollowingReloads();
 
   void testDurableZeroHistory() {
     MainWindow window;
@@ -1424,6 +1425,60 @@ void TestSessionWindow::testCreateRepoWorkflowSourceRefreshRetry() {
   QCOMPARE(sessionCreatedSpy.count(), 1);
   QCOMPARE(mockNet->createSessionCount, 1);
   QCOMPARE(qm->size(), 0);
+}
+
+void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 1); // Every minute
+  queueConfig.sync();
+
+  KConfigGroup sessionConfig(KSharedConfig::openConfig(), QStringLiteral("SessionWindow"));
+  sessionConfig.writeEntry(QStringLiteral("FollowingAutoRefreshInterval"), 1); // Force immediate expiration
+  sessionConfig.sync();
+
+  APIManager *api = window.apiManager();
+  auto *mockNet = new MockCreateRepoAndSessionNetworkManager(api);
+  api->injectNetworkAccessManagerForTesting(mockNet);
+  api->setApiKey(QStringLiteral("test-key"));
+  api->setGithubToken(QStringLiteral("gh-token"));
+
+  QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
+
+  // Setup a stale following session
+  QJsonObject sessObj;
+  sessObj[QStringLiteral("id")] = QStringLiteral("stale-sess-1");
+  sessObj[QStringLiteral("state")] = QStringLiteral("RUNNING"); // Eligible for refresh
+  sessObj[QStringLiteral("lastRefreshed")] = QDateTime::currentDateTimeUtc().addSecs(-60).toString(Qt::ISODate);
+  window.sessionModel()->addSession(sessObj);
+
+  // Set up queue with an item ready to process
+  QueueModel *qm = window.queueModel();
+  QueueItem item;
+  item.jobId = QStringLiteral("queued-job-1");
+  item.requestData = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test/repo"), QStringLiteral("test-branch"),
+      QStringLiteral("Prompt"), QStringLiteral("AUTO_CREATE_PR"));
+  qm->enqueueItem(item);
+
+  // Ensure queue is due
+  window.m_queueScheduler.setNextProcessAt(QDateTime::currentDateTimeUtc().addSecs(-60));
+
+  // Verify before processing
+  QCOMPARE(qm->size(), 1);
+  QCOMPARE(sessionCreatedSpy.count(), 0);
+
+  // Invoke the master minute timer which should trigger auto refresh AND process queue
+  window.onMasterMinuteTimer();
+
+  // Test that processQueue() was able to start immediately (queue size drops as it processes and session is created)
+  // because it's no longer gated by a m_isWaitingForRefreshBeforeQueue state or the completion of the auto refresh
+  QCOMPARE(qm->size(), 0);
+  QCOMPARE(sessionCreatedSpy.count(), 1);
+  QCOMPARE(mockNet->createSessionCount, 1);
 }
 
 void TestSessionWindow::testCreateRepoWorkflowBackgroundClassification() {
