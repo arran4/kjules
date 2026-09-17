@@ -1446,7 +1446,10 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   api->setApiKey(QStringLiteral("test-key"));
   api->setGithubToken(QStringLiteral("gh-token"));
 
+  mockNet->interceptCreateSession = true;
+
   QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
+  QSignalSpy sessionReloadedSpy(api, &APIManager::sessionReloaded);
 
   // Setup a stale following session
   QJsonObject sessObj;
@@ -1461,7 +1464,7 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   item.jobId = QStringLiteral("queued-job-1");
   item.requestData = SessionRequestBuilder::buildSessionRequest(
       QStringLiteral("sources/github/test/repo"), QStringLiteral("test-branch"),
-      QStringLiteral("Prompt"), QStringLiteral("AUTO_CREATE_PR"));
+      QStringLiteral("Prompt"), QStringLiteral("AUTO_CREATE_PR"), true, false, 0);
   qm->enqueueItem(item);
 
   // Ensure queue is due
@@ -1477,8 +1480,20 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   // Test that processQueue() was able to start immediately (queue size drops as it processes and session is created)
   // because it's no longer gated by a m_isWaitingForRefreshBeforeQueue state or the completion of the auto refresh
   QCOMPARE(qm->size(), 0);
-  QCOMPARE(sessionCreatedSpy.count(), 1);
+
+  // sessionCreatedSpy should NOT have fired yet because we intercepted it in the mock but didn't finish the loop
+  // However, we verify the POST actually went out via our mock intercept
+  QCOMPARE(sessionCreatedSpy.count(), 0);
   QCOMPARE(mockNet->createSessionCount, 1);
+
+  // Verify that a following reload was also started (the GET to the session API, which interceptCreateSession handles for both POST and GET)
+  // Wait, interceptCreateSession counts POSTs into createSessionCount. We can verify the reload fired if we check the in-flight set.
+  QVERIFY(window.m_inFlightSessionReloads.contains(QStringLiteral("stale-sess-1")));
+  QCOMPARE(sessionReloadedSpy.count(), 0); // Not completed yet
+
+  // Let the event loop process so MockSimpleNetworkReply fires its delayed QTimer::singleShot finished() signals
+  QTRY_COMPARE(sessionCreatedSpy.count(), 1);
+  QTRY_COMPARE(sessionReloadedSpy.count(), 1);
 }
 
 void TestSessionWindow::testCreateRepoWorkflowBackgroundClassification() {
