@@ -1463,9 +1463,9 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   QueueModel *qm = window.queueModel();
   QueueItem item;
   item.jobId = QStringLiteral("queued-job-1");
-  item.requestData = SessionRequestBuilder::buildSessionRequest(
-      QStringLiteral("sources/github/test/repo"), QStringLiteral("test-branch"),
-      QStringLiteral("Prompt"), QStringLiteral("AUTO_CREATE_PR"), true, false, 0);
+  item.requestData = SessionRequestBuilder::buildSessionRequest(QStringLiteral("sources/github/test/repo"),
+                                                                QStringLiteral("test-branch"), QStringLiteral("Prompt"),
+                                                                QStringLiteral("AUTO_CREATE_PR"), true, false, 0);
   qm->enqueueItem(item);
 
   // Ensure queue is due
@@ -1487,8 +1487,9 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   QCOMPARE(sessionCreatedSpy.count(), 0);
   QCOMPARE(mockNet->createSessionCount, 1);
 
-  // Verify that a following reload was also started (the GET to the session API, which interceptCreateSession handles for both POST and GET)
-  // Wait, interceptCreateSession counts POSTs into createSessionCount. We can verify the reload fired if we check the in-flight set.
+  // Verify that a following reload was also started (the GET to the session API, which interceptCreateSession handles
+  // for both POST and GET) Wait, interceptCreateSession counts POSTs into createSessionCount. We can verify the reload
+  // fired if we check the in-flight set.
   QVERIFY(window.m_inFlightSessionReloads.contains(QStringLiteral("stale-sess-1")));
   QCOMPARE(sessionReloadedSpy.count(), 0); // Not completed yet
 
