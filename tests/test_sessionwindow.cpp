@@ -1457,6 +1457,7 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
 
   mockNet->interceptCreateSession = true;
   mockNet->interceptReloadSession = true;
+  mockNet->reloadSessionResponse = "{\"id\":\"stale-sess-1\", \"state\":\"RUNNING\"}";
 
   QSignalSpy sessionCreatedSpy(api, &APIManager::sessionCreated);
   QSignalSpy sessionReloadedSpy(api, &APIManager::sessionReloaded);
@@ -1496,9 +1497,9 @@ void TestSessionWindow::testProcessQueueIndependenceFromFollowingReloads() {
   QCOMPARE(sessionCreatedSpy.count(), 0);
   QCOMPARE(mockNet->createSessionCount, 1);
 
-  // Verify that a following reload was also started (the GET to the session API, which interceptCreateSession handles
-  // for both POST and GET) Wait, interceptCreateSession counts POSTs into createSessionCount. We can verify the reload
-  // fired if we check the in-flight set.
+  // Verify that a following reload was also started (the GET to the session API). We can verify the reload
+  // fired if we check the mock's reload count and the in-flight set.
+  QCOMPARE(mockNet->reloadSessionCount, 1);
   QVERIFY(window.m_inFlightSessionReloads.contains(QStringLiteral("stale-sess-1")));
   QCOMPARE(sessionReloadedSpy.count(), 0); // Not completed yet
 
