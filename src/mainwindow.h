@@ -142,8 +142,6 @@ private Q_SLOTS:
   void scheduleNextQueueAttempt();
   void onMasterMinuteTimer();
   void onMasterSecondTimer();
-  void refreshBeforeQueue();
-  void checkPendingRefreshBeforeQueue(const QString &id);
   QStringList getActiveFollowingSessionIds() const;
   void updateHoldingTabVisibility();
   void updateBlockedTabVisibility();
@@ -365,7 +363,6 @@ private:
   bool m_isProcessingMinuteTimer;
   QueueScheduler m_queueScheduler;
   bool m_queuePaused;
-  QSet<QString> m_pendingRefreshIds;
   QSet<QString> m_inFlightSessionReloads;
   QHash<QString, QDateTime> m_sessionReloadFailedAt;
   QHash<QString, qint64> m_lastBackgroundErrors;
@@ -375,8 +372,6 @@ protected:
   qint64 m_throttleBaseTime = 0;
 
 private:
-  bool m_isWaitingForRefreshBeforeQueue;
-  QDateTime m_refreshBeforeQueueTime;
   bool m_isWaitingForCreatedRepoSource = false;
 
   RefreshProgressWindow *m_refreshProgressWindow;

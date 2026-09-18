@@ -105,7 +105,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_trayMenu(nullptr), m_isRefreshingSources(false), m_isBackgroundSourcesRefresh(false), m_sourcesLoadedCount(0),
       m_sourcesAddedCount(0), m_pagesLoadedCount(0), m_masterMinuteTimer(new QTimer(this)),
       m_masterSecondTimer(new QTimer(this)), m_isProcessingQueue(false), m_isProcessingMinuteTimer(false),
-      m_queuePaused(false), m_isWaitingForRefreshBeforeQueue(false), m_refreshProgressWindow(nullptr) {
+      m_queuePaused(false), m_refreshProgressWindow(nullptr) {
   ConfigMigration::migrate();
   setObjectName(QStringLiteral("MainWindow"));
   m_throttleTimer.start();
@@ -150,15 +150,10 @@ MainWindow::MainWindow(QWidget *parent)
         onGithubRepoCreatedResult(false, jobId, attemptId, requestData, QJsonObject(), apiError);
       });
   connect(m_apiManager, &APIManager::sessionDetailsReceived, this, &MainWindow::showSessionWindow);
-  connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
-    Q_UNUSED(isBackground);
-    checkPendingRefreshBeforeQueue(session.value(QStringLiteral("id")).toString());
-  });
   connect(m_apiManager, &APIManager::sessionReloadFailed, this,
           [this](const QString &sessionId, const QString &, bool) {
             m_inFlightSessionReloads.remove(sessionId);
             m_sessionReloadFailedAt[sessionId] = QDateTime::currentDateTimeUtc();
-            checkPendingRefreshBeforeQueue(sessionId);
           });
   connect(m_apiManager, &APIManager::sessionReloaded, this, [this](const QJsonObject &session, bool isBackground) {
     Q_UNUSED(isBackground);
@@ -3734,34 +3729,6 @@ QStringList MainWindow::getActiveFollowingSessionIds() const {
   return activeIds;
 }
 
-void MainWindow::refreshBeforeQueue() {
-  QStringList sessionsToReload = getActiveFollowingSessionIds();
-
-  if (sessionsToReload.isEmpty()) {
-    processQueue();
-    return;
-  }
-
-  m_pendingRefreshIds = QSet<QString>(sessionsToReload.begin(), sessionsToReload.end());
-  m_isWaitingForRefreshBeforeQueue = true;
-  updateStatus(i18np("Refreshing 1 following session before processing queue...",
-                     "Refreshing %1 following sessions before processing queue...", m_pendingRefreshIds.size()));
-
-  for (const QString &id : sessionsToReload) {
-    m_apiManager->reloadSession(id, true);
-  }
-}
-
-void MainWindow::checkPendingRefreshBeforeQueue(const QString &id) {
-  if (m_isWaitingForRefreshBeforeQueue && m_pendingRefreshIds.contains(id)) {
-    m_pendingRefreshIds.remove(id);
-    if (m_pendingRefreshIds.isEmpty()) {
-      m_isWaitingForRefreshBeforeQueue = false;
-      processQueue();
-    }
-  }
-}
-
 void MainWindow::scheduleNextQueueAttempt() {
   KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
   int queueIntervalMins = queueConfig.readEntry("TimerInterval", 1);
@@ -3774,9 +3741,6 @@ bool MainWindow::processQueue() {
   }
 
   QDateTime now = QDateTime::currentDateTimeUtc();
-  if (m_isWaitingForRefreshBeforeQueue || (m_refreshBeforeQueueTime.isValid() && now < m_refreshBeforeQueueTime)) {
-    return false;
-  }
 
   if (m_queueScheduler.isBackoffActive(now)) {
     return false;
