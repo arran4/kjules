@@ -919,7 +919,7 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   errorProxy->setSourceModel(m_errorsModel);
   errorView->setModel(errorProxy);
   errorLayout->addWidget(errorView);
-  m_tabWidget->addTab(m_errorTab, i18n("Errors"));
+  m_tabWidget->addTab(m_errorTab, i18n("Diagnostics"));
 
   m_unseenErrorLabel = new ClickableLabel(this);
   m_unseenErrorLabel->hide();
