@@ -374,7 +374,7 @@ void SourceWindow::setupQueuedBlockedTab() {
   // Blocked / Error
   m_errorTab = new QWidget(m_subTabWidget);
   QVBoxLayout *blockedLayout = new QVBoxLayout(m_errorTab);
-  blockedLayout->addWidget(new QLabel(tr("Errors:"), m_errorTab));
+  blockedLayout->addWidget(new QLabel(tr("Diagnostics:"), m_errorTab));
   QListView *errorView = new QListView(m_errorTab);
   errorView->setItemDelegate(new DraftDelegate(errorView));
   ErrorFilterProxyModel *errorProxy = new ErrorFilterProxyModel(m_sourceId, m_errorTab);
@@ -390,7 +390,7 @@ void SourceWindow::setupQueuedBlockedTab() {
   blockedView->setModel(blockedProxy);
   blockedLayout->addWidget(blockedView);
 
-  m_subTabWidget->addTab(m_errorTab, tr("Blocked / Error"));
+  m_subTabWidget->addTab(m_errorTab, tr("Blocked / Diagnostics"));
 
   layout->addWidget(m_subTabWidget);
   m_tabWidget->addTab(m_queuedBlockedTab, tr("Queued/Blocked"));

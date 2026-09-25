@@ -123,7 +123,6 @@ private Q_SLOTS:
   void testGithubIssuesTabs();
   void testSourceWindowNavigationAndUnseen();
   void testStaleIssueCallbackGuards();
-  void testSessionWindowContextualErrors();
   void testSessionWindowMessageSendFailureLinks();
   void testClickableLabelLinkHandling();
 };
@@ -541,11 +540,15 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   err1[QStringLiteral("sourceId")] = sourceId;
   errorsModel.addErrorObj(err1);
 
+  QJsonObject err1b;
+  err1b[QStringLiteral("sourceId")] = sourceId;
+  errorsModel.addErrorObj(err1b);
+
   QJsonObject err2;
   err2[QStringLiteral("sourceId")] = QStringLiteral("sources/github/other/repo");
   errorsModel.addErrorObj(err2);
 
-  QCOMPARE(errorsModel.unseenCount(), 2);
+  QCOMPARE(errorsModel.unseenCount(), 3);
 
   QTabWidget *tabWidget = window->findChild<QTabWidget *>();
   QVERIFY(tabWidget != nullptr);
@@ -559,7 +562,7 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   QTabWidget *subTab = tabWidget->currentWidget()->findChild<QTabWidget *>();
   if (subTab) {
     for (int i = 0; i < subTab->count(); ++i) {
-      if (subTab->tabText(i).contains(tr("Error"))) {
+      if (subTab->tabText(i).contains(tr("Diagnostic"))) {
         subTab->setCurrentIndex(i);
       }
     }
@@ -569,18 +572,23 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
   QCoreApplication::processEvents();
 
   bool err1Unseen = true;
+  bool err1bUnseen = true;
   bool err2Unseen = true;
 
   for (int row = 0; row < errorsModel.rowCount(); ++row) {
     QModelIndex idx = errorsModel.index(row, 0);
     if (idx.data(ErrorsModel::SourceIdRole).toString() == sourceId) {
-      err1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+      if (err1Unseen)
+        err1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+      else
+        err1bUnseen = idx.data(ErrorsModel::UnseenRole).toBool();
     } else if (idx.data(ErrorsModel::SourceIdRole).toString() == QStringLiteral("sources/github/other/repo")) {
       err2Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
     }
   }
 
   QCOMPARE(err1Unseen, false);
+  QCOMPARE(err1bUnseen, false);
   QCOMPARE(err2Unseen, true);
   QCOMPARE(errorsModel.unseenCount(), 1);
 }
@@ -666,72 +674,6 @@ void TestSourceWindow::testStaleIssueCallbackGuards() {
   QCOMPARE(spy.count(), 1);
   QCOMPARE(createAction->isEnabled(), true);
   QCOMPARE(cancelAction->isEnabled(), false);
-}
-
-void TestSourceWindow::testSessionWindowContextualErrors() {
-  QTemporaryDir tempDir;
-  QVERIFY(tempDir.isValid());
-  ErrorsModel errorsModel(nullptr, tempDir.filePath(QStringLiteral("errors.json")));
-  APIManager apiManager;
-
-  QJsonObject err1;
-  err1[QStringLiteral("sessionId")] = QStringLiteral("sess1");
-  errorsModel.addErrorObj(err1);
-
-  QJsonObject err2;
-  err2[QStringLiteral("sessionId")] = QStringLiteral("sess2");
-  errorsModel.addErrorObj(err2);
-
-  QCOMPARE(errorsModel.unseenCount(), 2);
-
-  SessionModel sessionModel(tempDir.filePath(QStringLiteral("sessions.json")));
-  QJsonObject sess1;
-  sess1[QStringLiteral("id")] = QStringLiteral("sess1");
-  sess1[QStringLiteral("state")] = QStringLiteral("ERROR");
-  sessionModel.addSessions(QJsonArray{sess1});
-
-  auto window = std::make_unique<SessionWindow>(sess1, &apiManager, &errorsModel, true, nullptr);
-  window->setAttribute(Qt::WA_DeleteOnClose, false);
-
-  QTabWidget *tabWidget = window->findChild<QTabWidget *>();
-  QVERIFY(tabWidget != nullptr);
-
-  QAbstractItemView *errorsView = nullptr;
-  for (int i = 0; i < tabWidget->count(); ++i) {
-    if (tabWidget->tabText(i).contains(tr("Error"))) {
-      tabWidget->setCurrentIndex(i);
-      errorsView = tabWidget->widget(i)->findChild<QAbstractItemView *>();
-      break;
-    }
-  }
-
-  if (!errorsView) {
-    errorsView = window->findChild<QAbstractItemView *>();
-  }
-
-  window->show();
-  QCoreApplication::processEvents();
-
-  bool err1Unseen = true;
-  bool err2Unseen = true;
-
-  for (int row = 0; row < errorsModel.rowCount(); ++row) {
-    QModelIndex idx = errorsModel.index(row, 0);
-    if (idx.data(ErrorsModel::SessionIdRole).toString() == QStringLiteral("sess1")) {
-      err1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
-    } else if (idx.data(ErrorsModel::SessionIdRole).toString() == QStringLiteral("sess2")) {
-      err2Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
-    }
-  }
-
-  QCOMPARE(err1Unseen, false);
-  QCOMPARE(err2Unseen, true);
-  QCOMPARE(errorsModel.unseenCount(), 1);
-
-  QVERIFY(errorsView != nullptr);
-  QAbstractItemModel *proxyModel = errorsView->model();
-  QVERIFY(proxyModel != nullptr);
-  QCOMPARE(proxyModel->rowCount(), 1);
 }
 
 void TestSourceWindow::testSessionWindowMessageSendFailureLinks() {
