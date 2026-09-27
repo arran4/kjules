@@ -2,6 +2,7 @@
 #include "../src/apimanager.h"
 #include "../src/clickableprogressbar.h"
 #include "../src/errorsmodel.h"
+#include "../src/errorwindow.h"
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
 #include "../src/mainwindow.h"
@@ -16,9 +17,11 @@
 #include <KSharedConfig>
 #include <QDir>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QSortFilterProxyModel>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStandardPaths>
@@ -687,6 +690,46 @@ private Q_SLOTS:
     QCOMPARE(noDupModel->data(noDupModel->index(0, 0), ErrorsModel::MessageRole).toString(),
              QStringLiteral("Structured error content"));
 
+    // 13. Sibling fallback isolation:
+    // Job has Attempt X (no structured errors) and Attempt Y (fails with launchErrors and job-level lastError)
+    JobData siblingJob;
+    siblingJob.id = QStringLiteral("job_sibling_isolation");
+    siblingJob.source = QStringLiteral("sources/github/kde/kjules");
+
+    JobAttemptData attX;
+    attX.id = QStringLiteral("att_X");
+    attX.julesState = QStringLiteral("IN_PROGRESS"); // No structured diagnostic, no rawResponse error
+
+    JobAttemptData attY;
+    attY.id = QStringLiteral("att_Y");
+    attY.julesState = QStringLiteral("FAILED");
+    attY.launchErrors = QJsonArray{QJsonObject{{QStringLiteral("message"), QStringLiteral("Failure in Attempt Y")}}};
+
+    siblingJob.attempts = {attX, attY};
+    siblingJob.lifecycleMetadata[QStringLiteral("lastError")] = QStringLiteral("Failure in Attempt Y");
+    store.addJob(siblingJob);
+
+    SessionWindow siblingWindow(siblingJob.id, &store, nullptr, &errorsModel);
+    siblingWindow.setAttribute(Qt::WA_DeleteOnClose, false);
+
+    // Select Attempt X
+    siblingWindow.selectAttempt(QStringLiteral("att_X"));
+    QAbstractItemModel *xModel = siblingWindow.diagnosticsModel();
+    QVERIFY(xModel != nullptr);
+    // Attempt X must NOT inherit Attempt Y's job-level failure
+    QCOMPARE(xModel->rowCount(), 0);
+
+    // Select Attempt Y
+    siblingWindow.selectAttempt(QStringLiteral("att_Y"));
+    QCOMPARE(xModel->rowCount(), 1);
+    QCOMPARE(xModel->data(xModel->index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Failure in Attempt Y"));
+
+    // 14. Exact attempt identity:
+    // Selecting an invalid/nonexistent attempt ID must show empty diagnostics rather than falling back to first attempt
+    siblingWindow.selectAttempt(QStringLiteral("nonexistent_attempt_id"));
+    QCOMPARE(xModel->rowCount(), 0);
+
     // Standalone legacy SessionWindow mode: filter operational ErrorsModel by remote session ID
     QJsonObject opSessErr;
     opSessErr[QStringLiteral("message")] = QStringLiteral("Standalone session operational error");
@@ -698,6 +741,83 @@ private Q_SLOTS:
     QCOMPARE(legacyProxy.rowCount(), 1);
     QCOMPARE(legacyProxy.data(legacyProxy.index(0, 0), ErrorsModel::MessageRole).toString(),
              QStringLiteral("Standalone session operational error"));
+  }
+
+  void testDiagnosticsProxyToSourceMapping() {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+    ErrorsModel *model = window.errorsModel();
+    QVERIFY(model != nullptr);
+    model->clear();
+
+    // 1. Add first diagnostic (becomes source row 1 after second insert)
+    QJsonObject diag1;
+    diag1[QStringLiteral("message")] = QStringLiteral("Alpha network failure");
+    diag1[QStringLiteral("sourceId")] = QStringLiteral("sources/github/kde/repoA");
+    model->addErrorObj(diag1);
+
+    // 2. Add second diagnostic (inserted at index 0, so source row 0 is Beta, source row 1 is Alpha)
+    QJsonObject diag2;
+    diag2[QStringLiteral("message")] = QStringLiteral("Beta disk full failure");
+    diag2[QStringLiteral("sourceId")] = QStringLiteral("sources/github/kde/repoB");
+    model->addErrorObj(diag2);
+
+    QCOMPARE(model->rowCount(), 2);
+    QCOMPARE(model->getError(0).value(QStringLiteral("message")).toString(), QStringLiteral("Beta disk full failure"));
+    QCOMPARE(model->getError(1).value(QStringLiteral("message")).toString(), QStringLiteral("Alpha network failure"));
+
+    QListView *view = window.diagnosticsView();
+    QVERIFY(view != nullptr);
+    auto *proxy = qobject_cast<QSortFilterProxyModel *>(view->model());
+    QVERIFY(proxy != nullptr);
+
+    // Filter by "Alpha" so only Alpha is visible in proxy
+    QLineEdit *filter = window.diagnosticsFilter();
+    QVERIFY(filter != nullptr);
+    filter->setText(QStringLiteral("Alpha"));
+    QCoreApplication::processEvents();
+
+    // In the proxy, only 1 row is visible (proxy row 0)
+    QCOMPARE(proxy->rowCount(), 1);
+    QModelIndex proxyIdx0 = proxy->index(0, 0);
+
+    // Verify proxy row 0 maps to source row 1 (Alpha), NOT source row 0 (Beta)
+    int sourceRow = window.diagnosticSourceRow(proxyIdx0);
+    QCOMPARE(sourceRow, 1);
+
+    // Verify Copy resolves the correct underlying diagnostic (Alpha, not Beta)
+    QString copyMsg = window.diagnosticErrorMessage(sourceRow);
+    QCOMPARE(copyMsg, QStringLiteral("Alpha network failure"));
+
+    // Verify Details resolves the correct underlying diagnostic (Alpha, not Beta)
+    ErrorWindow *detailsWin = window.showDiagnosticDetails(sourceRow);
+    QVERIFY(detailsWin != nullptr);
+    bool containsAlpha = false;
+    for (auto *label : detailsWin->findChildren<QLabel *>()) {
+      if (label->text().contains(QStringLiteral("Alpha network failure"))) {
+        containsAlpha = true;
+        break;
+      }
+    }
+    for (auto *tb : detailsWin->findChildren<QTextBrowser *>()) {
+      if (tb->toPlainText().contains(QStringLiteral("Alpha network failure"))) {
+        containsAlpha = true;
+        break;
+      }
+    }
+    QVERIFY(containsAlpha);
+    detailsWin->close();
+
+    // Verify Deletion: select proxy row 0 and delete
+    view->selectionModel()->select(proxyIdx0, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    QCOMPARE(window.selectedDiagnosticSourceRows(), QList<int>{1});
+
+    window.deleteSelectedDiagnostics(false);
+
+    // After deleting Alpha (source row 1), only Beta remains in the source model
+    QCOMPARE(model->rowCount(), 1);
+    QCOMPARE(model->getError(0).value(QStringLiteral("message")).toString(), QStringLiteral("Beta disk full failure"));
   }
 
   void testAttemptTimestampsExposedAndVisible() {

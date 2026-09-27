@@ -112,7 +112,7 @@ private Q_SLOTS:
   void onHoldingActivated(const QModelIndex &index);
   void onHoldingContextMenu(const QPoint &pos);
   void onBlockedContextMenu(const QPoint &pos);
-  void showDiagnosticDetails(int row);
+  class ErrorWindow *showDiagnosticDetails(int row);
   void onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request,
                                const ApiError &apiError, const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
@@ -194,6 +194,13 @@ public:
   JobStore *jobStore() const { return m_jobStore; }
   QueueModel *queueModel() const { return m_queueModel; }
   ErrorsModel *errorsModel() const { return m_errorsModel; }
+  QListView *diagnosticsView() const { return m_errorsView; }
+  QLineEdit *diagnosticsFilter() const { return m_errorsFilter; }
+  int diagnosticSourceRow(const QModelIndex &viewIndex) const;
+  QString diagnosticErrorMessage(int sourceRow) const;
+  void copyDiagnosticError(int sourceRow);
+  void deleteSelectedDiagnostics(bool promptConfirmation = true);
+  QList<int> selectedDiagnosticSourceRows() const;
   bool processQueueForTest() { return processQueue(); }
 
 private:

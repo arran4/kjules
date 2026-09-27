@@ -1675,11 +1675,14 @@ void MainWindow::setupDiagnosticsTab(QWidget *tab) {
   QVBoxLayout *errLayout = new QVBoxLayout(tab);
   // Diagnostics View
   m_errorsFilter = new QLineEdit(this);
+  m_errorsFilter->setObjectName(QStringLiteral("diagnosticsFilter"));
   m_errorsFilter->setPlaceholderText(i18n("Filter diagnostics..."));
   errLayout->addWidget(m_errorsFilter);
   m_errorsView = new QListView(this);
+  m_errorsView->setObjectName(QStringLiteral("diagnosticsView"));
   errLayout->addWidget(m_errorsView);
   QSortFilterProxyModel *errProxy = new QSortFilterProxyModel(this);
+  errProxy->setObjectName(QStringLiteral("diagnosticsProxy"));
   errProxy->setSourceModel(m_errorsModel);
   errProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
   m_errorsView->setModel(errProxy);
@@ -1707,15 +1710,18 @@ void MainWindow::setupDiagnosticsTab(QWidget *tab) {
       connect(detailsAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
         for (const QModelIndex &idx : selectedRows) {
-          showDiagnosticDetails(idx.row());
+          int sourceRow = diagnosticSourceRow(idx);
+          if (sourceRow != -1) {
+            showDiagnosticDetails(sourceRow);
+          }
         }
       });
 
       connect(copyErrorAction, &QAction::triggered, [this, index]() {
-        QJsonObject errData = m_errorsModel->getError(index.row());
-        QString errorMsg = errData.value(QStringLiteral("message")).toString();
-        QApplication::clipboard()->setText(errorMsg);
-        updateStatus(i18n("Error copied to clipboard."));
+        int sourceRow = diagnosticSourceRow(index);
+        if (sourceRow != -1) {
+          copyDiagnosticError(sourceRow);
+        }
       });
 
       connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteErrors);
@@ -1723,8 +1729,9 @@ void MainWindow::setupDiagnosticsTab(QWidget *tab) {
     }
   });
   connect(m_errorsView, &QListView::doubleClicked, this, [this](const QModelIndex &idx) {
-    if (idx.isValid()) {
-      showDiagnosticDetails(idx.row());
+    int sourceRow = diagnosticSourceRow(idx);
+    if (sourceRow != -1) {
+      showDiagnosticDetails(sourceRow);
     }
   });
 }
@@ -4581,9 +4588,9 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
   }
 }
 
-void MainWindow::showDiagnosticDetails(int row) {
+ErrorWindow *MainWindow::showDiagnosticDetails(int row) {
   if (row < 0 || row >= m_errorsModel->rowCount())
-    return;
+    return nullptr;
 
   QJsonObject errorData = m_errorsModel->getError(row);
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
@@ -4601,6 +4608,7 @@ void MainWindow::showDiagnosticDetails(int row) {
   });
   window->setAttribute(Qt::WA_DeleteOnClose);
   window->show();
+  return window;
 }
 
 void MainWindow::onDraftActivated(const QModelIndex &index) {
@@ -6178,20 +6186,55 @@ void MainWindow::deleteTemplates() {
   }
 }
 
-void MainWindow::deleteErrors() {
+int MainWindow::diagnosticSourceRow(const QModelIndex &viewIndex) const {
+  if (!viewIndex.isValid())
+    return -1;
+  const auto *proxy = qobject_cast<const QAbstractProxyModel *>(m_errorsView ? m_errorsView->model() : nullptr);
+  QModelIndex sourceIdx = proxy ? proxy->mapToSource(viewIndex) : viewIndex;
+  return sourceIdx.isValid() ? sourceIdx.row() : -1;
+}
+
+QString MainWindow::diagnosticErrorMessage(int sourceRow) const {
+  if (!m_errorsModel || sourceRow < 0 || sourceRow >= m_errorsModel->rowCount())
+    return QString();
+  return m_errorsModel->getError(sourceRow).value(QStringLiteral("message")).toString();
+}
+
+void MainWindow::copyDiagnosticError(int sourceRow) {
+  QString errorMsg = diagnosticErrorMessage(sourceRow);
+  if (!errorMsg.isEmpty()) {
+    QApplication::clipboard()->setText(errorMsg);
+    updateStatus(i18n("Error copied to clipboard."));
+  }
+}
+
+QList<int> MainWindow::selectedDiagnosticSourceRows() const {
+  if (!m_errorsView || !m_errorsView->selectionModel())
+    return {};
+  return getUniqueSortedRows(m_errorsView->selectionModel()->selectedRows(), m_errorsView);
+}
+
+void MainWindow::deleteSelectedDiagnostics(bool promptConfirmation) {
+  if (!m_errorsView || !m_errorsView->selectionModel())
+    return;
   QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  if (QMessageBox::question(this, i18np("Delete Error", "Delete Errors", selectedRows.size()),
-                            i18np("Are you sure?", "Are you sure you want to delete these errors?",
-                                  selectedRows.size())) == QMessageBox::Yes) {
+  if (!promptConfirmation ||
+      QMessageBox::question(this, i18np("Delete Diagnostic", "Delete Diagnostics", selectedRows.size()),
+                            i18np("Are you sure you want to delete this diagnostic?",
+                                  "Are you sure you want to delete these diagnostics?", selectedRows.size())) ==
+          QMessageBox::Yes) {
     QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_errorsView);
 
     for (int row : rowsToDelete) {
       m_errorsModel->removeError(row);
     }
+    updateStatus(i18np("1 diagnostic deleted.", "%1 diagnostics deleted.", rowsToDelete.size()));
   }
 }
+
+void MainWindow::deleteErrors() { deleteSelectedDiagnostics(true); }
 
 void MainWindow::processSessionModel(SessionModel *model, int &sessionCount) {
   for (int i = 0; i < model->rowCount(); ++i) {

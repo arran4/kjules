@@ -1360,15 +1360,13 @@ void SessionWindow::updateAttemptDiagnostics() {
     }
   }
 
-  if (!selectedAttempt && !job->attempts.isEmpty()) {
-    selectedAttempt = &job->attempts.first();
-  }
-
+  // Exact attempt identity: do not silently substitute another attempt
   if (!selectedAttempt)
     return;
 
   QVector<QJsonObject> diags;
 
+  // 1. Prefer attempt-owned structured launchErrors
   for (const QJsonValue &val : selectedAttempt->launchErrors) {
     QJsonObject errObj;
     if (val.isObject()) {
@@ -1397,36 +1395,81 @@ void SessionWindow::updateAttemptDiagnostics() {
     diags.append(errObj);
   }
 
+  // 2. Next, prefer attempt-owned rawResponse.error / rawResponse.message
   if (diags.isEmpty()) {
-    QString fallback;
-    if (job->lifecycleMetadata.contains(QStringLiteral("lastError"))) {
-      fallback = job->lifecycleMetadata.value(QStringLiteral("lastError")).toString();
-    } else if (job->legacyMetadata.contains(QStringLiteral("lastError"))) {
-      fallback = job->legacyMetadata.value(QStringLiteral("lastError")).toString();
-    } else if (selectedAttempt->rawResponse.contains(QStringLiteral("error"))) {
-      fallback = selectedAttempt->rawResponse.value(QStringLiteral("error")).toString();
+    QString attemptError;
+    if (selectedAttempt->rawResponse.contains(QStringLiteral("error"))) {
+      attemptError = selectedAttempt->rawResponse.value(QStringLiteral("error")).toString();
     } else if (selectedAttempt->rawResponse.contains(QStringLiteral("message"))) {
-      fallback = selectedAttempt->rawResponse.value(QStringLiteral("message")).toString();
+      attemptError = selectedAttempt->rawResponse.value(QStringLiteral("message")).toString();
     }
 
-    if (!fallback.isEmpty()) {
-      QJsonObject fallbackObj;
-      fallbackObj[QStringLiteral("message")] = fallback;
-      fallbackObj[QStringLiteral("jobId")] = m_jobId;
-      fallbackObj[QStringLiteral("attemptId")] = selectedAttempt->id;
+    if (!attemptError.isEmpty()) {
+      QJsonObject errObj;
+      errObj[QStringLiteral("message")] = attemptError;
+      errObj[QStringLiteral("jobId")] = m_jobId;
+      errObj[QStringLiteral("attemptId")] = selectedAttempt->id;
       if (!selectedAttempt->julesSessionId.isEmpty()) {
-        fallbackObj[QStringLiteral("sessionId")] = selectedAttempt->julesSessionId;
+        errObj[QStringLiteral("sessionId")] = selectedAttempt->julesSessionId;
       }
       if (!selectedAttempt->requestSnapshot.isEmpty()) {
-        fallbackObj[QStringLiteral("request")] = selectedAttempt->requestSnapshot;
+        errObj[QStringLiteral("request")] = selectedAttempt->requestSnapshot;
       }
       if (!selectedAttempt->rawResponse.isEmpty()) {
-        fallbackObj[QStringLiteral("response")] = selectedAttempt->rawResponse;
+        errObj[QStringLiteral("response")] = selectedAttempt->rawResponse;
       }
       if (selectedAttempt->updatedAt.isValid()) {
-        fallbackObj[QStringLiteral("timestamp")] = selectedAttempt->updatedAt.toUTC().toString(Qt::ISODate);
+        errObj[QStringLiteral("timestamp")] = selectedAttempt->updatedAt.toUTC().toString(Qt::ISODate);
       }
-      diags.append(fallbackObj);
+      diags.append(errObj);
+    }
+  }
+
+  // 3. Fallback to Job-level legacy lastError only where attribution to selected attempt is unambiguous
+  if (diags.isEmpty()) {
+    bool fallbackAttributable = false;
+    if (job->attempts.size() == 1) {
+      fallbackAttributable = true;
+    } else {
+      // Multiple attempts: do not project Job-level lastError unless explicit attribution ties it to this attempt
+      QString lastErrAttemptId;
+      if (job->lifecycleMetadata.contains(QStringLiteral("lastErrorAttemptId"))) {
+        lastErrAttemptId = job->lifecycleMetadata.value(QStringLiteral("lastErrorAttemptId")).toString();
+      } else if (job->legacyMetadata.contains(QStringLiteral("lastErrorAttemptId"))) {
+        lastErrAttemptId = job->legacyMetadata.value(QStringLiteral("lastErrorAttemptId")).toString();
+      }
+      if (!lastErrAttemptId.isEmpty() && lastErrAttemptId == selectedAttempt->id) {
+        fallbackAttributable = true;
+      }
+    }
+
+    if (fallbackAttributable) {
+      QString fallback;
+      if (job->lifecycleMetadata.contains(QStringLiteral("lastError"))) {
+        fallback = job->lifecycleMetadata.value(QStringLiteral("lastError")).toString();
+      } else if (job->legacyMetadata.contains(QStringLiteral("lastError"))) {
+        fallback = job->legacyMetadata.value(QStringLiteral("lastError")).toString();
+      }
+
+      if (!fallback.isEmpty()) {
+        QJsonObject fallbackObj;
+        fallbackObj[QStringLiteral("message")] = fallback;
+        fallbackObj[QStringLiteral("jobId")] = m_jobId;
+        fallbackObj[QStringLiteral("attemptId")] = selectedAttempt->id;
+        if (!selectedAttempt->julesSessionId.isEmpty()) {
+          fallbackObj[QStringLiteral("sessionId")] = selectedAttempt->julesSessionId;
+        }
+        if (!selectedAttempt->requestSnapshot.isEmpty()) {
+          fallbackObj[QStringLiteral("request")] = selectedAttempt->requestSnapshot;
+        }
+        if (!selectedAttempt->rawResponse.isEmpty()) {
+          fallbackObj[QStringLiteral("response")] = selectedAttempt->rawResponse;
+        }
+        if (selectedAttempt->updatedAt.isValid()) {
+          fallbackObj[QStringLiteral("timestamp")] = selectedAttempt->updatedAt.toUTC().toString(Qt::ISODate);
+        }
+        diags.append(fallbackObj);
+      }
     }
   }
 
@@ -1434,15 +1477,22 @@ void SessionWindow::updateAttemptDiagnostics() {
 }
 
 void SessionWindow::selectAttempt(const QString &attemptId) {
-  if (!m_attemptList)
-    return;
-  for (int i = 0; i < m_attemptList->count(); ++i) {
-    QListWidgetItem *item = m_attemptList->item(i);
-    if (item && item->data(Qt::UserRole).toString() == attemptId) {
-      m_attemptList->setCurrentItem(item);
-      return;
+  m_currentAttemptId = attemptId;
+  if (m_attemptList) {
+    bool found = false;
+    for (int i = 0; i < m_attemptList->count(); ++i) {
+      QListWidgetItem *item = m_attemptList->item(i);
+      if (item && item->data(Qt::UserRole).toString() == attemptId) {
+        m_attemptList->setCurrentItem(item);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      m_attemptList->setCurrentItem(nullptr);
     }
   }
+  updateAttemptDiagnostics();
 }
 
 QAbstractItemModel *SessionWindow::diagnosticsModel() const {
