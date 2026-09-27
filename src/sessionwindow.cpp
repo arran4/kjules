@@ -55,9 +55,87 @@
 #include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
-#include <QTextBrowser>
-#include <QTimer>
 #include <QUrl>
+
+AttemptDiagnosticsModel::AttemptDiagnosticsModel(QObject *parent) : QAbstractListModel(parent) {}
+
+int AttemptDiagnosticsModel::rowCount(const QModelIndex &parent) const {
+  if (parent.isValid())
+    return 0;
+  return m_diagnostics.size();
+}
+
+QVariant AttemptDiagnosticsModel::data(const QModelIndex &index, int role) const {
+  if (!index.isValid() || index.row() < 0 || index.row() >= m_diagnostics.size())
+    return QVariant();
+
+  const QJsonObject &diag = m_diagnostics.at(index.row());
+  switch (role) {
+  case Qt::DisplayRole:
+  case MessageRole:
+    return diag.value(QStringLiteral("message")).toString();
+  case RequestRole:
+    return diag.value(QStringLiteral("request")).toObject();
+  case ResponseRole:
+    return diag.value(QStringLiteral("response")).toObject();
+  case HttpDetailsRole:
+    return diag.value(QStringLiteral("httpDetails")).toString();
+  case DetailsRole:
+    return diag.value(QStringLiteral("details")).toString();
+  case TimestampRole:
+    if (diag.contains(QStringLiteral("timestamp"))) {
+      QDateTime dt = QDateTime::fromString(diag.value(QStringLiteral("timestamp")).toString(), Qt::ISODate);
+      if (dt.isValid()) {
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+      }
+      return diag.value(QStringLiteral("timestamp")).toString();
+    }
+    return QVariant();
+  case SeenRole:
+    return true;
+  case UnseenRole:
+    return false;
+  case JobIdRole:
+    return diag.value(QStringLiteral("jobId")).toString();
+  case AttemptIdRole:
+    return diag.value(QStringLiteral("attemptId")).toString();
+  default:
+    return QVariant();
+  }
+}
+
+QHash<int, QByteArray> AttemptDiagnosticsModel::roleNames() const {
+  QHash<int, QByteArray> roles;
+  roles[MessageRole] = "message";
+  roles[RequestRole] = "request";
+  roles[ResponseRole] = "response";
+  roles[HttpDetailsRole] = "httpDetails";
+  roles[TimestampRole] = "timestamp";
+  roles[SeenRole] = "seen";
+  roles[UnseenRole] = "unseen";
+  roles[JobIdRole] = "jobId";
+  roles[AttemptIdRole] = "attemptId";
+  roles[DetailsRole] = "details";
+  return roles;
+}
+
+void AttemptDiagnosticsModel::setDiagnostics(const QVector<QJsonObject> &diagnostics) {
+  beginResetModel();
+  m_diagnostics = diagnostics;
+  endResetModel();
+}
+
+void AttemptDiagnosticsModel::clear() {
+  beginResetModel();
+  m_diagnostics.clear();
+  endResetModel();
+}
+
+QJsonObject AttemptDiagnosticsModel::getDiagnostic(int row) const {
+  if (row >= 0 && row < m_diagnostics.size())
+    return m_diagnostics.at(row);
+  return QJsonObject();
+}
 #include <QVBoxLayout>
 
 SessionWindow::SessionWindow(const QString &jobId, JobStore *jobStore, APIManager *apiManager, ErrorsModel *errorsModel,
@@ -909,60 +987,68 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   m_errorTab = new QWidget(this);
   QVBoxLayout *errorLayout = new QVBoxLayout(m_errorTab);
   QListView *errorView = new QListView(m_errorTab);
-  SessionErrorFilterProxyModel *errorProxy =
-      new SessionErrorFilterProxyModel(currentSessionData().value(QStringLiteral("id")).toString(), m_errorTab);
-  errorProxy->setObjectName(QStringLiteral("errorProxy")); // Important for later updates
+  errorView->setObjectName(QStringLiteral("errorView"));
+
   if (m_jobStore) {
-    errorProxy->setFilterTarget(m_jobId, m_currentAttemptId,
-                                currentSessionData().value(QStringLiteral("id")).toString());
+    m_localDiagnosticsModel = new AttemptDiagnosticsModel(m_errorTab);
+    errorView->setModel(m_localDiagnosticsModel);
+    updateAttemptDiagnostics();
+  } else {
+    SessionErrorFilterProxyModel *errorProxy =
+        new SessionErrorFilterProxyModel(currentSessionData().value(QStringLiteral("id")).toString(), m_errorTab);
+    errorProxy->setObjectName(QStringLiteral("errorProxy")); // Important for later updates
+    errorProxy->setSourceModel(m_errorsModel);
+    errorView->setModel(errorProxy);
   }
-  errorProxy->setSourceModel(m_errorsModel);
-  errorView->setModel(errorProxy);
   errorLayout->addWidget(errorView);
   m_tabWidget->addTab(m_errorTab, i18n("Errors"));
 
   m_unseenErrorLabel = new ClickableLabel(this);
   m_unseenErrorLabel->hide();
 
-  auto updateUnseenErrors = [this, errorProxy]() {
-    if (!m_errorsModel || !m_unseenErrorLabel)
-      return;
-    int unseenCount = 0;
-    for (int i = 0; i < errorProxy->rowCount(); ++i) {
-      if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
-        unseenCount++;
-      }
-    }
-    if (unseenCount > 0) {
-      m_unseenErrorLabel->setText(i18np("1 Unseen Error", "%1 Unseen Errors", unseenCount));
-      m_unseenErrorLabel->show();
-    } else {
-      m_unseenErrorLabel->hide();
-    }
-  };
-
-  if (m_errorsModel) {
-    connect(m_errorsModel, &ErrorsModel::dataChanged, this, updateUnseenErrors);
-    connect(m_errorsModel, &ErrorsModel::rowsInserted, this, updateUnseenErrors);
-    connect(m_errorsModel, &ErrorsModel::rowsRemoved, this, updateUnseenErrors);
-    connect(m_errorsModel, &ErrorsModel::modelReset, this, updateUnseenErrors);
-    updateUnseenErrors();
-  }
-
-  connect(m_tabWidget, &QTabWidget::currentChanged, this, [this, errorProxy](int index) {
-    if (m_tabWidget->widget(index) == m_errorTab && m_errorsModel) {
+  if (!m_jobStore) {
+    SessionErrorFilterProxyModel *errorProxy =
+        m_errorTab->findChild<SessionErrorFilterProxyModel *>(QStringLiteral("errorProxy"));
+    auto updateUnseenErrors = [this, errorProxy]() {
+      if (!m_errorsModel || !m_unseenErrorLabel || !errorProxy)
+        return;
+      int unseenCount = 0;
       for (int i = 0; i < errorProxy->rowCount(); ++i) {
         if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
-          QModelIndex sourceIndex = errorProxy->mapToSource(errorProxy->index(i, 0));
-          m_errorsModel->markSeen(sourceIndex.row());
+          unseenCount++;
         }
       }
+      if (unseenCount > 0) {
+        m_unseenErrorLabel->setText(i18np("1 Unseen Error", "%1 Unseen Errors", unseenCount));
+        m_unseenErrorLabel->show();
+      } else {
+        m_unseenErrorLabel->hide();
+      }
+    };
+
+    if (m_errorsModel) {
+      connect(m_errorsModel, &ErrorsModel::dataChanged, this, updateUnseenErrors);
+      connect(m_errorsModel, &ErrorsModel::rowsInserted, this, updateUnseenErrors);
+      connect(m_errorsModel, &ErrorsModel::rowsRemoved, this, updateUnseenErrors);
+      connect(m_errorsModel, &ErrorsModel::modelReset, this, updateUnseenErrors);
+      updateUnseenErrors();
     }
-  });
 
-  connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() { m_tabWidget->setCurrentWidget(m_errorTab); });
+    connect(m_tabWidget, &QTabWidget::currentChanged, this, [this, errorProxy](int index) {
+      if (m_tabWidget->widget(index) == m_errorTab && m_errorsModel && errorProxy) {
+        for (int i = 0; i < errorProxy->rowCount(); ++i) {
+          if (errorProxy->data(errorProxy->index(i, 0), ErrorsModel::UnseenRole).toBool()) {
+            QModelIndex sourceIndex = errorProxy->mapToSource(errorProxy->index(i, 0));
+            m_errorsModel->markSeen(sourceIndex.row());
+          }
+        }
+      }
+    });
 
-  statusBar()->addWidget(m_unseenErrorLabel);
+    connect(m_unseenErrorLabel, &ClickableLabel::clicked, this,
+            [this]() { m_tabWidget->setCurrentWidget(m_errorTab); });
+    statusBar()->addWidget(m_unseenErrorLabel);
+  }
 
   QString title;
   QString sessionId;
@@ -1082,14 +1168,6 @@ void SessionWindow::renderZeroAttempts() {
     lastErrorText = job.lifecycleMetadata.value(QStringLiteral("lastError")).toString();
   } else if (job.legacyMetadata.contains(QStringLiteral("lastError"))) {
     lastErrorText = job.legacyMetadata.value(QStringLiteral("lastError")).toString();
-  } else if (m_errorsModel) {
-    for (int i = 0; i < m_errorsModel->rowCount(); ++i) {
-      QModelIndex idx = m_errorsModel->index(i, 0);
-      if (m_errorsModel->data(idx, ErrorsModel::JobIdRole).toString() == job.id) {
-        lastErrorText = m_errorsModel->data(idx, ErrorsModel::MessageRole).toString();
-        break;
-      }
-    }
   }
 
   QLabel *statusHeader = new QLabel(i18n("<b>Job Status & History:</b>"), m_zeroAttemptWidget);
@@ -1222,16 +1300,15 @@ void SessionWindow::updateAttemptList() {
     renderDetailsAndDiff();
   }
 
+  if (m_localDiagnosticsModel) {
+    updateAttemptDiagnostics();
+  }
+
   if (m_errorTab) {
     SessionErrorFilterProxyModel *proxy =
         m_errorTab->findChild<SessionErrorFilterProxyModel *>(QStringLiteral("errorProxy"));
     if (proxy) {
-      if (m_jobStore) {
-        proxy->setFilterTarget(m_jobId, m_currentAttemptId,
-                               currentSessionData().value(QStringLiteral("id")).toString());
-      } else {
-        proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
-      }
+      proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
     }
   }
 
@@ -1246,20 +1323,137 @@ void SessionWindow::onAttemptSelected(QListWidgetItem *item) {
     m_currentAttemptId = attemptId;
     renderDetailsAndDiff();
 
-    // Update the error proxy filter if it exists
+    if (m_localDiagnosticsModel) {
+      updateAttemptDiagnostics();
+    }
+
     if (m_errorTab) {
       SessionErrorFilterProxyModel *proxy =
           m_errorTab->findChild<SessionErrorFilterProxyModel *>(QStringLiteral("errorProxy"));
       if (proxy) {
-        if (m_jobStore) {
-          proxy->setFilterTarget(m_jobId, m_currentAttemptId,
-                                 currentSessionData().value(QStringLiteral("id")).toString());
-        } else {
-          proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
-        }
+        proxy->setSessionId(currentSessionData().value(QStringLiteral("id")).toString());
       }
     }
 
     refreshSession(false);
   }
+}
+
+void SessionWindow::updateAttemptDiagnostics() {
+  if (!m_localDiagnosticsModel)
+    return;
+
+  m_localDiagnosticsModel->clear();
+
+  if (!m_jobStore || m_jobId.isEmpty())
+    return;
+
+  const JobData *job = m_jobStore->getJobById(m_jobId);
+  if (!job)
+    return;
+
+  const JobAttemptData *selectedAttempt = nullptr;
+  for (const auto &attempt : job->attempts) {
+    if (attempt.id == m_currentAttemptId) {
+      selectedAttempt = &attempt;
+      break;
+    }
+  }
+
+  if (!selectedAttempt && !job->attempts.isEmpty()) {
+    selectedAttempt = &job->attempts.first();
+  }
+
+  if (!selectedAttempt)
+    return;
+
+  QVector<QJsonObject> diags;
+
+  for (const QJsonValue &val : selectedAttempt->launchErrors) {
+    QJsonObject errObj;
+    if (val.isObject()) {
+      errObj = val.toObject();
+    } else if (val.isString()) {
+      errObj[QStringLiteral("message")] = val.toString();
+    }
+    if (!errObj.contains(QStringLiteral("jobId"))) {
+      errObj[QStringLiteral("jobId")] = m_jobId;
+    }
+    if (!errObj.contains(QStringLiteral("attemptId"))) {
+      errObj[QStringLiteral("attemptId")] = selectedAttempt->id;
+    }
+    if (!selectedAttempt->julesSessionId.isEmpty() && !errObj.contains(QStringLiteral("sessionId"))) {
+      errObj[QStringLiteral("sessionId")] = selectedAttempt->julesSessionId;
+    }
+    if (!errObj.contains(QStringLiteral("request")) && !selectedAttempt->requestSnapshot.isEmpty()) {
+      errObj[QStringLiteral("request")] = selectedAttempt->requestSnapshot;
+    }
+    if (!errObj.contains(QStringLiteral("response")) && !selectedAttempt->rawResponse.isEmpty()) {
+      errObj[QStringLiteral("response")] = selectedAttempt->rawResponse;
+    }
+    if (!errObj.contains(QStringLiteral("timestamp")) && selectedAttempt->updatedAt.isValid()) {
+      errObj[QStringLiteral("timestamp")] = selectedAttempt->updatedAt.toUTC().toString(Qt::ISODate);
+    }
+    diags.append(errObj);
+  }
+
+  if (diags.isEmpty()) {
+    QString fallback;
+    if (job->lifecycleMetadata.contains(QStringLiteral("lastError"))) {
+      fallback = job->lifecycleMetadata.value(QStringLiteral("lastError")).toString();
+    } else if (job->legacyMetadata.contains(QStringLiteral("lastError"))) {
+      fallback = job->legacyMetadata.value(QStringLiteral("lastError")).toString();
+    } else if (selectedAttempt->rawResponse.contains(QStringLiteral("error"))) {
+      fallback = selectedAttempt->rawResponse.value(QStringLiteral("error")).toString();
+    } else if (selectedAttempt->rawResponse.contains(QStringLiteral("message"))) {
+      fallback = selectedAttempt->rawResponse.value(QStringLiteral("message")).toString();
+    }
+
+    if (!fallback.isEmpty()) {
+      QJsonObject fallbackObj;
+      fallbackObj[QStringLiteral("message")] = fallback;
+      fallbackObj[QStringLiteral("jobId")] = m_jobId;
+      fallbackObj[QStringLiteral("attemptId")] = selectedAttempt->id;
+      if (!selectedAttempt->julesSessionId.isEmpty()) {
+        fallbackObj[QStringLiteral("sessionId")] = selectedAttempt->julesSessionId;
+      }
+      if (!selectedAttempt->requestSnapshot.isEmpty()) {
+        fallbackObj[QStringLiteral("request")] = selectedAttempt->requestSnapshot;
+      }
+      if (!selectedAttempt->rawResponse.isEmpty()) {
+        fallbackObj[QStringLiteral("response")] = selectedAttempt->rawResponse;
+      }
+      if (selectedAttempt->updatedAt.isValid()) {
+        fallbackObj[QStringLiteral("timestamp")] = selectedAttempt->updatedAt.toUTC().toString(Qt::ISODate);
+      }
+      diags.append(fallbackObj);
+    }
+  }
+
+  m_localDiagnosticsModel->setDiagnostics(diags);
+}
+
+void SessionWindow::selectAttempt(const QString &attemptId) {
+  if (!m_attemptList)
+    return;
+  for (int i = 0; i < m_attemptList->count(); ++i) {
+    QListWidgetItem *item = m_attemptList->item(i);
+    if (item && item->data(Qt::UserRole).toString() == attemptId) {
+      m_attemptList->setCurrentItem(item);
+      return;
+    }
+  }
+}
+
+QAbstractItemModel *SessionWindow::diagnosticsModel() const {
+  if (m_localDiagnosticsModel) {
+    return m_localDiagnosticsModel;
+  }
+  if (m_errorTab) {
+    QListView *view = m_errorTab->findChild<QListView *>();
+    if (view) {
+      return view->model();
+    }
+  }
+  return nullptr;
 }

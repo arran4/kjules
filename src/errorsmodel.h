@@ -52,7 +52,6 @@ public:
   void loadErrors();
   void saveErrors();
   void setErrors(const QJsonArray &errors);
-  void syncJobErrors(const QJsonArray &jobErrors);
   void clear();
 
   int unseenCount() const;
@@ -68,9 +67,6 @@ private:
 
   QVector<QJsonObject> m_operationalErrors;
   QList<bool> m_operationalSeenState;
-  QVector<QJsonObject> m_jobErrors;
-  QSet<QString> m_seenJobKeys;
-  QSet<QString> m_dismissedJobKeys;
   int m_unseenCount = 0;
   QString m_filename;
 };

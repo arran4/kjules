@@ -14,8 +14,8 @@
 #include <QVBoxLayout>
 
 ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
-    : QDialog(parent), m_row(queueRow), m_requestData(item.requestData), m_lastResponse(item.lastResponse),
-      m_lastError(item.lastError) {
+    : QDialog(parent), m_row(queueRow), m_isQueueItem(true), m_requestData(item.requestData),
+      m_lastResponse(item.lastResponse), m_lastError(item.lastError) {
   setWindowTitle(i18n("Queue Error Details"));
   setupUi();
 }
@@ -23,9 +23,9 @@ ErrorWindow::ErrorWindow(int queueRow, const QueueItem &item, QWidget *parent)
 ErrorWindow::ErrorWindow(int errorRow, const QJsonObject &requestData, const QString &lastResponse,
                          const QString &lastError, const QString &httpDetails, const QString &errorDetails,
                          QWidget *parent)
-    : QDialog(parent), m_row(errorRow), m_requestData(requestData), m_lastResponse(lastResponse),
+    : QDialog(parent), m_row(errorRow), m_isQueueItem(false), m_requestData(requestData), m_lastResponse(lastResponse),
       m_lastError(lastError), m_httpDetails(httpDetails), m_errorDetails(errorDetails) {
-  setWindowTitle(i18n("Error Details"));
+  setWindowTitle(i18n("Diagnostic Details"));
   setupUi();
 }
 
@@ -74,8 +74,10 @@ void ErrorWindow::setupUi() {
 
   QPushButton *deleteBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete"), this);
   connect(deleteBtn, &QPushButton::clicked, [this]() {
-    if (QMessageBox::question(this, i18n("Remove Task"), i18n("Remove this task from the queue?")) ==
-        QMessageBox::Yes) {
+    QString title = m_isQueueItem ? i18n("Remove Task") : i18n("Delete Diagnostic");
+    QString msg = m_isQueueItem ? i18n("Remove this task from the queue?")
+                                : i18n("Are you sure you want to delete this diagnostic?");
+    if (QMessageBox::question(this, title, msg) == QMessageBox::Yes) {
       Q_EMIT deleteRequested(m_row);
       accept();
     }
@@ -109,6 +111,14 @@ void ErrorWindow::setupUi() {
 
   QPushButton *copyErrorBtn = new QPushButton(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy Error"), this);
   connect(copyErrorBtn, &QPushButton::clicked, this, &ErrorWindow::onCopyError);
+
+  if (!m_isQueueItem) {
+    editBtn->hide();
+    draftBtn->hide();
+    templateBtn->hide();
+    sendNowBtn->hide();
+    requeueBtn->hide();
+  }
 
   actionsLayout->addWidget(editBtn);
   actionsLayout->addWidget(deleteBtn);

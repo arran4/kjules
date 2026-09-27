@@ -53,6 +53,7 @@
 #include <KZip>
 #include <QAbstractItemView>
 #include <QAction>
+#include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QCoreApplication>
@@ -374,16 +375,16 @@ void MainWindow::setupUi() {
   // Blocked View
   setupBlockedTab();
 
-  // Errors View
-  QWidget *errTab = new QWidget(this);
-  errTab->setObjectName(QStringLiteral("errorsTab"));
-  setupErrorsTab(errTab);
-  m_tabWidget->addTab(errTab, i18n("Errors"));
+  // Diagnostics View
+  QWidget *diagTab = new QWidget(this);
+  diagTab->setObjectName(QStringLiteral("diagnosticsTab"));
+  setupDiagnosticsTab(diagTab);
+  m_tabWidget->addTab(diagTab, i18n("Diagnostics"));
 
   mainLayout->addWidget(m_tabWidget);
 
   connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
-    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("errorsTab")) {
+    if (m_tabWidget->widget(index)->objectName() == QStringLiteral("diagnosticsTab")) {
       m_errorsModel->markAllSeen();
     }
   });
@@ -1670,9 +1671,9 @@ void MainWindow::setupBlockedTab() {
   updateBlockedTabVisibility();
 }
 
-void MainWindow::setupErrorsTab(QWidget *tab) {
+void MainWindow::setupDiagnosticsTab(QWidget *tab) {
   QVBoxLayout *errLayout = new QVBoxLayout(tab);
-  // Errors View
+  // Diagnostics View
   m_errorsFilter = new QLineEdit(this);
   m_errorsFilter->setPlaceholderText(i18n("Filter diagnostics..."));
   errLayout->addWidget(m_errorsFilter);
@@ -1699,117 +1700,33 @@ void MainWindow::setupErrorsTab(QWidget *tab) {
         m_errorsView->setCurrentIndex(index);
       }
       QMenu menu;
-      QAction *editAction = menu.addAction(i18n("Edit / Modify"));
-      QAction *rawTranscriptAction = menu.addAction(i18n("Raw Transcript"));
-      QAction *requeueAction = menu.addAction(i18n("Requeue"));
-      QAction *copyTemplateAction = menu.addAction(i18n("Copy as Template"));
+      QAction *detailsAction = menu.addAction(i18n("Diagnostic Details"));
+      QAction *copyErrorAction = menu.addAction(i18n("Copy Error"));
       QAction *deleteAction = menu.addAction(i18n("Delete"));
 
-      connect(editAction, &QAction::triggered, [this]() {
+      connect(detailsAction, &QAction::triggered, [this]() {
         QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
         for (const QModelIndex &idx : selectedRows) {
-          onErrorActivated(idx);
+          showDiagnosticDetails(idx.row());
         }
       });
 
-      connect(copyTemplateAction, &QAction::triggered, [this, index]() {
-        SaveDialog dlg(QStringLiteral("Template"), this);
-        if (dlg.exec() == QDialog::Accepted) {
-          QJsonObject errData = m_errorsModel->getError(index.row());
-          QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-          req[QStringLiteral("name")] = dlg.nameOrComment();
-          req[QStringLiteral("description")] = dlg.description();
-          m_templatesModel->addTemplate(req);
-          updateStatus(i18n("Template created from error item."));
-        }
+      connect(copyErrorAction, &QAction::triggered, [this, index]() {
+        QJsonObject errData = m_errorsModel->getError(index.row());
+        QString errorMsg = errData.value(QStringLiteral("message")).toString();
+        QApplication::clipboard()->setText(errorMsg);
+        updateStatus(i18n("Error copied to clipboard."));
       });
 
-      connect(requeueAction, &QAction::triggered, [this]() {
-        QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
-        QList<int> rowsToRequeue = getUniqueSortedRows(selectedRows, m_errorsView);
-
-        for (int row : rowsToRequeue) {
-          QJsonObject errData = m_errorsModel->getError(row);
-          QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-          m_queueModel->enqueue(req);
-          m_errorsModel->removeError(row);
-        }
-        if (!rowsToRequeue.isEmpty()) {
-          updateStatus(i18np("Requeued 1 error item.", "Requeued %1 error items.", rowsToRequeue.size()));
-        }
-      });
-
-      connect(rawTranscriptAction, &QAction::triggered, [this]() {
-        QModelIndexList selectedRows = m_errorsView->selectionModel()->selectedRows();
-        for (const QModelIndex &idx : selectedRows) {
-          QJsonObject errorData = m_errorsModel->getError(idx.row());
-          QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
-          QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
-          QString errorStr = errorData.value(QStringLiteral("message")).toString();
-          QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
-          QString errorDetails = errorData.value(QStringLiteral("details")).toString();
-
-          ErrorWindow *window = new ErrorWindow(
-              idx.row(), request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)), errorStr,
-              httpDetails, errorDetails, this);
-          connect(window, &ErrorWindow::editRequested, [this](int row) {
-            QModelIndex idx = m_errorsModel->index(row, 0);
-            onErrorActivated(idx);
-          });
-          connect(window, &ErrorWindow::deleteRequested, [this](int row) {
-            m_errorsModel->removeError(row);
-            updateStatus(i18n("Diagnostic removed."));
-          });
-          connect(window, &ErrorWindow::draftRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            m_draftsModel->addDraft(req);
-            m_errorsModel->removeError(row);
-            updateStatus(i18n("Error converted to draft."));
-          });
-          connect(window, &ErrorWindow::templateRequested, [this](int row) {
-            SaveDialog dlg(QStringLiteral("Template"), this);
-            if (dlg.exec() == QDialog::Accepted) {
-              QJsonObject errData = m_errorsModel->getError(row);
-              QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-              req[QStringLiteral("name")] = dlg.nameOrComment();
-              req[QStringLiteral("description")] = dlg.description();
-              m_templatesModel->addTemplate(req);
-              updateStatus(i18n("Template created from error item."));
-            }
-          });
-          connect(window, &ErrorWindow::sendNowRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            m_errorsModel->removeError(row);
-
-            QueueItem item;
-            item.requestData = req;
-            sendItemNow(item, row, false, errData);
-
-            updateStatus(i18n("Sending error item immediately..."));
-          });
-          connect(window, &ErrorWindow::remapSourceRequested, [this](int row) {
-            const QString source = SourceFixer::source(m_errorsModel->getError(row));
-            showFixSourcesDialog(source);
-          });
-          connect(window, &ErrorWindow::requeueRequested, [this](int row) {
-            QJsonObject errData = m_errorsModel->getError(row);
-            QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-            m_errorsModel->removeError(row);
-            m_queueModel->enqueue(req);
-            updateStatus(i18n("Error item requeued."));
-          });
-
-          window->setAttribute(Qt::WA_DeleteOnClose);
-          window->show();
-        }
-      });
       connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteErrors);
       menu.exec(m_errorsView->mapToGlobal(pos));
     }
   });
-  connect(m_errorsView, &QListView::doubleClicked, this, &MainWindow::onErrorActivated);
+  connect(m_errorsView, &QListView::doubleClicked, this, [this](const QModelIndex &idx) {
+    if (idx.isValid()) {
+      showDiagnosticDetails(idx.row());
+    }
+  });
 }
 
 void MainWindow::setupStatusBar() {
@@ -1826,7 +1743,7 @@ void MainWindow::setupStatusBar() {
   m_unseenErrorLabel->hide(); // Initially hidden if no errors
   connect(m_unseenErrorLabel, &ClickableLabel::clicked, this, [this]() {
     for (int i = 0; i < m_tabWidget->count(); ++i) {
-      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("errorsTab")) {
+      if (m_tabWidget->widget(i)->objectName() == QStringLiteral("diagnosticsTab")) {
         m_tabWidget->setCurrentIndex(i);
         break;
       }
@@ -4386,20 +4303,6 @@ void MainWindow::sendItemNow(const QueueItem &item, int originRow, bool sourceIs
     m_apiManager->createSessionAsync(req, job->id, attempt.id);
   }
 }
-void MainWindow::requeueError(int sourceRow) {
-  QJsonObject errData = m_errorsModel->getError(sourceRow);
-  QJsonObject req = errData.value(QStringLiteral("request")).toObject();
-  QueueItem item;
-  item.requestData = req;
-  if (errData.contains(QStringLiteral("pastErrors"))) {
-    item.pastErrors = errData.value(QStringLiteral("pastErrors")).toArray();
-  }
-  QJsonObject strippedError = errData;
-  strippedError.remove(QStringLiteral("pastErrors"));
-  item.pastErrors.append(strippedError);
-  m_queueModel->enqueueItem(item);
-  m_errorsModel->removeError(sourceRow);
-}
 
 void MainWindow::showErrorDetails(int row, QueueModel *model) {
   QueueItem item = model->getItem(row);
@@ -4569,14 +4472,10 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
         onMoveRequested(jobId, insertAt);
         editQueueItem(insertAt);
       } else {
-        QJsonObject editableError = errDataJson;
-        editableError[QStringLiteral("request")] = requestCopy;
-        editableError[QStringLiteral("response")] = response;
-        editableError[QStringLiteral("message")] = errorString;
-        editableError[QStringLiteral("httpDetails")] = httpDetails;
-        editableError[QStringLiteral("timestamp")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-        m_errorsModel->addErrorObj(editableError);
-        onErrorActivated(m_errorsModel->index(0, 0));
+        auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, !m_apiManager->apiKey().isEmpty(), this);
+        window->setInitialData(requestCopy);
+        connectNewSessionDialog(window);
+        window->show();
       }
       return;
     } else if (remapBtn && msgBox.clickedButton() == remapBtn) {
@@ -4668,10 +4567,7 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
       }
 
       if (targetRow != -1) {
-        QModelIndex idx = m_errorsModel->index(targetRow, 0);
-        if (idx.isValid()) {
-          onErrorActivated(idx);
-        }
+        showDiagnosticDetails(targetRow);
       }
     });
 
@@ -4685,35 +4581,25 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
   }
 }
 
-void MainWindow::onErrorActivated(const QModelIndex &index) {
-  QJsonObject errorData = m_errorsModel->getError(index.row());
+void MainWindow::showDiagnosticDetails(int row) {
+  if (row < 0 || row >= m_errorsModel->rowCount())
+    return;
+
+  QJsonObject errorData = m_errorsModel->getError(row);
   QJsonObject request = errorData.value(QStringLiteral("request")).toObject();
+  QJsonObject response = errorData.value(QStringLiteral("response")).toObject();
+  QString errorStr = errorData.value(QStringLiteral("message")).toString();
+  QString httpDetails = errorData.value(QStringLiteral("httpDetails")).toString();
+  QString errorDetails = errorData.value(QStringLiteral("details")).toString();
 
-  bool hasApiKey = !m_apiManager->apiKey().isEmpty();
-  auto window = new NewSessionDialog(m_sourceModel, m_templatesModel, hasApiKey, this);
-  window->setInitialData(request);
-
-  QPersistentModelIndex persistentIndex(index);
-
-  connectNewSessionDialog(window);
-  connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency, int priority,
-                                  const QString &queueAction) {
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction);
-            if (persistentIndex.isValid()) {
-              m_errorsModel->removeError(persistentIndex.row());
-            }
-          });
-
-  connect(window, &NewSessionDialog::saveDraftRequested, [this, persistentIndex](const QJsonObject &d) {
-    m_draftsModel->addDraft(d);
-    if (persistentIndex.isValid()) {
-      m_errorsModel->removeError(persistentIndex.row());
-    }
-    updateStatus(i18n("Draft saved and error removed."));
+  ErrorWindow *window =
+      new ErrorWindow(row, request, QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Indented)),
+                      errorStr, httpDetails, errorDetails, this);
+  connect(window, &ErrorWindow::deleteRequested, [this](int r) {
+    m_errorsModel->removeError(r);
+    updateStatus(i18n("Diagnostic removed."));
   });
-
+  window->setAttribute(Qt::WA_DeleteOnClose);
   window->show();
 }
 
@@ -6534,7 +6420,6 @@ void MainWindow::onUnseenErrorsCountChanged(int count) {
 }
 
 void MainWindow::syncModelsFromJobStore() {
-  QJsonArray jobErrors;
   QVector<QueueItem> queueItems;
   QSet<QString> queuedJobs;
   for (int row = 0; row < m_queueModel->size(); ++row) {
@@ -6572,32 +6457,6 @@ void MainWindow::syncModelsFromJobStore() {
                              ? QString()
                              : attempt.launchErrors.last().toObject().value(QStringLiteral("message")).toString();
         item.lastTry = attempt.updatedAt;
-
-        QJsonObject errorObj;
-        errorObj[QStringLiteral("message")] = item.lastError;
-        errorObj[QStringLiteral("request")] = attempt.requestSnapshot;
-        errorObj[QStringLiteral("jobId")] = job.id;
-        errorObj[QStringLiteral("attemptId")] = attempt.id;
-        if (!attempt.julesSessionId.isEmpty()) {
-          errorObj[QStringLiteral("sessionId")] = attempt.julesSessionId;
-        }
-        if (!attempt.launchErrors.isEmpty()) {
-          QJsonObject lastErr = attempt.launchErrors.last().toObject();
-          if (lastErr.contains(QStringLiteral("details")))
-            errorObj[QStringLiteral("details")] = lastErr.value(QStringLiteral("details"));
-          if (lastErr.contains(QStringLiteral("httpDetails")))
-            errorObj[QStringLiteral("httpDetails")] = lastErr.value(QStringLiteral("httpDetails"));
-          if (lastErr.contains(QStringLiteral("response")))
-            errorObj[QStringLiteral("response")] = lastErr.value(QStringLiteral("response"));
-        }
-        if (attempt.updatedAt.isValid()) {
-          errorObj[QStringLiteral("timestamp")] = attempt.updatedAt.toUTC().toString(Qt::ISODate);
-        }
-        QString source = job.canonicalRequest.value(QStringLiteral("source")).toString();
-        if (!source.isEmpty()) {
-          errorObj[QStringLiteral("sourceId")] = source;
-        }
-        jobErrors.append(errorObj);
       }
     }
 
@@ -6649,7 +6508,6 @@ void MainWindow::syncModelsFromJobStore() {
 
   m_queueModel->setItems(queueItems);
   m_holdingModel->setItems(holdingItems);
-  m_errorsModel->syncJobErrors(jobErrors);
   m_sessionModel->setSessions(followingArray);
   m_archiveModel->setSessions(archiveArray);
 }

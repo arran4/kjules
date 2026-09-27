@@ -112,7 +112,7 @@ private Q_SLOTS:
   void onHoldingActivated(const QModelIndex &index);
   void onHoldingContextMenu(const QPoint &pos);
   void onBlockedContextMenu(const QPoint &pos);
-  void onErrorActivated(const QModelIndex &index);
+  void showDiagnosticDetails(int row);
   void onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request,
                                const ApiError &apiError, const QString &httpDetails);
   void onSessionActivated(const QModelIndex &index);
@@ -162,7 +162,6 @@ private Q_SLOTS:
   void editQueueItem(int row);
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row, QueueModel *model);
-  void requeueError(int sourceRow);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void backupData();
   void restoreData();
@@ -217,7 +216,7 @@ private:
   void setupHoldingTab();
   void mergeLegacyData();
   void setupBlockedTab();
-  void setupErrorsTab(QWidget *tab);
+  void setupDiagnosticsTab(QWidget *tab);
   void setupStatusBar();
   void setupTrayIcon();
   void createActions();

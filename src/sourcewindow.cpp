@@ -215,6 +215,7 @@ void SourceWindow::setupUi() {
     ActivityLogWindow::instance()->activateWindow();
   });
   m_unseenErrorLabel = new ClickableLabel(this);
+  m_unseenErrorLabel->setObjectName(QStringLiteral("unseenErrorLabel"));
   m_unseenErrorLabel->hide();
 
   statusBar()->addWidget(m_statusLabel);

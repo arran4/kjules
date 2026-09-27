@@ -554,83 +554,150 @@ private Q_SLOTS:
     QCOMPARE(window.currentVariantRequest().value(QStringLiteral("prompt")).toString(), QStringLiteral("Beta Prompt"));
   }
 
-  void testDiagnosticIdentityAndAttemptFiltering() {
+  void testJobAttemptDiagnosticsOwnershipAndIsolation() {
     QTemporaryDir dir;
     QString errPath = dir.path() + QStringLiteral("/errors.json");
     ErrorsModel errorsModel(nullptr, errPath);
 
-    // 1. Unrelated operational diagnostic (no jobId, sessionId = "sess_other")
-    QJsonObject opErr1;
-    opErr1[QStringLiteral("message")] = QStringLiteral("Operational error other session");
-    opErr1[QStringLiteral("sessionId")] = QStringLiteral("sess_other");
-    errorsModel.addErrorObj(opErr1);
+    // 4. Global ErrorsModel contains an unrelated operational diagnostic
+    QJsonObject opErr;
+    opErr[QStringLiteral("message")] = QStringLiteral("Operational network failure");
+    opErr[QStringLiteral("sourceId")] = QStringLiteral("sources/github/other/repo");
+    errorsModel.addErrorObj(opErr);
+    QCOMPARE(errorsModel.rowCount(), 1);
 
-    // 2. Unrelated operational diagnostic (no jobId, no sessionId)
-    QJsonObject opErr2;
-    opErr2[QStringLiteral("message")] = QStringLiteral("Operational error no session");
-    errorsModel.addErrorObj(opErr2);
+    JobStore store;
 
-    // Sync job errors from JobStore:
-    // 3. Job diagnostic for job_1, attempt_1: FAILED dispatch with NO remote session ID
-    QJsonObject jobErr1;
-    jobErr1[QStringLiteral("message")] = QStringLiteral("Pre-launch validation failed");
-    jobErr1[QStringLiteral("jobId")] = QStringLiteral("job_1");
-    jobErr1[QStringLiteral("attemptId")] = QStringLiteral("att_1");
-    // Notice: NO sessionId
+    // 1. Job with attempt A and attempt B
+    JobData job;
+    job.id = QStringLiteral("job_boundary_test");
+    job.source = QStringLiteral("sources/github/kde/kjules");
+    job.startingBranch = QStringLiteral("main");
 
-    // 4. Job diagnostic for job_1, attempt_2: FAILED with remote session ID
-    QJsonObject jobErr2;
-    jobErr2[QStringLiteral("message")] = QStringLiteral("Jules remote execution error");
-    jobErr2[QStringLiteral("jobId")] = QStringLiteral("job_1");
-    jobErr2[QStringLiteral("attemptId")] = QStringLiteral("att_2");
-    jobErr2[QStringLiteral("sessionId")] = QStringLiteral("remote_sess_2");
+    // 2. Attempt A has a unique structured diagnostic (failed before session: no julesSessionId)
+    JobAttemptData attA;
+    attA.id = QStringLiteral("att_A");
+    attA.julesState = QStringLiteral("FAILED");
+    attA.launchErrors =
+        QJsonArray{QJsonObject{{QStringLiteral("message"), QStringLiteral("Structured error for attempt A")}}};
 
-    // 5. Operational diagnostic tied to remote_sess_2 (e.g. from API manager during execution)
-    QJsonObject opErr3;
-    opErr3[QStringLiteral("message")] = QStringLiteral("API call error on remote session");
-    opErr3[QStringLiteral("sessionId")] = QStringLiteral("remote_sess_2");
-    errorsModel.addErrorObj(opErr3);
+    // 3. Attempt B has a different structured diagnostic
+    JobAttemptData attB;
+    attB.id = QStringLiteral("att_B");
+    attB.julesState = QStringLiteral("FAILED");
+    attB.launchErrors =
+        QJsonArray{QJsonObject{{QStringLiteral("message"), QStringLiteral("Structured error for attempt B")}}};
 
-    // 6. Job diagnostic for another job
-    QJsonObject jobErrOther;
-    jobErrOther[QStringLiteral("message")] = QStringLiteral("Other job failure");
-    jobErrOther[QStringLiteral("jobId")] = QStringLiteral("job_other");
-    jobErrOther[QStringLiteral("attemptId")] = QStringLiteral("att_x");
+    job.attempts = {attA, attB};
+    store.addJob(job);
 
-    QJsonArray jobErrors{jobErr1, jobErr2, jobErrOther};
-    errorsModel.syncJobErrors(jobErrors);
+    SessionWindow window(job.id, &store, nullptr, &errorsModel);
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
 
-    // Test SessionErrorFilterProxyModel:
-    SessionErrorFilterProxyModel proxy(QStringLiteral(""));
-    proxy.setSourceModel(&errorsModel);
+    QAbstractItemModel *diagModel = window.diagnosticsModel();
+    QVERIFY(diagModel != nullptr);
 
-    // Target attempt 1 (job_1, att_1, NO remote session):
-    proxy.setFilterTarget(QStringLiteral("job_1"), QStringLiteral("att_1"), QString());
-    // Should accept ONLY jobErr1 (pre-launch failure with no remote session).
-    // Sibling attempt_2, other job, and operational diagnostics must not leak!
-    QCOMPARE(proxy.rowCount(), 1);
-    QCOMPARE(proxy.data(proxy.index(0, 0), ErrorsModel::MessageRole).toString(),
-             QStringLiteral("Pre-launch validation failed"));
+    // 5. Selecting attempt A shows only A
+    window.selectAttempt(QStringLiteral("att_A"));
+    QCOMPARE(diagModel->rowCount(), 1);
+    QCOMPARE(diagModel->data(diagModel->index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Structured error for attempt A"));
 
-    // Switch selection to sibling attempt 2 (job_1, att_2, remote_sess_2):
-    proxy.setFilterTarget(QStringLiteral("job_1"), QStringLiteral("att_2"), QStringLiteral("remote_sess_2"));
-    // Should accept jobErr2 AND opErr3 (both associated with attempt 2 / remote_sess_2).
-    // attempt 1 must disappear!
-    QCOMPARE(proxy.rowCount(), 2);
-    QStringList msgs;
-    for (int i = 0; i < proxy.rowCount(); ++i) {
-      msgs.append(proxy.data(proxy.index(i, 0), ErrorsModel::MessageRole).toString());
+    // 9. Global operational diagnostic never appears in the Job-local model
+    for (int i = 0; i < diagModel->rowCount(); ++i) {
+      QVERIFY(diagModel->data(diagModel->index(i, 0), ErrorsModel::MessageRole).toString() !=
+              QStringLiteral("Operational network failure"));
     }
-    QVERIFY(msgs.contains(QStringLiteral("Jules remote execution error")));
-    QVERIFY(msgs.contains(QStringLiteral("API call error on remote session")));
-    QVERIFY(!msgs.contains(QStringLiteral("Pre-launch validation failed")));
 
-    // Standalone legacy SessionWindow mode: filter by remote session ID
-    SessionErrorFilterProxyModel legacyProxy(QStringLiteral("sess_other"));
+    // 6. Switching to B shows only B
+    window.selectAttempt(QStringLiteral("att_B"));
+    QCOMPARE(diagModel->rowCount(), 1);
+    QCOMPARE(diagModel->data(diagModel->index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Structured error for attempt B"));
+
+    // 8. No sibling-attempt accumulation: Attempt A is not present
+    for (int i = 0; i < diagModel->rowCount(); ++i) {
+      QVERIFY(diagModel->data(diagModel->index(i, 0), ErrorsModel::MessageRole).toString() !=
+              QStringLiteral("Structured error for attempt A"));
+      QVERIFY(diagModel->data(diagModel->index(i, 0), ErrorsModel::MessageRole).toString() !=
+              QStringLiteral("Operational network failure"));
+    }
+
+    // 7. Switching back to A shows only A
+    window.selectAttempt(QStringLiteral("att_A"));
+    QCOMPARE(diagModel->rowCount(), 1);
+    QCOMPARE(diagModel->data(diagModel->index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Structured error for attempt A"));
+
+    // 10. Failed-before-session / failed-only Job diagnostics are inspectable
+    // Both attA and attB had no remote Jules session and were FAILED; both were inspected above.
+    // Also test zero-attempt failed Job inspectability:
+    JobData zeroJob;
+    zeroJob.id = QStringLiteral("job_zero_failed");
+    zeroJob.source = QStringLiteral("sources/github/kde/kjules");
+    zeroJob.lifecycleMetadata[QStringLiteral("lastError")] = QStringLiteral("Pre-dispatch configuration invalid");
+    store.addJob(zeroJob);
+
+    SessionWindow zeroWindow(zeroJob.id, &store, nullptr, &errorsModel);
+    zeroWindow.setAttribute(Qt::WA_DeleteOnClose, false);
+    QLabel *zeroErrLabel = zeroWindow.findChild<QLabel *>(QStringLiteral("zeroErrorLabel"));
+    QVERIFY(zeroErrLabel != nullptr);
+    QVERIFY(zeroErrLabel->text().contains(QStringLiteral("Pre-dispatch configuration invalid")));
+    // Global errorsModel was not polluted by zero-attempt job
+    QCOMPARE(errorsModel.rowCount(), 1);
+
+    // 11. Legacy lastError fallback appears when structured diagnostics are absent
+    JobData legacyJob;
+    legacyJob.id = QStringLiteral("job_legacy_fallback");
+    JobAttemptData legAtt;
+    legAtt.id = QStringLiteral("att_leg");
+    legAtt.julesState = QStringLiteral("FAILED");
+    // No launchErrors
+    legacyJob.attempts = {legAtt};
+    legacyJob.lifecycleMetadata[QStringLiteral("lastError")] = QStringLiteral("Legacy timeout fallback");
+    store.addJob(legacyJob);
+
+    SessionWindow legWindow(legacyJob.id, &store, nullptr, &errorsModel);
+    legWindow.setAttribute(Qt::WA_DeleteOnClose, false);
+    legWindow.selectAttempt(QStringLiteral("att_leg"));
+    QAbstractItemModel *legModel = legWindow.diagnosticsModel();
+    QVERIFY(legModel != nullptr);
+    QCOMPARE(legModel->rowCount(), 1);
+    QCOMPARE(legModel->data(legModel->index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Legacy timeout fallback"));
+
+    // 12. Structured diagnostic + equivalent legacy fallback does not produce a duplicate
+    JobData noDupJob;
+    noDupJob.id = QStringLiteral("job_no_dup");
+    JobAttemptData dupAtt;
+    dupAtt.id = QStringLiteral("att_dup");
+    dupAtt.julesState = QStringLiteral("FAILED");
+    dupAtt.launchErrors =
+        QJsonArray{QJsonObject{{QStringLiteral("message"), QStringLiteral("Structured error content")}}};
+    noDupJob.attempts = {dupAtt};
+    noDupJob.lifecycleMetadata[QStringLiteral("lastError")] = QStringLiteral("Structured error content");
+    store.addJob(noDupJob);
+
+    SessionWindow noDupWindow(noDupJob.id, &store, nullptr, &errorsModel);
+    noDupWindow.setAttribute(Qt::WA_DeleteOnClose, false);
+    noDupWindow.selectAttempt(QStringLiteral("att_dup"));
+    QAbstractItemModel *noDupModel = noDupWindow.diagnosticsModel();
+    QVERIFY(noDupModel != nullptr);
+    QCOMPARE(noDupModel->rowCount(), 1);
+    QCOMPARE(noDupModel->data(noDupModel->index(0, 0), ErrorsModel::MessageRole).toString(),
+             QStringLiteral("Structured error content"));
+
+    // Standalone legacy SessionWindow mode: filter operational ErrorsModel by remote session ID
+    QJsonObject opSessErr;
+    opSessErr[QStringLiteral("message")] = QStringLiteral("Standalone session operational error");
+    opSessErr[QStringLiteral("sessionId")] = QStringLiteral("sess_standalone");
+    errorsModel.addErrorObj(opSessErr);
+
+    SessionErrorFilterProxyModel legacyProxy(QStringLiteral("sess_standalone"));
     legacyProxy.setSourceModel(&errorsModel);
     QCOMPARE(legacyProxy.rowCount(), 1);
     QCOMPARE(legacyProxy.data(legacyProxy.index(0, 0), ErrorsModel::MessageRole).toString(),
-             QStringLiteral("Operational error other session"));
+             QStringLiteral("Standalone session operational error"));
   }
 
   void testAttemptTimestampsExposedAndVisible() {
