@@ -33,6 +33,7 @@ private:
   void setupUi();
 
   int m_row;
+  bool m_isQueueItem = false;
   QJsonObject m_requestData;
   QString m_lastResponse;
   QString m_lastError;

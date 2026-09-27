@@ -537,15 +537,29 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
                                                &errorsModel, &blockedTreeModel, &apiManager);
   window->setAttribute(Qt::WA_DeleteOnClose, false);
 
-  QJsonObject err1;
-  err1[QStringLiteral("sourceId")] = sourceId;
-  errorsModel.addErrorObj(err1);
+  QJsonObject err1_1;
+  err1_1[QStringLiteral("message")] = QStringLiteral("Source A first error");
+  err1_1[QStringLiteral("sourceId")] = sourceId;
+  errorsModel.addErrorObj(err1_1);
+
+  QJsonObject err1_2;
+  err1_2[QStringLiteral("message")] = QStringLiteral("Source A second error");
+  err1_2[QStringLiteral("sourceId")] = sourceId;
+  errorsModel.addErrorObj(err1_2);
 
   QJsonObject err2;
+  err2[QStringLiteral("message")] = QStringLiteral("Source B error");
   err2[QStringLiteral("sourceId")] = QStringLiteral("sources/github/other/repo");
   errorsModel.addErrorObj(err2);
 
-  QCOMPARE(errorsModel.unseenCount(), 2);
+  QCOMPARE(errorsModel.unseenCount(), 3);
+
+  window->show();
+  QCoreApplication::processEvents();
+
+  auto *indicator = window->findChild<ClickableLabel *>(QStringLiteral("unseenErrorLabel"));
+  QVERIFY(indicator != nullptr);
+  QVERIFY(!indicator->isHidden());
 
   QTabWidget *tabWidget = window->findChild<QTabWidget *>();
   QVERIFY(tabWidget != nullptr);
@@ -565,24 +579,29 @@ void TestSourceWindow::testSourceWindowNavigationAndUnseen() {
     }
   }
 
-  window->show();
   QCoreApplication::processEvents();
 
-  bool err1Unseen = true;
+  bool err1_1Unseen = true;
+  bool err1_2Unseen = true;
   bool err2Unseen = true;
 
   for (int row = 0; row < errorsModel.rowCount(); ++row) {
     QModelIndex idx = errorsModel.index(row, 0);
-    if (idx.data(ErrorsModel::SourceIdRole).toString() == sourceId) {
-      err1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
-    } else if (idx.data(ErrorsModel::SourceIdRole).toString() == QStringLiteral("sources/github/other/repo")) {
+    QString msg = idx.data(ErrorsModel::MessageRole).toString();
+    if (msg == QStringLiteral("Source A first error")) {
+      err1_1Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+    } else if (msg == QStringLiteral("Source A second error")) {
+      err1_2Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
+    } else if (msg == QStringLiteral("Source B error")) {
       err2Unseen = idx.data(ErrorsModel::UnseenRole).toBool();
     }
   }
 
-  QCOMPARE(err1Unseen, false);
+  QCOMPARE(err1_1Unseen, false);
+  QCOMPARE(err1_2Unseen, false);
   QCOMPARE(err2Unseen, true);
   QCOMPARE(errorsModel.unseenCount(), 1);
+  QVERIFY(indicator->isHidden());
 }
 
 void TestSourceWindow::testStaleIssueCallbackGuards() {

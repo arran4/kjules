@@ -7,19 +7,6 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
-static QString jobKey(const QJsonObject &obj) {
-  QString jobId = obj.value(QStringLiteral("jobId")).toString();
-  QString attemptId = obj.value(QStringLiteral("attemptId")).toString();
-  if (!jobId.isEmpty() || !attemptId.isEmpty()) {
-    return jobId + QLatin1Char(':') + attemptId;
-  }
-  QString sessionId = obj.value(QStringLiteral("sessionId")).toString();
-  if (!sessionId.isEmpty()) {
-    return sessionId;
-  }
-  return QString();
-}
-
 ErrorsModel::ErrorsModel(QObject *parent, const QString &filename) : QAbstractListModel(parent), m_filename(filename) {
   loadErrors();
 }
@@ -27,16 +14,12 @@ ErrorsModel::ErrorsModel(QObject *parent, const QString &filename) : QAbstractLi
 int ErrorsModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid())
     return 0;
-  return m_operationalErrors.size() + m_jobErrors.size();
+  return m_operationalErrors.size();
 }
 
 QJsonObject ErrorsModel::getError(int row) const {
   if (row >= 0 && row < m_operationalErrors.size()) {
     return m_operationalErrors.at(row);
-  }
-  int jobRow = row - m_operationalErrors.size();
-  if (jobRow >= 0 && jobRow < m_jobErrors.size()) {
-    return m_jobErrors.at(jobRow);
   }
   return QJsonObject();
 }
@@ -67,22 +50,15 @@ QVariant ErrorsModel::data(const QModelIndex &index, int role) const {
   case Qt::DisplayRole:
     return error.value(QStringLiteral("message")).toString(); // Display error message as title
   case SeenRole:
-    if (index.row() < m_operationalErrors.size()) {
+    if (index.row() >= 0 && index.row() < m_operationalSeenState.size()) {
       return m_operationalSeenState.at(index.row());
-    } else {
-      QString key = jobKey(error);
-      return !key.isEmpty() && m_seenJobKeys.contains(key);
     }
-  case UnseenRole: {
-    bool seen = false;
-    if (index.row() < m_operationalErrors.size()) {
-      seen = m_operationalSeenState.at(index.row());
-    } else {
-      QString key = jobKey(error);
-      seen = !key.isEmpty() && m_seenJobKeys.contains(key);
+    return false;
+  case UnseenRole:
+    if (index.row() >= 0 && index.row() < m_operationalSeenState.size()) {
+      return !m_operationalSeenState.at(index.row());
     }
-    return !seen;
-  }
+    return false;
   case SourceIdRole:
     return error.value(QStringLiteral("sourceId")).toString();
   case SessionIdRole:
@@ -141,12 +117,6 @@ void ErrorsModel::updateError(int row, const QJsonObject &errorObj) {
     m_operationalErrors[row] = errorObj;
     Q_EMIT dataChanged(index(row, 0), index(row, 0));
     saveErrors();
-  } else {
-    int jobRow = row - m_operationalErrors.size();
-    if (jobRow >= 0 && jobRow < m_jobErrors.size()) {
-      m_jobErrors[jobRow] = errorObj;
-      Q_EMIT dataChanged(index(row, 0), index(row, 0));
-    }
   }
 }
 
@@ -154,9 +124,6 @@ void ErrorsModel::clear() {
   beginResetModel();
   m_operationalErrors.clear();
   m_operationalSeenState.clear();
-  m_jobErrors.clear();
-  m_seenJobKeys.clear();
-  m_dismissedJobKeys.clear();
   endResetModel();
   updateUnseenCount();
   saveErrors();
@@ -170,18 +137,6 @@ void ErrorsModel::removeError(int row) {
     endRemoveRows();
     updateUnseenCount();
     saveErrors();
-  } else {
-    int jobRow = row - m_operationalErrors.size();
-    if (jobRow >= 0 && jobRow < m_jobErrors.size()) {
-      QString key = jobKey(m_jobErrors[jobRow]);
-      if (!key.isEmpty()) {
-        m_dismissedJobKeys.insert(key);
-      }
-      beginRemoveRows(QModelIndex(), row, row);
-      m_jobErrors.removeAt(jobRow);
-      endRemoveRows();
-      updateUnseenCount();
-    }
   }
 }
 
@@ -258,12 +213,6 @@ void ErrorsModel::updateUnseenCount() {
     if (!seen)
       count++;
   }
-  for (const QJsonObject &jobErr : m_jobErrors) {
-    QString key = jobKey(jobErr);
-    if (key.isEmpty() || !m_seenJobKeys.contains(key)) {
-      count++;
-    }
-  }
   if (m_unseenCount != count) {
     m_unseenCount = count;
     Q_EMIT unseenCountChanged(m_unseenCount);
@@ -277,16 +226,6 @@ void ErrorsModel::markSeen(int row) {
       Q_EMIT dataChanged(index(row, 0), index(row, 0), {SeenRole, UnseenRole});
       updateUnseenCount();
     }
-  } else {
-    int jobRow = row - m_operationalErrors.size();
-    if (jobRow >= 0 && jobRow < m_jobErrors.size()) {
-      QString key = jobKey(m_jobErrors[jobRow]);
-      if (!key.isEmpty() && !m_seenJobKeys.contains(key)) {
-        m_seenJobKeys.insert(key);
-        Q_EMIT dataChanged(index(row, 0), index(row, 0), {SeenRole, UnseenRole});
-        updateUnseenCount();
-      }
-    }
   }
 }
 
@@ -295,13 +234,6 @@ void ErrorsModel::markAllSeen() {
   for (int i = 0; i < m_operationalSeenState.size(); ++i) {
     if (!m_operationalSeenState[i]) {
       m_operationalSeenState[i] = true;
-      changed = true;
-    }
-  }
-  for (const QJsonObject &jobErr : m_jobErrors) {
-    QString key = jobKey(jobErr);
-    if (!key.isEmpty() && !m_seenJobKeys.contains(key)) {
-      m_seenJobKeys.insert(key);
       changed = true;
     }
   }
@@ -323,28 +255,6 @@ void ErrorsModel::setErrors(const QJsonArray &errors) {
   m_operationalSeenState.clear();
   for (int i = 0; i < m_operationalErrors.size(); ++i)
     m_operationalSeenState.append(true);
-  endResetModel();
-  updateUnseenCount();
-}
-
-void ErrorsModel::syncJobErrors(const QJsonArray &jobErrors) {
-  QVector<QJsonObject> newJobErrors;
-  newJobErrors.reserve(jobErrors.size());
-  for (const QJsonValue &val : jobErrors) {
-    QJsonObject obj = val.toObject();
-    QString key = jobKey(obj);
-    if (!key.isEmpty() && m_dismissedJobKeys.contains(key)) {
-      continue;
-    }
-    newJobErrors.append(obj);
-  }
-
-  if (newJobErrors == m_jobErrors) {
-    return;
-  }
-
-  beginResetModel();
-  m_jobErrors = newJobErrors;
   endResetModel();
   updateUnseenCount();
 }

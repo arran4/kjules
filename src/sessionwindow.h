@@ -26,19 +26,6 @@ public:
   explicit SessionErrorFilterProxyModel(const QString &sessionId, QObject *parent = nullptr)
       : QSortFilterProxyModel(parent), m_sessionId(sessionId) {}
 
-  void setFilterTarget(const QString &jobId, const QString &attemptId, const QString &sessionId) {
-    m_jobId = jobId;
-    m_attemptId = attemptId;
-    m_sessionId = sessionId;
-    invalidate();
-  }
-
-  void setJobAndAttempt(const QString &jobId, const QString &attemptId) {
-    m_jobId = jobId;
-    m_attemptId = attemptId;
-    invalidate();
-  }
-
   void setSessionId(const QString &id) {
     m_sessionId = id;
     invalidate();
@@ -48,23 +35,7 @@ public:
     if (!sourceModel())
       return false;
     QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-    QString errorJobId = sourceModel()->data(index, ErrorsModel::JobIdRole).toString();
-    QString errorAttemptId = sourceModel()->data(index, ErrorsModel::AttemptIdRole).toString();
     QString errorSessionId = sourceModel()->data(index, ErrorsModel::SessionIdRole).toString();
-
-    // If this proxy is configured for a Job-aware window
-    if (!m_jobId.isEmpty()) {
-      // If error has a jobId: it must match this job and this attempt
-      if (!errorJobId.isEmpty()) {
-        return errorJobId == m_jobId && errorAttemptId == m_attemptId;
-      }
-      // If error does not have a jobId, but has a sessionId:
-      // It can match if the current attempt has a valid remote sessionId and they match
-      if (!m_sessionId.isEmpty() && !errorSessionId.isEmpty()) {
-        return errorSessionId == m_sessionId;
-      }
-      return false;
-    }
 
     // Standalone legacy SessionWindow: match on sessionId
     if (!m_sessionId.isEmpty() && !errorSessionId.isEmpty()) {
@@ -74,9 +45,37 @@ public:
   }
 
 private:
-  QString m_jobId;
-  QString m_attemptId;
   QString m_sessionId;
+};
+
+class AttemptDiagnosticsModel : public QAbstractListModel {
+  Q_OBJECT
+public:
+  enum Roles {
+    MessageRole = ErrorsModel::MessageRole,
+    RequestRole = ErrorsModel::RequestRole,
+    ResponseRole = ErrorsModel::ResponseRole,
+    HttpDetailsRole = ErrorsModel::HttpDetailsRole,
+    TimestampRole = ErrorsModel::TimestampRole,
+    SeenRole = ErrorsModel::SeenRole,
+    UnseenRole = ErrorsModel::UnseenRole,
+    JobIdRole = ErrorsModel::JobIdRole,
+    AttemptIdRole = ErrorsModel::AttemptIdRole,
+    DetailsRole = Qt::UserRole + 100
+  };
+
+  explicit AttemptDiagnosticsModel(QObject *parent = nullptr);
+
+  int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+  QHash<int, QByteArray> roleNames() const override;
+
+  void setDiagnostics(const QVector<QJsonObject> &diagnostics);
+  void clear();
+  QJsonObject getDiagnostic(int row) const;
+
+private:
+  QVector<QJsonObject> m_diagnostics;
 };
 
 class SessionWindow : public KXmlGuiWindow {
@@ -97,11 +96,15 @@ public:
   QString jobId() const { return m_jobId; }
   QJsonObject currentVariantRequest() const;
   QJsonObject currentSessionData() const;
+  void selectAttempt(const QString &attemptId);
+  QAbstractItemModel *diagnosticsModel() const;
+  AttemptDiagnosticsModel *localDiagnosticsModel() const { return m_localDiagnosticsModel; }
 
 private:
   void setupUi(const QJsonObject &sessionData);
   void renderZeroAttempts();
   void updateAttemptList();
+  void updateAttemptDiagnostics();
   void onAttemptSelected(QListWidgetItem *item);
   void setupActions();
   void updateActionStates();
@@ -146,6 +149,7 @@ private:
 
   QWidget *m_activityTabWidget;
   QWidget *m_errorTab;
+  AttemptDiagnosticsModel *m_localDiagnosticsModel = nullptr;
   class QLineEdit *m_chatInput;
   class QPushButton *m_sendButton;
   QString m_pendingMessage;
