@@ -3174,7 +3174,7 @@ void MainWindow::createFilterActions() {
       }
       sourceConfig.sync();
       updateStatus(i18n("Concurrency limit for %1 updated to %2", id, newLimit));
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
+      QTimer::singleShot(0, this, [this]() { processQueue(); });
     }
   });
 }
@@ -3374,7 +3374,7 @@ void MainWindow::openSourceWindow(const QString &sourceId) {
             showNewSessionDialog(initialData, true);
           });
   connect(window, &SourceWindow::queueProcessingRequested, this,
-          [this]() { QTimer::singleShot(0, this, &MainWindow::processQueue); });
+          [this]() { QTimer::singleShot(0, this, [this]() { processQueue(); }); });
   window->show();
 }
 
@@ -3461,7 +3461,7 @@ void MainWindow::onCreateRepoAndSession(const QString &org, const QString &repoN
   m_queueModel->enqueue(req);
 
   updateStatus(i18n("Added task to queue for creating repo and session."));
-  QTimer::singleShot(0, this, &MainWindow::processQueue);
+  QTimer::singleShot(0, this, [this]() { processQueue(); });
 }
 
 NewSessionDialog *MainWindow::showNewSessionDialog(const QJsonObject &initialData, bool ignoreSelection) {
@@ -3590,7 +3590,7 @@ void MainWindow::toggleQueueState() {
   } else {
     if (!m_queueModel->isEmpty()) {
       // Try processing immediately when unpaused
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
+      QTimer::singleShot(0, this, [this]() { processQueue(); });
     }
     m_toggleQueueAction->setText(i18n("Stop Queue"));
     m_toggleQueueAction->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-pause")));
@@ -3634,7 +3634,7 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
   // Start timer if not running
 
   // Trigger processing immediately if we can
-  QTimer::singleShot(0, this, &MainWindow::processQueue);
+  QTimer::singleShot(0, this, [this]() { processQueue(); });
 }
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
@@ -3659,8 +3659,87 @@ void MainWindow::scheduleNextQueueAttempt() {
   m_queueScheduler.recordNoWork(QDateTime::currentDateTimeUtc(), queueIntervalMins);
 }
 
-bool MainWindow::processQueue() {
-  if (m_isProcessingQueue || m_queuePaused) {
+void MainWindow::promptLoadNextBatch() {
+  if (m_manualBatchActive) {
+    stopManualBatch(i18n("Batch cancelled by user."));
+    return;
+  }
+  bool ok;
+  int target = QInputDialog::getInt(
+      this, i18n("Load Next Batch"),
+      i18n("Enter number of new Jules attempts to load (automatic processing will remain paused):"), 5, 1, 100, 1, &ok);
+  if (ok && target > 0) {
+    startManualBatch(target);
+  }
+}
+
+void MainWindow::startManualBatch(int target) {
+  if (m_manualBatchActive)
+    return;
+
+  if (!m_queuePaused) {
+    toggleQueueState(); // Keep queue paused naturally through normal action
+  }
+
+  m_manualBatchActive = true;
+  m_manualBatchTarget = target;
+  m_manualBatchAccepted = 0;
+  m_manualBatchCurrentAttemptId.clear();
+
+  if (m_loadNextBatchAction) {
+    m_loadNextBatchAction->setText(i18n("Stop Batch (%1/%2)", 0, target));
+    m_loadNextBatchAction->setIcon(QIcon::fromTheme(QStringLiteral("process-stop")));
+  }
+  updateStatus(i18n("Manual batch started. Target: %1", target));
+  continueManualBatch();
+}
+
+void MainWindow::stopManualBatch(const QString &reason) {
+  if (!m_manualBatchActive)
+    return;
+  m_manualBatchActive = false;
+  if (m_manualBatchTimer)
+    m_manualBatchTimer->stop();
+  m_manualBatchCurrentAttemptId.clear();
+
+  if (m_loadNextBatchAction) {
+    m_loadNextBatchAction->setText(i18n("Load Next Batch..."));
+    m_loadNextBatchAction->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
+  }
+  updateStatus(i18n("Manual batch stopped: %1", reason));
+}
+
+void MainWindow::continueManualBatch() {
+  if (!m_manualBatchActive)
+    return;
+
+  if (m_manualBatchAccepted >= m_manualBatchTarget) {
+    stopManualBatch(i18n("Target reached."));
+    return;
+  }
+
+  if (m_isProcessingQueue) {
+    // Wait until current async processing finishes.
+    return;
+  }
+
+  QString attemptId;
+  qDebug() << "Calling processQueue...";
+  bool dispatched = processQueue(true, &attemptId);
+  qDebug() << "processQueue returned:" << dispatched;
+
+  if (dispatched) {
+    m_manualBatchCurrentAttemptId = attemptId;
+  } else {
+    stopManualBatch(i18n("No more eligible queued work or capacity."));
+  }
+}
+
+bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId) {
+  if (m_isProcessingQueue) {
+    return false;
+  }
+  if (m_queuePaused && !bypassPauseGate) {
     return false;
   }
 
@@ -3681,6 +3760,7 @@ bool MainWindow::processQueue() {
     }
   }
 
+  qDebug() << "processQueue check queue empty:" << m_queueModel->isEmpty() << "size:" << m_queueModel->size();
   if (m_queueModel->isEmpty()) {
     return false;
   }
@@ -3795,6 +3875,7 @@ bool MainWindow::processQueue() {
   }
 
   if (dispatchIndex == -1 || !jobToDispatch) {
+    qDebug() << "processQueue return false! dispatchIndex:" << dispatchIndex;
     return false; // No eligible items
   }
 
@@ -3808,6 +3889,9 @@ bool MainWindow::processQueue() {
   JobData dispatchedJob = *jobToDispatch;
   dispatchedJob.recordHistory(QStringLiteral("dispatch"), i18n("Launch attempted"));
   dispatchedJob.attempts.append(attempt);
+  if (dispatchedAttemptId) {
+    *dispatchedAttemptId = attempt.id;
+  }
   dispatchedJob.lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("IN_PROGRESS");
   if (!m_jobStore->updateJobTransactional(dispatchedJob)) {
     qWarning() << "Queue dispatch failed: could not save new attempt to store.";
@@ -3818,6 +3902,8 @@ bool MainWindow::processQueue() {
   m_queueModel->removeItem(dispatchIndex);
 
   int queueIntervalMins = config.readEntry(QStringLiteral("TimerInterval"), 5);
+  if (m_manualBatchDelayMs == 0)
+    queueIntervalMins = 0; // For testing
   m_queueScheduler.recordDispatch(now, queueIntervalMins);
   syncModelsFromJobStore();
 
@@ -3959,6 +4045,28 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
       onError(i18n("Failed to create session: %1", errorMsg));
     }
   }
+
+  if (m_manualBatchActive && success && !m_manualBatchCurrentAttemptId.isEmpty() &&
+      m_manualBatchCurrentAttemptId == attemptId) {
+    m_manualBatchAccepted++;
+    if (m_loadNextBatchAction) {
+      m_loadNextBatchAction->setText(i18n("Stop Batch (%1/%2)", m_manualBatchAccepted, m_manualBatchTarget));
+    }
+  }
+
+  m_manualBatchCurrentAttemptId.clear();
+
+  if (m_manualBatchActive) {
+    if (m_manualBatchAccepted >= m_manualBatchTarget) {
+      stopManualBatch(i18n("Target reached."));
+    } else if (m_manualBatchTimer) {
+      m_manualBatchTimer->start(m_manualBatchDelayMs);
+    }
+  } else {
+    // Only process queue if batch isn't active
+    QTimer::singleShot(0, this, [this]() { processQueue(); });
+  }
+
   updateSelectionDependentActions();
 }
 void MainWindow::onDraftSaved(const QJsonObject &draft) {
@@ -4080,7 +4188,7 @@ void MainWindow::onBlockedContextMenu(const QPoint &pos) {
       item.blockMetadata = meta;
       m_queueModel->updateItem(queueIndex, item);
       m_queueModel->moveItem(queueIndex, 0);
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
+      QTimer::singleShot(0, this, [this]() { processQueue(); });
     });
   }
   menu.exec(m_blockedView->viewport()->mapToGlobal(pos));
@@ -4294,6 +4402,7 @@ void MainWindow::sendItemNow(const QueueItem &item, int originRow, bool sourceIs
   JobData dispatchedJob = *job;
   dispatchedJob.recordHistory(QStringLiteral("dispatch"), i18n("Launch attempted"));
   dispatchedJob.attempts.append(attempt);
+
   if (!m_jobStore->updateJobTransactional(dispatchedJob)) {
     qWarning() << "Failed to persist direct dispatch attempt. Aborting.";
     return;
@@ -5329,7 +5438,7 @@ void MainWindow::onSourcesRefreshFinished(bool complete) {
   if (m_isWaitingForCreatedRepoSource) {
     if (complete && resolvePendingGithubSource()) {
       updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
+      QTimer::singleShot(0, this, [this]() { processQueue(); });
     } else {
       if (!complete) {
         updateStatus(i18n("Source refresh failed or was incomplete while waiting for repository. Waiting for next "
@@ -6621,6 +6730,7 @@ void MainWindow::sendJobNow(const QString &jobId) {
     JobData updated = *job;
     updated.recordHistory(QStringLiteral("dispatch"), i18n("Launch attempted"));
     updated.attempts.append(attempt);
+
     if (m_jobStore->updateJobTransactional(updated)) {
       job = m_jobStore->getJobById(jobId);
       for (int row = 0; row < m_queueModel->size(); ++row) {
@@ -6666,7 +6776,7 @@ void MainWindow::submitVariantForJob(const QString &jobId, const QMultiMap<QStri
         }
         updateStatus(i18n("Variant attempt queued for Job %1", jobId));
       }
-      QTimer::singleShot(0, this, &MainWindow::processQueue);
+      QTimer::singleShot(0, this, [this]() { processQueue(); });
     }
   } else {
     onSessionCreated(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority, queueAction);
