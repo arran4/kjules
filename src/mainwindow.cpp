@@ -4695,7 +4695,6 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
     notification->sendEvent();
   }
 
-
   const bool manualBatchFailure =
       m_manualBatchActive && !m_manualBatchCurrentAttemptId.isEmpty() && m_manualBatchCurrentAttemptId == attemptId;
 

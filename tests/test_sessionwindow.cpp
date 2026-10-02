@@ -46,7 +46,8 @@ public:
     }
     open(QIODevice::ReadOnly);
     QTimer::singleShot(0, this, [this]() {
-      qDebug() << "HELLO FROM MockSimpleNetworkReply timer!"; Q_EMIT readyRead();
+      qDebug() << "HELLO FROM MockSimpleNetworkReply timer!";
+      Q_EMIT readyRead();
       Q_EMIT finished();
     });
   }
@@ -1940,12 +1941,11 @@ void TestSessionWindow::testManualBatch_failurePreservesAttemptAndStops() {
 
   QTRY_COMPARE(failedSpy.count(), 1);
 
-
-
   // Pump event loop to process the mock network reply
-  for(int i=0; i<50; ++i) {
+  for (int i = 0; i < 50; ++i) {
     QTest::qWait(100);
-    if (!window.m_manualBatchActive) break;
+    if (!window.m_manualBatchActive)
+      break;
   }
 
   QVERIFY(!window.m_manualBatchActive);
