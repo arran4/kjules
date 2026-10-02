@@ -3724,9 +3724,7 @@ void MainWindow::continueManualBatch() {
   }
 
   QString attemptId;
-  qDebug() << "Calling processQueue...";
   bool dispatched = processQueue(true, &attemptId);
-  qDebug() << "processQueue returned:" << dispatched;
 
   if (dispatched) {
     m_manualBatchCurrentAttemptId = attemptId;
@@ -3736,6 +3734,7 @@ void MainWindow::continueManualBatch() {
 }
 
 bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId) {
+  qWarning() << "HELLO FROM processQueue";
   if (m_isProcessingQueue) {
     return false;
   }
@@ -3760,7 +3759,6 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
     }
   }
 
-  qDebug() << "processQueue check queue empty:" << m_queueModel->isEmpty() << "size:" << m_queueModel->size();
   if (m_queueModel->isEmpty()) {
     return false;
   }
@@ -4046,29 +4044,35 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
     }
   }
 
-  if (m_manualBatchActive && success && !m_manualBatchCurrentAttemptId.isEmpty() &&
-      m_manualBatchCurrentAttemptId == attemptId) {
-    m_manualBatchAccepted++;
-    if (m_loadNextBatchAction) {
-      m_loadNextBatchAction->setText(i18n("Stop Batch (%1/%2)", m_manualBatchAccepted, m_manualBatchTarget));
+  if (m_manualBatchActive && !m_manualBatchCurrentAttemptId.isEmpty() && m_manualBatchCurrentAttemptId == attemptId) {
+    if (success) {
+      m_manualBatchAccepted++;
+      if (m_loadNextBatchAction) {
+        m_loadNextBatchAction->setText(i18n("Stop Batch (%1/%2)", m_manualBatchAccepted, m_manualBatchTarget));
+      }
     }
-  }
 
-  m_manualBatchCurrentAttemptId.clear();
+    m_manualBatchCurrentAttemptId.clear();
 
-  if (m_manualBatchActive) {
-    if (m_manualBatchAccepted >= m_manualBatchTarget) {
+    if (!success) {
+      if (apiError.type() == ApiError::Type::RateLimit) {
+        stopManualBatch(i18n("Batch aborted due to rate limit/quota."));
+      } else {
+        stopManualBatch(i18n("Batch aborted due to launch failure: %1", errorMsg));
+      }
+    } else if (m_manualBatchAccepted >= m_manualBatchTarget) {
       stopManualBatch(i18n("Target reached."));
     } else if (m_manualBatchTimer) {
       m_manualBatchTimer->start(m_manualBatchDelayMs);
     }
-  } else {
+  } else if (!m_manualBatchActive) {
     // Only process queue if batch isn't active
     QTimer::singleShot(0, this, [this]() { processQueue(); });
   }
 
   updateSelectionDependentActions();
 }
+
 void MainWindow::onDraftSaved(const QJsonObject &draft) {
   m_draftsModel->addDraft(draft);
   updateStatus(i18n("Draft saved."));
@@ -4500,6 +4504,7 @@ void MainWindow::convertQueueItemToDraft(int row) {
 
 void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &attemptId, const QJsonObject &request,
                                          const ApiError &apiError, const QString &httpDetails) {
+
   if (JobData *job = m_jobStore->getJobById(jobId)) {
     JobData updated = *job;
     updated.recordHistory(QStringLiteral("launch-error"), apiError.message());
@@ -4690,11 +4695,31 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
     notification->sendEvent();
   }
 
+
+  const bool manualBatchFailure =
+      m_manualBatchActive && !m_manualBatchCurrentAttemptId.isEmpty() && m_manualBatchCurrentAttemptId == attemptId;
+
+  if (m_isProcessingQueue) {
+    m_isProcessingQueue = false;
+  }
+
+  if (manualBatchFailure) {
+    m_manualBatchCurrentAttemptId.clear();
+    if (isRateLimit) {
+      stopManualBatch(i18n("Batch aborted due to rate limit/quota."));
+    } else {
+      stopManualBatch(i18n("Batch stopped after Jules launch failure: %1", errorString));
+    }
+    return;
+  }
+
   if (isRateLimit) {
     // These are rate-limiting/concurrency errors handled by the queue's wait
     // mechanism. Do not pop up an error modal for them.
     return;
   }
+
+  scheduleNextQueueAttempt();
 }
 
 ErrorWindow *MainWindow::showDiagnosticDetails(int row) {
