@@ -3810,6 +3810,7 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
   int dispatchIndex = -1;
   QueueItem itemToDispatch;
   JobData *jobToDispatch = nullptr;
+  int blockedCount = 0;
 
   QList<JobData> allJobs = m_jobStore->jobs();
   for (int i = 0; i < m_queueModel->size(); ++i) {
@@ -3882,6 +3883,7 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
     m_jobStore->updateJob(*job);
 
     if (blockedByConcurrency && !ignoreConcurrency && !forceBlockBypass) {
+      blockedCount++;
       continue;
     }
 
@@ -3898,7 +3900,10 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
   }
 
   if (dispatchIndex == -1 || !jobToDispatch) {
-    qDebug() << "processQueue return false! dispatchIndex:" << dispatchIndex;
+    if (outReason) {
+      *outReason = (blockedCount > 0) ? i18n("Capacity blocked: waiting for running tasks to finish.")
+                                      : i18n("No eligible queued work.");
+    }
     return false; // No eligible items
   }
 
