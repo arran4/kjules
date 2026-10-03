@@ -3689,7 +3689,7 @@ void MainWindow::promptLoadNextBatch() {
 }
 
 void MainWindow::startManualBatch(int target) {
-  if (m_manualBatchActive)
+  if (m_manualBatchActive || target <= 0)
     return;
 
   if (!m_queuePaused) {
@@ -3989,7 +3989,11 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
 
     if (m_isProcessingQueue) {
       m_isProcessingQueue = false;
-      scheduleNextQueueAttempt();
+      if (m_manualBatchActive) {
+        if (m_manualBatchTimer) m_manualBatchTimer->start(m_manualBatchDelayMs);
+      } else {
+        scheduleNextQueueAttempt();
+      }
     }
   } else {
     m_isWaitingForCreatedRepoSource = false;
@@ -3997,7 +4001,11 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
     onError(i18n("Failed to create GitHub repository: %1", errorMsg));
     if (m_isProcessingQueue) {
       m_isProcessingQueue = false;
-      scheduleNextQueueAttempt();
+      if (m_manualBatchActive) {
+        stopManualBatch(i18n("Batch stopped after repo provisioning failure: %1", errorMsg));
+      } else {
+        scheduleNextQueueAttempt();
+      }
     }
   }
 }
