@@ -1794,26 +1794,12 @@ void TestSessionWindow::testManualBatch_targetReached() {
 
   int initialSize = window.queueModel()->size();
 
-  // 1st dispatch
   window.startManualBatch(3);
-  QTRY_COMPARE(mockNam->createSessionCount, 1);
-  QTRY_COMPARE(window.m_manualBatchAccepted, 1);
-  QTRY_VERIFY(!window.m_isProcessingQueue);
 
-  // 2nd dispatch
-  window.continueManualBatch();
-  QTRY_COMPARE(mockNam->createSessionCount, 2);
-  QTRY_COMPARE(window.m_manualBatchAccepted, 2);
-  QTRY_VERIFY(!window.m_isProcessingQueue);
-
-  // 3rd dispatch
-  window.continueManualBatch();
   QTRY_COMPARE(mockNam->createSessionCount, 3);
   QTRY_COMPARE(window.m_manualBatchAccepted, 3);
-  QTRY_VERIFY(!window.m_isProcessingQueue);
-
-  window.continueManualBatch();
-  QVERIFY(!window.m_manualBatchActive);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QVERIFY(!window.m_isProcessingQueue);
   QCOMPARE(window.queueModel()->size(), initialSize - 3);
 }
 
@@ -1864,24 +1850,12 @@ void TestSessionWindow::testManualBatch_queueExhausted() {
 
   int initialSize = window.queueModel()->size();
 
-  // 1st dispatch
   window.startManualBatch(5);
-
-  QTRY_COMPARE(mockNam->createSessionCount, 1);
-  QTRY_COMPARE(window.m_manualBatchAccepted, 1);
-  QTRY_VERIFY(!window.m_isProcessingQueue);
-
-  // 2nd dispatch
-  window.continueManualBatch();
 
   QTRY_COMPARE(mockNam->createSessionCount, 2);
   QTRY_COMPARE(window.m_manualBatchAccepted, 2);
-  QTRY_VERIFY(!window.m_isProcessingQueue);
-
-  // 3rd dispatch (exhaust)
-  window.continueManualBatch();
-
-  QVERIFY(!window.m_manualBatchActive);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QVERIFY(!window.m_isProcessingQueue);
   QCOMPARE(window.queueModel()->size(), initialSize - 2);
 }
 

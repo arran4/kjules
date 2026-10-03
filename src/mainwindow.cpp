@@ -118,6 +118,10 @@ MainWindow::MainWindow(QWidget *parent)
   connect(m_masterMinuteTimer, &QTimer::timeout, this, &MainWindow::onMasterMinuteTimer);
   m_masterMinuteTimer->start(60000);
 
+  m_manualBatchTimer = new QTimer(this);
+  m_manualBatchTimer->setSingleShot(true);
+  connect(m_manualBatchTimer, &QTimer::timeout, this, &MainWindow::continueManualBatch);
+
   loadQueueSettings();
   createActions();
   setupTrayIcon();
@@ -2934,6 +2938,11 @@ void MainWindow::createQueueActions() {
   actionCollection()->addAction(QStringLiteral("toggle_queue"), m_toggleQueueAction);
   connect(m_toggleQueueAction, &QAction::triggered, this, &MainWindow::toggleQueueState);
 
+  m_loadNextBatchAction = new QAction(i18n("Load Next Batch..."), this);
+  m_loadNextBatchAction->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
+  actionCollection()->addAction(QStringLiteral("load_next_batch"), m_loadNextBatchAction);
+  connect(m_loadNextBatchAction, &QAction::triggered, this, &MainWindow::promptLoadNextBatch);
+
   m_configureConcurrencyLimitAction = new QAction(i18n("Configure Concurrency Limit..."), this);
   actionCollection()->addAction(QStringLiteral("configure_concurrency_limit"), m_configureConcurrencyLimitAction);
 }
@@ -3664,11 +3673,17 @@ void MainWindow::promptLoadNextBatch() {
     stopManualBatch(i18n("Batch cancelled by user."));
     return;
   }
+
+  KConfigGroup config(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  int defaultTarget = config.readEntry("LastManualBatchTarget", 5);
+
   bool ok;
   int target = QInputDialog::getInt(
       this, i18n("Load Next Batch"),
-      i18n("Enter number of new Jules attempts to load (automatic processing will remain paused):"), 5, 1, 100, 1, &ok);
+      i18n("Enter number of new Jules attempts to load (automatic processing will remain paused):"), defaultTarget, 1, 100, 1, &ok);
   if (ok && target > 0) {
+    config.writeEntry("LastManualBatchTarget", target);
+    config.sync();
     startManualBatch(target);
   }
 }
@@ -3734,8 +3749,7 @@ void MainWindow::continueManualBatch() {
 }
 
 bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId) {
-  qWarning() << "HELLO FROM processQueue";
-  if (m_isProcessingQueue) {
+    if (m_isProcessingQueue) {
     return false;
   }
   if (m_queuePaused && !bypassPauseGate) {
