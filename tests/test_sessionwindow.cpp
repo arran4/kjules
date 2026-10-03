@@ -2234,7 +2234,8 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
 
   auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
   window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
-  mockNam->interceptCreateSession = false; // We use interceptCreateRepo
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
   mockNam->interceptCreateRepo = true;
   mockNam->repoStatusCode = 200;
   mockNam->repoResponse = R"({"full_name":"test-org/new-repo"})";
@@ -2243,6 +2244,7 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
                                                                QStringLiteral("repo provision test"),
                                                                QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
   req[QStringLiteral("_kjules_github_owner")] = QStringLiteral("test-org");
+  req[QStringLiteral("_kjules_github_repository")] = QStringLiteral("new-repo");
   req[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
 
   JobData job = JobData::fromRequest(req);
@@ -2259,6 +2261,39 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
 
   window.startManualBatch(1);
   QTRY_COMPARE(mockNam->createRepoCount, 1);
+
+  QVERIFY(window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+  QVERIFY(window.m_queuePaused);
+
+  // Simulate the source being successfully resolved
+  window.m_isWaitingForCreatedRepoSource = false;
+
+  // Directly add the source string to the item so it passes processQueue!
+  QueueItem resolvedItem = window.queueModel()->getItem(0);
+  resolvedItem.requestData[QStringLiteral("source")] = QStringLiteral("sources/github/test-org/new-repo");
+  resolvedItem.requestData.remove(QStringLiteral("_kjules_github_owner"));
+  resolvedItem.requestData.remove(QStringLiteral("_kjules_github_repository"));
+  window.queueModel()->updateItem(0, resolvedItem);
+
+  // Add the source to the SourceModel so that processQueue() recognizes it!
+  QJsonObject sourceObj;
+  sourceObj[QStringLiteral("name")] = QStringLiteral("sources/github/test-org/new-repo");
+  QJsonObject contextObj;
+  contextObj[QStringLiteral("owner")] = QStringLiteral("test-org");
+  contextObj[QStringLiteral("repo")] = QStringLiteral("new-repo");
+  sourceObj[QStringLiteral("githubRepo")] = contextObj;
+  QJsonArray sourcesArray;
+  sourcesArray.append(sourceObj);
+  window.m_sourceModel->addSources(sourcesArray);
+
+  // Let the test continue to fetch the next item as if the timer had fired
+  if (window.m_manualBatchActive) {
+    window.continueManualBatch();
+  }
+
+  QTRY_COMPARE(mockNam->createSessionCount, 1);
   QTRY_VERIFY(!window.m_manualBatchActive);
-  QCOMPARE(window.m_manualBatchAccepted, 0); // Repo creation does not count as session!
+  QCOMPARE(window.m_manualBatchAccepted, 1);
+  QVERIFY(window.m_queuePaused);
 }
