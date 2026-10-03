@@ -3680,7 +3680,8 @@ void MainWindow::promptLoadNextBatch() {
   bool ok;
   int target = QInputDialog::getInt(
       this, i18n("Load Next Batch"),
-      i18n("Enter number of new Jules attempts to load (automatic processing will remain paused):"), defaultTarget, 1, 100, 1, &ok);
+      i18n("Enter number of new Jules attempts to load (automatic processing will remain paused):"), defaultTarget, 1,
+      100, 1, &ok);
   if (ok && target > 0) {
     config.writeEntry("LastManualBatchTarget", target);
     config.sync();
@@ -3721,7 +3722,7 @@ void MainWindow::stopManualBatch(const QString &reason) {
     m_loadNextBatchAction->setText(i18n("Load Next Batch..."));
     m_loadNextBatchAction->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
   }
-  updateStatus(i18n("Manual batch stopped: %1", reason));
+  updateStatus(i18n("Manual batch stopped: %1 (Accepted: %2/%3)", reason, m_manualBatchAccepted, m_manualBatchTarget));
 }
 
 void MainWindow::continueManualBatch() {
@@ -3749,19 +3750,22 @@ void MainWindow::continueManualBatch() {
 }
 
 bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId, QString *outReason) {
-    if (m_isProcessingQueue) {
-    if (outReason) *outReason = i18n("Queue is already processing.");
+  if (m_isProcessingQueue) {
+    if (outReason)
+      *outReason = i18n("Queue is already processing.");
     return false;
   }
   if (m_queuePaused && !bypassPauseGate) {
-    if (outReason) *outReason = i18n("Queue is paused.");
+    if (outReason)
+      *outReason = i18n("Queue is paused.");
     return false;
   }
 
   QDateTime now = QDateTime::currentDateTimeUtc();
 
   if (m_queueScheduler.isBackoffActive(now)) {
-    if (outReason) *outReason = i18n("Queue is in backoff state.");
+    if (outReason)
+      *outReason = i18n("Queue is in backoff state.");
     return false;
   }
 
@@ -3772,13 +3776,15 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
       if (!m_isRefreshingSources) {
         refreshSourcesImpl(true); // Autonomous background refresh to fetch new repo
       }
-      if (outReason) *outReason = i18n("Waiting for repository creation.");
+      if (outReason)
+        *outReason = i18n("Waiting for repository creation.");
       return false;
     }
   }
 
   if (m_queueModel->isEmpty()) {
-    if (outReason) *outReason = i18n("Queue is empty.");
+    if (outReason)
+      *outReason = i18n("Queue is empty.");
     return false;
   }
 
@@ -3990,7 +3996,8 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
     if (m_isProcessingQueue) {
       m_isProcessingQueue = false;
       if (m_manualBatchActive) {
-        if (m_manualBatchTimer) m_manualBatchTimer->start(m_manualBatchDelayMs);
+        if (m_manualBatchTimer)
+          m_manualBatchTimer->start(m_manualBatchDelayMs);
       } else {
         scheduleNextQueueAttempt();
       }
