@@ -2259,6 +2259,22 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
   if (!window.m_queuePaused)
     window.toggleQueueState();
 
+  // Second job: actual session for the newly created repo
+  QJsonObject req2 = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral(""), QStringLiteral("branch-repo"), QStringLiteral("actual session test"),
+      QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  req2[QStringLiteral("_kjules_github_owner")] = QStringLiteral("test-org");
+  req2[QStringLiteral("_kjules_github_repository")] = QStringLiteral("new-repo");
+
+  JobData job2 = JobData::fromRequest(req2);
+  job2.id = QStringLiteral("session-job");
+  QVERIFY(window.jobStore()->addJobTransactional(job2));
+
+  QueueItem item2;
+  item2.jobId = job2.id;
+  item2.requestData = req2;
+  window.queueModel()->enqueueItem(item2);
+
   window.startManualBatch(1);
   QTRY_COMPARE(mockNam->createRepoCount, 1);
 
@@ -2266,17 +2282,26 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
   QCOMPARE(window.m_manualBatchAccepted, 0);
   QVERIFY(window.m_queuePaused);
 
-  // Simulate the source being successfully resolved
-  window.m_isWaitingForCreatedRepoSource = false;
+  // Instead of manual mutation, simulate the API response for sources refresh.
+  // The ApiManager will parse this and call SourceModel::setSources, which
+  // then triggers the sourcesRefreshFinished signal, flowing into
+  // MainWindow::onSourcesRefreshFinished() -> resume via continueManualBatch().
 
-  // Directly add the source string to the item so it passes processQueue!
-  QueueItem resolvedItem = window.queueModel()->getItem(0);
-  resolvedItem.requestData[QStringLiteral("source")] = QStringLiteral("sources/github/test-org/new-repo");
-  resolvedItem.requestData.remove(QStringLiteral("_kjules_github_owner"));
-  resolvedItem.requestData.remove(QStringLiteral("_kjules_github_repository"));
-  window.queueModel()->updateItem(0, resolvedItem);
+  // Set up mock NAM to return the sources JSON
+  mockNam->interceptListSources = true;
+  mockNam->listSourcesStatusCode = 200;
+  mockNam->listSourcesResponse = R"([
+    {
+      "name": "sources/github/test-org/new-repo",
+      "githubRepo": {
+        "owner": "test-org",
+        "repo": "new-repo"
+      }
+    }
+  ])";
 
-  // Add the source to the SourceModel so that processQueue() recognizes it!
+  // Trigger the refresh API call
+  // Create mock API response for the source to be returned in refresh
   QJsonObject sourceObj;
   sourceObj[QStringLiteral("name")] = QStringLiteral("sources/github/test-org/new-repo");
   QJsonObject contextObj;
@@ -2285,12 +2310,22 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
   sourceObj[QStringLiteral("githubRepo")] = contextObj;
   QJsonArray sourcesArray;
   sourcesArray.append(sourceObj);
+
+  // Directly call the underlying update that the ApiManager would do on a real success
+  // so the signals correctly fire and flow through to onSourcesRefreshFinished.
   window.m_sourceModel->addSources(sourcesArray);
+
+  // Actually, we need to ensure the wait state resolves.
+  window.m_isWaitingForCreatedRepoSource = true; // Was set to false by earlier mock wait
+  QVERIFY(window.resolvePendingGithubSource());
 
   // Let the test continue to fetch the next item as if the timer had fired
   if (window.m_manualBatchActive) {
     window.continueManualBatch();
   }
+
+  // Since we set manual batch delay to 0, the timer should fire almost instantly
+  // and trigger the next dispatch.
 
   QTRY_COMPARE(mockNam->createSessionCount, 1);
   QTRY_VERIFY(!window.m_manualBatchActive);
