@@ -3748,17 +3748,20 @@ void MainWindow::continueManualBatch() {
   }
 }
 
-bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId) {
+bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId, QString *outReason) {
     if (m_isProcessingQueue) {
+    if (outReason) *outReason = i18n("Queue is already processing.");
     return false;
   }
   if (m_queuePaused && !bypassPauseGate) {
+    if (outReason) *outReason = i18n("Queue is paused.");
     return false;
   }
 
   QDateTime now = QDateTime::currentDateTimeUtc();
 
   if (m_queueScheduler.isBackoffActive(now)) {
+    if (outReason) *outReason = i18n("Queue is in backoff state.");
     return false;
   }
 
@@ -3769,11 +3772,13 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
       if (!m_isRefreshingSources) {
         refreshSourcesImpl(true); // Autonomous background refresh to fetch new repo
       }
+      if (outReason) *outReason = i18n("Waiting for repository creation.");
       return false;
     }
   }
 
   if (m_queueModel->isEmpty()) {
+    if (outReason) *outReason = i18n("Queue is empty.");
     return false;
   }
 

@@ -138,7 +138,7 @@ private Q_SLOTS:
   void increaseFavouriteRank();
   void decreaseFavouriteRank();
   void setFavouriteRank();
-  bool processQueue(bool bypassPauseGate = false, QString *dispatchedAttemptId = nullptr);
+  bool processQueue(bool bypassPauseGate = false, QString *dispatchedAttemptId = nullptr, QString *outReason = nullptr);
   void scheduleNextQueueAttempt();
   void onMasterMinuteTimer();
   void onMasterSecondTimer();
