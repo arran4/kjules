@@ -3740,12 +3740,13 @@ void MainWindow::continueManualBatch() {
   }
 
   QString attemptId;
-  bool dispatched = processQueue(true, &attemptId);
+  QString outReason;
+  bool dispatched = processQueue(true, &attemptId, &outReason);
 
   if (dispatched) {
     m_manualBatchCurrentAttemptId = attemptId;
   } else {
-    stopManualBatch(i18n("No more eligible queued work or capacity."));
+    stopManualBatch(outReason.isEmpty() ? i18n("No more eligible queued work or capacity.") : outReason);
   }
 }
 
@@ -4068,7 +4069,9 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
     if (m_isProcessingQueue) {
       updateStatus(i18n("Jules session created. Checking for more tasks..."));
       m_isProcessingQueue = false;
-      scheduleNextQueueAttempt();
+      if (!m_manualBatchActive) {
+        scheduleNextQueueAttempt();
+      }
     } else {
       updateStatus(i18n("Jules session created from explicit dispatch."));
     }
@@ -4076,7 +4079,9 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
     if (m_isProcessingQueue) {
       updateStatus(i18n("Failed to process queue task: %1", errorMsg));
       m_isProcessingQueue = false;
-      scheduleNextQueueAttempt();
+      if (!m_manualBatchActive) {
+        scheduleNextQueueAttempt();
+      }
     } else {
       updateStatus(i18n("Failed to create session: %1", errorMsg));
       onError(i18n("Failed to create session: %1", errorMsg));
@@ -4092,6 +4097,12 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
     }
 
     m_manualBatchCurrentAttemptId.clear();
+
+    if (success) {
+      if (m_manualBatchTimer)
+        m_manualBatchTimer->start(m_manualBatchDelayMs);
+      return;
+    }
 
     if (!success) {
       if (apiError.type() == ApiError::Type::RateLimit) {
@@ -4757,7 +4768,9 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
     return;
   }
 
-  scheduleNextQueueAttempt();
+  if (!m_manualBatchActive) {
+    scheduleNextQueueAttempt();
+  }
 }
 
 ErrorWindow *MainWindow::showDiagnosticDetails(int row) {
