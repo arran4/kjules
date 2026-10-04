@@ -3743,9 +3743,7 @@ void MainWindow::continueManualBatch() {
   QString outReason;
   bool dispatched = processQueue(true, &attemptId, &outReason);
 
-  if (dispatched) {
-    m_manualBatchCurrentAttemptId = attemptId;
-  } else {
+  if (!dispatched) {
     stopManualBatch(outReason.isEmpty() ? i18n("No more eligible queued work or capacity.") : outReason);
   }
 }
@@ -3924,6 +3922,9 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
   dispatchedJob.lifecycleMetadata[QStringLiteral("status")] = QStringLiteral("IN_PROGRESS");
   if (!m_jobStore->updateJobTransactional(dispatchedJob)) {
     qWarning() << "Queue dispatch failed: could not save new attempt to store.";
+    if (outReason) {
+      *outReason = i18n("Queue dispatch failed: could not save new attempt to store.");
+    }
     return false;
   }
   jobToDispatch = m_jobStore->getJobById(dispatchedJob.id);
@@ -3935,6 +3936,10 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
     queueIntervalMins = 0; // For testing
   m_queueScheduler.recordDispatch(now, queueIntervalMins);
   syncModelsFromJobStore();
+
+  if (bypassPauseGate && m_manualBatchActive) {
+    m_manualBatchCurrentAttemptId = attempt.id;
+  }
 
   m_isProcessingQueue = true;
 
@@ -5514,8 +5519,10 @@ void MainWindow::onSourcesRefreshFinished(bool complete) {
     if (complete && resolvePendingGithubSource()) {
       updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
       if (m_manualBatchActive) {
-        if (m_manualBatchTimer) m_manualBatchTimer->start(m_manualBatchDelayMs);
-        else QTimer::singleShot(0, this, [this]() { continueManualBatch(); });
+        if (m_manualBatchTimer)
+          m_manualBatchTimer->start(m_manualBatchDelayMs);
+        else
+          QTimer::singleShot(0, this, [this]() { continueManualBatch(); });
       } else {
         QTimer::singleShot(0, this, [this]() { processQueue(); });
       }

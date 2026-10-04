@@ -246,6 +246,7 @@ private Q_SLOTS:
   void testManualBatch_targetRejectsNonPositive();
 
   void testManualBatch_overlapPrevention();
+  void testManualBatch_synchronousFailure();
 
   void testManualBatch_cancellationPreventsDispatch();
 
@@ -1948,6 +1949,61 @@ void TestSessionWindow::testManualBatch_targetRejectsNonPositive() {
   QVERIFY(!window.m_manualBatchActive);
   window.startManualBatch(-1);
   QVERIFY(!window.m_manualBatchActive);
+}
+
+void TestSessionWindow::testManualBatch_synchronousFailure() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+
+  // Make API unavailable to trigger synchronous failure
+  window.apiManager()->setApiKey(QStringLiteral(""));
+  window.apiManager()->setGithubToken(QStringLiteral(""));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-x"),
+      QStringLiteral("sync failure test"), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("sync-fail-job");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(1);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 0);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+  QVERIFY(!window.m_isProcessingQueue);
+  QVERIFY(window.m_queuePaused);
+
+  JobData *updatedJob = window.jobStore()->getJobById(job.id);
+  QVERIFY(updatedJob != nullptr);
+  QVERIFY(updatedJob->attempts.size() > 0);
+  QCOMPARE(updatedJob->attempts.last().dispatchState, QStringLiteral("FAILED"));
 }
 
 void TestSessionWindow::testManualBatch_overlapPrevention() {
