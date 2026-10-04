@@ -4002,8 +4002,7 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
     if (m_isProcessingQueue) {
       m_isProcessingQueue = false;
       if (m_manualBatchActive) {
-        if (m_manualBatchTimer)
-          m_manualBatchTimer->start(m_manualBatchDelayMs);
+        // Do NOT start timer here, wait for source resolution.
       } else {
         scheduleNextQueueAttempt();
       }
