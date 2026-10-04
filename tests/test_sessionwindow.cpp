@@ -1897,8 +1897,8 @@ void TestSessionWindow::testManualBatch_failurePreservesAttemptAndStops() {
   window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
 
   mockNam->interceptCreateSession = true;
-  mockNam->createSessionStatusCode = 500;
-  mockNam->createSessionResponse = R"({"error":{"code":500,"status":"INTERNAL","message":"test failure"}})";
+  mockNam->createSessionStatusCode = 400; // MUST BE NON-TRANSIENT TO STOP IMMEDIATELY
+  mockNam->createSessionResponse = R"({"error":{"code":400,"status":"INVALID_ARGUMENT","message":"test failure"}})";
 
   for (int i = 0; i < 3; ++i) {
     QJsonObject req = SessionRequestBuilder::buildSessionRequest(

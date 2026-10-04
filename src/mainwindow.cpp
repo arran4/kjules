@@ -4756,10 +4756,32 @@ void MainWindow::onSessionCreationFailed(const QString &jobId, const QString &at
     m_isProcessingQueue = false;
   }
 
+  const bool transient = apiError.type() == ApiError::Type::Network || apiError.type() == ApiError::Type::ServerError;
+
   if (manualBatchFailure) {
     m_manualBatchCurrentAttemptId.clear();
+    m_isProcessingQueue = false;
+    ++m_manualBatchFailed;
+
+    if (transient && m_manualBatchTransientRetries < m_manualBatchMaxRetries) {
+      ++m_manualBatchTransientRetries;
+
+      QueueItem retryItem;
+      retryItem.jobId = jobId;
+      retryItem.requestData = request;
+
+      m_queueModel->insertItem(0, retryItem);
+
+      if (m_manualBatchTimer)
+        m_manualBatchTimer->start(m_manualBatchDelayMs);
+
+      return;
+    }
+
     if (isRateLimit) {
       stopManualBatch(i18n("Batch aborted due to rate limit/quota."));
+    } else if (transient) {
+      stopManualBatch(i18n("Batch stopped after exceeding retry limit for failure: %1", errorString));
     } else {
       stopManualBatch(i18n("Batch stopped after Jules launch failure: %1", errorString));
     }
