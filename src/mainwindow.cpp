@@ -5513,7 +5513,12 @@ void MainWindow::onSourcesRefreshFinished(bool complete) {
   if (m_isWaitingForCreatedRepoSource) {
     if (complete && resolvePendingGithubSource()) {
       updateStatus(i18n("Found the new repository's Jules source; resuming the queue."));
-      QTimer::singleShot(0, this, [this]() { processQueue(); });
+      if (m_manualBatchActive) {
+        if (m_manualBatchTimer) m_manualBatchTimer->start(m_manualBatchDelayMs);
+        else QTimer::singleShot(0, this, [this]() { continueManualBatch(); });
+      } else {
+        QTimer::singleShot(0, this, [this]() { processQueue(); });
+      }
     } else {
       if (!complete) {
         updateStatus(i18n("Source refresh failed or was incomplete while waiting for repository. Waiting for next "

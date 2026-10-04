@@ -2294,14 +2294,8 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
   // Let the test wait for the refresh callback to process signals completely
   QTRY_VERIFY(window.m_sourceModel->rowCount() > 0);
 
-  // Directly process events so the QTimer::singleShot triggers
-  QCoreApplication::processEvents();
+  // The test must not manually call QCoreApplication::processEvents() or continueManualBatch()
 
-  if (window.m_manualBatchActive) {
-    window.continueManualBatch();
-  }
-
-  // Assert source resolution triggers eventual Jules session creation
   QTRY_COMPARE(mockNam->createSessionCount, 1);
   QTRY_COMPARE(window.m_manualBatchAccepted, 1);
   QTRY_VERIFY(!window.m_manualBatchActive);
