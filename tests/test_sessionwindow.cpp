@@ -2063,6 +2063,7 @@ void TestSessionWindow::testManualBatch_transientFailureRetriesAndPreservesAttem
     window.toggleQueueState();
 
   // Test 1: Repeated transient failure that eventually succeeds
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
   window.startManualBatch(1);
 
   QTRY_COMPARE(mockNam->createSessionCount, 2);
@@ -2077,6 +2078,15 @@ void TestSessionWindow::testManualBatch_transientFailureRetriesAndPreservesAttem
   QCOMPARE(updatedJob->attempts.size(), 2);
   QCOMPARE(updatedJob->attempts.at(0).dispatchState, QStringLiteral("FAILED"));
   QCOMPARE(updatedJob->attempts.at(1).dispatchState, QStringLiteral("COMPLETED"));
+
+  bool foundTargetStatus = false;
+  for (const QList<QVariant> &args : statusSpy) {
+    if (args.first().toString().contains(QStringLiteral("Requested: 1, Attempted: 2, Accepted: 1, Failed: 1, Blocked: 0, Remaining: 0"))) {
+      foundTargetStatus = true;
+      break;
+    }
+  }
+  QVERIFY(foundTargetStatus);
 
   QCOMPARE(window.m_manualBatchFailed, 1);
   QCOMPARE(window.m_manualBatchAttempted, 2);
@@ -2128,6 +2138,7 @@ void TestSessionWindow::testManualBatch_transientFailureExhaustsRetries() {
     window.toggleQueueState();
 
   // Test 2: Retry exhaustion
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
   window.startManualBatch(1);
 
   QTRY_COMPARE(mockNam->createSessionCount, 3);
@@ -2144,6 +2155,15 @@ void TestSessionWindow::testManualBatch_transientFailureExhaustsRetries() {
   for (int i = 0; i < 3; ++i) {
     QCOMPARE(updatedJob->attempts.at(i).dispatchState, QStringLiteral("FAILED"));
   }
+
+  bool foundTargetStatus = false;
+  for (const QList<QVariant> &args : statusSpy) {
+    if (args.first().toString().contains(QStringLiteral("Requested: 1, Attempted: 3, Accepted: 0, Failed: 3, Blocked: 0, Remaining: 1"))) {
+      foundTargetStatus = true;
+      break;
+    }
+  }
+  QVERIFY(foundTargetStatus);
 }
 
 void TestSessionWindow::testManualBatch_countersResetOnNewBatch() {
