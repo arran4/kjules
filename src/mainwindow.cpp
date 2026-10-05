@@ -3700,6 +3700,10 @@ void MainWindow::startManualBatch(int target) {
   m_manualBatchActive = true;
   m_manualBatchTarget = target;
   m_manualBatchAccepted = 0;
+  m_manualBatchAttempted = 0;
+  m_manualBatchFailed = 0;
+  m_manualBatchBlocked = 0;
+  m_manualBatchTransientRetries = 0;
   m_manualBatchCurrentAttemptId.clear();
 
   if (m_loadNextBatchAction) {
@@ -3903,6 +3907,9 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
       *outReason = (blockedCount > 0) ? i18n("Capacity blocked: waiting for running tasks to finish.")
                                       : i18n("No eligible queued work.");
     }
+    if (bypassPauseGate && m_manualBatchActive && blockedCount > 0) {
+      m_manualBatchBlocked = blockedCount;
+    }
     return false; // No eligible items
   }
 
@@ -3948,6 +3955,9 @@ bool MainWindow::processQueue(bool bypassPauseGate, QString *dispatchedAttemptId
           QStringLiteral("create_github_repo")) {
     m_apiManager->createGithubRepoAsync(itemToDispatch.requestData, jobToDispatch->id, attempt.id);
   } else {
+    if (bypassPauseGate && m_manualBatchActive) {
+      m_manualBatchAttempted++;
+    }
     m_apiManager->createSessionAsync(itemToDispatch.requestData, jobToDispatch->id, attempt.id);
   }
 
@@ -4095,6 +4105,7 @@ void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, cons
   if (m_manualBatchActive && !m_manualBatchCurrentAttemptId.isEmpty() && m_manualBatchCurrentAttemptId == attemptId) {
     if (success) {
       m_manualBatchAccepted++;
+      m_manualBatchTransientRetries = 0; // Reset retries after success so budget is per item
       if (m_loadNextBatchAction) {
         m_loadNextBatchAction->setText(i18n("Stop Batch (%1/%2)", m_manualBatchAccepted, m_manualBatchTarget));
       }
