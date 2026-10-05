@@ -3727,16 +3727,10 @@ void MainWindow::stopManualBatch(const QString &reason) {
     m_loadNextBatchAction->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
   }
   const int remaining = qMax(0, m_manualBatchTarget - m_manualBatchAccepted);
-  updateStatus(
-      i18n("Manual batch stopped: %1 "
-           "(Requested: %2, Attempted: %3, Accepted: %4, Failed: %5, Blocked: %6, Remaining: %7)",
-           reason,
-           m_manualBatchTarget,
-           m_manualBatchAttempted,
-           m_manualBatchAccepted,
-           m_manualBatchFailed,
-           m_manualBatchBlocked,
-           remaining));
+  updateStatus(i18n("Manual batch stopped: %1 "
+                    "(Requested: %2, Attempted: %3, Accepted: %4, Failed: %5, Blocked: %6, Remaining: %7)",
+                    reason, m_manualBatchTarget, m_manualBatchAttempted, m_manualBatchAccepted, m_manualBatchFailed,
+                    m_manualBatchBlocked, remaining));
 }
 
 void MainWindow::continueManualBatch() {

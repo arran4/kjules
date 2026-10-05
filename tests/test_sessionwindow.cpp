@@ -2081,7 +2081,8 @@ void TestSessionWindow::testManualBatch_transientFailureRetriesAndPreservesAttem
 
   bool foundTargetStatus = false;
   for (const QList<QVariant> &args : statusSpy) {
-    if (args.first().toString().contains(QStringLiteral("Requested: 1, Attempted: 2, Accepted: 1, Failed: 1, Blocked: 0, Remaining: 0"))) {
+    if (args.first().toString().contains(
+            QStringLiteral("Requested: 1, Attempted: 2, Accepted: 1, Failed: 1, Blocked: 0, Remaining: 0"))) {
       foundTargetStatus = true;
       break;
     }
@@ -2158,7 +2159,8 @@ void TestSessionWindow::testManualBatch_transientFailureExhaustsRetries() {
 
   bool foundTargetStatus = false;
   for (const QList<QVariant> &args : statusSpy) {
-    if (args.first().toString().contains(QStringLiteral("Requested: 1, Attempted: 3, Accepted: 0, Failed: 3, Blocked: 0, Remaining: 1"))) {
+    if (args.first().toString().contains(
+            QStringLiteral("Requested: 1, Attempted: 3, Accepted: 0, Failed: 3, Blocked: 0, Remaining: 1"))) {
       foundTargetStatus = true;
       break;
     }
