@@ -259,6 +259,7 @@ private Q_SLOTS:
   void testManualBatch_transientFailureRetriesAndPreservesAttempt();
   void testManualBatch_transientFailureExhaustsRetries();
   void testManualBatch_countersResetOnNewBatch();
+  void testManualBatch_retryBudgetResetsPerAcceptedItem();
   void testManualBatch_synchronousFailure();
 
   void testManualBatch_cancellationPreventsDispatch();
@@ -2226,6 +2227,90 @@ void TestSessionWindow::testManualBatch_countersResetOnNewBatch() {
   QTRY_VERIFY(!window.m_manualBatchActive);
   QCOMPARE(window.m_manualBatchFailed, 0);
   QCOMPARE(window.m_manualBatchAttempted, 0);
+}
+
+void TestSessionWindow::testManualBatch_retryBudgetResetsPerAcceptedItem() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.setManualBatchMaxRetriesForTest(1);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCodes = {500, 200, 500, 200};
+  mockNam->createSessionResponses = {
+      R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure 1"}})",
+      R"({"id":"sessions/retry-success-1","state":"IN_PROGRESS"})",
+      R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure 2"}})",
+      R"({"id":"sessions/retry-success-2","state":"IN_PROGRESS"})",
+  };
+
+  QStringList jobIds;
+  for (int i = 0; i < 2; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("per-item retry budget test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false,
+        0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("retry-budget-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+    jobIds.append(job.id);
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+  window.startManualBatch(2);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 4);
+  QTRY_COMPARE(window.m_manualBatchAccepted, 2);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+
+  QCOMPARE(window.m_manualBatchAttempted, 4);
+  QCOMPARE(window.m_manualBatchFailed, 2);
+  QCOMPARE(window.m_manualBatchTransientRetries, 0);
+  QVERIFY(window.m_queuePaused);
+  QVERIFY(!window.m_isProcessingQueue);
+
+  for (const QString &jobId : jobIds) {
+    JobData *updatedJob = window.jobStore()->getJobById(jobId);
+    QVERIFY(updatedJob != nullptr);
+    QCOMPARE(updatedJob->attempts.size(), 2);
+    QCOMPARE(updatedJob->attempts.at(0).dispatchState, QStringLiteral("FAILED"));
+    QCOMPARE(updatedJob->attempts.at(1).dispatchState, QStringLiteral("COMPLETED"));
+  }
+
+  bool foundTargetStatus = false;
+  for (const QList<QVariant> &args : statusSpy) {
+    if (args.first().toString().contains(
+            QStringLiteral("Requested: 2, Attempted: 4, Accepted: 2, Failed: 2, Blocked: 0, Remaining: 0"))) {
+      foundTargetStatus = true;
+      break;
+    }
+  }
+  QVERIFY(foundTargetStatus);
 }
 
 void TestSessionWindow::testManualBatch_overlapPrevention() {
