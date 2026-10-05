@@ -82,6 +82,8 @@ public:
   int createSessionStatusCode = 200;
   bool interceptCreateSession = false;
   int createSessionCount = 0;
+  QList<int> createSessionStatusCodes;
+  QList<QByteArray> createSessionResponses;
 
   QByteArray reloadSessionResponse = "{}";
   int reloadSessionStatusCode = 200;
@@ -111,8 +113,16 @@ protected:
       intercepted = true;
       listSourcesCount++;
     } else if (interceptCreateSession && op == PostOperation && path.contains(QStringLiteral("/sessions"))) {
-      responseBody = createSessionResponse;
-      statusCode = createSessionStatusCode;
+      if (!createSessionStatusCodes.isEmpty()) {
+        statusCode = createSessionStatusCodes.takeFirst();
+      } else {
+        statusCode = createSessionStatusCode;
+      }
+      if (!createSessionResponses.isEmpty()) {
+        responseBody = createSessionResponses.takeFirst();
+      } else {
+        responseBody = createSessionResponse;
+      }
       intercepted = true;
       createSessionCount++;
       if (outgoingData) {
@@ -239,6 +249,29 @@ private Q_SLOTS:
   void testCreateRepoWorkflowRepoFailure();
   void testCreateRepoWorkflowSourceRefreshRetry();
   void testCreateRepoWorkflowBackgroundClassification();
+  void testManualBatch_targetReached();
+  void testManualBatch_queueExhausted();
+  void testManualBatch_failurePreservesAttemptAndStops();
+
+  void testManualBatch_targetRejectsNonPositive();
+
+  void testManualBatch_overlapPrevention();
+  void testManualBatch_transientFailureRetriesAndPreservesAttempt();
+  void testManualBatch_transientFailureExhaustsRetries();
+  void testManualBatch_countersResetOnNewBatch();
+  void testManualBatch_retryBudgetResetsPerAcceptedItem();
+  void testManualBatch_synchronousFailure();
+
+  void testManualBatch_cancellationPreventsDispatch();
+
+  void testManualBatch_concurrencyEnforced();
+
+  void testManualBatch_resourceExhaustedStopsBatch();
+
+  void testManualBatch_normalPlayRemainsPausedAfterBatch();
+
+  void testManualBatch_repoProvisioningDoesNotIncrement();
+
   void testProcessQueueIndependenceFromFollowingReloads();
 
   void testDurableZeroHistory() {
@@ -1740,4 +1773,894 @@ void TestSessionWindow::testCreateRepoWorkflowBackgroundClassification() {
   QVERIFY(window.m_sourceProgressBar->isHidden());
   QVERIFY(window.m_cancelRefreshBtn->isHidden());
   QCOMPARE(window.m_refreshSourcesAction->text(), QStringLiteral("Refresh Sources"));
+}
+
+void TestSessionWindow::testManualBatch_targetReached() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  for (int i = 0; i < 10; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("Manual batch test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("batch-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused) {
+    window.toggleQueueState();
+  }
+
+  int initialSize = window.queueModel()->size();
+
+  window.startManualBatch(3);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 3);
+  QTRY_COMPARE(window.m_manualBatchAccepted, 3);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QVERIFY(!window.m_isProcessingQueue);
+  QCOMPARE(window.queueModel()->size(), initialSize - 3);
+}
+
+void TestSessionWindow::testManualBatch_queueExhausted() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  for (int i = 0; i < 2; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("Manual batch test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("exhaust-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused) {
+    window.toggleQueueState();
+  }
+
+  int initialSize = window.queueModel()->size();
+
+  window.startManualBatch(5);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 2);
+  QTRY_COMPARE(window.m_manualBatchAccepted, 2);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QVERIFY(!window.m_isProcessingQueue);
+  QCOMPARE(window.queueModel()->size(), initialSize - 2);
+}
+
+void TestSessionWindow::testManualBatch_failurePreservesAttemptAndStops() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 400; // MUST BE NON-TRANSIENT TO STOP IMMEDIATELY
+  mockNam->createSessionResponse = R"({"error":{"code":400,"status":"INVALID_ARGUMENT","message":"test failure"}})";
+
+  for (int i = 0; i < 3; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("Manual batch test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("fail-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused) {
+    window.toggleQueueState();
+  }
+
+  int initialSize = window.queueModel()->size();
+
+  QSignalSpy failedSpy(window.apiManager(), &APIManager::sessionCreationFailed);
+  QVERIFY(failedSpy.isValid());
+
+  window.startManualBatch(3);
+  QTRY_COMPARE(mockNam->createSessionCount, 1);
+
+  QTRY_COMPARE(failedSpy.count(), 1);
+
+  QVERIFY(!window.m_manualBatchActive);
+  QVERIFY(!window.m_isProcessingQueue);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+
+  JobData *job = window.jobStore()->getJobById(QStringLiteral("fail-job-0"));
+  QVERIFY(job != nullptr);
+  QCOMPARE(job->attempts.size(), 1);
+  QCOMPARE(job->attempts.back().dispatchState, QStringLiteral("FAILED"));
+  QVERIFY(!job->attempts.back().launchErrors.isEmpty());
+
+  QCOMPARE(window.queueModel()->size(), initialSize - 1);
+  QVERIFY(window.m_queuePaused);
+}
+
+void TestSessionWindow::testManualBatch_targetRejectsNonPositive() {
+  MainWindow window;
+  window.startManualBatch(0);
+  QVERIFY(!window.m_manualBatchActive);
+  window.startManualBatch(-1);
+  QVERIFY(!window.m_manualBatchActive);
+}
+
+void TestSessionWindow::testManualBatch_synchronousFailure() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+
+  // Make API unavailable to trigger synchronous failure
+  window.apiManager()->setApiKey(QStringLiteral(""));
+  window.apiManager()->setGithubToken(QStringLiteral(""));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-x"),
+      QStringLiteral("sync failure test"), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("sync-fail-job");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(1);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 0);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+  QVERIFY(!window.m_isProcessingQueue);
+  QVERIFY(window.m_queuePaused);
+
+  JobData *updatedJob = window.jobStore()->getJobById(job.id);
+  QVERIFY(updatedJob != nullptr);
+  QVERIFY(updatedJob->attempts.size() > 0);
+  QCOMPARE(updatedJob->attempts.last().dispatchState, QStringLiteral("FAILED"));
+}
+
+void TestSessionWindow::testManualBatch_transientFailureRetriesAndPreservesAttempt() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.setManualBatchMaxRetriesForTest(2);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCodes = {500, 200};
+  mockNam->createSessionResponses = {R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure"}})",
+                                     R"({"id":"sessions/retry-success","state":"IN_PROGRESS"})"};
+
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-1"),
+      QStringLiteral("transient test 1"), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("transient-job-1");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  // Test 1: Repeated transient failure that eventually succeeds
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+  window.startManualBatch(1);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 2);
+  QTRY_COMPARE(window.m_manualBatchAccepted, 1);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+
+  QVERIFY(window.m_queuePaused);
+  QVERIFY(!window.m_isProcessingQueue);
+
+  JobData *updatedJob = window.jobStore()->getJobById(job.id);
+  QVERIFY(updatedJob != nullptr);
+  QCOMPARE(updatedJob->attempts.size(), 2);
+  QCOMPARE(updatedJob->attempts.at(0).dispatchState, QStringLiteral("FAILED"));
+  QCOMPARE(updatedJob->attempts.at(1).dispatchState, QStringLiteral("COMPLETED"));
+
+  bool foundTargetStatus = false;
+  for (const QList<QVariant> &args : statusSpy) {
+    if (args.first().toString().contains(
+            QStringLiteral("Requested: 1, Attempted: 2, Accepted: 1, Failed: 1, Blocked: 0, Remaining: 0"))) {
+      foundTargetStatus = true;
+      break;
+    }
+  }
+  QVERIFY(foundTargetStatus);
+
+  QCOMPARE(window.m_manualBatchFailed, 1);
+  QCOMPARE(window.m_manualBatchAttempted, 2);
+  QCOMPARE(window.m_manualBatchAccepted, 1);
+}
+
+void TestSessionWindow::testManualBatch_transientFailureExhaustsRetries() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.setManualBatchMaxRetriesForTest(2);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCodes = {500, 500, 500};
+  mockNam->createSessionResponses = {R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure"}})",
+                                     R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure"}})",
+                                     R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure"}})"};
+
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-2"),
+      QStringLiteral("exhaustion test"), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("exhaust-job-1");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  // Test 2: Retry exhaustion
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+  window.startManualBatch(1);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 3);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+  QCOMPARE(window.m_manualBatchFailed, 3);
+  QVERIFY(window.m_queuePaused);
+  QVERIFY(!window.m_isProcessingQueue);
+
+  JobData *updatedJob = window.jobStore()->getJobById(job.id);
+  QVERIFY(updatedJob != nullptr);
+  QCOMPARE(updatedJob->attempts.size(), 3);
+  for (int i = 0; i < 3; ++i) {
+    QCOMPARE(updatedJob->attempts.at(i).dispatchState, QStringLiteral("FAILED"));
+  }
+
+  bool foundTargetStatus = false;
+  for (const QList<QVariant> &args : statusSpy) {
+    if (args.first().toString().contains(
+            QStringLiteral("Requested: 1, Attempted: 3, Accepted: 0, Failed: 3, Blocked: 0, Remaining: 1"))) {
+      foundTargetStatus = true;
+      break;
+    }
+  }
+  QVERIFY(foundTargetStatus);
+}
+
+void TestSessionWindow::testManualBatch_countersResetOnNewBatch() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 400; // Let it fallback to regular scalar for this one
+  mockNam->createSessionResponses = {
+      R"({"error":{"code":400,"status":"INVALID_ARGUMENT","message":"permanent failure"}})",
+  };
+
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-1"), QStringLiteral("reset test 1"),
+      QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("reset-job-1");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  // Test 3: Counters reset
+  window.startManualBatch(1);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 1);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+
+  QCOMPARE(window.m_manualBatchFailed, 1);
+  QCOMPARE(window.m_manualBatchAttempted, 1);
+
+  // Restart new batch, queue is empty now
+  window.startManualBatch(1);
+
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchFailed, 0);
+  QCOMPARE(window.m_manualBatchAttempted, 0);
+}
+
+void TestSessionWindow::testManualBatch_retryBudgetResetsPerAcceptedItem() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.setManualBatchMaxRetriesForTest(1);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCodes = {500, 200, 500, 200};
+  mockNam->createSessionResponses = {
+      R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure 1"}})",
+      R"({"id":"sessions/retry-success-1","state":"IN_PROGRESS"})",
+      R"({"error":{"code":500,"status":"INTERNAL","message":"temporary failure 2"}})",
+      R"({"id":"sessions/retry-success-2","state":"IN_PROGRESS"})",
+  };
+
+  QStringList jobIds;
+  for (int i = 0; i < 2; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("per-item retry budget test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false,
+        0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("retry-budget-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+    jobIds.append(job.id);
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+  window.startManualBatch(2);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 4);
+  QTRY_COMPARE(window.m_manualBatchAccepted, 2);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+
+  QCOMPARE(window.m_manualBatchAttempted, 4);
+  QCOMPARE(window.m_manualBatchFailed, 2);
+  QCOMPARE(window.m_manualBatchTransientRetries, 0);
+  QVERIFY(window.m_queuePaused);
+  QVERIFY(!window.m_isProcessingQueue);
+
+  for (const QString &jobId : jobIds) {
+    JobData *updatedJob = window.jobStore()->getJobById(jobId);
+    QVERIFY(updatedJob != nullptr);
+    QCOMPARE(updatedJob->attempts.size(), 2);
+    QCOMPARE(updatedJob->attempts.at(0).dispatchState, QStringLiteral("FAILED"));
+    QCOMPARE(updatedJob->attempts.at(1).dispatchState, QStringLiteral("COMPLETED"));
+  }
+
+  bool foundTargetStatus = false;
+  for (const QList<QVariant> &args : statusSpy) {
+    if (args.first().toString().contains(
+            QStringLiteral("Requested: 2, Attempted: 4, Accepted: 2, Failed: 2, Blocked: 0, Remaining: 0"))) {
+      foundTargetStatus = true;
+      break;
+    }
+  }
+  QVERIFY(foundTargetStatus);
+}
+
+void TestSessionWindow::testManualBatch_overlapPrevention() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  for (int i = 0; i < 5; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("overlap test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("overlap-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(2);
+  // start another immediately
+  window.startManualBatch(5);
+
+  QTRY_COMPARE(mockNam->createSessionCount, 2);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 2);
+}
+
+void TestSessionWindow::testManualBatch_cancellationPreventsDispatch() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  for (int i = 0; i < 5; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("cancel test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("cancel-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(5);
+  window.stopManualBatch(QStringLiteral("Test cancellation"));
+
+  QTRY_COMPARE(mockNam->createSessionCount, 1);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 0); // Note: Since the first dispatch was cancelled, onSessionCreatedResult
+                                             // won't increment if manualBatchActive is false or ID is cleared
+}
+
+void TestSessionWindow::testManualBatch_concurrencyEnforced() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("one_at_a_time"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  // Dispatch one job that's IN_PROGRESS so concurrency is taken
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-x"),
+      QStringLiteral("concurrency test"), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("concurrency-job");
+  JobAttemptData attempt;
+  attempt.id = QStringLiteral("attempt-1");
+  attempt.dispatchState = QStringLiteral("IN_PROGRESS");
+  job.attempts.append(attempt);
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  // Try to dispatch a second job on same branch
+  QJsonObject req2 = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-x"),
+      QStringLiteral("concurrency test 2"), QStringLiteral("AUTOMATION_MODE_SMART"), false, false, 0);
+  JobData job2 = JobData::fromRequest(req2);
+  job2.id = QStringLiteral("concurrency-job-2");
+  QVERIFY(window.jobStore()->addJobTransactional(job2));
+
+  QueueItem item;
+  item.jobId = job2.id;
+  item.requestData = req2;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(5);
+
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(mockNam->createSessionCount, 0);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+}
+
+void TestSessionWindow::testManualBatch_resourceExhaustedStopsBatch() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 429;
+  mockNam->createSessionResponse = R"({"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"rate limit"}})";
+
+  for (int i = 0; i < 3; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("rate test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("rate-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(5);
+  QTRY_COMPARE(mockNam->createSessionCount, 1);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+}
+
+void TestSessionWindow::testManualBatch_normalPlayRemainsPausedAfterBatch() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  for (int i = 0; i < 5; ++i) {
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("branch-%1").arg(i),
+        QStringLiteral("play test %1").arg(i), QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("play-job-%1").arg(i);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+  }
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  window.startManualBatch(2);
+  QTRY_COMPARE(mockNam->createSessionCount, 2);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QVERIFY(window.m_queuePaused); // MUST still be paused!
+
+  window.toggleQueueState(); // unpause
+  QVERIFY(!window.m_queuePaused);
+  QTRY_COMPARE(mockNam->createSessionCount, 3);
+}
+
+void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
+  MainWindow window;
+  window.setManualBatchDelayForTest(0);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup queueConfig(KSharedConfig::openConfig(), QStringLiteral("Queue"));
+  queueConfig.writeEntry(QStringLiteral("QueueMode"), QStringLiteral("asap"));
+  queueConfig.writeEntry(QStringLiteral("QueueIntervalMins"), 0);
+  queueConfig.writeEntry(QStringLiteral("TimerInterval"), 0);
+  queueConfig.sync();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+
+  // Set up all intercepts BEFORE starting the batch!
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = 200;
+
+  mockNam->interceptCreateRepo = true;
+  mockNam->repoStatusCode = 200;
+  mockNam->repoResponse = R"({"full_name":"test-org/new-repo"})";
+
+  mockNam->interceptListSources = true;
+  mockNam->listSourcesStatusCode = 200;
+  mockNam->listSourcesResponse = R"({
+    "sources": [
+      {
+        "name": "sources/github/test-org/new-repo",
+        "githubRepo": {
+          "owner": "test-org",
+          "repo": "new-repo"
+        }
+      }
+    ]
+  })";
+
+  // Original Provisioning Job
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(QStringLiteral(""), QStringLiteral("branch-repo"),
+                                                               QStringLiteral("repo provision test"),
+                                                               QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  req[QStringLiteral("_kjules_github_owner")] = QStringLiteral("test-org");
+  req[QStringLiteral("_kjules_github_repository")] = QStringLiteral("new-repo");
+  req[QStringLiteral("_kjules_action")] = QStringLiteral("create_github_repo");
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("repo-job");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  if (!window.m_queuePaused)
+    window.toggleQueueState();
+
+  // Start the batch
+  window.startManualBatch(1);
+
+  // Assert repo creation happened
+  QTRY_COMPARE(mockNam->createRepoCount, 1);
+
+  // Assert refresh was requested
+  QTRY_COMPARE(mockNam->listSourcesCount, 1);
+
+  // Assert intermediate state while paused/waiting or immediately after
+  QVERIFY(window.m_manualBatchActive);
+  QCOMPARE(window.m_manualBatchAccepted, 0);
+  QVERIFY(window.m_queuePaused);
+
+  // Let the test wait for the refresh callback to process signals completely
+  QTRY_VERIFY(window.m_sourceModel->rowCount() > 0);
+
+  // The test must not manually call QCoreApplication::processEvents() or continueManualBatch()
+
+  QTRY_COMPARE(mockNam->createSessionCount, 1);
+  QTRY_COMPARE(window.m_manualBatchAccepted, 1);
+  QTRY_VERIFY(!window.m_manualBatchActive);
+  QVERIFY(window.m_queuePaused);
 }

@@ -22,6 +22,7 @@
         <Menu name="actions">
             <text>Actions</text>
             <Action name="toggle_queue" />
+            <Action name="load_next_batch" />
             <Separator />
             <Action name="refresh_current_tab" />
             <Action name="show_full_session_list" />

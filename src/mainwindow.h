@@ -138,7 +138,7 @@ private Q_SLOTS:
   void increaseFavouriteRank();
   void decreaseFavouriteRank();
   void setFavouriteRank();
-  bool processQueue();
+  bool processQueue(bool bypassPauseGate = false, QString *dispatchedAttemptId = nullptr, QString *outReason = nullptr);
   void scheduleNextQueueAttempt();
   void onMasterMinuteTimer();
   void onMasterSecondTimer();
@@ -201,7 +201,7 @@ public:
   void copyDiagnosticError(int sourceRow);
   void deleteSelectedDiagnostics(bool promptConfirmation = true);
   QList<int> selectedDiagnosticSourceRows() const;
-  bool processQueueForTest() { return processQueue(); }
+  bool processQueueForTest(bool bypassPauseGate = false) { return processQueue(bypassPauseGate); }
 
 private:
   QList<int> getUniqueSortedRows(const QList<QModelIndex> &selectedRows, const QAbstractItemView *view) const;
@@ -232,6 +232,28 @@ private:
   void createSourceActions();
   void setupSourceSettingsAction();
   void setupRefreshSourceActions();
+
+  // Manual batch state
+  bool m_manualBatchActive = false;
+  int m_manualBatchTarget = 0;
+  int m_manualBatchAttempted = 0;
+  int m_manualBatchAccepted = 0;
+  int m_manualBatchFailed = 0;
+  int m_manualBatchBlocked = 0;
+  int m_manualBatchTransientRetries = 0;
+  int m_manualBatchMaxRetries = 2;
+  int m_manualBatchDelayMs = 1000;
+  QString m_manualBatchCurrentAttemptId;
+  QTimer *m_manualBatchTimer = nullptr;
+  QAction *m_loadNextBatchAction = nullptr;
+
+  void promptLoadNextBatch();
+  void startManualBatch(int target);
+  void continueManualBatch();
+  void stopManualBatch(const QString &reason);
+  void setManualBatchDelayForTest(int ms) { m_manualBatchDelayMs = ms; }
+  void setManualBatchMaxRetriesForTest(int count) { m_manualBatchMaxRetries = count; }
+
   void setupRecalculateStatsAction();
   void setupShowFollowingNewSessionsAction();
   void setupViewRawDataAction();
