@@ -4,6 +4,8 @@
 #include <QJsonObject>
 #include <QString>
 
+class JobStore;
+
 namespace SessionRequestBuilder {
 
 QJsonObject createSession(const QJsonObject &requestData);
@@ -11,6 +13,7 @@ QJsonObject buildSessionRequest(const QString &source, const QString &startingBr
                                 const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
                                 int priority, const QString &queueAction = QString());
 QJsonObject normalizeSessionRequest(const QJsonObject &requestData);
+QJsonObject copyableSessionRequest(const QJsonObject &sessionOrRequest, const JobStore *jobStore = nullptr);
 QJsonObject sendMessage(const QString &prompt);
 QJsonObject sessionResponseWithRequest(const QJsonObject &response, const QJsonObject &request);
 

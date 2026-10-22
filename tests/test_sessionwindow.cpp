@@ -171,6 +171,11 @@ private Q_SLOTS:
   void testFollowingRefreshMultipleActiveAttempts();
   void testCompletedMergedAttemptRefreshExclusionAndUiStatus();
   void testZeroAttemptAndMultipleAttemptActionsIdentity();
+  void testNewSessionFromFollowingPreservesSourceAndBranchUI();
+  void testNewSessionFromArchivePreservesSourceAndBranchUI();
+  void testDuplicateSessionFromWindowPreservesSourceAndBranchUI();
+  void testVariantFromWindowPreservesSnapshotAndQueuesUnderSameJobUI();
+  void testDuplicateFollowingItemsToQueuePreservesFields();
 
   void testCanonicalPresentationAndRecovery_data() {
     QTest::addColumn<bool>("direct");
@@ -1000,11 +1005,10 @@ private Q_SLOTS:
     sw.actionCollection()->action(QStringLiteral("new_job_from"))->trigger();
     auto *dialog = window.findChild<NewSessionDialog *>();
     QVERIFY(dialog);
-    QMultiMap<QString, QString> sources;
-    sources.insert(QStringLiteral("sources/github/org/repo"), QStringLiteral("feature-branch"));
-    Q_EMIT dialog->createSessionRequested(sources, QStringLiteral("New Independent Workflow Prompt"),
-                                          QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0,
-                                          QStringLiteral("queue"));
+    QCOMPARE(dialog->promptText(), QStringLiteral("Original prompt"));
+    QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/org/repo")));
+    QCOMPARE(dialog->selectedSources().value(QStringLiteral("sources/github/org/repo")), QStringLiteral("main"));
+    dialog->submitSession();
     dialog->close();
 
     // Resulting job gets a distinct ID
@@ -1018,7 +1022,9 @@ private Q_SLOTS:
     }
     QVERIFY(resultingJob != nullptr);
     QVERIFY(resultingJob->id != QStringLiteral("orig_job_workflow"));
-    QCOMPARE(resultingJob->prompt, QStringLiteral("New Independent Workflow Prompt"));
+    QCOMPARE(resultingJob->prompt, QStringLiteral("Original prompt"));
+    QCOMPARE(resultingJob->source, QStringLiteral("sources/github/org/repo"));
+    QCOMPARE(resultingJob->startingBranch, QStringLiteral("main"));
 
     // Original job remains completely unchanged
     JobData *origCheck = store->getJobById(QStringLiteral("orig_job_workflow"));
@@ -1597,6 +1603,268 @@ void TestSessionWindow::testZeroAttemptAndMultipleAttemptActionsIdentity() {
   auto *copyAct = zeroWin.actionCollection()->action(QStringLiteral("copy_jules"));
   QVERIFY(copyAct);
   QVERIFY(!copyAct->isEnabled());
+}
+
+void TestSessionWindow::testNewSessionFromFollowingPreservesSourceAndBranchUI() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-following-source-prop");
+  job.source = QStringLiteral("sources/github/arran4/kjules");
+  job.startingBranch = QStringLiteral("feature-ui-prop");
+  job.prompt = QStringLiteral("Prompt from following");
+  job.automationMode = QStringLiteral("AUTO_CREATE_PR");
+  job.planApproval = true;
+  job.ignoreConcurrency = true;
+  job.priority = 5;
+  job.canonicalRequest[QStringLiteral("source")] = job.source;
+  job.canonicalRequest[QStringLiteral("startingBranch")] = job.startingBranch;
+  job.canonicalRequest[QStringLiteral("prompt")] = job.prompt;
+  job.canonicalRequest[QStringLiteral("automationMode")] = job.automationMode;
+  job.canonicalRequest[QStringLiteral("requirePlanApproval")] = true;
+  job.canonicalRequest[QStringLiteral("ignoreConcurrency")] = true;
+  job.canonicalRequest[QStringLiteral("priority")] = 5;
+
+  JobAttemptData att;
+  att.id = QStringLiteral("att-following-1");
+  att.julesSessionId = QStringLiteral("sess-following-1");
+  att.dispatchState = QStringLiteral("COMPLETED");
+  att.julesState = QStringLiteral("IN_PROGRESS");
+  job.attempts.append(att);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+
+  NewSessionDialog *dialog = window.showNewSessionDialog(
+      SessionRequestBuilder::copyableSessionRequest(window.sessionModel()->getSession(0), window.jobStore()), true);
+  QVERIFY(dialog != nullptr);
+
+  QCOMPARE(dialog->promptText(), QStringLiteral("Prompt from following"));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/arran4/kjules")));
+  QCOMPARE(dialog->selectedSources().value(QStringLiteral("sources/github/arran4/kjules")),
+           QStringLiteral("feature-ui-prop"));
+  QCOMPARE(dialog->automationMode(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(dialog->requirePlanApproval(), true);
+  QCOMPARE(dialog->ignoreConcurrency(), true);
+  QCOMPARE(dialog->priority(), 5);
+
+  dialog->submitSession();
+  dialog->close();
+
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+  JobData *newJob = nullptr;
+  for (const auto &j : window.jobStore()->jobs()) {
+    if (j.id != QStringLiteral("job-following-source-prop")) {
+      newJob = window.jobStore()->getJobById(j.id);
+      break;
+    }
+  }
+  QVERIFY(newJob != nullptr);
+  QCOMPARE(newJob->source, QStringLiteral("sources/github/arran4/kjules"));
+  QCOMPARE(newJob->startingBranch, QStringLiteral("feature-ui-prop"));
+  QCOMPARE(newJob->prompt, QStringLiteral("Prompt from following"));
+  QCOMPARE(newJob->automationMode, QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(newJob->planApproval, true);
+  QCOMPARE(newJob->ignoreConcurrency, true);
+  QCOMPARE(newJob->priority, 5);
+}
+
+void TestSessionWindow::testNewSessionFromArchivePreservesSourceAndBranchUI() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-archive-source-prop");
+  job.source = QStringLiteral("sources/github/arran4/kjules");
+  job.startingBranch = QStringLiteral("feature-archive-prop");
+  job.prompt = QStringLiteral("Prompt from archive");
+  job.automationMode = QStringLiteral("AUTO_CREATE_PR");
+  job.planApproval = true;
+  job.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+  job.canonicalRequest[QStringLiteral("source")] = job.source;
+  job.canonicalRequest[QStringLiteral("startingBranch")] = job.startingBranch;
+  job.canonicalRequest[QStringLiteral("prompt")] = job.prompt;
+
+  JobAttemptData att;
+  att.id = QStringLiteral("att-arch-1");
+  att.julesSessionId = QStringLiteral("sess-arch-1");
+  job.attempts.append(att);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+
+  NewSessionDialog *dialog = window.showNewSessionDialog(
+      SessionRequestBuilder::copyableSessionRequest(window.archiveModel()->getSession(0), window.jobStore()), true);
+  QVERIFY(dialog != nullptr);
+
+  QCOMPARE(dialog->promptText(), QStringLiteral("Prompt from archive"));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/arran4/kjules")));
+  QCOMPARE(dialog->selectedSources().value(QStringLiteral("sources/github/arran4/kjules")),
+           QStringLiteral("feature-archive-prop"));
+  QCOMPARE(dialog->requirePlanApproval(), true);
+
+  dialog->submitSession();
+  dialog->close();
+
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+  JobData *newJob = nullptr;
+  for (const auto &j : window.jobStore()->jobs()) {
+    if (j.id != QStringLiteral("job-archive-source-prop")) {
+      newJob = window.jobStore()->getJobById(j.id);
+      break;
+    }
+  }
+  QVERIFY(newJob != nullptr);
+  QCOMPARE(newJob->source, QStringLiteral("sources/github/arran4/kjules"));
+  QCOMPARE(newJob->startingBranch, QStringLiteral("feature-archive-prop"));
+  QCOMPARE(newJob->prompt, QStringLiteral("Prompt from archive"));
+}
+
+void TestSessionWindow::testDuplicateSessionFromWindowPreservesSourceAndBranchUI() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-dup-window");
+  job.source = QStringLiteral("sources/github/org/repo");
+  job.startingBranch = QStringLiteral("dev-branch");
+  job.prompt = QStringLiteral("Prompt to duplicate");
+  job.automationMode = QStringLiteral("AUTO_CREATE_PR");
+  job.planApproval = true;
+  job.canonicalRequest[QStringLiteral("source")] = job.source;
+  job.canonicalRequest[QStringLiteral("startingBranch")] = job.startingBranch;
+  job.canonicalRequest[QStringLiteral("prompt")] = job.prompt;
+
+  JobAttemptData att;
+  att.id = QStringLiteral("att-dup-1");
+  att.requestSnapshot[QStringLiteral("source")] = job.source;
+  att.requestSnapshot[QStringLiteral("startingBranch")] = job.startingBranch;
+  att.requestSnapshot[QStringLiteral("prompt")] = job.prompt;
+  job.attempts.append(att);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  SessionWindow sw(job.id, window.jobStore(), window.apiManager(), window.errorsModel(), true, &window);
+  window.connectSessionWindow(&sw);
+
+  QAction *dupAct = sw.actionCollection()->action(QStringLiteral("duplicate_session"));
+  QVERIFY(dupAct != nullptr);
+  dupAct->trigger();
+
+  NewSessionDialog *dialog = window.findChild<NewSessionDialog *>();
+  QVERIFY(dialog != nullptr);
+
+  QCOMPARE(dialog->promptText(), QStringLiteral("Prompt to duplicate"));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/org/repo")));
+  QCOMPARE(dialog->selectedSources().value(QStringLiteral("sources/github/org/repo")), QStringLiteral("dev-branch"));
+  QCOMPARE(dialog->requirePlanApproval(), true);
+
+  dialog->submitSession();
+  dialog->close();
+
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+}
+
+void TestSessionWindow::testVariantFromWindowPreservesSnapshotAndQueuesUnderSameJobUI() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-variant-ui");
+  job.source = QStringLiteral("sources/github/org/repo");
+  job.startingBranch = QStringLiteral("main");
+
+  JobAttemptData att;
+  att.id = QStringLiteral("att-variant-snap");
+  att.requestSnapshot[QStringLiteral("source")] = QStringLiteral("sources/github/org/repo");
+  att.requestSnapshot[QStringLiteral("startingBranch")] = QStringLiteral("snapshot-branch");
+  att.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Snapshot prompt variant");
+  att.requestSnapshot[QStringLiteral("automationMode")] = QStringLiteral("AUTO_CREATE_PR");
+  att.requestSnapshot[QStringLiteral("requirePlanApproval")] = true;
+  job.attempts.append(att);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  SessionWindow sw(job.id, window.jobStore(), window.apiManager(), window.errorsModel(), true, &window);
+  window.connectSessionWindow(&sw);
+
+  QAction *variantAct = sw.actionCollection()->action(QStringLiteral("launch_variant"));
+  QVERIFY(variantAct != nullptr);
+  variantAct->trigger();
+
+  NewSessionDialog *dialog = window.findChild<NewSessionDialog *>();
+  QVERIFY(dialog != nullptr);
+
+  QCOMPARE(dialog->promptText(), QStringLiteral("Snapshot prompt variant"));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/org/repo")));
+  QCOMPARE(dialog->selectedSources().value(QStringLiteral("sources/github/org/repo")),
+           QStringLiteral("snapshot-branch"));
+  QCOMPARE(dialog->requirePlanApproval(), true);
+
+  dialog->submitSession();
+  dialog->close();
+
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QCOMPARE(window.queueModel()->size(), 1);
+  QueueItem item = window.queueModel()->getItem(0);
+  QCOMPARE(item.jobId, QStringLiteral("job-variant-ui"));
+  QCOMPARE(item.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Snapshot prompt variant"));
+  QCOMPARE(item.requestData.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("snapshot-branch"));
+}
+
+void TestSessionWindow::testDuplicateFollowingItemsToQueuePreservesFields() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-batch-dup");
+  job.source = QStringLiteral("sources/github/batch/repo");
+  job.startingBranch = QStringLiteral("batch-branch");
+  job.prompt = QStringLiteral("Batch duplicate prompt");
+  job.automationMode = QStringLiteral("AUTO_CREATE_PR");
+  job.planApproval = true;
+  job.ignoreConcurrency = true;
+  job.canonicalRequest[QStringLiteral("source")] = job.source;
+  job.canonicalRequest[QStringLiteral("startingBranch")] = job.startingBranch;
+  job.canonicalRequest[QStringLiteral("prompt")] = job.prompt;
+  job.canonicalRequest[QStringLiteral("automationMode")] = job.automationMode;
+  job.canonicalRequest[QStringLiteral("requirePlanApproval")] = true;
+  job.canonicalRequest[QStringLiteral("ignoreConcurrency")] = true;
+
+  JobAttemptData att;
+  att.id = QStringLiteral("att-batch-1");
+  att.julesSessionId = QStringLiteral("sess-batch-1");
+  att.dispatchState = QStringLiteral("COMPLETED");
+  att.julesState = QStringLiteral("FAILED");
+  job.attempts.append(att);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+
+  window.duplicateFollowingItemsToQueue(QStringLiteral("FAILED"), QStringLiteral("Failed"));
+
+  QCOMPARE(window.queueModel()->size(), 1);
+  QueueItem item = window.queueModel()->getItem(0);
+  QCOMPARE(item.requestData.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/batch/repo"));
+  QCOMPARE(item.requestData.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("batch-branch"));
+  QCOMPARE(item.requestData.value(QStringLiteral("prompt")).toString(), QStringLiteral("Batch duplicate prompt"));
+  QCOMPARE(item.requestData.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(item.requestData.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
 }
 
 void TestSessionWindow::testCreateRepoWorkflow() {
