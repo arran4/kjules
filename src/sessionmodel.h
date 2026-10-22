@@ -40,6 +40,11 @@ struct SessionData {
   bool hasUnreadChanges = false;
   QDateTime snoozeUntil;
   std::optional<int> refreshInterval;
+  QString jobId;
+  QString attemptId;
+  QString julesSessionId;
+  QStringList julesSessionIds;
+  bool hasRemoteSession = false;
 };
 
 class SessionModel : public QAbstractTableModel {
@@ -61,7 +66,12 @@ public:
     PrLabelsRole,
     FavouriteRole,
     UnreadChangesRole,
-    SnoozeUntilRole
+    SnoozeUntilRole,
+    JobIdRole,
+    AttemptIdRole,
+    JulesSessionIdRole,
+    JulesSessionIdsRole,
+    HasRemoteSessionRole
   };
 
   enum Columns {

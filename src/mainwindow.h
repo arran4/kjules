@@ -209,6 +209,8 @@ private:
       std::function<void(const QSortFilterProxyModel *, QAbstractItemModel *, const QList<QModelIndex> &, int)> action);
 
   QStringList getSelectedSessionIds() const;
+  QStringList getSelectedRemoteSessionIds() const;
+  QStringList getSelectedJobIds() const;
   QString urlFromSource(const QJsonObject &source) const;
 
   void setupUi();

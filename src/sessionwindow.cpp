@@ -389,14 +389,18 @@ void SessionWindow::setupActions() {
   QAction *openJulesAction = new QAction(i18n("Open Jules URL"), this);
   connect(openJulesAction, &QAction::triggered, this, [this]() {
     QString id = currentSessionData().value(QStringLiteral("id")).toString();
-    Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
+    if (!id.isEmpty()) {
+      Utils::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
+    }
   });
   actionCollection()->addAction(QStringLiteral("open_jules"), openJulesAction);
 
   QAction *copyJulesAction = new QAction(i18n("Copy Jules URL"), this);
   connect(copyJulesAction, &QAction::triggered, this, [this]() {
     QString id = currentSessionData().value(QStringLiteral("id")).toString();
-    QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/session/") + id);
+    if (!id.isEmpty()) {
+      QGuiApplication::clipboard()->setText(QStringLiteral("https://jules.google.com/session/") + id);
+    }
   });
   actionCollection()->addAction(QStringLiteral("copy_jules"), copyJulesAction);
 
@@ -496,6 +500,18 @@ void SessionWindow::updateActionStates() {
   if (auto *act = actionCollection()->action(QStringLiteral("archive_job"))) {
     act->setEnabled(!isArchived);
   }
+
+  QString julesSessionId = currentSessionData().value(QStringLiteral("id")).toString();
+  bool hasRemoteSession = !julesSessionId.isEmpty();
+  if (auto *act = actionCollection()->action(QStringLiteral("open_jules"))) {
+    act->setEnabled(hasRemoteSession);
+  }
+  if (auto *act = actionCollection()->action(QStringLiteral("copy_jules"))) {
+    act->setEnabled(hasRemoteSession);
+  }
+  if (auto *act = actionCollection()->action(QStringLiteral("reload_session"))) {
+    act->setEnabled(hasRemoteSession);
+  }
 }
 
 void SessionWindow::updateAutoRefresh() {
@@ -510,8 +526,10 @@ void SessionWindow::updateAutoRefresh() {
 void SessionWindow::refreshSession(bool isBackground) {
   if (m_apiManager) {
     QString id = currentSessionData().value(QStringLiteral("id")).toString();
-    m_apiManager->reloadSession(id, isBackground);
-    m_statusLabel->setText(i18n("Refreshing..."));
+    if (!id.isEmpty()) {
+      m_apiManager->reloadSession(id, isBackground);
+      m_statusLabel->setText(i18n("Refreshing..."));
+    }
   }
 }
 
@@ -1051,23 +1069,31 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
   }
 
   QString title;
-  QString sessionId;
+  QString displayId;
+  QString remoteSessionId;
 
   if (m_jobStore) {
     JobData *jobOpt = m_jobStore->getJobById(m_jobId);
     if (jobOpt) {
       title = jobOpt->canonicalRequest.value(QStringLiteral("title")).toString();
+      for (const auto &attempt : jobOpt->attempts) {
+        if (attempt.id == m_currentAttemptId) {
+          remoteSessionId = attempt.julesSessionId;
+          break;
+        }
+      }
     }
-    sessionId = m_currentAttemptId;
+    displayId = m_currentAttemptId.isEmpty() ? m_jobId : m_currentAttemptId;
   } else {
     title = sessionData.value(QStringLiteral("title")).toString();
-    sessionId = sessionData.value(QStringLiteral("id")).toString();
+    displayId = sessionData.value(QStringLiteral("id")).toString();
+    remoteSessionId = sessionData.value(QStringLiteral("id")).toString();
   }
 
   if (title.isEmpty()) {
     title = i18n("Details");
   }
-  setWindowTitle(i18n("Session %1 - %2", sessionId, title));
+  setWindowTitle(i18n("Session %1 - %2", displayId, title));
 
   if (m_jobStore) {
     updateAttemptList();
@@ -1077,12 +1103,12 @@ void SessionWindow::setupUi(const QJsonObject &sessionData) {
     renderDetailsAndDiff();
   }
 
-  if (m_apiManager && !sessionId.isEmpty()) {
+  if (m_apiManager && !remoteSessionId.isEmpty()) {
     if (m_statusLabel)
       m_statusLabel->setText(i18n("Loading activities..."));
-    m_apiManager->listActivities(sessionId);
-  } else if (!sessionId.isEmpty()) {
-    onActivitiesReceived(sessionId, QJsonArray());
+    m_apiManager->listActivities(remoteSessionId);
+  } else if (!remoteSessionId.isEmpty()) {
+    onActivitiesReceived(remoteSessionId, QJsonArray());
   }
 
   resize(800, 600);
@@ -1322,6 +1348,7 @@ void SessionWindow::onAttemptSelected(QListWidgetItem *item) {
   if (attemptId != m_currentAttemptId) {
     m_currentAttemptId = attemptId;
     renderDetailsAndDiff();
+    updateActionStates();
 
     if (m_localDiagnosticsModel) {
       updateAttemptDiagnostics();

@@ -318,19 +318,38 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   KXmlGuiWindow::keyPressEvent(event);
 }
 
-QStringList MainWindow::getSelectedSessionIds() const {
+QStringList MainWindow::getSelectedJobIds() const {
   QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
   const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
   QStringList ids;
   for (const QModelIndex &idx : selectedRows) {
     QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-    QString currentId = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
-    if (!currentId.isEmpty()) {
+    QString currentId = m_sessionModel->data(mappedIdx, SessionModel::JobIdRole).toString();
+    if (currentId.isEmpty()) {
+      currentId = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+    }
+    if (!currentId.isEmpty() && !ids.contains(currentId)) {
       ids.append(currentId);
     }
   }
   return ids;
 }
+
+QStringList MainWindow::getSelectedRemoteSessionIds() const {
+  QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+  const QSortFilterProxyModel *proxy = qobject_cast<const QSortFilterProxyModel *>(m_sessionView->model());
+  QStringList ids;
+  for (const QModelIndex &idx : selectedRows) {
+    QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
+    QString currentId = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdRole).toString();
+    if (!currentId.isEmpty() && !ids.contains(currentId)) {
+      ids.append(currentId);
+    }
+  }
+  return ids;
+}
+
+QStringList MainWindow::getSelectedSessionIds() const { return getSelectedRemoteSessionIds(); }
 
 void MainWindow::setupUi() {
   QWidget *centralWidget = new QWidget(this);
@@ -972,9 +991,18 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
         QStringList idsToRefresh;
         for (const QModelIndex &idx : selectedRows) {
           QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-          QString currentId = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
-          if (!currentId.isEmpty()) {
-            idsToRefresh.append(currentId);
+          const QStringList allIds = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdsRole).toStringList();
+          if (!allIds.isEmpty()) {
+            for (const QString &id : allIds) {
+              if (!id.isEmpty() && !idsToRefresh.contains(id)) {
+                idsToRefresh.append(id);
+              }
+            }
+          } else {
+            QString repId = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdRole).toString();
+            if (!repId.isEmpty() && !idsToRefresh.contains(repId)) {
+              idsToRefresh.append(repId);
+            }
           }
         }
         if (!idsToRefresh.isEmpty()) {
@@ -1013,17 +1041,21 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
           int count = 0;
           for (const QModelIndex &idx : selectedRows) {
             QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-            QString currentId = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+            QString currentId = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdRole).toString();
             if (!currentId.isEmpty()) {
               QString urlStr = QStringLiteral("https://jules.google.com/session/") + currentId;
               Utils::openUrl(QUrl(urlStr));
               count++;
             }
           }
-          updateStatus(i18np("Opened 1 session", "Opened %1 sessions", count));
+          if (count > 0) {
+            updateStatus(i18np("Opened 1 session", "Opened %1 sessions", count));
+          } else {
+            updateStatus(i18n("No Jules session found for selection."));
+          }
         });
         connect(copyJulesUrlAction, &QAction::triggered, [this]() {
-          QStringList ids = getSelectedSessionIds();
+          QStringList ids = getSelectedRemoteSessionIds();
           QStringList urls;
           for (const QString &id : ids) {
             urls.append(QStringLiteral("https://jules.google.com/session/") + id);
@@ -1031,13 +1063,17 @@ void MainWindow::setupFollowingTab(QWidget *tab) {
           if (!urls.isEmpty()) {
             QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
             updateStatus(i18np("1 Jules URL copied to clipboard.", "%1 Jules URLs copied to clipboard.", urls.size()));
+          } else {
+            updateStatus(i18n("No Jules session found for selection."));
           }
         });
         connect(copyJulesIdAction, &QAction::triggered, [this]() {
-          QStringList ids = getSelectedSessionIds();
+          QStringList ids = getSelectedRemoteSessionIds();
           if (!ids.isEmpty()) {
             QGuiApplication::clipboard()->setText(ids.join(QLatin1Char('\n')));
             updateStatus(i18np("1 Jules ID copied to clipboard.", "%1 Jules IDs copied to clipboard.", ids.size()));
+          } else {
+            updateStatus(i18n("No Jules session found for selection."));
           }
         });
       }
@@ -1359,6 +1395,12 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
         for (int row : rowsToUnarchive) {
           QJsonObject session = m_archiveModel->getSession(row);
           QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+          if (jobId.isEmpty()) {
+            jobId = session.value(QStringLiteral("jobId")).toString();
+          }
+          if (jobId.isEmpty()) {
+            jobId = session.value(QStringLiteral("id")).toString();
+          }
           if (JobData *job = m_jobStore->getJobById(jobId)) {
             job->legacyMetadata[QStringLiteral("_isArchive")] = false;
             m_jobStore->updateJob(*job);
@@ -1869,6 +1911,12 @@ void MainWindow::checkAutoArchiveSessions() {
   for (const ArchiveItem &item : itemsToArchive) {
     QJsonObject session = m_sessionModel->getSession(item.row);
     QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("jobId")).toString();
+    }
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("id")).toString();
+    }
     if (JobData *job = m_jobStore->getJobById(jobId)) {
       job->legacyMetadata[QStringLiteral("_isArchive")] = true;
       m_jobStore->updateJob(*job);
@@ -2202,7 +2250,7 @@ void MainWindow::createSessionActions() {
       const QString state = m_sessionModel->data(idx, SessionModel::StateRole).toString();
       const QString prUrl = m_sessionModel->data(idx, SessionModel::PrUrlRole).toString();
       if (predicate(state, prUrl)) {
-        const QString id = m_sessionModel->data(idx, SessionModel::IdRole).toString();
+        const QString id = m_sessionModel->data(idx, SessionModel::JulesSessionIdRole).toString();
         if (!id.isEmpty()) {
           QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
           Utils::openUrl(QUrl(urlStr));
@@ -2255,7 +2303,7 @@ void MainWindow::createSessionActions() {
     int count = 0;
     for (const QModelIndex &idx : selectedRows) {
       QModelIndex mappedIdx = proxy ? proxy->mapToSource(idx) : idx;
-      QString id = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+      QString id = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdRole).toString();
 
       if (!id.isEmpty()) {
         QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
@@ -2266,7 +2314,7 @@ void MainWindow::createSessionActions() {
     if (count > 0) {
       updateStatus(i18np("Opened 1 Jules URL.", "Opened %1 Jules URLs.", count));
     } else {
-      updateStatus(i18n("Invalid session ID for opening Jules URL."));
+      updateStatus(i18n("No Jules session found for opening Jules URL."));
     }
   });
 
@@ -2728,7 +2776,7 @@ void MainWindow::setupUrlActions() {
             Utils::openUrl(QUrl(prUrl));
             count++;
           } else {
-            QString id = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+            QString id = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdRole).toString();
             if (!id.isEmpty()) {
               QString urlStr = QStringLiteral("https://jules.google.com/session/") + id;
               Utils::openUrl(QUrl(urlStr));
@@ -2775,7 +2823,7 @@ void MainWindow::setupUrlActions() {
 
       if (stateFilter(currentState)) {
         QString prUrl = m_sessionModel->data(mappedIdx, SessionModel::PrUrlRole).toString();
-        QString id = m_sessionModel->data(mappedIdx, SessionModel::IdRole).toString();
+        QString id = m_sessionModel->data(mappedIdx, SessionModel::JulesSessionIdRole).toString();
         QString julesUrl = id.isEmpty() ? QString() : QStringLiteral("https://jules.google.com/session/") + id;
         bool hasPrUrl = (!prUrl.isEmpty() && prUrl != QLatin1StringView("undefined"));
 
@@ -3648,17 +3696,59 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
   QStringList activeIds;
-  for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-    QModelIndex index = m_sessionModel->index(i, 0);
-    QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
-    QString prStatus = m_sessionModel->data(index, SessionModel::PrStatusRole).toString();
-    if (!FollowingRefreshEvaluator::isSessionEligible(state, prStatus))
-      continue;
-    QString currentId = m_sessionModel->data(index, SessionModel::IdRole).toString();
-    if (!currentId.isEmpty()) {
-      activeIds.append(currentId);
+  if (m_jobStore) {
+    const QList<JobData> allJobs = m_jobStore->jobs();
+    for (const JobData &job : allJobs) {
+      JobPolicy::JobAggregateState aggState = JobPolicy::aggregateState(job);
+      if (aggState == JobPolicy::JobAggregateState::Archived || aggState == JobPolicy::JobAggregateState::Pending) {
+        continue;
+      }
+      for (const JobAttemptData &attempt : job.attempts) {
+        if (attempt.julesSessionId.isEmpty()) {
+          continue;
+        }
+        QString prStatus;
+        if (attempt.rawResponse.contains(QStringLiteral("githubPrInfo"))) {
+          prStatus = attempt.rawResponse.value(QStringLiteral("githubPrInfo"))
+                         .toObject()
+                         .value(QStringLiteral("state"))
+                         .toString();
+          if (attempt.rawResponse.value(QStringLiteral("githubPrInfo"))
+                  .toObject()
+                  .contains(QStringLiteral("merged_at"))) {
+            prStatus = QStringLiteral("merged");
+          }
+        } else if (!attempt.prMetadata.isEmpty()) {
+          prStatus = attempt.prMetadata.value(QStringLiteral("state")).toString();
+          if (attempt.prMetadata.contains(QStringLiteral("merged_at"))) {
+            prStatus = QStringLiteral("merged");
+          }
+        }
+        if (!FollowingRefreshEvaluator::isSessionEligible(attempt.julesState, prStatus)) {
+          continue;
+        }
+        if (!activeIds.contains(attempt.julesSessionId)) {
+          activeIds.append(attempt.julesSessionId);
+        }
+      }
     }
   }
+
+  // Fallback if not using job store or no jobs present in store
+  if (activeIds.isEmpty() && m_sessionModel) {
+    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+      QModelIndex index = m_sessionModel->index(i, 0);
+      QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
+      QString prStatus = m_sessionModel->data(index, SessionModel::PrStatusRole).toString();
+      if (!FollowingRefreshEvaluator::isSessionEligible(state, prStatus))
+        continue;
+      QString julesId = m_sessionModel->data(index, SessionModel::JulesSessionIdRole).toString();
+      if (!julesId.isEmpty() && !activeIds.contains(julesId)) {
+        activeIds.append(julesId);
+      }
+    }
+  }
+
   return activeIds;
 }
 
@@ -5067,10 +5157,20 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
 void MainWindow::showSessionWindow(const QJsonObject &session) {
   QString sessionId = session.value(QStringLiteral("id")).toString();
+  QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+  if (jobId.isEmpty()) {
+    jobId = session.value(QStringLiteral("jobId")).toString();
+  }
   m_sessionModel->markAsRead(sessionId);
   SessionWindow *window = nullptr;
   if (m_jobStore) {
-    JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
+    JobData *job = nullptr;
+    if (!jobId.isEmpty()) {
+      job = m_jobStore->getJobById(jobId);
+    }
+    if (!job) {
+      job = m_jobStore->getJobBySessionId(sessionId);
+    }
     if (job)
       window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId),
                                  this);
@@ -5092,33 +5192,27 @@ void MainWindow::onSessionActivated(const QModelIndex &index) {
   QModelIndex sourceIndex = proxy ? proxy->mapToSource(index) : index;
   QJsonObject sessionData = m_sessionModel->getSession(sourceIndex.row());
 
-  QString id = m_sessionModel->data(sourceIndex, SessionModel::IdRole).toString();
-  m_sessionModel->clearUnreadChanges(id);
+  QString jobId = m_sessionModel->data(sourceIndex, SessionModel::JobIdRole).toString();
+  if (jobId.isEmpty()) {
+    jobId = sessionData.value(QStringLiteral("id")).toString();
+  }
+  m_sessionModel->clearUnreadChanges(jobId);
 
-  if (sessionData.isEmpty()) {
-    m_sessionModel->markAsRead(id);
-    m_apiManager->getSession(id);
-    updateStatus(i18n("Fetching details for session %1...", id));
-  } else {
-    QString sessionId = sessionData.value(QStringLiteral("id")).toString();
-    m_sessionModel->markAsRead(sessionId);
-    SessionWindow *window = nullptr;
-    if (m_jobStore) {
-      JobData *job = m_jobStore ? m_jobStore->getJobBySessionId(sessionId) : nullptr;
-      if (job)
-        window = new SessionWindow(job->id, m_jobStore, m_apiManager, m_errorsModel,
-                                   m_sessionModel->contains(sessionId), this);
-    }
-    if (!window)
-      window = new SessionWindow(sessionData, m_apiManager, m_errorsModel, m_sessionModel->contains(sessionId), this);
-    window->show();
-    connect(window, &SessionWindow::watchRequested, this, [this](const QJsonObject &s) {
-      m_sessionModel->addSession(s);
-      m_sessionModel->saveSessions();
-    });
-
+  if (m_jobStore && m_jobStore->getJobById(jobId)) {
+    m_sessionModel->markAsRead(jobId);
+    SessionWindow *window =
+        new SessionWindow(jobId, m_jobStore, m_apiManager, m_errorsModel, m_sessionModel->contains(jobId), this);
     connectSessionWindow(window);
     window->show();
+    return;
+  }
+
+  if (sessionData.isEmpty()) {
+    m_sessionModel->markAsRead(jobId);
+    m_apiManager->getSession(jobId);
+    updateStatus(i18n("Fetching details for session %1...", jobId));
+  } else {
+    showSessionWindow(sessionData);
   }
 }
 
@@ -5754,42 +5848,67 @@ void MainWindow::autoRefreshFollowing() {
 
     QDateTime lastFailedAt = m_sessionReloadFailedAt.value(id);
 
-    for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
-      if (m_sessionModel->data(m_sessionModel->index(i, 0), SessionModel::IdRole).toString() == id) {
-        QJsonObject rawData = m_sessionModel->getSession(i);
+    std::optional<int> localRefresh;
+    QDateTime lastRefreshed;
 
-        std::optional<int> localRefresh;
-        if (rawData.contains(QStringLiteral("local_refreshInterval"))) {
-          localRefresh = rawData.value(QStringLiteral("local_refreshInterval")).toInt(-1);
+    if (m_jobStore) {
+      if (const JobData *job = m_jobStore->getJobBySessionId(id)) {
+        if (job->legacyMetadata.contains(QStringLiteral("local_refreshInterval"))) {
+          localRefresh = job->legacyMetadata.value(QStringLiteral("local_refreshInterval")).toInt(-1);
         }
-
-        int intervalSecs = FollowingRefreshEvaluator::effectiveIntervalSeconds(globalIntervalSeconds, localRefresh);
-        if (intervalSecs <= 0) {
-          break; // Refresh disabled
-        }
-
-        QDateTime lastRefreshed;
-        if (rawData.contains(QStringLiteral("lastRefreshed"))) {
-          lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("lastRefreshed")).toString(), Qt::ISODate);
-        } else if (rawData.contains(QStringLiteral("updateTime"))) {
-          lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
-        } else if (rawData.contains(QStringLiteral("createTime"))) {
-          lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
-        }
-
-        if (FollowingRefreshEvaluator::shouldRefresh(now, lastRefreshed, intervalSecs, false, lastFailedAt)) {
-          qDebug() << "[AutoRefresh] Session considered due for refresh:" << id;
-          m_inFlightSessionReloads.insert(id);
-          m_apiManager->reloadSession(id, true);
-          qDebug() << "[AutoRefresh] Jules reload dispatched for:" << id;
-        } else {
-          if (lastFailedAt.isValid() && lastFailedAt.addSecs(300) > now) {
-            qDebug() << "[AutoRefresh] Session skipped due to failure cooldown:" << id;
-          } else {
-            qDebug() << "[AutoRefresh] Session not due for refresh:" << id << "| Interval(s):" << intervalSecs;
+        for (const auto &attempt : job->attempts) {
+          if (attempt.julesSessionId == id) {
+            lastRefreshed = attempt.updatedAt;
+            if (!lastRefreshed.isValid()) {
+              lastRefreshed = attempt.createdAt;
+            }
+            if (!lastRefreshed.isValid() && attempt.rawResponse.contains(QStringLiteral("lastRefreshed"))) {
+              lastRefreshed = QDateTime::fromString(
+                  attempt.rawResponse.value(QStringLiteral("lastRefreshed")).toString(), Qt::ISODate);
+            }
+            break;
           }
         }
-        break;
+      }
+    }
+
+    if (!lastRefreshed.isValid() && m_sessionModel) {
+      for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
+        QModelIndex idx = m_sessionModel->index(i, 0);
+        if (m_sessionModel->data(idx, SessionModel::JulesSessionIdRole).toString() == id ||
+            m_sessionModel->data(idx, SessionModel::IdRole).toString() == id) {
+          QJsonObject rawData = m_sessionModel->getSession(i);
+          if (rawData.contains(QStringLiteral("local_refreshInterval"))) {
+            localRefresh = rawData.value(QStringLiteral("local_refreshInterval")).toInt(-1);
+          }
+          if (rawData.contains(QStringLiteral("lastRefreshed"))) {
+            lastRefreshed =
+                QDateTime::fromString(rawData.value(QStringLiteral("lastRefreshed")).toString(), Qt::ISODate);
+          } else if (rawData.contains(QStringLiteral("updateTime"))) {
+            lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("updateTime")).toString(), Qt::ISODate);
+          } else if (rawData.contains(QStringLiteral("createTime"))) {
+            lastRefreshed = QDateTime::fromString(rawData.value(QStringLiteral("createTime")).toString(), Qt::ISODate);
+          }
+          break;
+        }
+      }
+    }
+
+    int intervalSecs = FollowingRefreshEvaluator::effectiveIntervalSeconds(globalIntervalSeconds, localRefresh);
+    if (intervalSecs <= 0) {
+      continue; // Refresh disabled
+    }
+
+    if (FollowingRefreshEvaluator::shouldRefresh(now, lastRefreshed, intervalSecs, false, lastFailedAt)) {
+      qDebug() << "[AutoRefresh] Session considered due for refresh:" << id;
+      m_inFlightSessionReloads.insert(id);
+      m_apiManager->reloadSession(id, true);
+      qDebug() << "[AutoRefresh] Jules reload dispatched for:" << id;
+    } else {
+      if (lastFailedAt.isValid() && lastFailedAt.addSecs(300) > now) {
+        qDebug() << "[AutoRefresh] Session skipped due to failure cooldown:" << id;
+      } else {
+        qDebug() << "[AutoRefresh] Session not due for refresh:" << id << "| Interval(s):" << intervalSecs;
       }
     }
   }
@@ -6324,6 +6443,12 @@ void MainWindow::deleteFollowingSessions() {
   for (int row : rowsToDelete) {
     QJsonObject session = m_sessionModel->getSession(row);
     QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("jobId")).toString();
+    }
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("id")).toString();
+    }
     for (int i = 0; i < jobs.size(); ++i) {
       if (jobs[i].id == jobId) {
         jobs.removeAt(i);
@@ -6348,6 +6473,12 @@ void MainWindow::archiveSelectedSessions() {
   for (int row : rowsToArchive) {
     QJsonObject session = m_sessionModel->getSession(row);
     QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("jobId")).toString();
+    }
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("id")).toString();
+    }
     if (JobData *job = m_jobStore->getJobById(jobId)) {
       job->legacyMetadata[QStringLiteral("_isArchive")] = true;
       m_jobStore->updateJob(*job);
@@ -6371,6 +6502,12 @@ void MainWindow::deleteArchiveSessions() {
   for (int row : rowsToDelete) {
     QJsonObject session = m_archiveModel->getSession(row);
     QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("jobId")).toString();
+    }
+    if (jobId.isEmpty()) {
+      jobId = session.value(QStringLiteral("id")).toString();
+    }
     for (int i = 0; i < jobs.size(); ++i) {
       if (jobs[i].id == jobId) {
         jobs.removeAt(i);
@@ -6739,15 +6876,106 @@ void MainWindow::syncModelsFromJobStore() {
     JobPolicy::JobAggregateState aggState = JobPolicy::aggregateState(job);
     QString aggStateStr = JobPolicy::aggregateStateToString(aggState);
 
-    if (aggState == JobPolicy::JobAggregateState::Archived) {
+    const JobAttemptData *repAttempt = nullptr;
+    if (!job.acceptedAttemptId.isEmpty()) {
+      for (const auto &attempt : job.attempts) {
+        if (attempt.id == job.acceptedAttemptId) {
+          repAttempt = &attempt;
+          break;
+        }
+      }
+    }
+    if (!repAttempt) {
+      for (int a = job.attempts.size() - 1; a >= 0; --a) {
+        if (!job.attempts[a].julesSessionId.isEmpty()) {
+          repAttempt = &job.attempts[a];
+          break;
+        }
+      }
+    }
+    if (!repAttempt && !job.attempts.isEmpty()) {
+      repAttempt = &job.attempts.last();
+    }
+
+    QStringList allJulesSessionIds;
+    for (const auto &attempt : job.attempts) {
+      if (!attempt.julesSessionId.isEmpty() && !allJulesSessionIds.contains(attempt.julesSessionId)) {
+        allJulesSessionIds.append(attempt.julesSessionId);
+      }
+    }
+
+    auto buildJobProjection = [&](const QString &stateStr) {
       QJsonObject projection = job.canonicalRequest;
       projection[QStringLiteral("id")] = job.id;
-      projection[QStringLiteral("state")] = QStringLiteral("archived");
-      projection[QStringLiteral("aggregateState")] = aggStateStr;
+      projection[QStringLiteral("jobId")] = job.id;
+      projection[QStringLiteral("_kjules_job_id")] = job.id;
       projection[QStringLiteral("jobMode")] = true;
-      if (!job.acceptedAttemptId.isEmpty())
+      projection[QStringLiteral("aggregateState")] = aggStateStr;
+      projection[QStringLiteral("state")] = stateStr;
+
+      if (!job.acceptedAttemptId.isEmpty()) {
         projection[QStringLiteral("winner")] = job.acceptedAttemptId;
-      archiveArray.append(projection);
+      }
+      if (repAttempt) {
+        projection[QStringLiteral("attemptId")] = repAttempt->id;
+        if (!repAttempt->julesSessionId.isEmpty()) {
+          projection[QStringLiteral("julesSessionId")] = repAttempt->julesSessionId;
+        }
+        if (!repAttempt->rawResponse.isEmpty()) {
+          if (repAttempt->rawResponse.contains(QStringLiteral("outputs"))) {
+            projection[QStringLiteral("outputs")] = repAttempt->rawResponse.value(QStringLiteral("outputs"));
+          }
+          if (repAttempt->rawResponse.contains(QStringLiteral("pullRequest"))) {
+            projection[QStringLiteral("pullRequest")] = repAttempt->rawResponse.value(QStringLiteral("pullRequest"));
+          }
+          if (repAttempt->rawResponse.contains(QStringLiteral("githubPrInfo"))) {
+            projection[QStringLiteral("githubPrInfo")] = repAttempt->rawResponse.value(QStringLiteral("githubPrInfo"));
+          }
+        } else if (!repAttempt->prMetadata.isEmpty()) {
+          projection[QStringLiteral("githubPrInfo")] = repAttempt->prMetadata;
+        }
+        if (repAttempt->updatedAt.isValid()) {
+          projection[QStringLiteral("updateTime")] = repAttempt->updatedAt.toUTC().toString(Qt::ISODate);
+        }
+        if (repAttempt->createdAt.isValid()) {
+          projection[QStringLiteral("createTime")] = repAttempt->createdAt.toUTC().toString(Qt::ISODate);
+        }
+      }
+      if (!allJulesSessionIds.isEmpty()) {
+        projection[QStringLiteral("julesSessionIds")] = QJsonArray::fromStringList(allJulesSessionIds);
+      }
+
+      if (!projection.contains(QStringLiteral("updateTime")) && job.updatedAt.isValid()) {
+        projection[QStringLiteral("updateTime")] = job.updatedAt.toUTC().toString(Qt::ISODate);
+      }
+      if (!projection.contains(QStringLiteral("createTime")) && job.createdAt.isValid()) {
+        projection[QStringLiteral("createTime")] = job.createdAt.toUTC().toString(Qt::ISODate);
+      }
+
+      if (!projection.contains(QStringLiteral("sourceContext")) ||
+          projection.value(QStringLiteral("sourceContext")).toObject().isEmpty()) {
+        QJsonObject srcCtx;
+        QString src = projection.value(QStringLiteral("source")).toString();
+        if (src.isEmpty()) {
+          src = job.source;
+        }
+        srcCtx[QStringLiteral("source")] = src;
+        QString branch = projection.value(QStringLiteral("startingBranch")).toString();
+        if (branch.isEmpty()) {
+          branch = job.startingBranch;
+        }
+        if (!branch.isEmpty()) {
+          QJsonObject ghCtx;
+          ghCtx[QStringLiteral("startingBranch")] = branch;
+          srcCtx[QStringLiteral("githubRepoContext")] = ghCtx;
+        }
+        projection[QStringLiteral("sourceContext")] = srcCtx;
+      }
+      return projection;
+    };
+
+    if (aggState == JobPolicy::JobAggregateState::Archived) {
+      archiveArray.append(buildJobProjection(QStringLiteral("archived")));
     } else if (aggState == JobPolicy::JobAggregateState::Pending) {
       if (job.legacyMetadata.value(QStringLiteral("holding")).toBool()) {
         holdingItems.append(item);
@@ -6756,29 +6984,22 @@ void MainWindow::syncModelsFromJobStore() {
       }
     } else {
       // In Following
-      QJsonObject projection = job.canonicalRequest;
-      projection[QStringLiteral("id")] = job.id;
-      projection[QStringLiteral("jobMode")] = true;
-      projection[QStringLiteral("aggregateState")] = aggStateStr;
-      if (!job.acceptedAttemptId.isEmpty()) {
-        projection[QStringLiteral("winner")] = job.acceptedAttemptId;
-      }
-
+      QString stateStr;
       if (aggState == JobPolicy::JobAggregateState::NeedsAttention) {
-        projection[QStringLiteral("state")] = QStringLiteral("ERROR_STATE");
+        stateStr = QStringLiteral("ERROR_STATE");
       } else if (aggState == JobPolicy::JobAggregateState::AwaitingUserAction) {
-        projection[QStringLiteral("state")] = JulesStatus::AWAITING_USER_FEEDBACK;
+        stateStr = JulesStatus::AWAITING_USER_FEEDBACK;
       } else if (aggState == JobPolicy::JobAggregateState::Active ||
                  aggState == JobPolicy::JobAggregateState::ActiveWithFailed ||
                  aggState == JobPolicy::JobAggregateState::WinnerWithActive) {
-        projection[QStringLiteral("state")] = JulesStatus::IN_PROGRESS;
+        stateStr = JulesStatus::IN_PROGRESS;
       } else if (aggState == JobPolicy::JobAggregateState::WinnerSatisfied ||
                  aggState == JobPolicy::JobAggregateState::CompletedWithoutWinner) {
-        projection[QStringLiteral("state")] = JulesStatus::COMPLETED;
+        stateStr = JulesStatus::COMPLETED;
       } else {
-        projection[QStringLiteral("state")] = job.lifecycleMetadata.value(QStringLiteral("state")).toString();
+        stateStr = job.lifecycleMetadata.value(QStringLiteral("state")).toString();
       }
-      followingArray.append(projection);
+      followingArray.append(buildJobProjection(stateStr));
     }
   }
 
