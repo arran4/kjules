@@ -251,3 +251,57 @@ bool JobStore::addJobTransactional(const JobData &job) {
   m_jobs = backup;
   return false;
 }
+
+bool JobStore::updateJobsTransactional(const QVector<JobData> &jobs) {
+  QVector<JobData> backup = m_jobs;
+  for (const JobData &job : jobs) {
+    updateJob(job);
+  }
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
+
+bool JobStore::removeJobsTransactional(const QStringList &ids) {
+  QVector<JobData> backup = m_jobs;
+  for (const QString &id : ids) {
+    removeJob(id);
+  }
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
+
+bool JobStore::archiveJobsTransactional(const QStringList &ids, bool archive) {
+  QVector<JobData> backup = m_jobs;
+  bool changed = false;
+  for (const QString &id : ids) {
+    for (int i = 0; i < m_jobs.size(); ++i) {
+      if (m_jobs[i].id == id) {
+        if (archive) {
+          m_jobs[i].lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+          m_jobs[i].legacyMetadata[QStringLiteral("_isArchive")] = true;
+          m_jobs[i].recordHistory(QStringLiteral("archive"), QStringLiteral("Job archived"));
+        } else {
+          m_jobs[i].lifecycleMetadata.remove(QStringLiteral("state"));
+          m_jobs[i].legacyMetadata.remove(QStringLiteral("_isArchive"));
+          m_jobs[i].recordHistory(QStringLiteral("unarchive"), QStringLiteral("Job unarchived"));
+        }
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (!changed) {
+    return true;
+  }
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}

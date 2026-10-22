@@ -72,7 +72,10 @@ private Q_SLOTS:
   void snoozeSelectedFollowingSessionsCustom();
   void clearSnoozeSelectedFollowingSessions();
   void archiveSelectedSessions();
+  void unarchiveSelectedSessions();
   void deleteArchiveSessions();
+  void deleteQueueItems();
+  void deleteHoldingItems();
   void deleteDrafts();
   void deleteTemplates();
   void deleteErrors();

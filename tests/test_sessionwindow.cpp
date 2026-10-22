@@ -29,6 +29,7 @@
 #include <QTest>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QTreeView>
 #include <QUuid>
 
 class MockSimpleNetworkReply : public QNetworkReply {
@@ -177,6 +178,10 @@ private Q_SLOTS:
   void testSessionCreationJobStoreFailurePreservesDialogAndPrompt();
   void testSessionCreationPartialFailureRetainsFailedSourcesOnly();
   void testEditQueueItemJobStoreFailurePreservesOriginalQueueItem();
+  void testDeleteFollowingSessionsTransactionalAndProxyMapping();
+  void testDeleteArchiveSessionsTransactional();
+  void testQueueItemDeleteRemovesJobAndNeverReappearsAcrossSyncOrRestart();
+  void testArchiveAndUnarchiveTransitionsPreserveJobAndHistory();
 
   void testCanonicalPresentationAndRecovery_data() {
     QTest::addColumn<bool>("direct");
@@ -1876,6 +1881,223 @@ void TestSessionWindow::testEditQueueItemJobStoreFailurePreservesOriginalQueueIt
   QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
            QStringLiteral("Modified prompt"));
   QVERIFY(!dlg->isVisible());
+}
+
+void TestSessionWindow::testDeleteFollowingSessionsTransactionalAndProxyMapping() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData job1;
+  job1.id = QStringLiteral("job-del-follow-1");
+  job1.source = QStringLiteral("sources/github/a/repo");
+  job1.prompt = QStringLiteral("Prompt A");
+  JobAttemptData att1;
+  att1.id = QStringLiteral("att-del-1");
+  att1.julesSessionId = QStringLiteral("sess-del-1");
+  att1.dispatchState = QStringLiteral("COMPLETED");
+  att1.julesState = QStringLiteral("IN_PROGRESS");
+  job1.attempts.append(att1);
+
+  JobData job2;
+  job2.id = QStringLiteral("job-del-follow-2");
+  job2.source = QStringLiteral("sources/github/z/repo");
+  job2.prompt = QStringLiteral("Prompt Z");
+  JobAttemptData att2;
+  att2.id = QStringLiteral("att-del-2");
+  att2.julesSessionId = QStringLiteral("sess-del-2");
+  att2.dispatchState = QStringLiteral("COMPLETED");
+  att2.julesState = QStringLiteral("IN_PROGRESS");
+  job2.attempts.append(att2);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job1));
+  QVERIFY(window.jobStore()->addJobTransactional(job2));
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 2);
+
+  // Switch to following tab
+  window.switchToFollowingTab();
+
+  // Select the first row in m_sessionView
+  window.m_sessionView->selectionModel()->select(window.m_sessionView->model()->index(0, 0),
+                                                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+  QCOMPARE(window.m_sessionView->selectionModel()->selectedRows().size(), 1);
+
+  // Inject save failure
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+  window.deleteFollowingSessions();
+
+  // JobStore and model must remain intact (rollback)
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+  QCOMPARE(window.sessionModel()->rowCount(), 2);
+
+  // Clear simulation and delete again
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  window.deleteFollowingSessions();
+
+  // Exactly 1 job deleted
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+}
+
+void TestSessionWindow::testDeleteArchiveSessionsTransactional() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.archiveModel()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-del-archive-1");
+  job.source = QStringLiteral("sources/github/arch/repo");
+  job.prompt = QStringLiteral("Archive prompt");
+  job.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+
+  // Select row in m_archiveView
+  window.m_archiveView->selectionModel()->select(window.m_archiveView->model()->index(0, 0),
+                                                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+  // Inject save failure
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+  window.deleteArchiveSessions();
+
+  // Job remains intact
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+
+  // Clear failure and delete
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  window.deleteArchiveSessions();
+
+  QCOMPARE(window.jobStore()->jobs().size(), 0);
+  QCOMPARE(window.archiveModel()->rowCount(), 0);
+}
+
+void TestSessionWindow::testQueueItemDeleteRemovesJobAndNeverReappearsAcrossSyncOrRestart() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  QString storePath = tempDir.filePath(QStringLiteral("jobs.json"));
+
+  {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->setFilename(storePath);
+    window.jobStore()->clear();
+    window.queueModel()->clear();
+
+    QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+        QStringLiteral("sources/github/q/repo"), QStringLiteral("main"), QStringLiteral("Queued task to delete"),
+        QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+
+    JobData job = JobData::fromRequest(req);
+    job.id = QStringLiteral("job-queue-del-1");
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    QueueItem item;
+    item.jobId = job.id;
+    item.requestData = req;
+    window.queueModel()->enqueueItem(item);
+    QCOMPARE(window.queueModel()->size(), 1);
+
+    // Select queue item
+    window.m_queueView->selectionModel()->select(window.m_queueModel->index(0, 0),
+                                                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+    // Test rollback on failure
+    window.jobStore()->setSimulateSaveFailureForTest(true);
+    window.deleteQueueItems();
+
+    // Verify task not deleted on save failure
+    QCOMPARE(window.queueModel()->size(), 1);
+    QVERIFY(window.jobStore()->getJobById(job.id) != nullptr);
+
+    // Now delete with save succeeding
+    window.jobStore()->setSimulateSaveFailureForTest(false);
+    window.deleteQueueItems();
+
+    // Verify deleted from queue and JobStore
+    QCOMPARE(window.queueModel()->size(), 0);
+    QVERIFY(window.jobStore()->getJobById(job.id) == nullptr);
+
+    // Crucial: Call syncModelsFromJobStore() and assert it does NOT reappear!
+    window.syncModelsFromJobStore();
+    QCOMPARE(window.queueModel()->size(), 0);
+  }
+
+  // Simulate application restart: load from same storePath
+  {
+    JobStore reloadedStore(storePath);
+    QVERIFY(reloadedStore.load());
+    QCOMPARE(reloadedStore.jobs().size(), 0);
+    QVERIFY(reloadedStore.getJobById(QStringLiteral("job-queue-del-1")) == nullptr);
+  }
+}
+
+void TestSessionWindow::testArchiveAndUnarchiveTransitionsPreserveJobAndHistory() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+
+  JobData job;
+  job.id = QStringLiteral("job-archive-trans");
+  job.source = QStringLiteral("sources/github/trans/repo");
+  job.prompt = QStringLiteral("Transition prompt");
+  job.acceptedAttemptId = QStringLiteral("att-trans-1");
+  JobAttemptData att;
+  att.id = QStringLiteral("att-trans-1");
+  att.julesSessionId = QStringLiteral("sess-trans-1");
+  att.dispatchState = QStringLiteral("COMPLETED");
+  att.julesState = QStringLiteral("COMPLETED");
+  job.attempts.append(att);
+
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  QCOMPARE(window.archiveModel()->rowCount(), 0);
+
+  // Select in Following and archive
+  window.m_sessionView->selectionModel()->select(window.m_sessionView->model()->index(0, 0),
+                                                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+  // Test rollback on failure
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+  window.archiveSelectedSessions();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  QCOMPARE(window.archiveModel()->rowCount(), 0);
+
+  // Succeeded archive
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  window.archiveSelectedSessions();
+
+  QCOMPARE(window.sessionModel()->rowCount(), 0);
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+  JobData *archivedJob = window.jobStore()->getJobById(job.id);
+  QVERIFY(archivedJob != nullptr);
+  QCOMPARE(JobPolicy::aggregateState(*archivedJob), JobPolicy::JobAggregateState::Archived);
+  QVERIFY(archivedJob->lifecycleMetadata.value(QStringLiteral("history")).toArray().size() >= 1);
+
+  // Now Unarchive from archive tab
+  window.m_archiveView->selectionModel()->select(window.m_archiveView->model()->index(0, 0),
+                                                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+  window.unarchiveSelectedSessions();
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+  QCOMPARE(window.sessionModel()->rowCount(), 0);
+
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  window.unarchiveSelectedSessions();
+
+  QCOMPARE(window.archiveModel()->rowCount(), 0);
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  JobData *unarchivedJob = window.jobStore()->getJobById(job.id);
+  QVERIFY(unarchivedJob != nullptr);
+  QCOMPARE(unarchivedJob->acceptedAttemptId, QStringLiteral("att-trans-1"));
+  QCOMPARE(JobPolicy::aggregateState(*unarchivedJob), JobPolicy::JobAggregateState::WinnerSatisfied);
 }
 
 void TestSessionWindow::testCreateRepoWorkflow() {
