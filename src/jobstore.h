@@ -85,11 +85,15 @@ public:
   bool removeJobTransactional(const QString &id);
   bool addJobTransactional(const JobData &job);
   bool replaceJobTransactional(const QString &origJobId, const QVector<JobData> &newJobs, bool keepOrigJob = false);
+  int updateJobsTransactional(const QVector<JobData> &jobs);
+  int removeJobsTransactional(const QStringList &ids);
+  int archiveJobsTransactional(const QStringList &ids, bool archive);
 
   // For migration seams
   static JobStore fromMemory(const QVector<JobData> &jobs);
 
   QString filename() const { return m_filename; }
+  void setFilename(const QString &filename) { m_filename = filename; }
   QString lastError() const { return m_lastError; }
   void setSimulateSaveFailureForTest(bool simulate) { m_simulateSaveFailure = simulate; }
   bool simulateSaveFailureForTest() const { return m_simulateSaveFailure; }
