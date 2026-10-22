@@ -76,7 +76,7 @@ PromptTextEdit::Mode PromptTextEdit::currentMode() const { return m_mode; }
 
 QString PromptTextEdit::getPromptText() const {
   if (m_mode == WysiwygMarkdown) {
-    return toMarkdown();
+    return toMarkdown().trimmed();
   } else {
     return toPlainText();
   }
@@ -1543,6 +1543,26 @@ void NewSessionDialog::setEditMode(bool isEdit) {
   }
 }
 
+QString NewSessionDialog::promptText() const {
+  return m_promptEdit ? m_promptEdit->getPromptText().trimmed() : QString();
+}
+
+QString NewSessionDialog::automationMode() const {
+  return m_automationModeComboBox ? m_automationModeComboBox->currentData().toString() : QString();
+}
+
+bool NewSessionDialog::requirePlanApproval() const {
+  return m_requirePlanApprovalCheckBox ? m_requirePlanApprovalCheckBox->isChecked() : false;
+}
+
+bool NewSessionDialog::ignoreConcurrency() const {
+  return m_ignoreConcurrencyCheckBox ? m_ignoreConcurrencyCheckBox->isChecked() : false;
+}
+
+int NewSessionDialog::priority() const { return m_prioritySpinBox ? m_prioritySpinBox->value() : 0; }
+
+void NewSessionDialog::submitSession() { onSubmitSession(); }
+
 void NewSessionDialog::setInitialData(const QJsonObject &initialData) {
   const auto data = SessionRequestBuilder::normalizeSessionRequest(initialData);
   QString prompt = data.value(QStringLiteral("prompt")).toString();
@@ -1593,8 +1613,8 @@ void NewSessionDialog::setInitialData(const QJsonObject &initialData) {
     return matches.size() == 1 ? matches.first().data(SourceModel::IdRole).toString() : storedName;
   };
 
-  auto extractSourceAndBranch = [this, &resolveSourceName](const QJsonValue &val, QString &outName,
-                                                           QString &outBranch) {
+  auto extractSourceAndBranch = [this, &data, &resolveSourceName](const QJsonValue &val, QString &outName,
+                                                                  QString &outBranch) {
     outName.clear();
     outBranch.clear();
     if (val.isObject()) {
@@ -1606,12 +1626,22 @@ void NewSessionDialog::setInitialData(const QJsonObject &initialData) {
       } else if (obj.contains(QStringLiteral("id")) && !obj.value(QStringLiteral("id")).toString().isEmpty()) {
         outName = obj.value(QStringLiteral("id")).toString();
       }
-      outBranch = obj.value(QStringLiteral("branch")).toString();
+      if (obj.contains(QStringLiteral("branch")) && !obj.value(QStringLiteral("branch")).toString().isEmpty()) {
+        outBranch = obj.value(QStringLiteral("branch")).toString();
+      } else if (obj.contains(QStringLiteral("startingBranch")) &&
+                 !obj.value(QStringLiteral("startingBranch")).toString().isEmpty()) {
+        outBranch = obj.value(QStringLiteral("startingBranch")).toString();
+      }
     } else if (val.isString()) {
       outName = val.toString();
     }
 
     outName = resolveSourceName(outName);
+
+    if (outBranch.isEmpty() && data.contains(QStringLiteral("startingBranch")) &&
+        !data.value(QStringLiteral("startingBranch")).toString().isEmpty()) {
+      outBranch = data.value(QStringLiteral("startingBranch")).toString();
+    }
 
     if (outBranch.isEmpty() && !outName.isEmpty()) {
       QModelIndexList matches =
