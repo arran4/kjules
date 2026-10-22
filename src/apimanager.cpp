@@ -727,40 +727,129 @@ void APIManager::createSessionAsync(const QJsonObject &requestData, const QStrin
   connect(reply, &QNetworkReply::finished, this, [this, reply, request, json, data, requestData, jobId, attemptId]() {
     QByteArray responseData = reply->readAll();
     if (reply->error() == QNetworkReply::NoError) {
-      QJsonDocument doc = QJsonDocument::fromJson(responseData);
-      QJsonObject sessionObj = SessionRequestBuilder::sessionResponseWithRequest(doc.object(), json);
-      if (requestData.contains(QStringLiteral("ignoreConcurrency"))) {
-        sessionObj[QStringLiteral("ignoreConcurrency")] =
-            requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
+      QJsonParseError parseError;
+      QJsonDocument doc = QJsonDocument::fromJson(responseData, &parseError);
+      bool valid = false;
+      QString resolvedSessionId;
+      QJsonObject rawSessionObj;
+      QString validationErrorMsg;
+
+      if (parseError.error != QJsonParseError::NoError) {
+        validationErrorMsg = QStringLiteral("Malformed JSON response in session creation: ") + parseError.errorString();
+      } else if (!doc.isObject()) {
+        validationErrorMsg =
+            QStringLiteral("Expected JSON object in session creation response, got %1")
+                .arg(doc.isArray() ? QStringLiteral("JSON array") : QStringLiteral("empty/non-object"));
+      } else {
+        rawSessionObj = doc.object();
+        if (rawSessionObj.contains(QStringLiteral("error"))) {
+          validationErrorMsg =
+              QStringLiteral("API returned error payload with HTTP 200: ") +
+              rawSessionObj.value(QStringLiteral("error")).toObject().value(QStringLiteral("message")).toString();
+        } else {
+          QString rawId = rawSessionObj.value(QStringLiteral("id")).toString().trimmed();
+          QString rawName = rawSessionObj.value(QStringLiteral("name")).toString().trimmed();
+          if (!rawId.isEmpty()) {
+            resolvedSessionId = cleanSessionId(rawId).trimmed();
+          } else if (!rawName.isEmpty()) {
+            if (rawName.startsWith(QStringLiteral("sessions/")) || rawName.startsWith(QStringLiteral("/sessions/"))) {
+              resolvedSessionId = cleanSessionId(rawName).trimmed();
+            } else {
+              validationErrorMsg = QStringLiteral("Invalid session resource name format in fallback: %1").arg(rawName);
+            }
+          }
+          if (validationErrorMsg.isEmpty()) {
+            if (resolvedSessionId.isEmpty() || resolvedSessionId.contains(QStringLiteral("..")) ||
+                resolvedSessionId.contains(QLatin1Char('/'))) {
+              validationErrorMsg =
+                  QStringLiteral("Missing or invalid session identifier in session creation response.");
+            } else {
+              valid = true;
+            }
+          }
+        }
       }
 
-      Q_EMIT sessionCreated(jobId, attemptId, sessionObj);
-      Q_EMIT logMessage(QStringLiteral("Session created successfully."));
-
-      // Cache session locally
-      QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-      auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
-        QMutexLocker locker(&s_sessionCacheMutex);
-        QDir().mkpath(path);
-        QString filePath = path + QStringLiteral("/cached_sessions.json");
-        QFile file(filePath);
-        QJsonArray cachedSessions;
-        if (file.open(QIODevice::ReadOnly)) {
-          QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-          cachedSessions = doc.array();
-          file.close();
+      if (valid) {
+        if (rawSessionObj.value(QStringLiteral("id")).toString().trimmed().isEmpty()) {
+          rawSessionObj[QStringLiteral("id")] = resolvedSessionId;
         }
-        cachedSessions.append(sessionObj);
-
-        QSaveFile saveFile(filePath);
-        if (saveFile.open(QIODevice::WriteOnly)) {
-          QJsonDocument writeDoc(cachedSessions);
-          saveFile.write(writeDoc.toJson());
-          saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-          saveFile.commit();
+        QJsonObject sessionObj = SessionRequestBuilder::sessionResponseWithRequest(rawSessionObj, json);
+        if (requestData.contains(QStringLiteral("ignoreConcurrency"))) {
+          sessionObj[QStringLiteral("ignoreConcurrency")] =
+              requestData.value(QStringLiteral("ignoreConcurrency")).toBool();
         }
-      });
-      Q_UNUSED(cacheFuture)
+
+        Q_EMIT sessionCreated(jobId, attemptId, sessionObj);
+        Q_EMIT logMessage(QStringLiteral("Session created successfully."));
+
+        // Cache session locally
+        QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        auto cacheFuture = QtConcurrent::run([path, sessionObj]() {
+          QMutexLocker locker(&s_sessionCacheMutex);
+          QDir().mkpath(path);
+          QString filePath = path + QStringLiteral("/cached_sessions.json");
+          QFile file(filePath);
+          QJsonArray cachedSessions;
+          if (file.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+            cachedSessions = doc.array();
+            file.close();
+          }
+          cachedSessions.append(sessionObj);
+
+          QSaveFile saveFile(filePath);
+          if (saveFile.open(QIODevice::WriteOnly)) {
+            QJsonDocument writeDoc(cachedSessions);
+            saveFile.write(writeDoc.toJson());
+            saveFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+            saveFile.commit();
+          }
+        });
+        Q_UNUSED(cacheFuture)
+      } else {
+        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (statusCode == 0) {
+          statusCode = 200;
+        }
+        QString method = QStringLiteral("POST");
+        QString url = reply->url().toString();
+        QString httpReq = method + QStringLiteral(" ") + url + QStringLiteral("\n");
+        const auto reqHeaders = request.rawHeaderList();
+        for (const QByteArray &h : reqHeaders) {
+          if (h.toLower() != QByteArrayLiteral("x-goog-api-key") && h.toLower() != QByteArrayLiteral("authorization")) {
+            httpReq += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(request.rawHeader(h)) +
+                       QStringLiteral("\n");
+          } else {
+            httpReq += QString::fromUtf8(h) + QStringLiteral(": [REDACTED]\n");
+          }
+        }
+        httpReq += QStringLiteral("\n") + QString::fromUtf8(data);
+
+        QString httpRes = QStringLiteral("HTTP %1 OK\n").arg(statusCode);
+        const auto resHeaders = reply->rawHeaderList();
+        for (const QByteArray &h : resHeaders) {
+          httpRes += QString::fromUtf8(h) + QStringLiteral(": ") + QString::fromUtf8(reply->rawHeader(h)) +
+                     QStringLiteral("\n");
+        }
+        httpRes += QStringLiteral("\n") + QString::fromUtf8(responseData);
+
+        QString httpDetails =
+            QStringLiteral("=== Request ===\n") + httpReq + QStringLiteral("\n\n=== Response ===\n") + httpRes;
+
+        ApiError apiError = ApiErrorDetector::detect(reply, responseData);
+        if (apiError.type() == ApiError::Type::Unknown) {
+          apiError.setType(ApiError::Type::Validation);
+        }
+        apiError.setMessage(validationErrorMsg);
+        if (doc.isObject()) {
+          apiError.setRawResponse(doc.object());
+        }
+
+        Q_EMIT sessionCreationFailed(jobId, attemptId, requestData, apiError, httpDetails);
+        QString errorMsg = QStringLiteral("Failed to create session: ") + validationErrorMsg;
+        Q_EMIT errorOccurredWithResponse(errorMsg, QString::fromUtf8(responseData), false);
+      }
     } else {
       int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       if (statusCode == 401) {
