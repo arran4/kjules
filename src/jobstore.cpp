@@ -142,10 +142,23 @@ bool JobStore::load() {
 }
 
 bool JobStore::save() const {
+  if (m_simulateSaveFailure) {
+    m_lastError = QStringLiteral("Simulated disk I/O failure");
+    return false;
+  }
+  if (m_simulateSaveFailureAfterCount == 0) {
+    m_lastError = QStringLiteral("Simulated disk I/O failure");
+    return false;
+  }
+  if (m_simulateSaveFailureAfterCount > 0) {
+    --m_simulateSaveFailureAfterCount;
+  }
+
   QFileInfo fi(m_filename);
   QDir dir = fi.dir();
   if (!dir.exists()) {
     if (!dir.mkpath(dir.absolutePath())) {
+      m_lastError = QStringLiteral("Failed to create directory: %1").arg(dir.absolutePath());
       qWarning() << "[JobStore::save] mkpath failed for" << dir.absolutePath();
       return false;
     }
@@ -154,6 +167,7 @@ bool JobStore::save() const {
   QSaveFile saveFile(m_filename);
   saveFile.setDirectWriteFallback(false);
   if (!saveFile.open(QIODevice::WriteOnly)) {
+    m_lastError = saveFile.errorString();
     qWarning() << "[JobStore::save] open failed for" << m_filename << ":" << saveFile.errorString();
     return false;
   }
@@ -169,13 +183,17 @@ bool JobStore::save() const {
 
   QJsonDocument doc(root);
   if (saveFile.write(doc.toJson(QJsonDocument::Compact)) == -1) {
+    m_lastError = saveFile.errorString();
     qWarning() << "[JobStore::save] write failed:" << saveFile.errorString();
     return false;
   }
 
   bool committed = saveFile.commit();
   if (!committed) {
+    m_lastError = saveFile.errorString();
     qWarning() << "[JobStore::save] commit failed:" << saveFile.errorString();
+  } else {
+    m_lastError.clear();
   }
   return committed;
 }

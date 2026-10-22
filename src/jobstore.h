@@ -88,10 +88,18 @@ public:
   // For migration seams
   static JobStore fromMemory(const QVector<JobData> &jobs);
 
+  QString lastError() const { return m_lastError; }
+  void setSimulateSaveFailureForTest(bool simulate) { m_simulateSaveFailure = simulate; }
+  bool simulateSaveFailureForTest() const { return m_simulateSaveFailure; }
+  void setSimulateSaveFailureAfterCount(int count) { m_simulateSaveFailureAfterCount = count; }
+
 private:
   QString m_filename;
   QVector<JobData> m_jobs;
   int m_schemaVersion = 1;
+  mutable QString m_lastError;
+  bool m_simulateSaveFailure = false;
+  mutable int m_simulateSaveFailureAfterCount = -1;
 };
 
 #endif // JOBSTORE_H

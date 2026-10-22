@@ -1543,6 +1543,12 @@ void NewSessionDialog::setEditMode(bool isEdit) {
   }
 }
 
+void NewSessionDialog::setPromptText(const QString &text) {
+  if (m_promptEdit) {
+    m_promptEdit->setPromptText(text);
+  }
+}
+
 QString NewSessionDialog::promptText() const {
   return m_promptEdit ? m_promptEdit->getPromptText().trimmed() : QString();
 }
@@ -1819,17 +1825,52 @@ void NewSessionDialog::onSubmit(const QString &automationMode, const QString &qu
 
   Q_EMIT createSessionRequested(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority,
                                 queueAction);
+}
 
-  if (m_keepOpenCheckBox->isChecked()) {
-    if (!m_keepPromptCheckBox->isChecked()) {
-      m_promptEdit->clear();
+void NewSessionDialog::handleSubmissionResult(int successCount, int failureCount, const QStringList &failedSources,
+                                              const QString &errorMessage) {
+  m_lastSubmissionSuccessful = (failureCount == 0 && successCount > 0);
+  m_lastSubmissionError = errorMessage;
+
+  if (failureCount == 0 && successCount > 0) {
+    if (m_keepOpenCheckBox->isChecked()) {
+      if (!m_keepPromptCheckBox->isChecked()) {
+        m_promptEdit->clear();
+      }
+      if (!m_keepSourceCheckBox->isChecked()) {
+        m_selectedSources.clear();
+        updateModels();
+      }
+    } else {
+      close();
     }
-    if (!m_keepSourceCheckBox->isChecked()) {
-      m_selectedSources.clear();
-      updateModels();
+  } else if (failureCount > 0 && successCount == 0) {
+    // Total failure: preserve user input, do not close dialog, show error
+    if (isVisible() && !QStandardPaths::isTestModeEnabled()) {
+      QString msg = errorMessage.isEmpty() ? tr("Unknown persistence error.") : errorMessage;
+      QMessageBox::critical(
+          this, tr("Failed to Queue Task"),
+          tr("Could not save task to database:\n%1\n\nYour prompt and selections have been preserved.").arg(msg));
     }
-  } else {
-    close();
+  } else if (failureCount > 0 && successCount > 0) {
+    // Partial failure: remove successfully queued sources, keep failed ones for safe retry
+    for (auto it = m_selectedSources.begin(); it != m_selectedSources.end();) {
+      if (!failedSources.contains(it.key())) {
+        it = m_selectedSources.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    updateModels();
+    if (isVisible() && !QStandardPaths::isTestModeEnabled()) {
+      QString msg = errorMessage.isEmpty() ? tr("Persistence error.") : errorMessage;
+      QMessageBox::warning(this, tr("Partial Submission Failure"),
+                           tr("%1 task(s) queued successfully, but %2 task(s) failed to save:\n%3\n\nFailed sources "
+                              "have been retained for retry.")
+                               .arg(successCount)
+                               .arg(failureCount)
+                               .arg(msg));
+    }
   }
 }
 
