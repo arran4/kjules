@@ -145,6 +145,9 @@ protected:
 class TestSessionWindow : public QObject {
   Q_OBJECT
 private Q_SLOTS:
+  void testRegressionFollowingProjectionPreservesCopySource();
+  void testRegressionFollowingRefreshUsesRemoteSessionId();
+  void testRegressionArchiveProjectionExposesJobIdentity();
   void initTestCase() {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     qputenv("KDE_HOME_READONLY", "1");
@@ -1264,6 +1267,91 @@ private Q_SLOTS:
              QStringLiteral("Legacy prompt"));
   }
 };
+
+
+void TestSessionWindow::testRegressionFollowingProjectionPreservesCopySource() {
+  // Expected RED on main: New Session From Session reads sourceContext.source,
+  // but current Job-based Following projections contain only a flat source.
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const QString source = QStringLiteral("sources/github/example/repo");
+  const auto request = SessionRequestBuilder::buildSessionRequest(
+      source, QStringLiteral("feature/regression"), QStringLiteral("Original prompt"),
+      QStringLiteral("AUTO_CREATE_PR"), true, false, 0);
+  JobData job = JobData::fromRequest(request);
+  job.id = QStringLiteral("local-job-copy-source");
+  JobAttemptData attempt;
+  attempt.id = QStringLiteral("local-attempt-copy-source");
+  attempt.julesSessionId = QStringLiteral("123456");
+  attempt.requestSnapshot = request;
+  attempt.dispatchState = QStringLiteral("COMPLETED");
+  attempt.julesState = QStringLiteral("IN_PROGRESS");
+  job.attempts.append(attempt);
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  const QJsonObject projection = window.sessionModel()->getSession(0);
+  QCOMPARE(projection.value(QStringLiteral("id")).toString(), job.id);
+  QCOMPARE(projection.value(QStringLiteral("sourceContext"))
+               .toObject()
+               .value(QStringLiteral("source"))
+               .toString(),
+           source);
+  QCOMPARE(projection.value(QStringLiteral("sourceContext"))
+               .toObject()
+               .value(QStringLiteral("githubRepoContext"))
+               .toObject()
+               .value(QStringLiteral("startingBranch"))
+               .toString(),
+           QStringLiteral("feature/regression"));
+}
+
+void TestSessionWindow::testRegressionFollowingRefreshUsesRemoteSessionId() {
+  // Expected RED on main: the refresh candidate list returns local Job UUIDs,
+  // which are not valid remote Jules session IDs.
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const auto request = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/example/repo"), QStringLiteral("main"),
+      QStringLiteral("Refresh me"), QString(), false, false, 0);
+  JobData job = JobData::fromRequest(request);
+  job.id = QStringLiteral("local-job-refresh");
+  JobAttemptData attempt;
+  attempt.id = QStringLiteral("local-attempt-refresh");
+  attempt.julesSessionId = QStringLiteral("987654321");
+  attempt.requestSnapshot = request;
+  attempt.dispatchState = QStringLiteral("COMPLETED");
+  attempt.julesState = QStringLiteral("IN_PROGRESS");
+  job.attempts.append(attempt);
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  QCOMPARE(window.getActiveFollowingSessionIds(), QStringList{QStringLiteral("987654321")});
+}
+
+void TestSessionWindow::testRegressionArchiveProjectionExposesJobIdentity() {
+  // Expected RED on main: the Archive Delete and Unarchive handlers use
+  // _kjules_job_id, but the archive projection omits that field.
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const auto request = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/example/repo"), QStringLiteral("main"),
+      QStringLiteral("Archived job"), QString(), false, false, 0);
+  JobData job = JobData::fromRequest(request);
+  job.id = QStringLiteral("local-job-archive");
+  job.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+  QCOMPARE(window.archiveModel()
+               ->getSession(0)
+               .value(QStringLiteral("_kjules_job_id"))
+               .toString(),
+           job.id);
+}
 
 QTEST_MAIN(TestSessionWindow)
 #include "test_sessionwindow.moc"
