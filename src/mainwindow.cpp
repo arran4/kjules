@@ -3641,6 +3641,18 @@ void MainWindow::toggleQueueState() {
 void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
                                   const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
                                   int priority, const QString &queueAction) {
+  onSessionCreatedForDialog(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority,
+                            queueAction, qobject_cast<NewSessionDialog *>(sender()));
+}
+
+void MainWindow::onSessionCreatedForDialog(const QMultiMap<QString, QString> &sources, const QString &prompt,
+                                           const QString &automationMode, bool requirePlanApproval,
+                                           bool ignoreConcurrency, int priority, const QString &queueAction,
+                                           NewSessionDialog *dialog) {
+  int successCount = 0;
+  int failureCount = 0;
+  QStringList failedSources;
+  QString lastError;
 
   for (auto it = sources.begin(); it != sources.end(); ++it) {
     QJsonObject req = SessionRequestBuilder::buildSessionRequest(
@@ -3652,8 +3664,14 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
     if (m_jobStore) {
       JobData newJob = JobData::fromRequest(req);
       newJob.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-      if (!m_jobStore->addJobTransactional(newJob))
+      if (!m_jobStore->addJobTransactional(newJob)) {
+        failureCount++;
+        failedSources.append(it.key());
+        if (lastError.isEmpty()) {
+          lastError = m_jobStore->lastError();
+        }
         continue;
+      }
       item.jobId = newJob.id;
     }
 
@@ -3664,17 +3682,35 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
     } else {
       m_queueModel->enqueueItem(item);
     }
+    successCount++;
   }
-  updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.", sources.size()));
 
-  if (m_jobStore) {
+  if (failureCount > 0) {
+    if (successCount == 0) {
+      QString msg = lastError.isEmpty() ? i18n("Failed to save task to JobStore.") : lastError;
+      updateStatus(i18n("Failed to queue task: %1", msg));
+      onError(i18n("JobStore persistence error: %1", msg));
+    } else {
+      updateStatus(i18n("Queued %1 task(s), but %2 task(s) failed to save.", successCount, failureCount));
+      onError(i18n("%1 task(s) failed to save to JobStore.", failureCount));
+    }
+  } else if (successCount > 0) {
+    updateStatus(i18np("Added 1 task to queue.", "Added %1 tasks to queue.", successCount));
+  }
+
+  if (m_jobStore && successCount > 0) {
     syncModelsFromJobStore();
   }
 
-  // Start timer if not running
+  NewSessionDialog *dlg = dialog ? dialog : qobject_cast<NewSessionDialog *>(sender());
+  if (dlg) {
+    dlg->handleSubmissionResult(successCount, failureCount, failedSources, lastError);
+  }
 
-  // Trigger processing immediately if we can
-  QTimer::singleShot(0, this, [this]() { processQueue(); });
+  if (successCount > 0) {
+    // Trigger processing immediately if we can
+    QTimer::singleShot(0, this, [this]() { processQueue(); });
+  }
 }
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
@@ -4595,22 +4631,51 @@ void MainWindow::editQueueItem(int row) {
   window->setEditMode(true);
   window->setInitialData(item.requestData);
 
-  QPersistentModelIndex persistentIndex(m_queueModel->index(row, 0));
+  QString origJobId = item.jobId;
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency, int priority,
-                                  const QString &queueAction) {
-            if (persistentIndex.isValid()) {
-              m_queueModel->removeItem(persistentIndex.row());
+          [this, window, origJobId, row](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
+                                         bool requirePlanApproval, bool ignoreConcurrency, int priority,
+                                         const QString &queueAction) {
+            onSessionCreatedForDialog(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction,
+                                      window);
+            if (window->lastSubmissionSuccessful()) {
+              bool removed = false;
+              if (!origJobId.isEmpty()) {
+                for (int i = 0; i < m_queueModel->size(); ++i) {
+                  if (m_queueModel->getItem(i).jobId == origJobId) {
+                    m_queueModel->removeItem(i);
+                    removed = true;
+                    break;
+                  }
+                }
+                if (m_jobStore) {
+                  m_jobStore->removeJobTransactional(origJobId);
+                }
+              }
+              if (!removed && row < m_queueModel->size()) {
+                m_queueModel->removeItem(row);
+              }
             }
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction);
           });
 
-  connect(window, &NewSessionDialog::saveDraftRequested, [this, persistentIndex](const QJsonObject &d) {
-    if (persistentIndex.isValid()) {
-      m_queueModel->removeItem(persistentIndex.row());
+  connect(window, &NewSessionDialog::saveDraftRequested, [this, origJobId, row](const QJsonObject &d) {
+    bool removed = false;
+    if (!origJobId.isEmpty()) {
+      for (int i = 0; i < m_queueModel->size(); ++i) {
+        if (m_queueModel->getItem(i).jobId == origJobId) {
+          m_queueModel->removeItem(i);
+          removed = true;
+          break;
+        }
+      }
+      if (m_jobStore) {
+        m_jobStore->removeJobTransactional(origJobId);
+      }
+    }
+    if (!removed && row < m_queueModel->size()) {
+      m_queueModel->removeItem(row);
     }
     m_draftsModel->addDraft(d);
     updateStatus(i18n("Task moved to drafts."));
@@ -4905,11 +4970,12 @@ void MainWindow::onDraftActivated(const QModelIndex &index) {
 
   connectNewSessionDialog(window);
   connect(window, &NewSessionDialog::createSessionRequested,
-          [this, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p, const QString &a,
-                                  bool requirePlanApproval, bool ignoreConcurrency, int priority,
-                                  const QString &queueAction) {
-            onSessionCreated(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction);
-            if (persistentIndex.isValid()) {
+          [this, window, persistentIndex](const QMultiMap<QString, QString> &sources, const QString &p,
+                                          const QString &a, bool requirePlanApproval, bool ignoreConcurrency,
+                                          int priority, const QString &queueAction) {
+            onSessionCreatedForDialog(sources, p, a, requirePlanApproval, ignoreConcurrency, priority, queueAction,
+                                      window);
+            if (window->lastSubmissionSuccessful() && persistentIndex.isValid()) {
               m_draftsModel->removeDraft(persistentIndex.row());
             }
           });
@@ -5021,11 +5087,11 @@ void MainWindow::connectSessionWindow(SessionWindow *window) {
 
     disconnect(dlg, &NewSessionDialog::createSessionRequested, this, &MainWindow::onSessionCreated);
     connect(dlg, &NewSessionDialog::createSessionRequested, this,
-            [this, jobId](const QMultiMap<QString, QString> &sources, const QString &prompt,
-                          const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency, int priority,
-                          const QString &queueAction) {
+            [this, dlg, jobId](const QMultiMap<QString, QString> &sources, const QString &prompt,
+                               const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                               int priority, const QString &queueAction) {
               submitVariantForJob(jobId, sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency,
-                                  priority, queueAction);
+                                  priority, queueAction, dlg);
             });
 
     dlg->setInitialData(SessionRequestBuilder::copyableSessionRequest(request, m_jobStore));
@@ -7069,15 +7135,28 @@ void MainWindow::sendJobNow(const QString &jobId) {
 
 void MainWindow::submitVariantForJob(const QString &jobId, const QMultiMap<QString, QString> &sources,
                                      const QString &prompt, const QString &automationMode, bool requirePlanApproval,
-                                     bool ignoreConcurrency, int priority, const QString &queueAction) {
+                                     bool ignoreConcurrency, int priority, const QString &queueAction,
+                                     NewSessionDialog *dialog) {
+  NewSessionDialog *dlg = dialog ? dialog : qobject_cast<NewSessionDialog *>(sender());
   if (!jobId.isEmpty() && m_jobStore) {
     JobData *job = m_jobStore->getJobById(jobId);
     if (job && JobPolicy::aggregateState(*job) != JobPolicy::JobAggregateState::Archived) {
+      int successCount = 0;
+      int failureCount = 0;
+      QStringList failedSources;
+      QString lastError;
+
       for (auto it = sources.cbegin(); it != sources.cend(); ++it) {
         JobData updated = *m_jobStore->getJobById(jobId);
         updated.recordHistory(QStringLiteral("variant"), i18n("Variant scheduled (%1)", queueAction));
-        if (!m_jobStore->updateJobTransactional(updated))
-          return;
+        if (!m_jobStore->updateJobTransactional(updated)) {
+          failureCount++;
+          failedSources.append(it.key());
+          if (lastError.isEmpty()) {
+            lastError = m_jobStore->lastError();
+          }
+          continue;
+        }
         QueueItem item;
         item.requestData =
             SessionRequestBuilder::buildSessionRequest(it.key(), it.value(), prompt, automationMode,
@@ -7090,11 +7169,32 @@ void MainWindow::submitVariantForJob(const QString &jobId, const QMultiMap<QStri
         } else {
           m_queueModel->enqueueItem(item);
         }
+        successCount++;
         updateStatus(i18n("Variant attempt queued for Job %1", jobId));
       }
-      QTimer::singleShot(0, this, [this]() { processQueue(); });
+
+      if (failureCount > 0) {
+        if (successCount == 0) {
+          QString msg = lastError.isEmpty() ? i18n("Failed to update job in JobStore.") : lastError;
+          updateStatus(i18n("Failed to queue variant: %1", msg));
+          onError(i18n("JobStore persistence error: %1", msg));
+        } else {
+          updateStatus(i18n("Queued %1 variant(s), but %2 failed to save.", successCount, failureCount));
+          onError(i18n("%1 variant(s) failed to save to JobStore.", failureCount));
+        }
+      }
+
+      if (dlg) {
+        dlg->handleSubmissionResult(successCount, failureCount, failedSources, lastError);
+      }
+
+      if (successCount > 0) {
+        QTimer::singleShot(0, this, [this]() { processQueue(); });
+      }
+      return;
     }
-  } else {
-    onSessionCreated(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority, queueAction);
   }
+
+  onSessionCreatedForDialog(sources, prompt, automationMode, requirePlanApproval, ignoreConcurrency, priority,
+                            queueAction, dlg);
 }

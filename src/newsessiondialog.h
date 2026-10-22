@@ -55,6 +55,7 @@ public:
   void setInitialData(const QJsonObject &data);
   void setTemplateData(const QJsonObject &data);
   void setEditMode(bool isEdit);
+  void setPromptText(const QString &text);
 
   QMultiMap<QString, QString> selectedSources() const { return m_selectedSources; }
   QString promptText() const;
@@ -63,6 +64,11 @@ public:
   bool ignoreConcurrency() const;
   int priority() const;
   void submitSession();
+
+  bool lastSubmissionSuccessful() const { return m_lastSubmissionSuccessful; }
+  QString lastSubmissionError() const { return m_lastSubmissionError; }
+  void handleSubmissionResult(int successCount, int failureCount, const QStringList &failedSources = QStringList(),
+                              const QString &errorMessage = QString());
 
 Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources, const QString &prompt,
@@ -129,6 +135,8 @@ private:
   QPushButton *m_saveTemplateButton;
   QMultiMap<QString, QString> m_selectedSources;
   QString m_draftComment;
+  QString m_lastSubmissionError;
+  bool m_lastSubmissionSuccessful = false;
 
   QWidget *m_sourceSelectionWidget;
 };
