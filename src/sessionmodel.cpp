@@ -32,6 +32,9 @@ SessionData parseSessionData(const QJsonObject &obj) {
   data.prompt = prompt;
 
   data.source = obj.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString();
+  if (data.source.isEmpty()) {
+    data.source = obj.value(QStringLiteral("source")).toString();
+  }
 
   QStringList sourceParts = data.source.split(QLatin1Char('/'));
   if (sourceParts.size() >= 4 && sourceParts[0] == QStringLiteral("sources")) {
@@ -109,6 +112,31 @@ SessionData parseSessionData(const QJsonObject &obj) {
   } else {
     data.refreshInterval = std::nullopt;
   }
+
+  data.jobId = obj.value(QStringLiteral("jobId")).toString();
+  if (data.jobId.isEmpty()) {
+    data.jobId = obj.value(QStringLiteral("_kjules_job_id")).toString();
+  }
+  if (data.jobId.isEmpty() && obj.value(QStringLiteral("jobMode")).toBool()) {
+    data.jobId = obj.value(QStringLiteral("id")).toString();
+  }
+  data.attemptId = obj.value(QStringLiteral("attemptId")).toString();
+  data.julesSessionId = obj.value(QStringLiteral("julesSessionId")).toString();
+  if (data.julesSessionId.isEmpty() && !obj.value(QStringLiteral("jobMode")).toBool()) {
+    data.julesSessionId = obj.value(QStringLiteral("id")).toString();
+  }
+  if (obj.contains(QStringLiteral("julesSessionIds"))) {
+    const QJsonArray arr = obj.value(QStringLiteral("julesSessionIds")).toArray();
+    for (const auto &val : arr) {
+      QString s = val.toString();
+      if (!s.isEmpty() && !data.julesSessionIds.contains(s)) {
+        data.julesSessionIds.append(s);
+      }
+    }
+  } else if (!data.julesSessionId.isEmpty()) {
+    data.julesSessionIds.append(data.julesSessionId);
+  }
+  data.hasRemoteSession = !data.julesSessionId.isEmpty();
 
   data.rawObject = obj;
   data.hasUnreadChanges = false;
@@ -306,6 +334,16 @@ QVariant SessionModel::data(const QModelIndex &index, int role) const {
     return session.snoozeUntil.isValid() ? QVariant(session.snoozeUntil) : QVariant();
   case UnreadChangesRole:
     return session.hasUnreadChanges;
+  case JobIdRole:
+    return session.jobId.isEmpty() ? session.id : session.jobId;
+  case AttemptIdRole:
+    return session.attemptId;
+  case JulesSessionIdRole:
+    return session.julesSessionId;
+  case JulesSessionIdsRole:
+    return session.julesSessionIds;
+  case HasRemoteSessionRole:
+    return session.hasRemoteSession;
   default:
     return QVariant();
   }
@@ -354,6 +392,11 @@ QHash<int, QByteArray> SessionModel::roleNames() const {
   roles[LastRefreshedRole] = "lastRefreshed";
   roles[FavouriteRole] = "favourite";
   roles[SnoozeUntilRole] = "snoozeUntil";
+  roles[JobIdRole] = "jobId";
+  roles[AttemptIdRole] = "attemptId";
+  roles[JulesSessionIdRole] = "julesSessionId";
+  roles[JulesSessionIdsRole] = "julesSessionIds";
+  roles[HasRemoteSessionRole] = "hasRemoteSession";
   return roles;
 }
 

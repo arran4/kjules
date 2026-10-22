@@ -882,24 +882,21 @@ void TestSourceWindow::testFullSemanticChain() {
   cg.writeEntry("PrMergeArchiveEnabled", true);
   cg.sync();
 
-  // The test framework injects a fake session ID ("sess-e2e-1") into the following model early on,
-  // but never provisions the corresponding authoritative JobStore backing data that the new architecture requires.
-  // We must establish this foundation before the refresh cycle occurs so checkAutoArchiveSessions operates on real
-  // data.
-  if (window.jobStore()->jobs().isEmpty()) {
-    JobData testJob;
-    testJob.id = QStringLiteral("sess-e2e-1");
-    JobAttemptData attempt;
-    attempt.id = QStringLiteral("attempt-1");
-    attempt.julesSessionId = QStringLiteral("sess-e2e-1");
-    testJob.attempts.append(attempt);
-    // We need to inject the mock response into the store as well so checkAutoArchiveSessions can read the 'merged'
-    // state
-    testJob.attempts[0].rawResponse = reloadedObj;
-    testJob.attempts[0].rawResponse[QStringLiteral("pullRequest")] = prObj; // PR needs to be there
-    window.jobStore()->addJob(testJob);
-    window.jobStore()->save();
-  }
+  // Provision authoritative JobStore backing data for this test
+  window.jobStore()->setJobs({});
+  JobData testJob;
+  testJob.id = QStringLiteral("sess-e2e-1");
+  JobAttemptData attempt;
+  attempt.id = QStringLiteral("attempt-1");
+  attempt.julesSessionId = QStringLiteral("sess-e2e-1");
+  attempt.julesState = QStringLiteral("COMPLETED");
+  // We need to inject the mock response into the store as well so checkAutoArchiveSessions can read the 'merged'
+  // state
+  attempt.rawResponse = reloadedObj;
+  attempt.rawResponse[QStringLiteral("pullRequest")] = prObj; // PR needs to be there
+  testJob.attempts.append(attempt);
+  window.jobStore()->addJob(testJob);
+  window.jobStore()->save();
 
   // 1. Trigger auto refresh evaluator
   QMetaObject::invokeMethod(&window, "autoRefreshFollowing", Qt::DirectConnection);

@@ -417,7 +417,7 @@ void SessionsWidget::openSessionUrls() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   int count = 0;
   for (const QModelIndex &idx : selectedRows) {
-    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+    QString id = m_proxyModel->data(idx, SessionModel::JulesSessionIdRole).toString();
     if (!id.isEmpty()) {
       QDesktopServices::openUrl(QUrl(QStringLiteral("https://jules.google.com/session/") + id));
       count++;
@@ -430,13 +430,17 @@ void SessionsWidget::copySessionUrls() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   QStringList urls;
   for (const QModelIndex &idx : selectedRows) {
-    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
+    QString id = m_proxyModel->data(idx, SessionModel::JulesSessionIdRole).toString();
     if (!id.isEmpty()) {
       urls.append(QStringLiteral("https://jules.google.com/session/") + id);
     }
   }
-  QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
-  m_statusLabel->setText(i18n("Session URLs copied to clipboard."));
+  if (!urls.isEmpty()) {
+    QGuiApplication::clipboard()->setText(urls.join(QLatin1Char('\n')));
+    m_statusLabel->setText(i18n("Session URLs copied to clipboard."));
+  } else {
+    m_statusLabel->setText(i18n("No Jules session URLs found for selection."));
+  }
 }
 
 QString SessionsWidget::getSourceUrl(const QModelIndex &idx) const {
@@ -514,21 +518,32 @@ void SessionsWidget::copyPrUrls() {
 
 void SessionsWidget::reloadSelectedSessions() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
+  int count = 0;
   for (const QModelIndex &idx : selectedRows) {
-    QString id = m_proxyModel->data(idx, SessionModel::IdRole).toString();
-    m_apiManager->reloadSession(id);
+    QString id = m_proxyModel->data(idx, SessionModel::JulesSessionIdRole).toString();
+    if (!id.isEmpty()) {
+      m_apiManager->reloadSession(id);
+      count++;
+    }
   }
-  m_statusLabel->setText(i18n("Reloading %1 sessions...", selectedRows.size()));
+  m_statusLabel->setText(i18n("Reloading %1 sessions...", count));
 }
 
 void SessionsWidget::copyJulesIds() {
   QModelIndexList selectedRows = m_listView->selectionModel()->selectedRows();
   QStringList ids;
   for (const QModelIndex &idx : selectedRows) {
-    ids.append(m_proxyModel->data(idx, SessionModel::IdRole).toString());
+    QString id = m_proxyModel->data(idx, SessionModel::JulesSessionIdRole).toString();
+    if (!id.isEmpty()) {
+      ids.append(id);
+    }
   }
-  QGuiApplication::clipboard()->setText(ids.join(QLatin1Char('\n')));
-  m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
+  if (!ids.isEmpty()) {
+    QGuiApplication::clipboard()->setText(ids.join(QLatin1Char('\n')));
+    m_statusLabel->setText(i18n("Jules IDs copied to clipboard."));
+  } else {
+    m_statusLabel->setText(i18n("No Jules IDs found for selection."));
+  }
 }
 
 void SessionsWidget::toggleFavourite() {
