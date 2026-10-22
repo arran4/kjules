@@ -1368,31 +1368,7 @@ void MainWindow::setupArchiveTab(QWidget *tab) {
         }
       });
 
-      connect(unarchiveAction, &QAction::triggered, [this]() {
-        QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
-        QList<int> rowsToUnarchive = getUniqueSortedRows(selectedRows, m_archiveView);
-
-        bool updated = false;
-        for (int row : rowsToUnarchive) {
-          QJsonObject session = m_archiveModel->getSession(row);
-          QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
-          if (jobId.isEmpty()) {
-            jobId = session.value(QStringLiteral("jobId")).toString();
-          }
-          if (jobId.isEmpty()) {
-            jobId = session.value(QStringLiteral("id")).toString();
-          }
-          if (JobData *job = m_jobStore->getJobById(jobId)) {
-            job->legacyMetadata[QStringLiteral("_isArchive")] = false;
-            m_jobStore->updateJob(*job);
-            updated = true;
-          }
-        }
-        if (updated && m_jobStore->save()) {
-          syncModelsFromJobStore();
-        }
-        updateStatus(i18np("1 session unarchived.", "%1 sessions unarchived.", rowsToUnarchive.size()));
-      });
+      connect(unarchiveAction, &QAction::triggered, this, &MainWindow::unarchiveSelectedSessions);
 
       connect(newSessionFromSessionAction, &QAction::triggered, [this, sourceIndex]() {
         QJsonObject session = m_archiveModel->getSession(sourceIndex.row());
@@ -1614,21 +1590,7 @@ void MainWindow::setupQueueTab() {
   connect(m_queueView, &QListView::activated, this, &MainWindow::onQueueActivated);
   connect(m_queueView, &QListView::customContextMenuRequested, this, &MainWindow::onQueueContextMenu);
 
-  m_deleteQueueItemsLambda = [this]() {
-    QModelIndexList selectedRows = m_queueView->selectionModel()->selectedRows();
-    if (selectedRows.isEmpty())
-      return;
-    if (QMessageBox::question(this, i18n("Remove Task"),
-                              i18np("Remove this task from the queue?", "Remove these tasks from the queue?",
-                                    selectedRows.size())) == QMessageBox::Yes) {
-      QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_queueView);
-
-      for (int row : rowsToDelete) {
-        m_queueModel->removeItem(row);
-      }
-      updateStatus(i18np("Task removed from queue.", "%1 tasks removed from queue.", rowsToDelete.size()));
-    }
-  };
+  m_deleteQueueItemsLambda = [this]() { deleteQueueItems(); };
 
   QAction *queueDeleteAction = new QAction(i18n("Delete"), m_queueView);
   queueDeleteAction->setShortcut(QKeySequence::Delete);
@@ -1654,23 +1616,7 @@ void MainWindow::setupHoldingTab() {
   connect(m_holdingView, &QListView::activated, this, &MainWindow::onHoldingActivated);
   connect(m_holdingView, &QListView::customContextMenuRequested, this, &MainWindow::onHoldingContextMenu);
 
-  m_deleteHoldingItemsLambda = [this]() {
-    QModelIndexList selectedRows = m_holdingView->selectionModel()->selectedRows();
-    if (selectedRows.isEmpty())
-      return;
-    if (QMessageBox::question(this, i18n("Remove Task"),
-                              i18np("Remove this task from the holding queue?",
-                                    "Remove these tasks from the holding queue?", selectedRows.size())) ==
-        QMessageBox::Yes) {
-      QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_holdingView);
-
-      for (int row : rowsToDelete) {
-        m_holdingModel->removeItem(row);
-      }
-      updateStatus(
-          i18np("Task removed from holding queue.", "%1 tasks removed from holding queue.", rowsToDelete.size()));
-    }
-  };
+  m_deleteHoldingItemsLambda = [this]() { deleteHoldingItems(); };
 
   QAction *holdingDeleteAction = new QAction(i18n("Delete"), m_holdingView);
   holdingDeleteAction->setShortcut(QKeySequence::Delete);
@@ -1893,28 +1839,29 @@ void MainWindow::checkAutoArchiveSessions() {
     }
   }
 
-  bool updated = false;
+  QStringList jobIdsToAutoArchive;
   for (const ArchiveItem &item : itemsToArchive) {
-    QJsonObject session = m_sessionModel->getSession(item.row);
-    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    QModelIndex srcIndex = m_sessionModel->index(item.row, 0);
+    QString jobId = m_sessionModel->data(srcIndex, SessionModel::JobIdRole).toString();
     if (jobId.isEmpty()) {
+      QJsonObject session = m_sessionModel->getSession(item.row);
       jobId = session.value(QStringLiteral("jobId")).toString();
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("id")).toString();
+      }
     }
-    if (jobId.isEmpty()) {
-      jobId = session.value(QStringLiteral("id")).toString();
-    }
-    if (JobData *job = m_jobStore->getJobById(jobId)) {
-      job->legacyMetadata[QStringLiteral("_isArchive")] = true;
-      m_jobStore->updateJob(*job);
-      updated = true;
+    if (!jobId.isEmpty() && !jobIdsToAutoArchive.contains(jobId)) {
+      jobIdsToAutoArchive.append(jobId);
     }
     Q_EMIT sessionAutoArchived(item.id, item.reason);
   }
 
-  if (updated && m_jobStore->save()) {
-    syncModelsFromJobStore();
-    ActivityLogWindow::instance()->logMessage(
-        i18np("Auto-archived 1 following session.", "Auto-archived %1 following sessions.", itemsToArchive.size()));
+  if (m_jobStore && !jobIdsToAutoArchive.isEmpty()) {
+    if (m_jobStore->archiveJobsTransactional(jobIdsToAutoArchive, true)) {
+      syncModelsFromJobStore();
+      ActivityLogWindow::instance()->logMessage(i18np(
+          "Auto-archived 1 following session.", "Auto-archived %1 following sessions.", jobIdsToAutoArchive.size()));
+    }
   }
 }
 
@@ -6478,102 +6425,259 @@ void MainWindow::clearSnoozeSelectedFollowingSessions() {
 
 void MainWindow::deleteFollowingSessions() {
   QModelIndexList selectedRows;
+  const QAbstractItemView *activeView = nullptr;
   if (m_tabWidget->currentWidget() == m_sessionView->parentWidget()) {
     selectedRows = m_sessionView->selectionModel()->selectedRows();
+    activeView = m_sessionView;
   } else if (m_tabWidget->currentWidget() == m_snoozedView->parentWidget()) {
     selectedRows = m_snoozedView->selectionModel()->selectedRows();
+    activeView = m_snoozedView;
   }
 
-  if (selectedRows.isEmpty())
+  if (selectedRows.isEmpty() || !activeView)
     return;
 
-  QList<int> rowsToDelete = getUniqueSortedRows(
-      selectedRows, m_tabWidget->currentWidget() == m_sessionView->parentWidget() ? m_sessionView : m_snoozedView);
+  if (!QStandardPaths::isTestModeEnabled()) {
+    if (QMessageBox::question(this, i18np("Delete Local Job", "Delete Local Jobs", selectedRows.size()),
+                              i18np("Are you sure you want to delete this local Job? This will delete the local Job "
+                                    "and its attempts, but will not delete any remote Jules session.",
+                                    "Are you sure you want to delete these %1 local Jobs? This will delete the local "
+                                    "Jobs and their attempts, but will not delete any remote Jules sessions.",
+                                    selectedRows.size())) != QMessageBox::Yes) {
+      return;
+    }
+  }
 
-  bool updated = false;
-  auto jobs = m_jobStore->jobs();
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, activeView);
+  QStringList jobIdsToDelete;
   for (int row : rowsToDelete) {
-    QJsonObject session = m_sessionModel->getSession(row);
-    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    QModelIndex srcIndex = m_sessionModel->index(row, 0);
+    QString jobId = m_sessionModel->data(srcIndex, SessionModel::JobIdRole).toString();
     if (jobId.isEmpty()) {
+      QJsonObject session = m_sessionModel->getSession(row);
       jobId = session.value(QStringLiteral("jobId")).toString();
-    }
-    if (jobId.isEmpty()) {
-      jobId = session.value(QStringLiteral("id")).toString();
-    }
-    for (int i = 0; i < jobs.size(); ++i) {
-      if (jobs[i].id == jobId) {
-        jobs.removeAt(i);
-        updated = true;
-        break;
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("id")).toString();
+      }
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
       }
     }
+    if (!jobId.isEmpty() && !jobIdsToDelete.contains(jobId)) {
+      jobIdsToDelete.append(jobId);
+    }
   }
-  if (updated) {
-    m_jobStore->setJobs(jobs);
-    if (m_jobStore->save())
-      syncModelsFromJobStore();
+
+  if (m_jobStore) {
+    if (!m_jobStore->removeJobsTransactional(jobIdsToDelete)) {
+      QString errMsg = m_jobStore->lastError().isEmpty() ? i18n("Unknown error") : m_jobStore->lastError();
+      updateStatus(i18n("Failed to delete sessions: %1", errMsg));
+      onError(i18n("Failed to delete sessions from database: %1", errMsg));
+      return;
+    }
+    syncModelsFromJobStore();
+    updateStatus(i18np("1 session deleted.", "%1 sessions deleted.", jobIdsToDelete.size()));
   }
-  updateStatus(i18np("1 session deleted.", "%1 sessions deleted.", rowsToDelete.size()));
 }
 
 void MainWindow::archiveSelectedSessions() {
   QModelIndexList selectedRows = m_sessionView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
   QList<int> rowsToArchive = getUniqueSortedRows(selectedRows, m_sessionView);
 
-  bool updated = false;
+  QStringList jobIdsToArchive;
   for (int row : rowsToArchive) {
-    QJsonObject session = m_sessionModel->getSession(row);
-    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    QModelIndex srcIndex = m_sessionModel->index(row, 0);
+    QString jobId = m_sessionModel->data(srcIndex, SessionModel::JobIdRole).toString();
     if (jobId.isEmpty()) {
+      QJsonObject session = m_sessionModel->getSession(row);
       jobId = session.value(QStringLiteral("jobId")).toString();
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("id")).toString();
+      }
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+      }
     }
-    if (jobId.isEmpty()) {
-      jobId = session.value(QStringLiteral("id")).toString();
-    }
-    if (JobData *job = m_jobStore->getJobById(jobId)) {
-      job->legacyMetadata[QStringLiteral("_isArchive")] = true;
-      m_jobStore->updateJob(*job);
-      updated = true;
+    if (!jobId.isEmpty() && !jobIdsToArchive.contains(jobId)) {
+      jobIdsToArchive.append(jobId);
     }
   }
-  if (updated && m_jobStore->save()) {
+
+  if (m_jobStore) {
+    if (!m_jobStore->archiveJobsTransactional(jobIdsToArchive, true)) {
+      QString errMsg = m_jobStore->lastError().isEmpty() ? i18n("Unknown error") : m_jobStore->lastError();
+      updateStatus(i18n("Failed to archive sessions: %1", errMsg));
+      onError(i18n("Failed to archive sessions in database: %1", errMsg));
+      return;
+    }
     syncModelsFromJobStore();
+    updateStatus(i18np("1 session archived.", "%1 sessions archived.", jobIdsToArchive.size()));
   }
-  updateStatus(i18np("1 session archived.", "%1 sessions archived.", rowsToArchive.size()));
+}
+
+void MainWindow::unarchiveSelectedSessions() {
+  QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
+  QList<int> rowsToUnarchive = getUniqueSortedRows(selectedRows, m_archiveView);
+
+  QStringList jobIdsToUnarchive;
+  for (int row : rowsToUnarchive) {
+    QModelIndex srcIndex = m_archiveModel->index(row, 0);
+    QString jobId = m_archiveModel->data(srcIndex, SessionModel::JobIdRole).toString();
+    if (jobId.isEmpty()) {
+      QJsonObject session = m_archiveModel->getSession(row);
+      jobId = session.value(QStringLiteral("jobId")).toString();
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("id")).toString();
+      }
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+      }
+    }
+    if (!jobId.isEmpty() && !jobIdsToUnarchive.contains(jobId)) {
+      jobIdsToUnarchive.append(jobId);
+    }
+  }
+
+  if (m_jobStore) {
+    if (!m_jobStore->archiveJobsTransactional(jobIdsToUnarchive, false)) {
+      QString errMsg = m_jobStore->lastError().isEmpty() ? i18n("Unknown error") : m_jobStore->lastError();
+      updateStatus(i18n("Failed to unarchive sessions: %1", errMsg));
+      onError(i18n("Failed to unarchive sessions in database: %1", errMsg));
+      return;
+    }
+    syncModelsFromJobStore();
+    updateStatus(i18np("1 session unarchived.", "%1 sessions unarchived.", jobIdsToUnarchive.size()));
+  }
 }
 
 void MainWindow::deleteArchiveSessions() {
   QModelIndexList selectedRows = m_archiveView->selectionModel()->selectedRows();
   if (selectedRows.isEmpty())
     return;
-  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_archiveView);
+  if (!QStandardPaths::isTestModeEnabled()) {
+    if (QMessageBox::question(this, i18np("Delete Archived Job", "Delete Archived Jobs", selectedRows.size()),
+                              i18np("Are you sure you want to delete this archived local Job? This will delete the "
+                                    "local Job and its attempts, but will not delete any remote Jules session.",
+                                    "Are you sure you want to delete these %1 archived local Jobs? This will delete "
+                                    "the local Jobs and their attempts, but will not delete any remote Jules sessions.",
+                                    selectedRows.size())) != QMessageBox::Yes) {
+      return;
+    }
+  }
 
-  bool updated = false;
-  auto jobs = m_jobStore->jobs();
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_archiveView);
+  QStringList jobIdsToDelete;
   for (int row : rowsToDelete) {
-    QJsonObject session = m_archiveModel->getSession(row);
-    QString jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
+    QModelIndex srcIndex = m_archiveModel->index(row, 0);
+    QString jobId = m_archiveModel->data(srcIndex, SessionModel::JobIdRole).toString();
     if (jobId.isEmpty()) {
+      QJsonObject session = m_archiveModel->getSession(row);
       jobId = session.value(QStringLiteral("jobId")).toString();
-    }
-    if (jobId.isEmpty()) {
-      jobId = session.value(QStringLiteral("id")).toString();
-    }
-    for (int i = 0; i < jobs.size(); ++i) {
-      if (jobs[i].id == jobId) {
-        jobs.removeAt(i);
-        updated = true;
-        break;
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("id")).toString();
+      }
+      if (jobId.isEmpty()) {
+        jobId = session.value(QStringLiteral("_kjules_job_id")).toString();
       }
     }
+    if (!jobId.isEmpty() && !jobIdsToDelete.contains(jobId)) {
+      jobIdsToDelete.append(jobId);
+    }
   }
-  if (updated) {
-    m_jobStore->setJobs(jobs);
-    if (m_jobStore->save())
-      syncModelsFromJobStore();
+
+  if (m_jobStore) {
+    if (!m_jobStore->removeJobsTransactional(jobIdsToDelete)) {
+      QString errMsg = m_jobStore->lastError().isEmpty() ? i18n("Unknown error") : m_jobStore->lastError();
+      updateStatus(i18n("Failed to delete sessions from archive: %1", errMsg));
+      onError(i18n("Failed to delete archived sessions from database: %1", errMsg));
+      return;
+    }
+    syncModelsFromJobStore();
+    updateStatus(i18np("1 session deleted from archive.", "%1 sessions deleted from archive.", jobIdsToDelete.size()));
   }
-  updateStatus(i18np("1 session deleted from archive.", "%1 sessions deleted from archive.", rowsToDelete.size()));
+}
+
+void MainWindow::deleteQueueItems() {
+  QModelIndexList selectedRows = m_queueView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
+  if (!QStandardPaths::isTestModeEnabled()) {
+    if (QMessageBox::question(this, i18n("Remove Task"),
+                              i18np("Remove this task from the queue?", "Remove these tasks from the queue?",
+                                    selectedRows.size())) != QMessageBox::Yes) {
+      return;
+    }
+  }
+
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_queueView);
+  QStringList jobIdsToDelete;
+  for (int row : rowsToDelete) {
+    QString jId = m_queueModel->getItem(row).jobId;
+    if (!jId.isEmpty() && !jobIdsToDelete.contains(jId)) {
+      jobIdsToDelete.append(jId);
+    }
+  }
+
+  if (m_jobStore && !jobIdsToDelete.isEmpty()) {
+    if (!m_jobStore->removeJobsTransactional(jobIdsToDelete)) {
+      QString errMsg = m_jobStore->lastError().isEmpty() ? i18n("Unknown error") : m_jobStore->lastError();
+      updateStatus(i18n("Failed to delete queued tasks: %1", errMsg));
+      onError(i18n("Failed to remove queued tasks from JobStore: %1", errMsg));
+      return;
+    }
+  }
+
+  for (int row : rowsToDelete) {
+    m_queueModel->removeItem(row);
+  }
+  if (m_jobStore) {
+    syncModelsFromJobStore();
+  }
+  updateStatus(i18np("Task removed from queue.", "%1 tasks removed from queue.", rowsToDelete.size()));
+}
+
+void MainWindow::deleteHoldingItems() {
+  QModelIndexList selectedRows = m_holdingView->selectionModel()->selectedRows();
+  if (selectedRows.isEmpty())
+    return;
+  if (!QStandardPaths::isTestModeEnabled()) {
+    if (QMessageBox::question(this, i18n("Remove Task"),
+                              i18np("Remove this task from the holding queue?",
+                                    "Remove these tasks from the holding queue?", selectedRows.size())) !=
+        QMessageBox::Yes) {
+      return;
+    }
+  }
+
+  QList<int> rowsToDelete = getUniqueSortedRows(selectedRows, m_holdingView);
+  QStringList jobIdsToDelete;
+  for (int row : rowsToDelete) {
+    QString jId = m_holdingModel->getItem(row).jobId;
+    if (!jId.isEmpty() && !jobIdsToDelete.contains(jId)) {
+      jobIdsToDelete.append(jId);
+    }
+  }
+
+  if (m_jobStore && !jobIdsToDelete.isEmpty()) {
+    if (!m_jobStore->removeJobsTransactional(jobIdsToDelete)) {
+      QString errMsg = m_jobStore->lastError().isEmpty() ? i18n("Unknown error") : m_jobStore->lastError();
+      updateStatus(i18n("Failed to delete holding tasks: %1", errMsg));
+      onError(i18n("Failed to remove holding tasks from JobStore: %1", errMsg));
+      return;
+    }
+  }
+
+  for (int row : rowsToDelete) {
+    m_holdingModel->removeItem(row);
+  }
+  if (m_jobStore) {
+    syncModelsFromJobStore();
+  }
+  updateStatus(i18np("Task removed from holding queue.", "%1 tasks removed from holding queue.", rowsToDelete.size()));
 }
 
 void MainWindow::deleteDrafts() {
