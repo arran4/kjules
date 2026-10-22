@@ -174,6 +174,9 @@ private Q_SLOTS:
   void testDuplicateSessionFromWindowPreservesSourceAndBranchUI();
   void testVariantFromWindowPreservesSnapshotAndQueuesUnderSameJobUI();
   void testDuplicateFollowingItemsToQueuePreservesFields();
+  void testSessionCreationJobStoreFailurePreservesDialogAndPrompt();
+  void testSessionCreationPartialFailureRetainsFailedSourcesOnly();
+  void testEditQueueItemJobStoreFailurePreservesOriginalQueueItem();
 
   void testCanonicalPresentationAndRecovery_data() {
     QTest::addColumn<bool>("direct");
@@ -1731,6 +1734,148 @@ void TestSessionWindow::testDuplicateFollowingItemsToQueuePreservesFields() {
   QCOMPARE(item.requestData.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
   QCOMPARE(item.requestData.value(QStringLiteral("requirePlanApproval")).toBool(), true);
   QCOMPARE(item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
+}
+
+void TestSessionWindow::testSessionCreationJobStoreFailurePreservesDialogAndPrompt() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  QJsonObject initialData;
+  initialData[QStringLiteral("sources")] = QJsonArray{QStringLiteral("sources/github/owner/repo")};
+  initialData[QStringLiteral("prompt")] = QStringLiteral("Fix issue 452 prompt");
+
+  NewSessionDialog *dialog = window.showNewSessionDialog(initialData, true);
+  QVERIFY(dialog != nullptr);
+  QCOMPARE(dialog->promptText(), QStringLiteral("Fix issue 452 prompt"));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/owner/repo")));
+
+  // Inject failure in JobStore
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+
+  // Submit via genuine dialog UI method
+  dialog->submitSession();
+
+  // Task was NOT added to queue and NOT persisted in JobStore
+  QCOMPARE(window.queueModel()->size(), 0);
+  QCOMPARE(window.jobStore()->jobs().size(), 0);
+
+  // Status message reported failure, not success
+  QVERIFY(!statusSpy.isEmpty());
+  bool foundFailureMsg = false;
+  for (const auto &call : statusSpy) {
+    if (call.at(0).toString().contains(QStringLiteral("Failed to queue task"))) {
+      foundFailureMsg = true;
+      break;
+    }
+  }
+  QVERIFY(foundFailureMsg);
+
+  // Dialog remains open with user prompt and input intact
+  QVERIFY(dialog->isVisible());
+  QCOMPARE(dialog->promptText(), QStringLiteral("Fix issue 452 prompt"));
+  QVERIFY(!dialog->lastSubmissionSuccessful());
+  QCOMPARE(dialog->lastSubmissionError(), QStringLiteral("Simulated disk I/O failure"));
+
+  // Recovery / safe retry: unblock JobStore and submit again
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  dialog->submitSession();
+
+  // Now successfully queued and persisted
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QVERIFY(dialog->lastSubmissionSuccessful());
+  QVERIFY(!dialog->isVisible());
+}
+
+void TestSessionWindow::testSessionCreationPartialFailureRetainsFailedSourcesOnly() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  QJsonObject initialData;
+  initialData[QStringLiteral("sources")] =
+      QJsonArray{QStringLiteral("sources/github/owner/repo-1"), QStringLiteral("sources/github/owner/repo-2")};
+  initialData[QStringLiteral("prompt")] = QStringLiteral("Partial failure prompt");
+
+  NewSessionDialog *dialog = window.showNewSessionDialog(initialData, true);
+  QVERIFY(dialog != nullptr);
+  QCOMPARE(dialog->selectedSources().size(), 2);
+
+  // Allow 1st save to succeed, fail on 2nd save
+  window.jobStore()->setSimulateSaveFailureAfterCount(1);
+
+  dialog->submitSession();
+
+  // Exactly 1 task was queued and 1 persisted
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+
+  // Dialog remains open, prompt preserved, and only failed source repo-2 is retained
+  QVERIFY(dialog->isVisible());
+  QCOMPARE(dialog->promptText(), QStringLiteral("Partial failure prompt"));
+  QVERIFY(!dialog->selectedSources().contains(QStringLiteral("sources/github/owner/repo-1")));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/owner/repo-2")));
+  QVERIFY(!dialog->lastSubmissionSuccessful());
+
+  // Retry with JobStore working normally
+  window.jobStore()->setSimulateSaveFailureAfterCount(-1);
+  dialog->submitSession();
+
+  // Now both are queued (total 2)
+  QCOMPARE(window.queueModel()->size(), 2);
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+  QVERIFY(dialog->lastSubmissionSuccessful());
+  QVERIFY(!dialog->isVisible());
+}
+
+void TestSessionWindow::testEditQueueItemJobStoreFailurePreservesOriginalQueueItem() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  QJsonObject originalReq = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/orig/repo"), QStringLiteral("main"), QStringLiteral("Original prompt"),
+      QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  QueueItem item;
+  item.jobId = QStringLiteral("job-edit-queue");
+  item.requestData = originalReq;
+  window.queueModel()->enqueueItem(item);
+  QCOMPARE(window.queueModel()->size(), 1);
+
+  // Now simulate save failure
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+
+  // Open edit dialog
+  window.editQueueItem(0);
+
+  NewSessionDialog *dlg = window.findChild<NewSessionDialog *>();
+  QVERIFY(dlg != nullptr);
+  QCOMPARE(dlg->promptText(), QStringLiteral("Original prompt"));
+
+  dlg->setPromptText(QStringLiteral("Modified prompt"));
+  dlg->submitSession();
+
+  // Verify the original queue item was preserved and not deleted
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Original prompt"));
+  QVERIFY(dlg->isVisible());
+  QCOMPARE(dlg->promptText(), QStringLiteral("Modified prompt"));
+
+  // Recover
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  dlg->submitSession();
+
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Modified prompt"));
+  QVERIFY(!dlg->isVisible());
 }
 
 void TestSessionWindow::testCreateRepoWorkflow() {
