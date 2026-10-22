@@ -78,7 +78,8 @@ public:
   bool interceptListSources = false;
   int listSourcesCount = 0;
 
-  QByteArray createSessionResponse = "{}";
+  QByteArray createSessionResponse =
+      "{\"id\":\"mock-sess-id\",\"name\":\"sessions/mock-sess-id\",\"state\":\"IN_PROGRESS\"}";
   int createSessionStatusCode = 200;
   bool interceptCreateSession = false;
   int createSessionCount = 0;
@@ -273,6 +274,8 @@ private Q_SLOTS:
   void testManualBatch_repoProvisioningDoesNotIncrement();
 
   void testProcessQueueIndependenceFromFollowingReloads();
+  void testCreateSessionValidation_data();
+  void testCreateSessionValidation();
 
   void testDurableZeroHistory() {
     MainWindow window;
@@ -2663,4 +2666,114 @@ void TestSessionWindow::testManualBatch_repoProvisioningDoesNotIncrement() {
   QTRY_COMPARE(window.m_manualBatchAccepted, 1);
   QTRY_VERIFY(!window.m_manualBatchActive);
   QVERIFY(window.m_queuePaused);
+}
+
+void TestSessionWindow::testCreateSessionValidation_data() {
+  QTest::addColumn<QByteArray>("responseBody");
+  QTest::addColumn<int>("statusCode");
+  QTest::addColumn<bool>("expectedSuccess");
+  QTest::addColumn<QString>("expectedSessionId");
+  QTest::addColumn<QString>("expectedErrorSubstring");
+
+  QTest::newRow("empty_body_200") << QByteArray("") << 200 << false << QString() << QStringLiteral("Malformed JSON");
+  QTest::newRow("malformed_json_200") << QByteArray("not a { json") << 200 << false << QString()
+                                      << QStringLiteral("Malformed JSON");
+  QTest::newRow("json_array_200") << QByteArray("[{\"id\":\"123\"}]") << 200 << false << QString()
+                                  << QStringLiteral("Expected JSON object");
+  QTest::newRow("empty_object_200") << QByteArray("{}") << 200 << false << QString()
+                                    << QStringLiteral("Missing or invalid session identifier");
+  QTest::newRow("error_payload_200") << QByteArray("{\"error\":{\"code\":500,\"message\":\"backend failure\"}}") << 200
+                                     << false << QString() << QStringLiteral("backend failure");
+  QTest::newRow("empty_id_and_invalid_name_200")
+      << QByteArray("{\"id\":\"\",\"name\":\"invalid/name/format\"}") << 200 << false << QString()
+      << QStringLiteral("Invalid session resource name format");
+  QTest::newRow("name_fallback_valid_200")
+      << QByteArray("{\"name\":\"sessions/sess-from-name-123\",\"state\":\"RUNNING\"}") << 200 << true
+      << QStringLiteral("sess-from-name-123") << QString();
+  QTest::newRow("normal_success_with_id_200")
+      << QByteArray("{\"id\":\"sess-valid-456\",\"name\":\"sessions/sess-valid-456\",\"state\":\"RUNNING\"}") << 200
+      << true << QStringLiteral("sess-valid-456") << QString();
+  QTest::newRow("http_400_validation_error")
+      << QByteArray("{\"error\":{\"code\":400,\"status\":\"INVALID_ARGUMENT\",\"message\":\"invalid argument\"}}")
+      << 400 << false << QString() << QString();
+  QTest::newRow("http_401_unauthorized")
+      << QByteArray("{\"error\":{\"code\":401,\"status\":\"UNAUTHENTICATED\",\"message\":\"bad key\"}}") << 401 << false
+      << QString() << QString();
+  QTest::newRow("http_429_rate_limit")
+      << QByteArray("{\"error\":{\"code\":429,\"status\":\"RESOURCE_EXHAUSTED\",\"message\":\"quota exceeded\"}}")
+      << 429 << false << QString() << QString();
+}
+
+void TestSessionWindow::testCreateSessionValidation() {
+  QFETCH(QByteArray, responseBody);
+  QFETCH(int, statusCode);
+  QFETCH(bool, expectedSuccess);
+  QFETCH(QString, expectedSessionId);
+  QFETCH(QString, expectedErrorSubstring);
+
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  KConfigGroup authConfig(KSharedConfig::openConfig(), QStringLiteral("Authentication"));
+  authConfig.writeEntry(QStringLiteral("ApiKey"), QStringLiteral("dummy-token"));
+  authConfig.writeEntry(QStringLiteral("GithubToken"), QStringLiteral("dummy-token"));
+  authConfig.sync();
+  window.apiManager()->setApiKey(QStringLiteral("dummy-token"));
+  window.apiManager()->setGithubToken(QStringLiteral("dummy-token"));
+
+  auto *mockNam = new MockCreateRepoAndSessionNetworkManager(&window);
+  window.apiManager()->injectNetworkAccessManagerForTesting(mockNam);
+
+  mockNam->interceptCreateSession = true;
+  mockNam->createSessionStatusCode = statusCode;
+  mockNam->createSessionResponse = responseBody;
+
+  QSignalSpy createdSpy(window.apiManager(), &APIManager::sessionCreated);
+  QSignalSpy failedSpy(window.apiManager(), &APIManager::sessionCreationFailed);
+
+  QJsonObject req = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/test-org/test-repo"), QStringLiteral("main"),
+      QStringLiteral("Validation test prompt"), QStringLiteral("AUTO_CREATE_PR"), true, false, 0);
+
+  JobData job = JobData::fromRequest(req);
+  job.id = QStringLiteral("validation-job-id");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  QueueItem item;
+  item.jobId = job.id;
+  item.requestData = req;
+  window.queueModel()->enqueueItem(item);
+
+  window.processQueueForTest();
+
+  if (expectedSuccess) {
+    QTRY_COMPARE(createdSpy.count(), 1);
+    QCOMPARE(failedSpy.count(), 0);
+    QCOMPARE(createdSpy.first().at(0).toString(), job.id);
+    QJsonObject createdSession = createdSpy.first().at(2).toJsonObject();
+    QCOMPARE(createdSession.value(QStringLiteral("id")).toString(), expectedSessionId);
+
+    JobData *updatedJob = window.jobStore()->getJobById(job.id);
+    QVERIFY(updatedJob != nullptr);
+    QCOMPARE(updatedJob->attempts.size(), 1);
+    QCOMPARE(updatedJob->attempts[0].dispatchState, QStringLiteral("COMPLETED"));
+    QCOMPARE(updatedJob->attempts[0].julesSessionId, expectedSessionId);
+  } else {
+    QTRY_COMPARE(failedSpy.count(), 1);
+    QCOMPARE(createdSpy.count(), 0);
+    QCOMPARE(failedSpy.first().at(0).toString(), job.id);
+    ApiError err = failedSpy.first().at(3).value<ApiError>();
+    if (!expectedErrorSubstring.isEmpty()) {
+      QVERIFY(err.message().contains(expectedErrorSubstring));
+    }
+
+    JobData *updatedJob = window.jobStore()->getJobById(job.id);
+    QVERIFY(updatedJob != nullptr);
+    QCOMPARE(updatedJob->attempts.size(), 1);
+    QCOMPARE(updatedJob->attempts[0].dispatchState, QStringLiteral("FAILED"));
+    QVERIFY(updatedJob->attempts[0].julesSessionId.isEmpty());
+    QVERIFY(!updatedJob->attempts[0].launchErrors.isEmpty());
+  }
 }

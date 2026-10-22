@@ -3,6 +3,7 @@
 
 #include <QByteArray>
 #include <QJsonObject>
+#include <QMetaType>
 #include <QNetworkReply>
 #include <QString>
 
@@ -54,5 +55,7 @@ class ApiErrorDetector {
 public:
   static ApiError detect(QNetworkReply *reply, const QByteArray &responseData = QByteArray());
 };
+
+Q_DECLARE_METATYPE(ApiError)
 
 #endif // APIERROR_H
