@@ -6,6 +6,7 @@
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
 #include "../src/mainwindow.h"
+#include "../src/migrationorchestrator.h"
 #include "../src/newsessiondialog.h"
 #include "../src/queuemodel.h"
 #include "../src/sessionmodel.h"
@@ -168,6 +169,7 @@ private Q_SLOTS:
   void testRegressionFollowingRefreshUsesRemoteSessionId();
   void testRegressionArchiveProjectionExposesJobIdentity();
   void testFollowingRefreshMultipleActiveAttempts();
+  void testCompletedMergedAttemptRefreshExclusionAndUiStatus();
   void testZeroAttemptAndMultipleAttemptActionsIdentity();
 
   void testCanonicalPresentationAndRecovery_data() {
@@ -1442,6 +1444,104 @@ void TestSessionWindow::testFollowingRefreshMultipleActiveAttempts() {
   QVERIFY(!candidates.contains(a1.id));
   QVERIFY(!candidates.contains(a5.id));
   QCOMPARE(candidates.size(), 4);
+}
+
+void TestSessionWindow::testCompletedMergedAttemptRefreshExclusionAndUiStatus() {
+  // Ensure migrated flag is active
+  MigrationOrchestrator::getMigratedFlag() = true;
+
+  // Case 1: JobStore with one COMPLETED attempt, prMetadata with merged_at timestamp, rawResponse lacking githubPrInfo
+  {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->clear();
+
+    JobData job;
+    job.id = QStringLiteral("job-completed-merged");
+    job.source = QStringLiteral("sources/github/example/repo");
+
+    JobAttemptData attempt;
+    attempt.id = QStringLiteral("att-merged-1");
+    attempt.julesSessionId = QStringLiteral("remote-merged-1");
+    attempt.julesState = QStringLiteral("COMPLETED");
+    attempt.dispatchState = QStringLiteral("COMPLETED");
+
+    // Non-empty rawResponse without githubPrInfo
+    QJsonObject raw;
+    raw[QStringLiteral("id")] = QStringLiteral("remote-merged-1");
+    attempt.rawResponse = raw;
+
+    // Authoritative prMetadata with state closed and valid merged_at
+    QJsonObject prMeta;
+    prMeta[QStringLiteral("state")] = QStringLiteral("closed");
+    prMeta[QStringLiteral("merged_at")] = QStringLiteral("2026-10-20T12:00:00Z");
+    attempt.prMetadata = prMeta;
+
+    job.attempts.append(attempt);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    window.syncModelsFromJobStore();
+
+    // UI Model must reflect merged PR status even though rawResponse lacked githubPrInfo
+    QCOMPARE(window.sessionModel()->rowCount(), 1);
+    QModelIndex idx = window.sessionModel()->index(0, 0);
+    QCOMPARE(window.sessionModel()->data(idx, SessionModel::PrStatusRole).toString(), QStringLiteral("merged"));
+    QCOMPARE(window.sessionModel()
+                 ->data(window.sessionModel()->index(0, SessionModel::ColPRStatus), Qt::DisplayRole)
+                 .toString(),
+             QStringLiteral("merged"));
+
+    // Must be excluded from candidate enumeration
+    QStringList candidates = window.getActiveFollowingSessionIds();
+    QCOMPARE(candidates.size(), 0);
+
+    // Auto-refresh must not dispatch any remote reload for excluded session
+    window.autoRefreshFollowing();
+    QVERIFY(!window.m_inFlightSessionReloads.contains(QStringLiteral("remote-merged-1")));
+  }
+
+  // Case 2: No jobs in JobStore
+  {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->clear();
+    window.syncModelsFromJobStore();
+
+    QStringList candidates = window.getActiveFollowingSessionIds();
+    QCOMPARE(candidates.size(), 0);
+  }
+
+  // Case 3: Legacy-only data (!isMigrated())
+  {
+    MigrationOrchestrator::getMigratedFlag() = false;
+
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->clear();
+
+    QJsonArray legacySessions;
+    QJsonObject sActive;
+    sActive[QStringLiteral("id")] = QStringLiteral("legacy-active-id");
+    sActive[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
+    legacySessions.append(sActive);
+
+    QJsonObject sMerged;
+    sMerged[QStringLiteral("id")] = QStringLiteral("legacy-merged-id");
+    sMerged[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+    QJsonObject mergedPr;
+    mergedPr[QStringLiteral("state")] = QStringLiteral("closed");
+    mergedPr[QStringLiteral("merged_at")] = QStringLiteral("2026-10-20T12:00:00Z");
+    sMerged[QStringLiteral("githubPrInfo")] = mergedPr;
+    legacySessions.append(sMerged);
+
+    window.sessionModel()->setSessions(legacySessions);
+
+    QStringList candidates = window.getActiveFollowingSessionIds();
+    QCOMPARE(candidates, QStringList{QStringLiteral("legacy-active-id")});
+
+    // Reset migrated flag
+    MigrationOrchestrator::getMigratedFlag() = true;
+  }
 }
 
 void TestSessionWindow::testZeroAttemptAndMultipleAttemptActionsIdentity() {

@@ -3695,7 +3695,7 @@ void MainWindow::onSessionCreated(const QMultiMap<QString, QString> &sources, co
 
 QStringList MainWindow::getActiveFollowingSessionIds() const {
   QStringList activeIds;
-  if (m_jobStore) {
+  if (m_jobStore && !m_jobStore->jobs().isEmpty()) {
     const QList<JobData> allJobs = m_jobStore->jobs();
     for (const JobData &job : allJobs) {
       JobPolicy::JobAggregateState aggState = JobPolicy::aggregateState(job);
@@ -3715,10 +3715,11 @@ QStringList MainWindow::getActiveFollowingSessionIds() const {
         }
       }
     }
+    return activeIds;
   }
 
-  // Fallback if not using job store or no jobs present in store
-  if (activeIds.isEmpty() && m_sessionModel) {
+  // Fallback if not using JobStore or no jobs present in store (e.g. unmigrated legacy data)
+  if (m_sessionModel) {
     for (int i = 0; i < m_sessionModel->rowCount(); ++i) {
       QModelIndex index = m_sessionModel->index(i, 0);
       QString state = m_sessionModel->data(index, SessionModel::StateRole).toString();
@@ -6914,7 +6915,8 @@ void MainWindow::syncModelsFromJobStore() {
           if (repAttempt->rawResponse.contains(QStringLiteral("githubPrInfo"))) {
             projection[QStringLiteral("githubPrInfo")] = repAttempt->rawResponse.value(QStringLiteral("githubPrInfo"));
           }
-        } else if (!repAttempt->prMetadata.isEmpty()) {
+        }
+        if (!repAttempt->prMetadata.isEmpty()) {
           projection[QStringLiteral("githubPrInfo")] = repAttempt->prMetadata;
         }
         if (repAttempt->updatedAt.isValid()) {

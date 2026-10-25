@@ -110,6 +110,7 @@ private Q_SLOTS:
   void testInFlightRecovery();
   void testBackgroundErrorThrottle();
   void initTestCase();
+  void cleanup();
   void testKXmlGuiResourceExists();
   void testNoNestedSessionsWindowAndSingleChrome();
   void testIntegratedTabLayoutAndInitialSelection();
@@ -133,6 +134,15 @@ void TestSourceWindow::initTestCase() {
   qputenv("KDE_HOME_READONLY", "1");
   qputenv("CANBERRA_DRIVER", "null");
   qputenv("KNOTIFICATIONS_DEFAULT_BACKEND", "null");
+}
+
+void TestSourceWindow::cleanup() {
+  const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QFile::remove(appData + QStringLiteral("/jobs.json"));
+  QFile::remove(appData + QStringLiteral("/cached_all_sessions.json"));
+  QFile::remove(appData + QStringLiteral("/cached_archive_sessions.json"));
+  QFile::remove(appData + QStringLiteral("/queue.json"));
+  QFile::remove(appData + QStringLiteral("/holding.json"));
 }
 
 void TestSourceWindow::testKXmlGuiResourceExists() {
