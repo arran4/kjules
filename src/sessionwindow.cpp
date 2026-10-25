@@ -1,4 +1,5 @@
 #include "sessionwindow.h"
+#include "followingrefreshevaluator.h"
 #include "sessionrequestbuilder.h"
 
 #include <KActionCollection>
@@ -843,10 +844,7 @@ void SessionWindow::renderDetailsAndDiff() {
 
     prHtml += QStringLiteral("<tr><th>") + i18n("Title:") + QStringLiteral("</th><td>") +
               prInfo.value(QStringLiteral("title")).toString().toHtmlEscaped() + QStringLiteral("</td></tr>");
-    QString state = prInfo.value(QStringLiteral("state")).toString();
-    if (prInfo.value(QStringLiteral("merged_at")).isString()) {
-      state = QStringLiteral("merged");
-    }
+    QString state = FollowingRefreshEvaluator::extractPrStatus(prInfo);
     prHtml += QStringLiteral("<tr><th>") + i18n("State:") + QStringLiteral("</th><td>") + state.toHtmlEscaped() +
               QStringLiteral("</td></tr>");
 

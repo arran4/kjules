@@ -1,4 +1,5 @@
 #include "sessionmodel.h"
+#include "followingrefreshevaluator.h"
 #include "migrationorchestrator.h"
 #include <KLocalizedString>
 #include <QColor>
@@ -96,10 +97,7 @@ SessionData parseSessionData(const QJsonObject &obj) {
 
   if (obj.contains(QStringLiteral("githubPrInfo"))) {
     QJsonObject prInfo = obj.value(QStringLiteral("githubPrInfo")).toObject();
-    data.prStatus = prInfo.value(QStringLiteral("state")).toString();
-    if (prInfo.value(QStringLiteral("merged_at")).isString()) {
-      data.prStatus = QStringLiteral("merged");
-    }
+    data.prStatus = FollowingRefreshEvaluator::extractPrStatus(prInfo);
     QJsonArray labelsArr = prInfo.value(QStringLiteral("labels")).toArray();
     for (int i = 0; i < labelsArr.size(); ++i) {
       data.prLabels.append(labelsArr[i].toObject().value(QStringLiteral("name")).toString());

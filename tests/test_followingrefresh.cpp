@@ -10,6 +10,8 @@ class TestFollowingRefresh : public QObject {
 private Q_SLOTS:
   void testGlobalIntervalEvaluated();
   void testSessionEligibility();
+  void testMergedPrDetection();
+  void testSessionModelPrStatusWithNullMergedAt();
   void testInheritedPerSessionInterval();
   void testPerSessionDisabledState();
   void testPositivePerSessionOverride();
@@ -80,6 +82,139 @@ void TestFollowingRefresh::testSessionEligibility() {
   QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"), QStringLiteral("CLOSED")));
   QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("CANCELED"), QString()));
   QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("ERROR"), QString()));
+}
+
+void TestFollowingRefresh::testMergedPrDetection() {
+  // 1. state=open, merged_at=null (unmerged PR, must be eligible)
+  QJsonObject openNull;
+  openNull[QStringLiteral("state")] = QStringLiteral("open");
+  openNull[QStringLiteral("merged_at")] = QJsonValue::Null;
+  QVERIFY(!FollowingRefreshEvaluator::isPrMerged(openNull));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(openNull), QStringLiteral("open"));
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                       FollowingRefreshEvaluator::extractPrStatus(openNull)));
+
+  // 2. state=open, no merged_at field (must be eligible)
+  QJsonObject openNoField;
+  openNoField[QStringLiteral("state")] = QStringLiteral("open");
+  QVERIFY(!FollowingRefreshEvaluator::isPrMerged(openNoField));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(openNoField), QStringLiteral("open"));
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                       FollowingRefreshEvaluator::extractPrStatus(openNoField)));
+
+  // 3. state=open, merged_at="" (empty string, must be eligible)
+  QJsonObject openEmptyMergedAt;
+  openEmptyMergedAt[QStringLiteral("state")] = QStringLiteral("open");
+  openEmptyMergedAt[QStringLiteral("merged_at")] = QStringLiteral("");
+  QVERIFY(!FollowingRefreshEvaluator::isPrMerged(openEmptyMergedAt));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(openEmptyMergedAt), QStringLiteral("open"));
+  QVERIFY(FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                       FollowingRefreshEvaluator::extractPrStatus(openEmptyMergedAt)));
+
+  // 4. Truly merged: state=closed, merged_at is a valid non-empty timestamp (must NOT be eligible)
+  QJsonObject trulyMerged;
+  trulyMerged[QStringLiteral("state")] = QStringLiteral("closed");
+  trulyMerged[QStringLiteral("merged_at")] = QStringLiteral("2026-01-01T12:00:00Z");
+  QVERIFY(FollowingRefreshEvaluator::isPrMerged(trulyMerged));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(trulyMerged), QStringLiteral("merged"));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                        FollowingRefreshEvaluator::extractPrStatus(trulyMerged)));
+
+  // 5. Canonical merged state or open with merged_at timestamp
+  QJsonObject openWithMergedAt;
+  openWithMergedAt[QStringLiteral("state")] = QStringLiteral("open");
+  openWithMergedAt[QStringLiteral("merged_at")] = QStringLiteral("2026-01-01T12:00:00Z");
+  QVERIFY(FollowingRefreshEvaluator::isPrMerged(openWithMergedAt));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(openWithMergedAt), QStringLiteral("merged"));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                        FollowingRefreshEvaluator::extractPrStatus(openWithMergedAt)));
+
+  QJsonObject canonicalMerged;
+  canonicalMerged[QStringLiteral("state")] = QStringLiteral("merged");
+  QVERIFY(FollowingRefreshEvaluator::isPrMerged(canonicalMerged));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(canonicalMerged), QStringLiteral("merged"));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                        FollowingRefreshEvaluator::extractPrStatus(canonicalMerged)));
+
+  // 6. Closed-unmerged: state=closed, merged_at=null (must NOT be eligible because it is closed)
+  QJsonObject closedUnmerged;
+  closedUnmerged[QStringLiteral("state")] = QStringLiteral("closed");
+  closedUnmerged[QStringLiteral("merged_at")] = QJsonValue::Null;
+  QVERIFY(!FollowingRefreshEvaluator::isPrMerged(closedUnmerged));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(closedUnmerged), QStringLiteral("closed"));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                        FollowingRefreshEvaluator::extractPrStatus(closedUnmerged)));
+
+  // 7. Closed-unmerged: state=closed, no merged_at field
+  QJsonObject closedNoField;
+  closedNoField[QStringLiteral("state")] = QStringLiteral("closed");
+  QVERIFY(!FollowingRefreshEvaluator::isPrMerged(closedNoField));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(closedNoField), QStringLiteral("closed"));
+  QVERIFY(!FollowingRefreshEvaluator::isSessionEligible(QStringLiteral("COMPLETED"),
+                                                        FollowingRefreshEvaluator::extractPrStatus(closedNoField)));
+
+  // 8. Explicit boolean merged flags
+  QJsonObject mergedBoolTrue;
+  mergedBoolTrue[QStringLiteral("merged")] = true;
+  QVERIFY(FollowingRefreshEvaluator::isPrMerged(mergedBoolTrue));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(mergedBoolTrue), QStringLiteral("merged"));
+
+  QJsonObject mergedBoolFalse;
+  mergedBoolFalse[QStringLiteral("merged")] = false;
+  mergedBoolFalse[QStringLiteral("state")] = QStringLiteral("open");
+  QVERIFY(!FollowingRefreshEvaluator::isPrMerged(mergedBoolFalse));
+  QCOMPARE(FollowingRefreshEvaluator::extractPrStatus(mergedBoolFalse), QStringLiteral("open"));
+
+  // 9. Sibling attempts with different PR statuses
+  QJsonObject sibOpenRaw;
+  QJsonObject sibOpenPr;
+  sibOpenPr[QStringLiteral("state")] = QStringLiteral("open");
+  sibOpenPr[QStringLiteral("merged_at")] = QJsonValue::Null;
+  sibOpenRaw[QStringLiteral("githubPrInfo")] = sibOpenPr;
+
+  QJsonObject sibMergedRaw;
+  QJsonObject sibMergedPr;
+  sibMergedPr[QStringLiteral("state")] = QStringLiteral("closed");
+  sibMergedPr[QStringLiteral("merged_at")] = QStringLiteral("2026-01-01T12:00:00Z");
+  sibMergedRaw[QStringLiteral("githubPrInfo")] = sibMergedPr;
+
+  QJsonObject sibClosedRaw;
+  QJsonObject sibClosedPr;
+  sibClosedPr[QStringLiteral("state")] = QStringLiteral("closed");
+  sibClosedPr[QStringLiteral("merged_at")] = QJsonValue::Null;
+  sibClosedRaw[QStringLiteral("githubPrInfo")] = sibClosedPr;
+
+  // Active or completed attempt with open PR (merged_at null) remains eligible
+  QVERIFY(FollowingRefreshEvaluator::isAttemptEligible(QStringLiteral("COMPLETED"), sibOpenRaw, QJsonObject()));
+  QVERIFY(FollowingRefreshEvaluator::isAttemptEligible(QStringLiteral("IN_PROGRESS"), sibOpenRaw, QJsonObject()));
+
+  // Sibling attempts that are closed-unmerged or merged are not eligible when COMPLETED
+  QVERIFY(!FollowingRefreshEvaluator::isAttemptEligible(QStringLiteral("COMPLETED"), sibMergedRaw, QJsonObject()));
+  QVERIFY(!FollowingRefreshEvaluator::isAttemptEligible(QStringLiteral("COMPLETED"), sibClosedRaw, QJsonObject()));
+
+  // Sibling attempt via prMetadata fallback
+  QJsonObject sibMetaOpen;
+  sibMetaOpen[QStringLiteral("status")] = QStringLiteral("open");
+  sibMetaOpen[QStringLiteral("merged_at")] = QJsonValue::Null;
+  QVERIFY(FollowingRefreshEvaluator::isAttemptEligible(QStringLiteral("COMPLETED"), QJsonObject(), sibMetaOpen));
+}
+
+void TestFollowingRefresh::testSessionModelPrStatusWithNullMergedAt() {
+  SessionModel model(QStringLiteral("test_following_pr_null.json"));
+  model.clearSessions();
+
+  QJsonObject session;
+  session[QStringLiteral("id")] = QStringLiteral("sess-null-merged-at");
+  session[QStringLiteral("title")] = QStringLiteral("PR with null merged_at");
+
+  QJsonObject prInfo;
+  prInfo[QStringLiteral("state")] = QStringLiteral("open");
+  prInfo[QStringLiteral("merged_at")] = QJsonValue::Null;
+  session[QStringLiteral("githubPrInfo")] = prInfo;
+
+  model.addSession(session);
+  QModelIndex idx = model.index(0, 0);
+  QCOMPARE(model.data(idx, SessionModel::PrStatusRole).toString(), QStringLiteral("open"));
 }
 
 void TestFollowingRefresh::testGlobalIntervalEvaluated() {

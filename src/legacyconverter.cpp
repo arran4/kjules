@@ -1,4 +1,5 @@
 #include "legacyconverter.h"
+#include "followingrefreshevaluator.h"
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QUuid>
@@ -464,11 +465,9 @@ JobData LegacyConverter::fromSession(const QJsonObject &session, bool isArchive,
   // Status and labels strictly from githubPrInfo
   if (session.contains(QStringLiteral("githubPrInfo"))) {
     QJsonObject gh = session[QStringLiteral("githubPrInfo")].toObject();
-    if (gh.contains(QStringLiteral("state"))) {
-      QString state = gh[QStringLiteral("state")].toString();
-      if (gh.contains(QStringLiteral("merged_at")) && !gh[QStringLiteral("merged_at")].isNull()) {
-        state = QStringLiteral("merged");
-      }
+    if (gh.contains(QStringLiteral("state")) || gh.contains(QStringLiteral("status")) ||
+        gh.contains(QStringLiteral("merged_at")) || gh.contains(QStringLiteral("merged"))) {
+      QString state = FollowingRefreshEvaluator::extractPrStatus(gh);
       prMetadata[QStringLiteral("status")] = state;
     }
 

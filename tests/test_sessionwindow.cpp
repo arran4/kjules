@@ -1382,7 +1382,36 @@ void TestSessionWindow::testFollowingRefreshMultipleActiveAttempts() {
   a4.julesSessionId = QString(); // Failed creation, no remote session
   a4.dispatchState = QStringLiteral("FAILED");
 
-  job1.attempts = {a1, a2, a3, a4};
+  JobAttemptData a5;
+  a5.id = QStringLiteral("att-5");
+  a5.julesSessionId = QStringLiteral("remote-sess-open-null-merged");
+  a5.julesState = QStringLiteral("COMPLETED");
+  a5.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfoOpenNull;
+  prInfoOpenNull[QStringLiteral("state")] = QStringLiteral("open");
+  prInfoOpenNull[QStringLiteral("merged_at")] = QJsonValue::Null;
+  a5.rawResponse[QStringLiteral("githubPrInfo")] = prInfoOpenNull;
+
+  JobAttemptData a6;
+  a6.id = QStringLiteral("att-6");
+  a6.julesSessionId = QStringLiteral("remote-sess-closed-unmerged");
+  a6.julesState = QStringLiteral("COMPLETED");
+  a6.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfoClosedNull;
+  prInfoClosedNull[QStringLiteral("state")] = QStringLiteral("closed");
+  prInfoClosedNull[QStringLiteral("merged_at")] = QJsonValue::Null;
+  a6.rawResponse[QStringLiteral("githubPrInfo")] = prInfoClosedNull;
+
+  JobAttemptData a7;
+  a7.id = QStringLiteral("att-7");
+  a7.julesSessionId = QStringLiteral("remote-sess-open-no-field");
+  a7.julesState = QStringLiteral("COMPLETED");
+  a7.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfoOpenNoField;
+  prInfoOpenNoField[QStringLiteral("state")] = QStringLiteral("open");
+  a7.rawResponse[QStringLiteral("githubPrInfo")] = prInfoOpenNoField;
+
+  job1.attempts = {a1, a2, a3, a4, a5, a6, a7};
   QVERIFY(window.jobStore()->addJobTransactional(job1));
 
   // Job 2: Pending job (not in Following)
@@ -1403,11 +1432,16 @@ void TestSessionWindow::testFollowingRefreshMultipleActiveAttempts() {
   QStringList candidates = window.getActiveFollowingSessionIds();
   QVERIFY(candidates.contains(QStringLiteral("remote-sess-1")));
   QVERIFY(candidates.contains(QStringLiteral("remote-sess-2")));
+  QVERIFY(candidates.contains(QStringLiteral("remote-sess-open-null-merged")));
+  QVERIFY(candidates.contains(QStringLiteral("remote-sess-open-no-field")));
   QVERIFY(!candidates.contains(QStringLiteral("remote-sess-terminal")));
+  QVERIFY(!candidates.contains(QStringLiteral("remote-sess-closed-unmerged")));
   QVERIFY(!candidates.contains(job1.id));
   QVERIFY(!candidates.contains(job2.id));
   QVERIFY(!candidates.contains(job3.id));
-  QCOMPARE(candidates.size(), 2);
+  QVERIFY(!candidates.contains(a1.id));
+  QVERIFY(!candidates.contains(a5.id));
+  QCOMPARE(candidates.size(), 4);
 }
 
 void TestSessionWindow::testZeroAttemptAndMultipleAttemptActionsIdentity() {

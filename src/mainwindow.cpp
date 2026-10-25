@@ -1894,8 +1894,7 @@ void MainWindow::checkAutoArchiveSessions() {
     if (!shouldArchive && prMergeArchiveEnabled) {
       if (session.contains(QStringLiteral("githubPrInfo"))) {
         QJsonObject prInfo = session.value(QStringLiteral("githubPrInfo")).toObject();
-        if (prInfo.value(QStringLiteral("state")).toString() == QStringLiteral("merged") ||
-            prInfo.value(QStringLiteral("merged_at")).isString()) {
+        if (FollowingRefreshEvaluator::isPrMerged(prInfo)) {
           shouldArchive = true;
           archiveReason = i18n("PR is merged");
         }
@@ -3707,24 +3706,8 @@ QStringList MainWindow::getActiveFollowingSessionIds() const {
         if (attempt.julesSessionId.isEmpty()) {
           continue;
         }
-        QString prStatus;
-        if (attempt.rawResponse.contains(QStringLiteral("githubPrInfo"))) {
-          prStatus = attempt.rawResponse.value(QStringLiteral("githubPrInfo"))
-                         .toObject()
-                         .value(QStringLiteral("state"))
-                         .toString();
-          if (attempt.rawResponse.value(QStringLiteral("githubPrInfo"))
-                  .toObject()
-                  .contains(QStringLiteral("merged_at"))) {
-            prStatus = QStringLiteral("merged");
-          }
-        } else if (!attempt.prMetadata.isEmpty()) {
-          prStatus = attempt.prMetadata.value(QStringLiteral("state")).toString();
-          if (attempt.prMetadata.contains(QStringLiteral("merged_at"))) {
-            prStatus = QStringLiteral("merged");
-          }
-        }
-        if (!FollowingRefreshEvaluator::isSessionEligible(attempt.julesState, prStatus)) {
+        if (!FollowingRefreshEvaluator::isAttemptEligible(attempt.julesState, attempt.rawResponse,
+                                                          attempt.prMetadata)) {
           continue;
         }
         if (!activeIds.contains(attempt.julesSessionId)) {
