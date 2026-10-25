@@ -17,16 +17,19 @@ public:
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
-  void addDraft(const QJsonObject &draft);
-  void updateDraft(int row, const QJsonObject &draft);
-  void removeDraft(int row);
+  bool addDraft(const QJsonObject &draft);
+  bool updateDraft(int row, const QJsonObject &draft);
+  bool removeDraft(int row);
   QJsonObject getDraft(int row) const;
   void loadDrafts();
-  void saveDrafts();
+  bool saveDrafts();
   void clear();
+
+  void setSimulateSaveFailureForTest(bool simulate) { m_simulateSaveFailure = simulate; }
 
 private:
   QJsonArray m_drafts;
+  bool m_simulateSaveFailure = false;
 };
 
 #endif // DRAFTSMODEL_H

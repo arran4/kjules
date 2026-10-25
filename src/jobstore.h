@@ -84,14 +84,19 @@ public:
   bool updateJobTransactional(const JobData &job);
   bool removeJobTransactional(const QString &id);
   bool addJobTransactional(const JobData &job);
+  bool replaceJobTransactional(const QString &origJobId, const QVector<JobData> &newJobs, bool keepOrigJob = false);
 
   // For migration seams
   static JobStore fromMemory(const QVector<JobData> &jobs);
 
+  QString filename() const { return m_filename; }
   QString lastError() const { return m_lastError; }
   void setSimulateSaveFailureForTest(bool simulate) { m_simulateSaveFailure = simulate; }
   bool simulateSaveFailureForTest() const { return m_simulateSaveFailure; }
   void setSimulateSaveFailureAfterCount(int count) { m_simulateSaveFailureAfterCount = count; }
+  void setSimulateFailureBetweenReplacementAndRemovalForTest(bool enable) {
+    m_simulateFailureBetweenReplaceAndRemove = enable;
+  }
 
 private:
   QString m_filename;
@@ -100,6 +105,7 @@ private:
   mutable QString m_lastError;
   bool m_simulateSaveFailure = false;
   mutable int m_simulateSaveFailureAfterCount = -1;
+  bool m_simulateFailureBetweenReplaceAndRemove = false;
 };
 
 #endif // JOBSTORE_H

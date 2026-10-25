@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 DraftsModel::DraftsModel(QObject *parent) : QAbstractListModel(parent) { loadDrafts(); }
@@ -56,20 +57,32 @@ QHash<int, QByteArray> DraftsModel::roleNames() const {
   return roles;
 }
 
-void DraftsModel::addDraft(const QJsonObject &draft) {
+bool DraftsModel::addDraft(const QJsonObject &draft) {
   beginInsertRows(QModelIndex(), 0, 0);
   m_drafts.insert(0, draft);
   endInsertRows();
-  saveDrafts();
+  if (!saveDrafts()) {
+    beginRemoveRows(QModelIndex(), 0, 0);
+    m_drafts.removeAt(0);
+    endRemoveRows();
+    return false;
+  }
+  return true;
 }
 
-void DraftsModel::updateDraft(int row, const QJsonObject &draft) {
+bool DraftsModel::updateDraft(int row, const QJsonObject &draft) {
   if (row < 0 || row >= m_drafts.size()) {
-    return;
+    return false;
   }
+  QJsonObject backup = m_drafts[row].toObject();
   m_drafts[row] = draft;
   Q_EMIT dataChanged(index(row, 0), index(row, 0));
-  saveDrafts();
+  if (!saveDrafts()) {
+    m_drafts[row] = backup;
+    Q_EMIT dataChanged(index(row, 0), index(row, 0));
+    return false;
+  }
+  return true;
 }
 
 void DraftsModel::clear() {
@@ -78,13 +91,21 @@ void DraftsModel::clear() {
   endResetModel();
 }
 
-void DraftsModel::removeDraft(int row) {
+bool DraftsModel::removeDraft(int row) {
   if (row >= 0 && row < m_drafts.size()) {
+    QJsonValue removedItem = m_drafts.at(row);
     beginRemoveRows(QModelIndex(), row, row);
     m_drafts.removeAt(row);
     endRemoveRows();
-    saveDrafts();
+    if (!saveDrafts()) {
+      beginInsertRows(QModelIndex(), row, row);
+      m_drafts.insert(row, removedItem);
+      endInsertRows();
+      return false;
+    }
+    return true;
   }
+  return false;
 }
 
 QJsonObject DraftsModel::getDraft(int row) const {
@@ -104,16 +125,27 @@ void DraftsModel::loadDrafts() {
   }
 }
 
-void DraftsModel::saveDrafts() {
+bool DraftsModel::saveDrafts() {
+  if (m_simulateSaveFailure) {
+    return false;
+  }
   QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir dir(path);
   if (!dir.exists()) {
-    dir.mkpath(QStringLiteral("."));
+    if (!dir.mkpath(QStringLiteral("."))) {
+      return false;
+    }
   }
-  QFile file(path + QStringLiteral("/drafts.json"));
-  if (file.open(QIODevice::WriteOnly)) {
-    QJsonDocument doc(m_drafts);
-    file.write(doc.toJson());
-    file.close();
+  QSaveFile file(path + QStringLiteral("/drafts.json"));
+  if (!file.open(QIODevice::WriteOnly)) {
+    return false;
   }
+  QJsonDocument doc(m_drafts);
+  QByteArray data = doc.toJson();
+  qint64 written = file.write(data);
+  if (written != data.size()) {
+    file.cancelWriting();
+    return false;
+  }
+  return file.commit();
 }

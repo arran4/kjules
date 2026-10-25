@@ -251,3 +251,31 @@ bool JobStore::addJobTransactional(const JobData &job) {
   m_jobs = backup;
   return false;
 }
+
+bool JobStore::replaceJobTransactional(const QString &origJobId, const QVector<JobData> &newJobs, bool keepOrigJob) {
+  QVector<JobData> backup = m_jobs;
+  for (const JobData &job : newJobs) {
+    addJob(job);
+  }
+  if (m_simulateFailureBetweenReplaceAndRemove) {
+    m_lastError = QStringLiteral("Simulated failure between replacement creation and original removal");
+    m_jobs = backup;
+    return false;
+  }
+  if (!origJobId.isEmpty()) {
+    JobData *origJob = getJobById(origJobId);
+    if (keepOrigJob || (origJob && !origJob->attempts.isEmpty())) {
+      if (origJob) {
+        origJob->recordHistory(QStringLiteral("cancel_dispatch"),
+                               QStringLiteral("Pending variant edited and rescheduled"));
+      }
+    } else {
+      removeJob(origJobId);
+    }
+  }
+  if (save()) {
+    return true;
+  }
+  m_jobs = backup;
+  return false;
+}
