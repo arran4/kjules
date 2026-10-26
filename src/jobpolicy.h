@@ -149,6 +149,12 @@ public:
       return JobAggregateState::Archived;
     }
 
+    if (job.lifecycleMetadata.value(QStringLiteral("state")).toString() == QStringLiteral("canceled")) {
+      if (job.attempts.isEmpty()) {
+        return JobAggregateState::NeedsAttention;
+      }
+    }
+
     bool hasWinner = isEligibleWinner(job, job.acceptedAttemptId);
 
     bool hasActive = false;

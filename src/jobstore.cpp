@@ -232,15 +232,7 @@ bool JobStore::updateJobTransactional(const JobData &job) {
   return false;
 }
 
-bool JobStore::removeJobTransactional(const QString &id) {
-  QVector<JobData> backup = m_jobs;
-  removeJob(id);
-  if (save()) {
-    return true;
-  }
-  m_jobs = backup;
-  return false;
-}
+bool JobStore::removeJobTransactional(const QString &id) { return removeJobsTransactional(QStringList{id}) > 0; }
 
 bool JobStore::addJobTransactional(const JobData &job) {
   QVector<JobData> backup = m_jobs;
@@ -278,4 +270,81 @@ bool JobStore::replaceJobTransactional(const QString &origJobId, const QVector<J
   }
   m_jobs = backup;
   return false;
+}
+
+int JobStore::updateJobsTransactional(const QVector<JobData> &jobs) {
+  QVector<JobData> backup = m_jobs;
+  int affected = 0;
+  for (const JobData &job : jobs) {
+    for (int i = 0; i < m_jobs.size(); ++i) {
+      if (m_jobs[i].id == job.id) {
+        m_jobs[i] = job;
+        affected++;
+        break;
+      }
+    }
+  }
+  if (affected == 0) {
+    m_lastError = QStringLiteral("No matching jobs found");
+    return 0;
+  }
+  if (save()) {
+    return affected;
+  }
+  m_jobs = backup;
+  return -1;
+}
+
+int JobStore::removeJobsTransactional(const QStringList &ids) {
+  QVector<JobData> backup = m_jobs;
+  int affected = 0;
+  for (const QString &id : ids) {
+    for (int i = 0; i < m_jobs.size(); ++i) {
+      if (m_jobs[i].id == id) {
+        m_jobs.removeAt(i);
+        affected++;
+        break;
+      }
+    }
+  }
+  if (affected == 0) {
+    m_lastError = QStringLiteral("No matching jobs found");
+    return 0;
+  }
+  if (save()) {
+    return affected;
+  }
+  m_jobs = backup;
+  return -1;
+}
+
+int JobStore::archiveJobsTransactional(const QStringList &ids, bool archive) {
+  QVector<JobData> backup = m_jobs;
+  int affected = 0;
+  for (const QString &id : ids) {
+    for (int i = 0; i < m_jobs.size(); ++i) {
+      if (m_jobs[i].id == id) {
+        if (archive) {
+          m_jobs[i].lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+          m_jobs[i].legacyMetadata[QStringLiteral("_isArchive")] = true;
+          m_jobs[i].recordHistory(QStringLiteral("archive"), QStringLiteral("Job archived"));
+        } else {
+          m_jobs[i].lifecycleMetadata.remove(QStringLiteral("state"));
+          m_jobs[i].legacyMetadata.remove(QStringLiteral("_isArchive"));
+          m_jobs[i].recordHistory(QStringLiteral("unarchive"), QStringLiteral("Job unarchived"));
+        }
+        affected++;
+        break;
+      }
+    }
+  }
+  if (affected == 0) {
+    m_lastError = QStringLiteral("No matching jobs found");
+    return 0;
+  }
+  if (save()) {
+    return affected;
+  }
+  m_jobs = backup;
+  return -1;
 }
