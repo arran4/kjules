@@ -2,7 +2,7 @@ add_executable(test_dummy test_dummy.cpp)
 add_executable(test_filter test_filter.cpp ../src/filterparser.cpp ../src/filtereditor.cpp)
 add_executable(test_advancedfilterproxymodel test_advancedfilterproxymodel.cpp ../src/advancedfilterproxymodel.cpp ../src/filterparser.cpp ../src/sessionmodel.cpp ../src/sourcemodel.cpp ../src/queuemodel.cpp)
 add_executable(test_sessionrequestbuilder test_sessionrequestbuilder.cpp ../src/sessionrequestbuilder.cpp
-  ../src/clickablelabel.cpp)
+  ../src/jobstore.cpp ../src/jobdata.cpp ../src/clickablelabel.cpp)
 add_executable(test_sourcefixer test_sourcefixer.cpp ../src/sourcefixer.cpp ../src/sessionrequestbuilder.cpp
   ../src/clickablelabel.cpp)
 add_executable(test_sourceremapdialog test_sourceremapdialog.cpp ../src/sourceremapdialog.cpp ../src/sourcefixer.cpp)

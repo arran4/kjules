@@ -1,3 +1,4 @@
+#include "../src/jobstore.h"
 #include "../src/sessionrequestbuilder.h"
 
 #include <QJsonObject>
@@ -22,6 +23,10 @@ private Q_SLOTS:
   void buildsCanonicalSessionRequestWithAllFields();
   void normalizesPlanApprovalAndActionFields();
   void normalizesMixedSourceAndBranch();
+  void copyableSessionRequestFromFlatSession();
+  void copyableSessionRequestFromNestedSourceContext();
+  void copyableSessionRequestWithJobStoreResolution();
+  void copyableSessionRequestWithMultipleAttempts();
 };
 
 void SessionRequestBuilderTest::createsDocumentedFullRequest() {
@@ -216,6 +221,130 @@ void SessionRequestBuilderTest::normalizesMixedSourceAndBranch() {
   mixed[QStringLiteral("startingBranch")] = QStringLiteral("current-branch");
   normalized = SessionRequestBuilder::normalizeSessionRequest(mixed);
   QCOMPARE(normalized.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("current-branch"));
+}
+
+void SessionRequestBuilderTest::copyableSessionRequestFromFlatSession() {
+  QJsonObject flatSession;
+  flatSession[QStringLiteral("source")] = QStringLiteral("sources/github/arran4/kjules");
+  flatSession[QStringLiteral("startingBranch")] = QStringLiteral("feature-branch");
+  flatSession[QStringLiteral("prompt")] = QStringLiteral("Fix bug #450");
+  flatSession[QStringLiteral("automationMode")] = QStringLiteral("AUTO_CREATE_PR");
+  flatSession[QStringLiteral("requirePlanApproval")] = true;
+  flatSession[QStringLiteral("ignoreConcurrency")] = true;
+  flatSession[QStringLiteral("priority")] = 12;
+  // Execution metadata that must be stripped:
+  flatSession[QStringLiteral("id")] = QStringLiteral("session-123");
+  flatSession[QStringLiteral("_kjules_job_id")] = QStringLiteral("job-uuid-abc");
+  flatSession[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+
+  QJsonObject copy = SessionRequestBuilder::copyableSessionRequest(flatSession);
+
+  QCOMPARE(copy.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/arran4/kjules"));
+  QCOMPARE(copy.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("feature-branch"));
+  QCOMPARE(copy.value(QStringLiteral("prompt")).toString(), QStringLiteral("Fix bug #450"));
+  QCOMPARE(copy.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(copy.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(copy.value(QStringLiteral("planApproval")).toBool(), true);
+  QCOMPARE(copy.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
+  QCOMPARE(copy.value(QStringLiteral("priority")).toInt(), 12);
+
+  // Both flat and nested sourceContext should be present:
+  QJsonObject sc = copy.value(QStringLiteral("sourceContext")).toObject();
+  QCOMPARE(sc.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/arran4/kjules"));
+  QCOMPARE(sc.value(QStringLiteral("githubRepoContext")).toObject().value(QStringLiteral("startingBranch")).toString(),
+           QStringLiteral("feature-branch"));
+
+  // Strip execution metadata:
+  QVERIFY(!copy.contains(QStringLiteral("id")));
+  QVERIFY(!copy.contains(QStringLiteral("_kjules_job_id")));
+  QVERIFY(!copy.contains(QStringLiteral("jobId")));
+  QVERIFY(!copy.contains(QStringLiteral("state")));
+}
+
+void SessionRequestBuilderTest::copyableSessionRequestFromNestedSourceContext() {
+  QJsonObject nestedSession;
+  QJsonObject sc;
+  sc[QStringLiteral("source")] = QStringLiteral("sources/github/upstream/project");
+  sc[QStringLiteral("githubRepoContext")] = QJsonObject{{QStringLiteral("startingBranch"), QStringLiteral("dev")}};
+  nestedSession[QStringLiteral("sourceContext")] = sc;
+  nestedSession[QStringLiteral("prompt")] = QStringLiteral("Nested context prompt");
+  nestedSession[QStringLiteral("planApproval")] = true;
+
+  QJsonObject copy = SessionRequestBuilder::copyableSessionRequest(nestedSession);
+
+  QCOMPARE(copy.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/upstream/project"));
+  QCOMPARE(copy.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("dev"));
+  QCOMPARE(copy.value(QStringLiteral("prompt")).toString(), QStringLiteral("Nested context prompt"));
+  QCOMPARE(copy.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+}
+
+void SessionRequestBuilderTest::copyableSessionRequestWithJobStoreResolution() {
+  JobStore store;
+  JobData job;
+  job.id = QStringLiteral("resolved-job-id");
+  job.source = QStringLiteral("sources/github/owner/authoritative");
+  job.startingBranch = QStringLiteral("main");
+  job.prompt = QStringLiteral("Authoritative prompt");
+  job.automationMode = QStringLiteral("AUTO_CREATE_PR");
+  job.planApproval = true;
+  job.ignoreConcurrency = true;
+  job.priority = 7;
+  job.canonicalRequest[QStringLiteral("prompt")] = job.prompt;
+  job.canonicalRequest[QStringLiteral("source")] = job.source;
+  job.canonicalRequest[QStringLiteral("startingBranch")] = job.startingBranch;
+  store.addJob(job);
+
+  QJsonObject sessionStub;
+  sessionStub[QStringLiteral("_kjules_job_id")] = QStringLiteral("resolved-job-id");
+
+  QJsonObject copy = SessionRequestBuilder::copyableSessionRequest(sessionStub, &store);
+
+  QCOMPARE(copy.value(QStringLiteral("source")).toString(), QStringLiteral("sources/github/owner/authoritative"));
+  QCOMPARE(copy.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("main"));
+  QCOMPARE(copy.value(QStringLiteral("prompt")).toString(), QStringLiteral("Authoritative prompt"));
+  QCOMPARE(copy.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
+  QCOMPARE(copy.value(QStringLiteral("requirePlanApproval")).toBool(), true);
+  QCOMPARE(copy.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
+  QCOMPARE(copy.value(QStringLiteral("priority")).toInt(), 7);
+  QVERIFY(!copy.contains(QStringLiteral("_kjules_job_id")));
+}
+
+void SessionRequestBuilderTest::copyableSessionRequestWithMultipleAttempts() {
+  JobStore store;
+  JobData job;
+  job.id = QStringLiteral("multi-att-job");
+  job.source = QStringLiteral("sources/github/owner/repo");
+  job.startingBranch = QStringLiteral("main");
+
+  JobAttemptData att1;
+  att1.id = QStringLiteral("att-1");
+  att1.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Prompt attempt 1");
+  att1.requestSnapshot[QStringLiteral("startingBranch")] = QStringLiteral("branch-1");
+
+  JobAttemptData att2;
+  att2.id = QStringLiteral("att-2");
+  att2.requestSnapshot[QStringLiteral("prompt")] = QStringLiteral("Prompt attempt 2");
+  att2.requestSnapshot[QStringLiteral("startingBranch")] = QStringLiteral("branch-2");
+
+  job.attempts.append(att1);
+  job.attempts.append(att2);
+  job.acceptedAttemptId = QStringLiteral("att-2");
+  store.addJob(job);
+
+  // When referencing specific attempt 1:
+  QJsonObject refAtt1;
+  refAtt1[QStringLiteral("jobId")] = QStringLiteral("multi-att-job");
+  refAtt1[QStringLiteral("attemptId")] = QStringLiteral("att-1");
+  QJsonObject copy1 = SessionRequestBuilder::copyableSessionRequest(refAtt1, &store);
+  QCOMPARE(copy1.value(QStringLiteral("prompt")).toString(), QStringLiteral("Prompt attempt 1"));
+  QCOMPARE(copy1.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("branch-1"));
+
+  // When referencing job without specifying attempt, accepted attempt 2 is chosen:
+  QJsonObject refJob;
+  refJob[QStringLiteral("jobId")] = QStringLiteral("multi-att-job");
+  QJsonObject copy2 = SessionRequestBuilder::copyableSessionRequest(refJob, &store);
+  QCOMPARE(copy2.value(QStringLiteral("prompt")).toString(), QStringLiteral("Prompt attempt 2"));
+  QCOMPARE(copy2.value(QStringLiteral("startingBranch")).toString(), QStringLiteral("branch-2"));
 }
 
 QTEST_MAIN(SessionRequestBuilderTest)

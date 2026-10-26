@@ -56,6 +56,14 @@ public:
   void setTemplateData(const QJsonObject &data);
   void setEditMode(bool isEdit);
 
+  QMultiMap<QString, QString> selectedSources() const { return m_selectedSources; }
+  QString promptText() const;
+  QString automationMode() const;
+  bool requirePlanApproval() const;
+  bool ignoreConcurrency() const;
+  int priority() const;
+  void submitSession();
+
 Q_SIGNALS:
   void createSessionRequested(const QMultiMap<QString, QString> &sources, const QString &prompt,
                               const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,

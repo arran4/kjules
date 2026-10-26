@@ -258,8 +258,18 @@ void SessionWindow::setupActions() {
       new QAction(QIcon::fromTheme(QStringLiteral("media-playback-start")), i18n("Launch New Attempt"), this);
   connect(launchNewAttemptAction, &QAction::triggered, this, [this]() {
     // Create new attempt from job canonical
-    Q_EMIT newAttemptRequested(m_jobId,
-                               m_jobStore ? m_jobStore->getJobById(m_jobId)->canonicalRequest : currentSessionData());
+    QJsonObject req;
+    if (m_jobStore) {
+      JobData *job = m_jobStore->getJobById(m_jobId);
+      if (job && !job->canonicalRequest.isEmpty()) {
+        req = job->canonicalRequest;
+      } else {
+        req = SessionRequestBuilder::copyableSessionRequest(currentSessionData(), m_jobStore);
+      }
+    } else {
+      req = SessionRequestBuilder::copyableSessionRequest(currentSessionData());
+    }
+    Q_EMIT newAttemptRequested(m_jobId, req);
   });
   actionCollection()->addAction(QStringLiteral("launch_new_attempt"), launchNewAttemptAction);
 
@@ -662,6 +672,9 @@ QJsonObject SessionWindow::currentSessionData() const {
           // Keep ID to allow refresh etc
           data[QStringLiteral("id")] = attempt.julesSessionId;
           data[QStringLiteral("state")] = attempt.julesState;
+          data[QStringLiteral("_kjules_job_id")] = job->id;
+          data[QStringLiteral("jobId")] = job->id;
+          data[QStringLiteral("attemptId")] = attempt.id;
 
           if (!outputs.isEmpty()) {
             data[QStringLiteral("outputs")] = outputs.value(QStringLiteral("outputs"));
@@ -690,26 +703,27 @@ QJsonObject SessionWindow::currentSessionData() const {
           return data;
         }
       }
+
+      QJsonObject data = job->canonicalRequest;
+      data[QStringLiteral("_kjules_job_id")] = job->id;
+      data[QStringLiteral("jobId")] = job->id;
+      if (!data.contains(QStringLiteral("prompt")) && !job->prompt.isEmpty()) {
+        data[QStringLiteral("prompt")] = job->prompt;
+      }
+      if (!data.contains(QStringLiteral("source")) && !job->source.isEmpty()) {
+        data[QStringLiteral("source")] = job->source;
+      }
+      if (!data.contains(QStringLiteral("startingBranch")) && !job->startingBranch.isEmpty()) {
+        data[QStringLiteral("startingBranch")] = job->startingBranch;
+      }
+      return data;
     }
   }
   return m_sessionData;
 }
 
 QJsonObject SessionWindow::currentVariantRequest() const {
-  if (m_jobStore && !m_jobId.isEmpty()) {
-    JobData *job = m_jobStore->getJobById(m_jobId);
-    if (job) {
-      if (!m_currentAttemptId.isEmpty()) {
-        for (const auto &attempt : job->attempts) {
-          if (attempt.id == m_currentAttemptId && !attempt.requestSnapshot.isEmpty()) {
-            return attempt.requestSnapshot;
-          }
-        }
-      }
-      return job->canonicalRequest;
-    }
-  }
-  return currentSessionData();
+  return SessionRequestBuilder::copyableSessionRequest(currentSessionData(), m_jobStore);
 }
 
 void SessionWindow::renderDetailsAndDiff() {
