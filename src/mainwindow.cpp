@@ -4043,7 +4043,13 @@ void MainWindow::onGithubRepoCreatedResult(bool success, const QString &jobId, c
 void MainWindow::onSessionCreatedResult(bool success, const QString &jobId, const QString &attemptId,
                                         const QJsonObject &session, const ApiError &apiError,
                                         const QString &rawResponse) {
-  QString errorMsg = apiError.message();
+  ApiError effectiveError = apiError;
+  if (success && session.value(QStringLiteral("id")).toString().trimmed().isEmpty()) {
+    success = false;
+    effectiveError =
+        ApiError(ApiError::Type::Validation, QStringLiteral("Created session response missing valid session ID."));
+  }
+  QString errorMsg = effectiveError.message();
 
   if (JobData *job = m_jobStore->getJobById(jobId)) {
     JobData updated = *job;
