@@ -6,6 +6,7 @@
 #include "../src/jobpolicy.h"
 #include "../src/jobstore.h"
 #include "../src/mainwindow.h"
+#include "../src/migrationorchestrator.h"
 #include "../src/newsessiondialog.h"
 #include "../src/queuemodel.h"
 #include "../src/sessionmodel.h"
@@ -164,6 +165,13 @@ private Q_SLOTS:
     QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir(dataDir).removeRecursively();
   }
+
+  void testRegressionFollowingProjectionPreservesCopySource();
+  void testRegressionFollowingRefreshUsesRemoteSessionId();
+  void testRegressionArchiveProjectionExposesJobIdentity();
+  void testFollowingRefreshMultipleActiveAttempts();
+  void testCompletedMergedAttemptRefreshExclusionAndUiStatus();
+  void testZeroAttemptAndMultipleAttemptActionsIdentity();
 
   void testCanonicalPresentationAndRecovery_data() {
     QTest::addColumn<bool>("direct");
@@ -1270,6 +1278,329 @@ private Q_SLOTS:
 
 QTEST_MAIN(TestSessionWindow)
 #include "test_sessionwindow.moc"
+
+void TestSessionWindow::testRegressionFollowingProjectionPreservesCopySource() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const QString source = QStringLiteral("sources/github/example/repo");
+  const auto request = SessionRequestBuilder::buildSessionRequest(source, QStringLiteral("feature/regression"),
+                                                                  QStringLiteral("Original prompt"),
+                                                                  QStringLiteral("AUTO_CREATE_PR"), true, false, 0);
+  JobData job = JobData::fromRequest(request);
+  job.id = QStringLiteral("local-job-copy-source");
+  JobAttemptData attempt;
+  attempt.id = QStringLiteral("local-attempt-copy-source");
+  attempt.julesSessionId = QStringLiteral("123456");
+  attempt.requestSnapshot = request;
+  attempt.dispatchState = QStringLiteral("COMPLETED");
+  attempt.julesState = QStringLiteral("IN_PROGRESS");
+  job.attempts.append(attempt);
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  const QJsonObject projection = window.sessionModel()->getSession(0);
+  QCOMPARE(projection.value(QStringLiteral("id")).toString(), job.id);
+  QCOMPARE(projection.value(QStringLiteral("sourceContext")).toObject().value(QStringLiteral("source")).toString(),
+           source);
+  QCOMPARE(projection.value(QStringLiteral("sourceContext"))
+               .toObject()
+               .value(QStringLiteral("githubRepoContext"))
+               .toObject()
+               .value(QStringLiteral("startingBranch"))
+               .toString(),
+           QStringLiteral("feature/regression"));
+}
+
+void TestSessionWindow::testRegressionFollowingRefreshUsesRemoteSessionId() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const auto request =
+      SessionRequestBuilder::buildSessionRequest(QStringLiteral("sources/github/example/repo"), QStringLiteral("main"),
+                                                 QStringLiteral("Refresh me"), QString(), false, false, 0);
+  JobData job = JobData::fromRequest(request);
+  job.id = QStringLiteral("local-job-refresh");
+  JobAttemptData attempt;
+  attempt.id = QStringLiteral("local-attempt-refresh");
+  attempt.julesSessionId = QStringLiteral("987654321");
+  attempt.requestSnapshot = request;
+  attempt.dispatchState = QStringLiteral("COMPLETED");
+  attempt.julesState = QStringLiteral("IN_PROGRESS");
+  job.attempts.append(attempt);
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+  QCOMPARE(window.getActiveFollowingSessionIds(), QStringList{QStringLiteral("987654321")});
+}
+
+void TestSessionWindow::testRegressionArchiveProjectionExposesJobIdentity() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const auto request =
+      SessionRequestBuilder::buildSessionRequest(QStringLiteral("sources/github/example/repo"), QStringLiteral("main"),
+                                                 QStringLiteral("Archived job"), QString(), false, false, 0);
+  JobData job = JobData::fromRequest(request);
+  job.id = QStringLiteral("local-job-archive");
+  job.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("archived");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.archiveModel()->rowCount(), 1);
+  QCOMPARE(window.archiveModel()->getSession(0).value(QStringLiteral("_kjules_job_id")).toString(), job.id);
+  QCOMPARE(window.archiveModel()->getSession(0).value(QStringLiteral("jobId")).toString(), job.id);
+}
+
+void TestSessionWindow::testFollowingRefreshMultipleActiveAttempts() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  // Job 1: Has multiple attempts with different states
+  JobData job1;
+  job1.id = QStringLiteral("job-multi-active");
+  job1.source = QStringLiteral("sources/github/example/repo1");
+
+  JobAttemptData a1;
+  a1.id = QStringLiteral("att-1");
+  a1.julesSessionId = QStringLiteral("remote-sess-1");
+  a1.julesState = QStringLiteral("IN_PROGRESS");
+  a1.dispatchState = QStringLiteral("COMPLETED");
+
+  JobAttemptData a2;
+  a2.id = QStringLiteral("att-2");
+  a2.julesSessionId = QStringLiteral("remote-sess-2");
+  a2.julesState = QStringLiteral("AWAITING_USER_FEEDBACK");
+  a2.dispatchState = QStringLiteral("COMPLETED");
+
+  JobAttemptData a3;
+  a3.id = QStringLiteral("att-3");
+  a3.julesSessionId = QStringLiteral("remote-sess-terminal");
+  a3.julesState = QStringLiteral("COMPLETED");
+  a3.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfo;
+  prInfo[QStringLiteral("state")] = QStringLiteral("merged");
+  prInfo[QStringLiteral("merged_at")] = QStringLiteral("2026-01-01T00:00:00Z");
+  a3.rawResponse[QStringLiteral("githubPrInfo")] = prInfo;
+
+  JobAttemptData a4;
+  a4.id = QStringLiteral("att-4");
+  a4.julesSessionId = QString(); // Failed creation, no remote session
+  a4.dispatchState = QStringLiteral("FAILED");
+
+  JobAttemptData a5;
+  a5.id = QStringLiteral("att-5");
+  a5.julesSessionId = QStringLiteral("remote-sess-open-null-merged");
+  a5.julesState = QStringLiteral("COMPLETED");
+  a5.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfoOpenNull;
+  prInfoOpenNull[QStringLiteral("state")] = QStringLiteral("open");
+  prInfoOpenNull[QStringLiteral("merged_at")] = QJsonValue::Null;
+  a5.rawResponse[QStringLiteral("githubPrInfo")] = prInfoOpenNull;
+
+  JobAttemptData a6;
+  a6.id = QStringLiteral("att-6");
+  a6.julesSessionId = QStringLiteral("remote-sess-closed-unmerged");
+  a6.julesState = QStringLiteral("COMPLETED");
+  a6.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfoClosedNull;
+  prInfoClosedNull[QStringLiteral("state")] = QStringLiteral("closed");
+  prInfoClosedNull[QStringLiteral("merged_at")] = QJsonValue::Null;
+  a6.rawResponse[QStringLiteral("githubPrInfo")] = prInfoClosedNull;
+
+  JobAttemptData a7;
+  a7.id = QStringLiteral("att-7");
+  a7.julesSessionId = QStringLiteral("remote-sess-open-no-field");
+  a7.julesState = QStringLiteral("COMPLETED");
+  a7.dispatchState = QStringLiteral("COMPLETED");
+  QJsonObject prInfoOpenNoField;
+  prInfoOpenNoField[QStringLiteral("state")] = QStringLiteral("open");
+  a7.rawResponse[QStringLiteral("githubPrInfo")] = prInfoOpenNoField;
+
+  job1.attempts = {a1, a2, a3, a4, a5, a6, a7};
+  QVERIFY(window.jobStore()->addJobTransactional(job1));
+
+  // Job 2: Pending job (not in Following)
+  JobData job2;
+  job2.id = QStringLiteral("job-pending");
+  job2.source = QStringLiteral("sources/github/example/repo2");
+  QVERIFY(window.jobStore()->addJobTransactional(job2));
+
+  // Job 3: Zero attempts in Following (error state)
+  JobData job3;
+  job3.id = QStringLiteral("job-zero-attempt");
+  job3.source = QStringLiteral("sources/github/example/repo3");
+  job3.lifecycleMetadata[QStringLiteral("state")] = QStringLiteral("ERROR_STATE");
+  QVERIFY(window.jobStore()->addJobTransactional(job3));
+
+  window.syncModelsFromJobStore();
+
+  QStringList candidates = window.getActiveFollowingSessionIds();
+  QVERIFY(candidates.contains(QStringLiteral("remote-sess-1")));
+  QVERIFY(candidates.contains(QStringLiteral("remote-sess-2")));
+  QVERIFY(candidates.contains(QStringLiteral("remote-sess-open-null-merged")));
+  QVERIFY(candidates.contains(QStringLiteral("remote-sess-open-no-field")));
+  QVERIFY(!candidates.contains(QStringLiteral("remote-sess-terminal")));
+  QVERIFY(!candidates.contains(QStringLiteral("remote-sess-closed-unmerged")));
+  QVERIFY(!candidates.contains(job1.id));
+  QVERIFY(!candidates.contains(job2.id));
+  QVERIFY(!candidates.contains(job3.id));
+  QVERIFY(!candidates.contains(a1.id));
+  QVERIFY(!candidates.contains(a5.id));
+  QCOMPARE(candidates.size(), 4);
+}
+
+void TestSessionWindow::testCompletedMergedAttemptRefreshExclusionAndUiStatus() {
+  // Ensure migrated flag is active
+  MigrationOrchestrator::getMigratedFlag() = true;
+
+  // Case 1: JobStore with one COMPLETED attempt, prMetadata with merged_at timestamp, rawResponse lacking githubPrInfo
+  {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->clear();
+
+    JobData job;
+    job.id = QStringLiteral("job-completed-merged");
+    job.source = QStringLiteral("sources/github/example/repo");
+
+    JobAttemptData attempt;
+    attempt.id = QStringLiteral("att-merged-1");
+    attempt.julesSessionId = QStringLiteral("remote-merged-1");
+    attempt.julesState = QStringLiteral("COMPLETED");
+    attempt.dispatchState = QStringLiteral("COMPLETED");
+
+    // Non-empty rawResponse without githubPrInfo
+    QJsonObject raw;
+    raw[QStringLiteral("id")] = QStringLiteral("remote-merged-1");
+    attempt.rawResponse = raw;
+
+    // Authoritative prMetadata with state closed and valid merged_at
+    QJsonObject prMeta;
+    prMeta[QStringLiteral("state")] = QStringLiteral("closed");
+    prMeta[QStringLiteral("merged_at")] = QStringLiteral("2026-10-20T12:00:00Z");
+    attempt.prMetadata = prMeta;
+
+    job.attempts.append(attempt);
+    QVERIFY(window.jobStore()->addJobTransactional(job));
+
+    window.syncModelsFromJobStore();
+
+    // UI Model must reflect merged PR status even though rawResponse lacked githubPrInfo
+    QCOMPARE(window.sessionModel()->rowCount(), 1);
+    QModelIndex idx = window.sessionModel()->index(0, 0);
+    QCOMPARE(window.sessionModel()->data(idx, SessionModel::PrStatusRole).toString(), QStringLiteral("merged"));
+    QCOMPARE(window.sessionModel()
+                 ->data(window.sessionModel()->index(0, SessionModel::ColPRStatus), Qt::DisplayRole)
+                 .toString(),
+             QStringLiteral("merged"));
+
+    // Must be excluded from candidate enumeration
+    QStringList candidates = window.getActiveFollowingSessionIds();
+    QCOMPARE(candidates.size(), 0);
+
+    // Auto-refresh must not dispatch any remote reload for excluded session
+    window.autoRefreshFollowing();
+    QVERIFY(!window.m_inFlightSessionReloads.contains(QStringLiteral("remote-merged-1")));
+  }
+
+  // Case 2: No jobs in JobStore
+  {
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->clear();
+    window.syncModelsFromJobStore();
+
+    QStringList candidates = window.getActiveFollowingSessionIds();
+    QCOMPARE(candidates.size(), 0);
+  }
+
+  // Case 3: Legacy-only data (!isMigrated())
+  {
+    MigrationOrchestrator::getMigratedFlag() = false;
+
+    MainWindow window;
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    window.jobStore()->clear();
+
+    QJsonArray legacySessions;
+    QJsonObject sActive;
+    sActive[QStringLiteral("id")] = QStringLiteral("legacy-active-id");
+    sActive[QStringLiteral("state")] = QStringLiteral("IN_PROGRESS");
+    legacySessions.append(sActive);
+
+    QJsonObject sMerged;
+    sMerged[QStringLiteral("id")] = QStringLiteral("legacy-merged-id");
+    sMerged[QStringLiteral("state")] = QStringLiteral("COMPLETED");
+    QJsonObject mergedPr;
+    mergedPr[QStringLiteral("state")] = QStringLiteral("closed");
+    mergedPr[QStringLiteral("merged_at")] = QStringLiteral("2026-10-20T12:00:00Z");
+    sMerged[QStringLiteral("githubPrInfo")] = mergedPr;
+    legacySessions.append(sMerged);
+
+    window.sessionModel()->setSessions(legacySessions);
+
+    QStringList candidates = window.getActiveFollowingSessionIds();
+    QCOMPARE(candidates, QStringList{QStringLiteral("legacy-active-id")});
+
+    // Reset migrated flag
+    MigrationOrchestrator::getMigratedFlag() = true;
+  }
+}
+
+void TestSessionWindow::testZeroAttemptAndMultipleAttemptActionsIdentity() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  JobData job;
+  job.id = QStringLiteral("job-identity-test");
+  job.source = QStringLiteral("sources/github/example/repo");
+
+  JobAttemptData att1;
+  att1.id = QStringLiteral("att-winner");
+  att1.julesSessionId = QStringLiteral("remote-winner-123");
+  att1.julesState = QStringLiteral("COMPLETED");
+  att1.dispatchState = QStringLiteral("COMPLETED");
+
+  JobAttemptData att2;
+  att2.id = QStringLiteral("att-other");
+  att2.julesSessionId = QStringLiteral("remote-other-456");
+  att2.julesState = QStringLiteral("IN_PROGRESS");
+  att2.dispatchState = QStringLiteral("COMPLETED");
+
+  job.attempts = {att1, att2};
+  job.acceptedAttemptId = QStringLiteral("att-winner");
+  QVERIFY(window.jobStore()->addJobTransactional(job));
+
+  window.syncModelsFromJobStore();
+  QCOMPARE(window.sessionModel()->rowCount(), 1);
+
+  QModelIndex idx = window.sessionModel()->index(0, 0);
+  QCOMPARE(window.sessionModel()->data(idx, SessionModel::JobIdRole).toString(), job.id);
+  QCOMPARE(window.sessionModel()->data(idx, SessionModel::AttemptIdRole).toString(), QStringLiteral("att-winner"));
+  QCOMPARE(window.sessionModel()->data(idx, SessionModel::JulesSessionIdRole).toString(),
+           QStringLiteral("remote-winner-123"));
+  QStringList allJulesIds = window.sessionModel()->data(idx, SessionModel::JulesSessionIdsRole).toStringList();
+  QVERIFY(allJulesIds.contains(QStringLiteral("remote-winner-123")));
+  QVERIFY(allJulesIds.contains(QStringLiteral("remote-other-456")));
+
+  // Test SessionWindow behavior with zero attempts
+  JobData zeroJob;
+  zeroJob.id = QStringLiteral("job-zero-attempts");
+  zeroJob.source = QStringLiteral("sources/github/example/repo");
+  QVERIFY(window.jobStore()->addJobTransactional(zeroJob));
+
+  SessionWindow zeroWin(zeroJob.id, window.jobStore(), window.apiManager(), nullptr, false, &window);
+  zeroWin.setAttribute(Qt::WA_DeleteOnClose, false);
+  QVERIFY(zeroWin.currentSessionData().value(QStringLiteral("id")).toString().isEmpty());
+
+  auto *openAct = zeroWin.actionCollection()->action(QStringLiteral("open_jules"));
+  QVERIFY(openAct);
+  QVERIFY(!openAct->isEnabled());
+
+  auto *copyAct = zeroWin.actionCollection()->action(QStringLiteral("copy_jules"));
+  QVERIFY(copyAct);
+  QVERIFY(!copyAct->isEnabled());
+}
 
 void TestSessionWindow::testCreateRepoWorkflow() {
   MainWindow window;
