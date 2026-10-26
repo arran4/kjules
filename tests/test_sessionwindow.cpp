@@ -1,6 +1,7 @@
 
 #include "../src/apimanager.h"
 #include "../src/clickableprogressbar.h"
+#include "../src/draftsmodel.h"
 #include "../src/errorsmodel.h"
 #include "../src/errorwindow.h"
 #include "../src/jobpolicy.h"
@@ -177,6 +178,13 @@ private Q_SLOTS:
   void testDuplicateSessionFromWindowPreservesSourceAndBranchUI();
   void testVariantFromWindowPreservesSnapshotAndQueuesUnderSameJobUI();
   void testDuplicateFollowingItemsToQueuePreservesFields();
+  void testSessionCreationJobStoreFailurePreservesDialogAndPrompt();
+  void testSessionCreationPartialFailureRetainsFailedSourcesOnly();
+  void testEditQueueItemJobStoreFailurePreservesOriginalQueueItem();
+  void testEditQueueItemFailureBetweenReplacementAndRemovalWithRestart();
+  void testEditQueueItemMoveToDraftWithRollback();
+  void testEditQueueItemMultiSourceReplacement();
+  void testEditOrMoveQueuedVariantPreservesParentJobWinnerHistoryAndSiblingsAcrossSyncOrRestart();
 
   void testCanonicalPresentationAndRecovery_data() {
     QTest::addColumn<bool>("direct");
@@ -1868,6 +1876,487 @@ void TestSessionWindow::testDuplicateFollowingItemsToQueuePreservesFields() {
   QCOMPARE(item.requestData.value(QStringLiteral("automationMode")).toString(), QStringLiteral("AUTO_CREATE_PR"));
   QCOMPARE(item.requestData.value(QStringLiteral("requirePlanApproval")).toBool(), true);
   QCOMPARE(item.requestData.value(QStringLiteral("ignoreConcurrency")).toBool(), true);
+}
+
+void TestSessionWindow::testSessionCreationJobStoreFailurePreservesDialogAndPrompt() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  QJsonObject initialData;
+  initialData[QStringLiteral("sources")] = QJsonArray{QStringLiteral("sources/github/owner/repo")};
+  initialData[QStringLiteral("prompt")] = QStringLiteral("Fix issue 452 prompt");
+
+  NewSessionDialog *dialog = window.showNewSessionDialog(initialData, true);
+  QVERIFY(dialog != nullptr);
+  QCOMPARE(dialog->promptText(), QStringLiteral("Fix issue 452 prompt"));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/owner/repo")));
+
+  // Inject failure in JobStore
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+
+  QSignalSpy statusSpy(&window, &MainWindow::statusMessage);
+
+  // Submit via genuine dialog UI method
+  dialog->submitSession();
+
+  // Task was NOT added to queue and NOT persisted in JobStore
+  QCOMPARE(window.queueModel()->size(), 0);
+  QCOMPARE(window.jobStore()->jobs().size(), 0);
+
+  // Status message reported failure, not success
+  QVERIFY(!statusSpy.isEmpty());
+  bool foundFailureMsg = false;
+  for (const auto &call : statusSpy) {
+    if (call.at(0).toString().contains(QStringLiteral("Failed to queue task"))) {
+      foundFailureMsg = true;
+      break;
+    }
+  }
+  QVERIFY(foundFailureMsg);
+
+  // Dialog remains open with user prompt and input intact
+  QVERIFY(dialog->isVisible());
+  QCOMPARE(dialog->promptText(), QStringLiteral("Fix issue 452 prompt"));
+  QVERIFY(!dialog->lastSubmissionSuccessful());
+  QCOMPARE(dialog->lastSubmissionError(), QStringLiteral("Simulated disk I/O failure"));
+
+  // Recovery / safe retry: unblock JobStore and submit again
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  dialog->submitSession();
+
+  // Now successfully queued and persisted
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QVERIFY(dialog->lastSubmissionSuccessful());
+  QVERIFY(!dialog->isVisible());
+}
+
+void TestSessionWindow::testSessionCreationPartialFailureRetainsFailedSourcesOnly() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  QJsonObject initialData;
+  initialData[QStringLiteral("sources")] =
+      QJsonArray{QStringLiteral("sources/github/owner/repo-1"), QStringLiteral("sources/github/owner/repo-2")};
+  initialData[QStringLiteral("prompt")] = QStringLiteral("Partial failure prompt");
+
+  NewSessionDialog *dialog = window.showNewSessionDialog(initialData, true);
+  QVERIFY(dialog != nullptr);
+  QCOMPARE(dialog->selectedSources().size(), 2);
+
+  // Allow 1st save to succeed, fail on 2nd save
+  window.jobStore()->setSimulateSaveFailureAfterCount(1);
+
+  dialog->submitSession();
+
+  // Exactly 1 task was queued and 1 persisted
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+
+  // Dialog remains open, prompt preserved, and only failed source repo-2 is retained
+  QVERIFY(dialog->isVisible());
+  QCOMPARE(dialog->promptText(), QStringLiteral("Partial failure prompt"));
+  QVERIFY(!dialog->selectedSources().contains(QStringLiteral("sources/github/owner/repo-1")));
+  QVERIFY(dialog->selectedSources().contains(QStringLiteral("sources/github/owner/repo-2")));
+  QVERIFY(!dialog->lastSubmissionSuccessful());
+
+  // Retry with JobStore working normally
+  window.jobStore()->setSimulateSaveFailureAfterCount(-1);
+  dialog->submitSession();
+
+  // Now both are queued (total 2)
+  QCOMPARE(window.queueModel()->size(), 2);
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+  QVERIFY(dialog->lastSubmissionSuccessful());
+  QVERIFY(!dialog->isVisible());
+}
+
+void TestSessionWindow::testEditQueueItemJobStoreFailurePreservesOriginalQueueItem() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  QJsonObject originalReq = SessionRequestBuilder::buildSessionRequest(
+      QStringLiteral("sources/github/orig/repo"), QStringLiteral("main"), QStringLiteral("Original prompt"),
+      QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  QueueItem item;
+  item.jobId = QStringLiteral("job-edit-queue");
+  item.requestData = originalReq;
+  window.queueModel()->enqueueItem(item);
+  QCOMPARE(window.queueModel()->size(), 1);
+
+  // Now simulate save failure
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+
+  // Open edit dialog
+  window.editQueueItem(0);
+
+  NewSessionDialog *dlg = window.findChild<NewSessionDialog *>();
+  QVERIFY(dlg != nullptr);
+  QCOMPARE(dlg->promptText(), QStringLiteral("Original prompt"));
+
+  dlg->setPromptText(QStringLiteral("Modified prompt"));
+  dlg->submitSession();
+
+  // Verify the original queue item was preserved and not deleted
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Original prompt"));
+  QVERIFY(dlg->isVisible());
+  QCOMPARE(dlg->promptText(), QStringLiteral("Modified prompt"));
+
+  // Recover
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+  dlg->submitSession();
+
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Modified prompt"));
+  QVERIFY(!dlg->isVisible());
+}
+
+void TestSessionWindow::testEditQueueItemFailureBetweenReplacementAndRemovalWithRestart() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  // 1. Initial JobData in JobStore and QueueModel
+  JobData origJob;
+  origJob.id = QStringLiteral("job-orig-atomic");
+  origJob.source = QStringLiteral("sources/github/orig/repo");
+  origJob.startingBranch = QStringLiteral("main");
+  origJob.prompt = QStringLiteral("Original prompt that must not be lost");
+  origJob.canonicalRequest = SessionRequestBuilder::buildSessionRequest(
+      origJob.source, origJob.startingBranch, origJob.prompt, QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  QVERIFY(window.jobStore()->addJobTransactional(origJob));
+
+  QueueItem item;
+  item.jobId = origJob.id;
+  item.requestData = origJob.canonicalRequest;
+  window.queueModel()->enqueueItem(item);
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+
+  // 2. Open edit dialog and modify prompt
+  window.editQueueItem(0);
+  NewSessionDialog *dlg = window.findChild<NewSessionDialog *>();
+  QVERIFY(dlg != nullptr);
+  QCOMPARE(dlg->promptText(), QStringLiteral("Original prompt that must not be lost"));
+  dlg->setPromptText(QStringLiteral("Modified replacement prompt"));
+
+  // 3. Inject failure specifically between replacement creation and original removal
+  window.jobStore()->setSimulateFailureBetweenReplacementAndRemovalForTest(true);
+  dlg->submitSession();
+
+  // Assertions immediately after failure:
+  // - Dialog remains open with user's modified prompt intact (no lost prompt)
+  QVERIFY(dlg->isVisible());
+  QCOMPARE(dlg->promptText(), QStringLiteral("Modified replacement prompt"));
+
+  // - Original queue item was not removed
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.queueModel()->getItem(0).jobId, origJob.id);
+  QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Original prompt that must not be lost"));
+
+  // - In-memory JobStore contains only the original job (no duplicate, no leak)
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QCOMPARE(window.jobStore()->jobs().first().id, origJob.id);
+  QCOMPARE(window.jobStore()->jobs().first().prompt, QStringLiteral("Original prompt that must not be lost"));
+
+  // 4. Restart assertion: reload JobStore from disk to simulate application restart
+  QString storePath = window.jobStore()->filename();
+  JobStore restartStore(storePath);
+  QVERIFY(restartStore.load());
+  QCOMPARE(restartStore.jobs().size(), 1);
+  QCOMPARE(restartStore.jobs().first().id, origJob.id);
+  QCOMPARE(restartStore.jobs().first().prompt, QStringLiteral("Original prompt that must not be lost"));
+
+  // 5. Recovery: clear the failure injection and retry submission
+  window.jobStore()->setSimulateFailureBetweenReplacementAndRemovalForTest(false);
+  dlg->submitSession();
+
+  // Dialog cleanly closes
+  QVERIFY(!dlg->isVisible());
+
+  // Queue item replaced
+  QCOMPARE(window.queueModel()->size(), 1);
+  QString replacementJobId = window.queueModel()->getItem(0).jobId;
+  QVERIFY(!replacementJobId.isEmpty());
+  QVERIFY(replacementJobId != origJob.id);
+  QCOMPARE(window.queueModel()->getItem(0).requestData.value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Modified replacement prompt"));
+
+  // In-memory JobStore has exactly the replacement job; original is durably removed
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  QCOMPARE(window.jobStore()->jobs().first().id, replacementJobId);
+  QCOMPARE(window.jobStore()->jobs().first().prompt, QStringLiteral("Modified replacement prompt"));
+
+  // Restart assertion after successful replacement: reload from disk
+  JobStore restartStore2(storePath);
+  QVERIFY(restartStore2.load());
+  QCOMPARE(restartStore2.jobs().size(), 1);
+  QCOMPARE(restartStore2.jobs().first().id, replacementJobId);
+  QCOMPARE(restartStore2.jobs().first().prompt, QStringLiteral("Modified replacement prompt"));
+}
+
+void TestSessionWindow::testEditQueueItemMoveToDraftWithRollback() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+  window.draftsModel()->clear();
+
+  JobData origJob;
+  origJob.id = QStringLiteral("job-draft-test");
+  origJob.source = QStringLiteral("sources/github/orig/repo");
+  origJob.startingBranch = QStringLiteral("main");
+  origJob.prompt = QStringLiteral("Draft test prompt");
+  origJob.canonicalRequest = SessionRequestBuilder::buildSessionRequest(
+      origJob.source, origJob.startingBranch, origJob.prompt, QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  QVERIFY(window.jobStore()->addJobTransactional(origJob));
+
+  QueueItem item;
+  item.jobId = origJob.id;
+  item.requestData = origJob.canonicalRequest;
+  window.queueModel()->enqueueItem(item);
+
+  // Subcase 1: Draft save failure
+  window.draftsModel()->setSimulateSaveFailureForTest(true);
+  window.editQueueItem(0);
+  NewSessionDialog *dlg = window.findChild<NewSessionDialog *>();
+  QVERIFY(dlg != nullptr);
+
+  QJsonObject draftObj = origJob.canonicalRequest;
+  draftObj[QStringLiteral("prompt")] = QStringLiteral("Draft edited prompt");
+  Q_EMIT dlg->saveDraftRequested(draftObj);
+
+  // Draft save failed: draft must NOT be in model, task remains in queue and JobStore
+  QCOMPARE(window.draftsModel()->rowCount(), 0);
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  window.draftsModel()->setSimulateSaveFailureForTest(false);
+
+  // Subcase 2: JobStore removal failure -> rollback draft
+  window.jobStore()->setSimulateSaveFailureForTest(true);
+  Q_EMIT dlg->saveDraftRequested(draftObj);
+
+  // JobStore removal failed: draft was rolled back, task remains in queue and JobStore
+  QCOMPARE(window.draftsModel()->rowCount(), 0);
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+  window.jobStore()->setSimulateSaveFailureForTest(false);
+
+  // Subcase 3: Succeeded Move to Draft
+  Q_EMIT dlg->saveDraftRequested(draftObj);
+
+  // Both draft and removal succeeded: draft exists, task removed from queue and JobStore
+  QCOMPARE(window.draftsModel()->rowCount(), 1);
+  QCOMPARE(window.draftsModel()->getDraft(0).value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Draft edited prompt"));
+  QCOMPARE(window.queueModel()->size(), 0);
+  QCOMPARE(window.jobStore()->jobs().size(), 0);
+
+  // Restart assertion: reload from disk
+  JobStore restartStore(window.jobStore()->filename());
+  QVERIFY(restartStore.load());
+  QCOMPARE(restartStore.jobs().size(), 0);
+}
+
+void TestSessionWindow::testEditQueueItemMultiSourceReplacement() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+
+  JobData origJob;
+  origJob.id = QStringLiteral("job-orig-multi");
+  origJob.source = QStringLiteral("sources/github/orig/repo");
+  origJob.startingBranch = QStringLiteral("main");
+  origJob.prompt = QStringLiteral("Multi replacement prompt");
+  origJob.canonicalRequest = SessionRequestBuilder::buildSessionRequest(
+      origJob.source, origJob.startingBranch, origJob.prompt, QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  QVERIFY(window.jobStore()->addJobTransactional(origJob));
+
+  QueueItem item;
+  item.jobId = origJob.id;
+  item.requestData = origJob.canonicalRequest;
+  window.queueModel()->enqueueItem(item);
+
+  // Replace original task with 2 sources
+  QMultiMap<QString, QString> sources;
+  sources.insert(QStringLiteral("sources/github/owner/repo-a"), QStringLiteral("branch-a"));
+  sources.insert(QStringLiteral("sources/github/owner/repo-b"), QStringLiteral("branch-b"));
+
+  bool ok = window.replaceQueueItemWithSession(origJob.id, 0, sources, QStringLiteral("Prompt for multi"),
+                                               QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0,
+                                               QStringLiteral("queue"), nullptr);
+  QVERIFY(ok);
+
+  // Original job was removed; 2 replacement jobs exist in JobStore and QueueModel
+  QCOMPARE(window.queueModel()->size(), 2);
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+  QVERIFY(window.jobStore()->getJobById(origJob.id) == nullptr);
+
+  // Restart assertion: reload from disk
+  JobStore restartStore(window.jobStore()->filename());
+  QVERIFY(restartStore.load());
+  QCOMPARE(restartStore.jobs().size(), 2);
+  QVERIFY(restartStore.getJobById(origJob.id) == nullptr);
+}
+
+void TestSessionWindow::testEditOrMoveQueuedVariantPreservesParentJobWinnerHistoryAndSiblingsAcrossSyncOrRestart() {
+  MainWindow window;
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.jobStore()->clear();
+  window.queueModel()->clear();
+  window.draftsModel()->clear();
+
+  // 1. Setup multi-attempt Job with accepted attempt (winner) and sibling attempt
+  JobData parentJob;
+  parentJob.id = QStringLiteral("job-parent-multi-1");
+  parentJob.source = QStringLiteral("sources/github/owner/repo");
+  parentJob.startingBranch = QStringLiteral("main");
+  parentJob.prompt = QStringLiteral("Parent job prompt");
+  parentJob.acceptedAttemptId = QStringLiteral("att-winner-1");
+
+  JobAttemptData winnerAttempt;
+  winnerAttempt.id = QStringLiteral("att-winner-1");
+  winnerAttempt.julesSessionId = QStringLiteral("sess-winner-1");
+  winnerAttempt.julesState = QStringLiteral("COMPLETED");
+  QJsonObject winnerResp;
+  winnerResp[QStringLiteral("id")] = QStringLiteral("sess-winner-1");
+  winnerResp[QStringLiteral("url")] = QStringLiteral("https://jules.google.com/session/sess-winner-1");
+  winnerAttempt.rawResponse = winnerResp;
+  parentJob.attempts.append(winnerAttempt);
+
+  JobAttemptData siblingAttempt;
+  siblingAttempt.id = QStringLiteral("att-sibling-2");
+  siblingAttempt.julesSessionId = QStringLiteral("sess-sibling-2");
+  siblingAttempt.julesState = QStringLiteral("FAILED");
+  QJsonObject siblingResp;
+  siblingResp[QStringLiteral("id")] = QStringLiteral("sess-sibling-2");
+  siblingResp[QStringLiteral("url")] = QStringLiteral("https://jules.google.com/session/sess-sibling-2");
+  siblingAttempt.rawResponse = siblingResp;
+  parentJob.attempts.append(siblingAttempt);
+
+  parentJob.recordHistory(QStringLiteral("created"), QStringLiteral("Job created"));
+  parentJob.recordHistory(QStringLiteral("winner_selected"), QStringLiteral("Attempt att-winner-1 chosen as winner"));
+
+  QVERIFY(window.jobStore()->addJobTransactional(parentJob));
+
+  // 2. Enqueue a pending variant on this existing Job
+  QueueItem variantItem;
+  variantItem.jobId = parentJob.id;
+  variantItem.requestData = SessionRequestBuilder::buildSessionRequest(
+      parentJob.source, parentJob.startingBranch, QStringLiteral("Variant prompt 1"),
+      QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  window.queueModel()->enqueueItem(variantItem);
+
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 1);
+
+  // 3. Edit / Replace the queued variant
+  QMultiMap<QString, QString> newSources;
+  newSources.insert(QStringLiteral("sources/github/owner/new-repo"), QStringLiteral("feat-branch"));
+  bool ok = window.replaceQueueItemWithSession(parentJob.id, 0, newSources, QStringLiteral("Replacement work prompt"),
+                                               QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0,
+                                               QStringLiteral("queue"), nullptr);
+  QVERIFY(ok);
+
+  // Assert:
+  // - Queue has 1 item (the new replacement task)
+  // - JobStore has 2 jobs: the preserved parent Job, and the new replacement Job
+  QCOMPARE(window.queueModel()->size(), 1);
+  QCOMPARE(window.jobStore()->jobs().size(), 2);
+
+  // Verify parent Job preservation
+  JobData *storedParent = window.jobStore()->getJobById(parentJob.id);
+  QVERIFY(storedParent != nullptr);
+  QCOMPARE(storedParent->id, parentJob.id);
+  QCOMPARE(storedParent->acceptedAttemptId, QStringLiteral("att-winner-1"));
+  QCOMPARE(storedParent->attempts.size(), 2);
+  QCOMPARE(storedParent->attempts[0].id, QStringLiteral("att-winner-1"));
+  QCOMPARE(storedParent->attempts[0].julesSessionId, QStringLiteral("sess-winner-1"));
+  QCOMPARE(storedParent->attempts[1].id, QStringLiteral("att-sibling-2"));
+  QCOMPARE(storedParent->attempts[1].julesSessionId, QStringLiteral("sess-sibling-2"));
+
+  // Verify cancel_dispatch history was recorded on parent Job
+  QJsonArray histArr = storedParent->lifecycleMetadata.value(QStringLiteral("history")).toArray();
+  bool foundCancelDispatch = false;
+  for (const auto &val : histArr) {
+    if (val.toObject().value(QStringLiteral("event")).toString() == QStringLiteral("cancel_dispatch")) {
+      foundCancelDispatch = true;
+      break;
+    }
+  }
+  QVERIFY(foundCancelDispatch);
+
+  // Verify syncModelsFromJobStore preserves parent Job in following/session model
+  window.syncModelsFromJobStore();
+  QVERIFY(window.sessionModel()->rowCount() >= 1);
+  bool foundParentInSessionModel = false;
+  for (int i = 0; i < window.sessionModel()->rowCount(); ++i) {
+    if (window.sessionModel()->data(window.sessionModel()->index(i, 0), SessionModel::JobIdRole).toString() ==
+        parentJob.id) {
+      foundParentInSessionModel = true;
+      break;
+    }
+  }
+  QVERIFY(foundParentInSessionModel);
+
+  // Verify durability across simulated restart
+  JobStore restartStore1(window.jobStore()->filename());
+  QVERIFY(restartStore1.load());
+  QCOMPARE(restartStore1.jobs().size(), 2);
+  JobData *reloadedParent = restartStore1.getJobById(parentJob.id);
+  QVERIFY(reloadedParent != nullptr);
+  QCOMPARE(reloadedParent->acceptedAttemptId, QStringLiteral("att-winner-1"));
+  QCOMPARE(reloadedParent->attempts.size(), 2);
+  QCOMPARE(reloadedParent->attempts[0].julesSessionId, QStringLiteral("sess-winner-1"));
+  QCOMPARE(reloadedParent->attempts[1].julesSessionId, QStringLiteral("sess-sibling-2"));
+
+  // 4. Now test moving a queued variant to draft on a multi-attempt Job
+  QueueItem variant2;
+  variant2.jobId = parentJob.id;
+  variant2.requestData = SessionRequestBuilder::buildSessionRequest(
+      parentJob.source, parentJob.startingBranch, QStringLiteral("Variant prompt 2 to move to draft"),
+      QStringLiteral("AUTOMATION_MODE_ASAP"), false, false, 0);
+  window.queueModel()->enqueueItem(variant2);
+  int variant2Row = window.queueModel()->size() - 1;
+
+  window.convertQueueItemToDraft(variant2Row);
+
+  // Assert:
+  // - Draft was persisted in DraftsModel
+  QCOMPARE(window.draftsModel()->rowCount(), 1);
+  QCOMPARE(window.draftsModel()->getDraft(0).value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Variant prompt 2 to move to draft"));
+
+  // - Parent Job still exists in JobStore with all history, winner, and attempts
+  storedParent = window.jobStore()->getJobById(parentJob.id);
+  QVERIFY(storedParent != nullptr);
+  QCOMPARE(storedParent->acceptedAttemptId, QStringLiteral("att-winner-1"));
+  QCOMPARE(storedParent->attempts.size(), 2);
+
+  // - Restart persistence verification
+  JobStore restartStore2(window.jobStore()->filename());
+  QVERIFY(restartStore2.load());
+  JobData *reloadedParent2 = restartStore2.getJobById(parentJob.id);
+  QVERIFY(reloadedParent2 != nullptr);
+  QCOMPARE(reloadedParent2->acceptedAttemptId, QStringLiteral("att-winner-1"));
+  QCOMPARE(reloadedParent2->attempts.size(), 2);
+
+  DraftsModel restartDrafts;
+  QCOMPARE(restartDrafts.rowCount(), 1);
+  QCOMPARE(restartDrafts.getDraft(0).value(QStringLiteral("prompt")).toString(),
+           QStringLiteral("Variant prompt 2 to move to draft"));
 }
 
 void TestSessionWindow::testCreateRepoWorkflow() {

@@ -97,10 +97,13 @@ private Q_SLOTS:
   void showSettingsDialog();
   void submitVariantForJob(const QString &jobId, const QMultiMap<QString, QString> &sources, const QString &prompt,
                            const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
-                           int priority, const QString &queueAction);
+                           int priority, const QString &queueAction, NewSessionDialog *dialog = nullptr);
   void onSessionCreated(const QMultiMap<QString, QString> &sources, const QString &prompt,
                         const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
                         int priority = 0, const QString &queueAction = QString());
+  void onSessionCreatedForDialog(const QMultiMap<QString, QString> &sources, const QString &prompt,
+                                 const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                                 int priority, const QString &queueAction, NewSessionDialog *dialog);
   void onCreateRepoAndSession(const QString &org, const QString &repoName, bool isPrivate, const QString &prompt,
                               const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency);
   void onDraftSaved(const QJsonObject &draft);
@@ -160,6 +163,10 @@ private Q_SLOTS:
   void sendItemNow(const QueueItem &item, int originRow, bool sourceIsQueue,
                    const QJsonObject &errData = QJsonObject());
   void editQueueItem(int row);
+  bool replaceQueueItemWithSession(const QString &origJobId, int origQueueRow,
+                                   const QMultiMap<QString, QString> &sources, const QString &prompt,
+                                   const QString &automationMode, bool requirePlanApproval, bool ignoreConcurrency,
+                                   int priority, const QString &queueAction, NewSessionDialog *dialog);
   void convertQueueItemToDraft(int row);
   void showErrorDetails(int row, QueueModel *model);
   void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
@@ -193,6 +200,7 @@ public:
   APIManager *apiManager() const { return m_apiManager; }
   JobStore *jobStore() const { return m_jobStore; }
   QueueModel *queueModel() const { return m_queueModel; }
+  DraftsModel *draftsModel() const { return m_draftsModel; }
   ErrorsModel *errorsModel() const { return m_errorsModel; }
   QListView *diagnosticsView() const { return m_errorsView; }
   QLineEdit *diagnosticsFilter() const { return m_errorsFilter; }
